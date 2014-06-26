@@ -34,9 +34,9 @@ def search_instances_by_search_opts(config, exporter):
             yield instance
 
 
-def migrate_one_instance(instance, exporter, importer, scnt):
+def migrate_one_instance(instance, exporter, importer, config_from):
     data = exporter.export(instance)
-    importer.upload(data, scnt)
+    importer.upload(data, config_from)
 
 
 @task
@@ -49,4 +49,4 @@ def migrate(name_config):
     LOG.info("Migrating all instance by search opts")
     for instance in search_instances_by_search_opts(config, exporter):
         LOG.debug("Migrate instance %s", instance)
-        migrate_one_instance(instance, exporter, importer, config['clouds']['from']['host'])
+        migrate_one_instance(instance, exporter, importer, config['clouds']['from'])

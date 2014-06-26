@@ -10,14 +10,14 @@ class Importer(osCommon.osCommon):
     def __init__(self, config):
         super(Importer, self).__init__(config)
 
-    def upload(self, data, scnt):
+    def upload(self, data, config_from):
         LOG.info("Start migrate instance")
         LOG.debug("| creating new instance")
         new_instance = self.create_instance(data)
         LOG.debug("| wait for instance activating")
         self.wait_for_status(self.nova_client.servers, new_instance.id, 'ACTIVE')
         LOG.debug("| sync delta")
-        self.import_instance_delta(data, new_instance, scnt)
+        self.import_instance_delta(data, new_instance, config_from)
         LOG.debug("| migrateVolumes")
         self.import_volumes(data, new_instance)
 
@@ -84,7 +84,7 @@ class Importer(osCommon.osCommon):
         if 'name' in network_info:
             return self.quantum_client.list_networks(name=network_info['name'])['networks'][0]
 
-    def import_instance_delta(self, data, instance, scnt):
+    def import_instance_delta(self, data, instance, config_from):
         LOG.debug("| import instance delta")
         if instance.status == 'ACTIVE':
             print "| | instance is active. Stopping."
@@ -94,19 +94,19 @@ class Importer(osCommon.osCommon):
 
         {
             'remote file': self.sync_instance_delta_remote_file
-        }[data['disk']['type']](data['disk'], instance, scnt)
+        }[data['disk']['type']](data['disk'], instance, config_from)
 
         instance.start()
         LOG.debug("| | sync delta: done")
 
-    def sync_instance_delta_remote_file(self, disk_data, instance, scnt):
+    def sync_instance_delta_remote_file(self, disk_data, instance, config_from):
         LOG.debug("| | sync with remote file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         LOG.debug("| | copy file")
 #        subprocess.call(['eval `ssh-agent` | ssh-add'])
 #        subprocess.call(['ssh', host, "scp %s:%s /var/lib/nova/instances/%s/disk" %
 #                                      (disk_data['host'], disk_data['file'], instance.id)])
-        with settings(host_string=scnt):
+        with settings(host_string=config_from['host']):
             with forward_agent("privkey"):
                 with up_ssh_tunnel("node-17", "172.18.172.22"):
                     run("ssh -oStrictHostKeyChecking=no node-15 'dd bs=1M if=/var/lib/nova/instances/82a5dd60-f02e-4e14-a540-6e3dd1b73a01/disk' | ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=/root/disk_test_new'")
