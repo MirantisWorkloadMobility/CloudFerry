@@ -17,6 +17,7 @@ clouds:
                 key: {name: control}
                 networks:
                  - name: "net04_ext"
-        
+key_filename:
+    name: privkey
 instances:
  - key_name: amazon

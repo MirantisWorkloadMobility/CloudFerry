@@ -52,7 +52,8 @@ class Exporter(osCommon.osCommon):
         return {
             'type': 'remote file',
             'host': getattr(instance, 'OS-EXT-SRV-ATTR:host'),
-            'file': '/var/lib/nova/instances/%s/disk' % instance.id
+            'file': '/var/lib/nova/instances/%s/disk' % instance.id,
+            'pattern_to': '/var/lib/nova/instances/%s/disk'
         }
 
     def export_volumes(self, instance):

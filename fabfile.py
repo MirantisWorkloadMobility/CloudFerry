@@ -5,7 +5,6 @@ from fabric.api import task, env
 import logging
 
 env.forward_agent = True
-env.key_filename = 'privkey'
 env.user = 'root'
 LOG = logging.getLogger(__name__)
 
@@ -46,6 +45,7 @@ def migrate(name_config):
     """
     LOG.info("Init config migrate")
     config, exporter, importer = init_migrate(name_config)
+    env.key_filename = config['key_filename']['name']
     LOG.info("Migrating all instance by search opts")
     for instance in search_instances_by_search_opts(config, exporter):
         LOG.debug("Migrate instance %s", instance)

@@ -2,7 +2,7 @@ import osCommon
 import subprocess
 import logging
 from utils import forward_agent, up_ssh_tunnel
-from fabric.api import run, settings
+from fabric.api import run, settings, env
 LOG = logging.getLogger(__name__)
 
 
@@ -106,10 +106,12 @@ class Importer(osCommon.osCommon):
 #        subprocess.call(['eval `ssh-agent` | ssh-add'])
 #        subprocess.call(['ssh', host, "scp %s:%s /var/lib/nova/instances/%s/disk" %
 #                                      (disk_data['host'], disk_data['file'], instance.id)])
+        dest_path_disk = disk_data['pattern_to'] % (instance.id)
         with settings(host_string=config_from['host']):
-            with forward_agent("privkey"):
-                with up_ssh_tunnel("node-17", "172.18.172.22"):
-                    run("ssh -oStrictHostKeyChecking=no node-15 'dd bs=1M if=/var/lib/nova/instances/82a5dd60-f02e-4e14-a540-6e3dd1b73a01/disk' | ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=/root/disk_test_new'")
+            with forward_agent(env.key_filename):
+                with up_ssh_tunnel(host, self.config['host']):
+                    run("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' | ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'"%
+                        (disk_data['host'], disk_data['file'], dest_path_disk))
 
 
 
