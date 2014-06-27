@@ -30,6 +30,7 @@ class Exporter(osCommon.osCommon):
         data['disk_config'] = getattr(instance, 'OS-DCF:diskConfig')
         data['networks'] = self.export_networks(instance)
         data['disk'] = self.export_disk(instance)
+        data['instance_name'] = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
         LOG.debug("| exporting volumes")
         data['volumes'] = self.export_volumes(instance)
 

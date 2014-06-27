@@ -91,28 +91,37 @@ class Importer(osCommon.osCommon):
             instance.stop()
         LOG.debug("| | wait for instances")
         self.wait_for_status(self.nova_client.servers, instance.id, 'SHUTOFF')
-
+        print data['disk']
         {
             'remote file': self.sync_instance_delta_remote_file
-        }[data['disk']['type']](data['disk'], instance, config_from)
+        }[data['disk']['type']](data['disk'], data['instance_name'], instance, config_from)
 
         instance.start()
         LOG.debug("| | sync delta: done")
 
-    def sync_instance_delta_remote_file(self, disk_data, instance, config_from):
+    def sync_instance_delta_remote_file(self, disk_data, libvirt_name,instance, config_from):
         LOG.debug("| | sync with remote file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        source_instance_name = libvirt_name
+        print source_instance_name
+        dest_instance_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
+        print dest_instance_name
+
         LOG.debug("| | copy file")
 #        subprocess.call(['eval `ssh-agent` | ssh-add'])
 #        subprocess.call(['ssh', host, "scp %s:%s /var/lib/nova/instances/%s/disk" %
 #                                      (disk_data['host'], disk_data['file'], instance.id)])
-        dest_path_disk = self.config['path_to_disk'] % instance.id
+
         with settings(host_string=config_from['host']):
             with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host']):
+                    out = run(("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'") % (disk_data['host'], source_instance_name))
+                    source_disk=out.split()[4]
+                    out = run(("ssh -oStrictHostKeyChecking=no -p 9999 localhost 'virsh domblklist %s'") % dest_instance_name)
+                    dest_disk=out.split()[4]
                     run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
                         "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
-                        (disk_data['host'], disk_data['file'], dest_path_disk))
+                        (disk_data['host'], source_disk, dest_disk))
 
     def import_volumes(self, data, instance):
         LOG.debug("| import volumes")
