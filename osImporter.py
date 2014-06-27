@@ -13,7 +13,7 @@ class Importer(osCommon.osCommon):
     def upload(self, data, config_from):
         LOG.info("Start migrate instance")
         LOG.debug("| creating new instance")
-        new_instance = self.create_instance(data)
+        new_instance = self.create_instance(data, config_from)
         LOG.debug("| wait for instance activating")
         self.wait_for_status(self.nova_client.servers, new_instance.id, 'ACTIVE')
         LOG.debug("| sync delta")
@@ -21,9 +21,9 @@ class Importer(osCommon.osCommon):
         LOG.debug("| migrateVolumes")
         self.import_volumes(data, new_instance, config_from)
 
-    def create_instance(self, data):
+    def create_instance(self, data, config_from):
         return self.nova_client.servers.create(name=data['name'],
-                                               image=self.get_image(self.ensure_param(data, 'image')),
+                                               image=self.get_image(data, config_from),
                                                flavor=self.get_flavor(self.ensure_param(data, 'flavor')),
                                                meta=self.ensure_param(data, 'metadata'),
                                                security_groups=self.ensure_param(data, 'security_groups'),
@@ -46,11 +46,19 @@ class Importer(osCommon.osCommon):
             return import_rules['default'][rules_name]
         return None
 
-    def get_image(self, image_info):
-        if 'id' in image_info:
-            return self.nova_client.images.get(image_info['id'])
-        if 'name' in image_info:
-            return self.nova_client.images.find(name=image_info['name'])
+    def get_image(self, data, config_from):
+        #TODO: Add check public key
+        checksum = data["image"]["checksum"]
+        for image in self.glance_client.images.list():
+            if image.checksum == checksum:
+                return image
+        image_dest = self.glance_client.images.create(name=data["image"]["name"] + "Migrate",
+                                                      container_format=data["image"]["container_format"],
+                                                      disk_format=data["image"]["disk_format"])
+        glance_client_from = self.get_glance_client(config_from, self.get_keystone_client(config_from))
+        pointer_file = glance_client_from.images.data(data["image"]["id"])._resp
+        self.glance_client.images.upload(image_dest["id"], pointer_file)
+        return self.nova_client.images.get(image_dest.id)
 
     def get_flavor(self, flavor_info):
         if 'id' in flavor_info:

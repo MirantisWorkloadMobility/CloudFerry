@@ -17,8 +17,7 @@ class Exporter(osCommon.osCommon):
         data = {'name': instance.name}
 
         LOG.debug("| take image name")
-        data['image'] = {'name': self.nova_client.images.get(instance.image['id']).name}
-
+        data['image'] = self.glance_client.images.get(instance.image['id'])
         LOG.debug("| take flavor name")
         data['flavor'] = {'name': self.nova_client.flavors.get(instance.flavor['id']).name}
 
