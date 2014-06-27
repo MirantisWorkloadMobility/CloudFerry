@@ -106,15 +106,13 @@ class Importer(osCommon.osCommon):
 #        subprocess.call(['eval `ssh-agent` | ssh-add'])
 #        subprocess.call(['ssh', host, "scp %s:%s /var/lib/nova/instances/%s/disk" %
 #                                      (disk_data['host'], disk_data['file'], instance.id)])
-        dest_path_disk = disk_data['pattern_to'] % (instance.id)
+        dest_path_disk = self.config['path_to_disk'] % instance.id
         with settings(host_string=config_from['host']):
             with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host']):
-                    run("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' | ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'"%
+                    run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
+                        "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
                         (disk_data['host'], disk_data['file'], dest_path_disk))
-
-
-
 
     def import_volumes(self, data, instance):
         LOG.debug("| import volumes")

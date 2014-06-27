@@ -47,13 +47,11 @@ class Exporter(osCommon.osCommon):
 
         return networks
 
-    @staticmethod
-    def export_disk(instance):
+    def export_disk(self, instance):
         return {
             'type': 'remote file',
             'host': getattr(instance, 'OS-EXT-SRV-ATTR:host'),
-            'file': '/var/lib/nova/instances/%s/disk' % instance.id,
-            'pattern_to': '/var/lib/nova/instances/%s/disk'
+            'file': self.config['path_to_disk'] % instance.id
         }
 
     def export_volumes(self, instance):
