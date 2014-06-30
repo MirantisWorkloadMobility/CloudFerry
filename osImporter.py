@@ -19,7 +19,7 @@ class Importer(osCommon.osCommon):
         LOG.debug("| sync delta")
         self.import_instance_delta(data, new_instance, config_from)
         LOG.debug("| migrateVolumes")
-        self.import_volumes(data, new_instance)
+        self.import_volumes(data, new_instance, config_from)
 
     def create_instance(self, data):
         return self.nova_client.servers.create(name=data['name'],
@@ -123,7 +123,7 @@ class Importer(osCommon.osCommon):
                         "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
                         (disk_data['host'], source_disk, dest_disk))
 
-    def import_volumes(self, data, instance):
+    def import_volumes(self, data, instance, config_from):
         LOG.debug("| import volumes")
         LOG.debug("| | wait for instance activating")
         self.wait_for_status(self.nova_client.servers, instance.id, 'ACTIVE')
@@ -147,12 +147,16 @@ class Importer(osCommon.osCommon):
 
             {
                 'remote disk by id': self.import_volume_remote_disk_by_id
-            }[volume_info['type']](volume_info, instance, volume)
+            }[volume_info['type']](volume_info, instance, volume, config_from)
 
             LOG.debug("| | | | done")
 
-    def import_volume_remote_disk_by_id(self, volume_info, instance, volume):
+    def import_volume_remote_disk_by_id(self, volume_info, instance, volume, config_from):
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
-        subprocess.call(['ssh', volume_info['host'],
-                         "dd bs=4M if=`ls /dev/disk/by-path/*%s-lun-1` | ssh %s 'dd bs=4M of=`ls /dev/disk/by-path/*%s*`'"
-                         % (volume_info['id'], host, volume.id)])
+#        subprocess.call(['ssh', volume_info['host'],
+#                         "dd bs=4M if=`ls /dev/disk/by-path/*%s-lun-1` | ssh %s 'dd bs=4M of=`ls /dev/disk/by-path/*%s*`'"
+#                         % (volume_info['id'], host, volume.id)])
+        with settings(host_string=config_from['host']):
+            with forward_agent(env.key_filename):
+                with up_ssh_tunnel(host, self.config['host']):
+                    run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=4M if=`ls /dev/disk/by-path/*%s-lun-1`' | ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=4M of=`ls /dev/disk/by-path/*%s*`'") % (volume_info['host'], volume_info['id'], volume.id))
