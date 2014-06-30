@@ -50,15 +50,19 @@ class Importer(osCommon.osCommon):
         return None
 
     def get_image(self, data, config_from):
-        #TODO: Add check public key
         checksum = data["image"]["checksum"]
         for image in self.glance_client.images.list():
             if image.checksum == checksum:
                 return image
+        LOG.debug("Data image = %s", data)
         image_dest = self.glance_client.images.create(name=data["image"]["name"] + "Migrate",
                                                       container_format=data["image"]["container_format"],
-                                                      disk_format=data["image"]["disk_format"])
-        glance_client_from = self.get_glance_client(config_from, self.get_keystone_client(config_from))
+                                                      disk_format=data["image"]["disk_format"],
+                                                      visibility=data["image"]["visibility"],
+                                                      protected=data["image"]["protected"])
+        keystone_client_from = self.get_keystone_client(config_from)
+        config_from["endpoint_glance"] = self.get_endpoint_by_name_service(keystone_client_from, "glance")
+        glance_client_from = self.get_glance_client(config_from, keystone_client_from)
         pointer_file = glance_client_from.images.data(data["image"]["id"])._resp
         self.glance_client.images.upload(image_dest["id"], pointer_file)
         return self.nova_client.images.get(image_dest.id)
@@ -138,10 +142,10 @@ class Importer(osCommon.osCommon):
             if volume_info['volume_type'] == u'None':
                 volume_info['volume_type'] = None
             volume = self.cinder_client.volumes.create(size=volume_info['size'],
-                                                          display_name=volume_info['name'],
-                                                          display_description=volume_info['description'],
-                                                          volume_type=volume_info['volume_type'],
-                                                          availability_zone=volume_info['availability_zone'])
+                                                       display_name=volume_info['name'],
+                                                       display_description=volume_info['description'],
+                                                       volume_type=volume_info['volume_type'],
+                                                       availability_zone=volume_info['availability_zone'])
             LOG.debug("| | | | wait for available")
             self.wait_for_status(self.cinder_client.volumes, volume.id, 'available')
             LOG.debug("| | | | attach vol")

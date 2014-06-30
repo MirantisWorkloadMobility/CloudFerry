@@ -2,7 +2,6 @@ clouds:
     from:
         type: os
         host: 172.18.172.35
-        endpoint_glance: http://172.18.172.35:9292
         user: admin
         password: admin
         tenant: admin
@@ -10,7 +9,6 @@ clouds:
     to:
         type: os
         host: 172.18.172.22
-        endpoint_glance: http://172.18.172.22:9292
         user: admin
         password: admin
         tenant: admin

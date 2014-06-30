@@ -20,6 +20,7 @@ def get_importer(cloud_info):
         'os': lambda info: osImporter.Importer(info)
     }[cloud_info['type']](cloud_info)
 
+
 def init_migrate(name_config):
     config = yaml.load(open(name_config, 'r'))
     exporter = get_exporter(config['clouds']['from'])
