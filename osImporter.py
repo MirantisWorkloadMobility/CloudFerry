@@ -103,15 +103,8 @@ class Importer(osCommon.osCommon):
         LOG.debug("| | sync with remote file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         source_instance_name = libvirt_name
-        print source_instance_name
         dest_instance_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
-        print dest_instance_name
-
         LOG.debug("| | copy file")
-#        subprocess.call(['eval `ssh-agent` | ssh-add'])
-#        subprocess.call(['ssh', host, "scp %s:%s /var/lib/nova/instances/%s/disk" %
-#                                      (disk_data['host'], disk_data['file'], instance.id)])
-
         with settings(host_string=config_from['host']):
             with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host']):
@@ -153,10 +146,9 @@ class Importer(osCommon.osCommon):
 
     def import_volume_remote_disk_by_id(self, volume_info, instance, volume, config_from):
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
-#        subprocess.call(['ssh', volume_info['host'],
-#                         "dd bs=4M if=`ls /dev/disk/by-path/*%s-lun-1` | ssh %s 'dd bs=4M of=`ls /dev/disk/by-path/*%s*`'"
-#                         % (volume_info['id'], host, volume.id)])
         with settings(host_string=config_from['host']):
             with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host']):
-                    run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=4M if=`ls /dev/disk/by-path/*%s-lun-1`' | ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=4M of=`ls /dev/disk/by-path/*%s*`'") % (volume_info['host'], volume_info['id'], volume.id))
+                    run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=4M if=`ls /dev/disk/by-path/*%s-lun-1`' | "
+                        + "ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=4M of=`ls /dev/disk/by-path/*%s*`'")
+                    % (volume_info['host'], volume_info['id'], volume.id))
