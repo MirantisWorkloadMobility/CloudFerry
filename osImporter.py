@@ -130,6 +130,8 @@ class Importer(osCommon.osCommon):
         for volume_info in data['volumes']:
             LOG.debug("| | | volume %s" % volume_info['name'])
             LOG.debug("| | | | creating volume")
+            if volume_info['volume_type'] == u'None':
+                volume_info['volume_type'] = None
             volume = self.cinder_client.volumes.create(size=volume_info['size'],
                                                           display_name=volume_info['name'],
                                                           display_description=volume_info['description'],
