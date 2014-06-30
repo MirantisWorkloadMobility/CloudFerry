@@ -4,6 +4,9 @@ import logging
 from utils import forward_agent, up_ssh_tunnel
 from fabric.api import run, settings, env
 LOG = logging.getLogger(__name__)
+LOG.setLevel(logging.DEBUG)
+hdlr = logging.FileHandler('importer.log')
+LOG.addHandler(hdlr)
 
 
 class Importer(osCommon.osCommon):
@@ -95,11 +98,11 @@ class Importer(osCommon.osCommon):
     def import_instance_delta(self, data, instance, config_from):
         LOG.debug("| import instance delta")
         if instance.status == 'ACTIVE':
-            print "| | instance is active. Stopping."
+            LOG.info("| | instance is active. Stopping.")
             instance.stop()
         LOG.debug("| | wait for instances")
         self.wait_for_status(self.nova_client.servers, instance.id, 'SHUTOFF')
-        print data['disk']
+
         {
             'remote file': self.sync_instance_delta_remote_file
         }[data['disk']['type']](data['disk'], data['instance_name'], instance, config_from)
@@ -113,6 +116,7 @@ class Importer(osCommon.osCommon):
         source_instance_name = libvirt_name
         dest_instance_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
         LOG.debug("| | copy file")
+        dest_path_disk = self.config['path_to_disk'] % instance.id
         with settings(host_string=config_from['host']):
             with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host']):

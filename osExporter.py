@@ -2,6 +2,9 @@ import osCommon
 import logging
 
 LOG = logging.getLogger(__name__)
+LOG.setLevel(logging.DEBUG)
+hdlr = logging.FileHandler('exporter.log')
+LOG.addHandler(hdlr)
 
 
 class Exporter(osCommon.osCommon):
