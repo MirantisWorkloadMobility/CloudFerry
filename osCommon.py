@@ -11,12 +11,10 @@ class osCommon(object):
     
     def __init__(self, config):
         self.keystone_client = self.get_keystone_client(config)
-        config["endpoint_glance"] = self.get_endpoint_by_name_service(self.keystone_client, 'glance')
         self.nova_client = self.get_nova_client(config)
         self.cinder_client = self.get_cinder_client(config)
         self.quantum_client = self.get_quantum_client(config)
-        self.glance_client = self.get_glance_client(config, self.keystone_client)
-        self.config = config
+        self.glance_client = self.get_glance_client(self.keystone_client)
         
     @staticmethod
     def get_nova_client(params):
@@ -49,8 +47,9 @@ class osCommon(object):
                                      endpoint="http://" + params["host"] + ":35357/v2.0/")
 
     @staticmethod
-    def get_glance_client(params, keystone_client):
-        return glanceClient.Client(params["endpoint_glance"], token=keystone_client.auth_token_from_user)
+    def get_glance_client(keystone_client):
+        endpoint_glance = osCommon.get_endpoint_by_name_service(keystone_client, 'glance')
+        return glanceClient.Client(endpoint_glance, token=keystone_client.auth_token_from_user)
 
     @staticmethod
     def get_id_service(keystone_client, name_service):

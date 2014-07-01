@@ -9,22 +9,22 @@ env.user = 'root'
 LOG = logging.getLogger(__name__)
 
 
-def get_exporter(cloud_info):
+def get_exporter(config):
     return {
         'os': lambda info: osExporter.Exporter(info)
-    }[cloud_info['type']](cloud_info)
+    }[config['clouds']['from']['type']](config)
 
 
-def get_importer(cloud_info):
+def get_importer(config):
     return {
         'os': lambda info: osImporter.Importer(info)
-    }[cloud_info['type']](cloud_info)
+    }[config['clouds']['to']['type']](config)
 
 
 def init_migrate(name_config):
     config = yaml.load(open(name_config, 'r'))
-    exporter = get_exporter(config['clouds']['from'])
-    importer = get_importer(config['clouds']['to'])
+    exporter = get_exporter(config)
+    importer = get_importer(config)
     return config, exporter, importer
 
 
@@ -34,9 +34,9 @@ def search_instances_by_search_opts(config, exporter):
             yield instance
 
 
-def migrate_one_instance(instance, exporter, importer, config_from):
+def migrate_one_instance(instance, exporter, importer, config):
     data = exporter.export(instance)
-    importer.upload(data, config_from)
+    importer.upload(data)
 
 
 @task
@@ -50,4 +50,4 @@ def migrate(name_config):
     LOG.info("Migrating all instance by search opts")
     for instance in search_instances_by_search_opts(config, exporter):
         LOG.debug("Migrate instance %s", instance)
-        migrate_one_instance(instance, exporter, importer, config['clouds']['from'])
+        migrate_one_instance(instance, exporter, importer, config)

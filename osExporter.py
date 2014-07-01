@@ -10,33 +10,42 @@ LOG.addHandler(hdlr)
 class Exporter(osCommon.osCommon):
 
     def __init__(self, config):
-        super(Exporter, self).__init__(config)
+        self.config = config['clouds']['from']
+        self.config_to = config['clouds']['to']
+        super(Exporter, self).__init__(self.config)
 
     def find_instances(self, search_opts):
         return self.nova_client.servers.list(search_opts=search_opts)
 
     def export(self, instance):
         LOG.info("Exporting instance %s [%s]" % (instance.name, instance.id))
-        data = {'name': instance.name}
-
-        LOG.debug("| take image name")
-        data['image'] = self.glance_client.images.get(instance.image['id'])
-        LOG.debug("| take flavor name")
-        data['flavor'] = {'name': self.nova_client.flavors.get(instance.flavor['id']).name}
-
-        data['security_groups'] = [security_group['name'] for security_group in instance.security_groups]
-        data['metadata'] = instance.metadata
-        data['key'] = {'name': instance.key_name}
+        data = dict()
+        data['name'] = getattr(instance, 'name')
+        data['image'] = self.get_image(instance)
+        data['flavor'] = self.get_flavor(instance)
+        data['security_groups'] = self.get_security_groups(instance)
+        data['metadata'] = getattr(instance, 'metadata')
+        data['key'] = self.get_key(instance)
         data['availability_zone'] = getattr(instance, 'OS-EXT-AZ:availability_zone'),
-        data['config_drive'] = instance.config_drive
+        data['config_drive'] = getattr(instance, 'config_drive')
         data['disk_config'] = getattr(instance, 'OS-DCF:diskConfig')
         data['networks'] = self.export_networks(instance)
         data['disk'] = self.export_disk(instance)
         data['instance_name'] = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
-        LOG.debug("| exporting volumes")
         data['volumes'] = self.export_volumes(instance)
-
         return data
+
+    def get_image(self, instance):
+        return self.glance_client.images.get(instance.image['id'])
+
+    def get_flavor(self, instance):
+        return {'name': self.nova_client.flavors.get(instance.flavor['id']).name}
+
+    def get_security_groups(self, instance):
+        return [security_group['name'] for security_group in instance.security_groups]
+
+    def get_key(self, instance):
+        return {'name': instance.key_name}
 
     def export_networks(self, instance):
         networks = []
@@ -54,7 +63,6 @@ class Exporter(osCommon.osCommon):
         return {
             'type': 'remote file',
             'host': getattr(instance, 'OS-EXT-SRV-ATTR:host'),
-            'file': self.config['path_to_disk'] % instance.id
         }
 
     def export_volumes(self, instance):

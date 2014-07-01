@@ -11,31 +11,48 @@ LOG.addHandler(hdlr)
 
 class Importer(osCommon.osCommon):
     def __init__(self, config):
-        super(Importer, self).__init__(config)
+        self.config = config['clouds']['to']
+        self.config_from = config['clouds']['from']
+        super(Importer, self).__init__(self.config)
 
-    def upload(self, data, config_from):
+    def upload(self, data):
         LOG.info("Start migrate instance")
-        LOG.debug("| creating new instance")
-        new_instance = self.create_instance(data, config_from)
-        LOG.debug("| wait for instance activating")
+        LOG.info("| prepare env for creating new instance")
+        data_for_instance = self.prepare_for_creating_new_instance(data)
+        LOG.info("| creating new instance")
+        new_instance = self.create_instance(data_for_instance)
+        LOG.info("| wait for instance activating")
         self.wait_for_status(self.nova_client.servers, new_instance.id, 'ACTIVE')
-        LOG.debug("| sync delta")
-        self.import_instance_delta(data, new_instance, config_from)
-        LOG.debug("| migrateVolumes")
-        self.import_volumes(data, new_instance, config_from)
+        LOG.info("| sync delta")
+        self.import_instance_delta(data, new_instance)
+        LOG.info("| migrateVolumes")
+        self.import_volumes(data, new_instance)
 
-    def create_instance(self, data, config_from):
-        return self.nova_client.servers.create(name=data['name'],
-                                               image=self.get_image(data, config_from),
-                                               flavor=self.get_flavor(self.ensure_param(data, 'flavor')),
-                                               meta=self.ensure_param(data, 'metadata'),
-                                               security_groups=self.ensure_param(data, 'security_groups'),
-                                               key_name=self.get_key_name(self.ensure_param(data, 'key')),
-                                               nics=self.prepare_networks(data['networks']),
-                                               #availability_zone=self.ensure_param(data, 'availability_zone'),
-                                               config_drive=self.ensure_param(data, 'config_drive'),
-                                               disk_config=self.ensure_param(data, 'diskConfig')
-                                               )
+    def prepare_for_creating_new_instance(self, data):
+        data_for_instance = {}
+        LOG.debug("| | Get name")
+        data_for_instance["name"] = data["name"]
+        LOG.debug("| | Get image")
+        data_for_instance["image"] = self.get_image(data)
+        LOG.debug("| | Get flavor")
+        data_for_instance["flavor"] = self.get_flavor(self.ensure_param(data, 'flavor'))
+        LOG.debug("| | Get metadata")
+        data_for_instance["meta"] = self.ensure_param(data, 'metadata')
+        LOG.debug("| | Get security groups")
+        data_for_instance["security_groups"] = self.ensure_param(data, 'security_groups')
+        LOG.debug("| | Get key name")
+        data_for_instance["key_name"] = self.get_key_name(self.ensure_param(data, 'key'))
+        LOG.debug("| | Get nics")
+        data_for_instance["nics"] = self.prepare_networks(data['networks'])
+        LOG.debug("| | Get config drive")
+        data_for_instance["config_drive"] = self.ensure_param(data, 'config_drive')
+        LOG.debug("| | Get disk config")
+        data_for_instance["disk_config"] = self.ensure_param(data, 'diskConfig')
+         #availability_zone=self.ensure_param(data, 'availability_zone')
+        return data_for_instance
+
+    def create_instance(self, data_for_instance):
+        return self.nova_client.servers.create(**data_for_instance)
 
     def ensure_param(self, data, name, rules_name=None):
         if rules_name is None:
@@ -49,7 +66,7 @@ class Importer(osCommon.osCommon):
             return import_rules['default'][rules_name]
         return None
 
-    def get_image(self, data, config_from):
+    def get_image(self, data):
         checksum = data["image"]["checksum"]
         for image in self.glance_client.images.list():
             if image.checksum == checksum:
@@ -60,11 +77,11 @@ class Importer(osCommon.osCommon):
                                                       disk_format=data["image"]["disk_format"],
                                                       visibility=data["image"]["visibility"],
                                                       protected=data["image"]["protected"])
-        keystone_client_from = self.get_keystone_client(config_from)
-        config_from["endpoint_glance"] = self.get_endpoint_by_name_service(keystone_client_from, "glance")
-        glance_client_from = self.get_glance_client(config_from, keystone_client_from)
+        keystone_client_from = self.get_keystone_client(self.config_from)
+        glance_client_from = self.get_glance_client(keystone_client_from)
         pointer_file = glance_client_from.images.data(data["image"]["id"])._resp
         self.glance_client.images.upload(image_dest["id"], pointer_file)
+        # TODO: Add check checksum image on destination
         return self.nova_client.images.get(image_dest.id)
 
     def get_flavor(self, flavor_info):
@@ -99,7 +116,7 @@ class Importer(osCommon.osCommon):
         if 'name' in network_info:
             return self.quantum_client.list_networks(name=network_info['name'])['networks'][0]
 
-    def import_instance_delta(self, data, instance, config_from):
+    def import_instance_delta(self, data, instance):
         LOG.debug("| import instance delta")
         if instance.status == 'ACTIVE':
             LOG.info("| | instance is active. Stopping.")
@@ -109,30 +126,31 @@ class Importer(osCommon.osCommon):
 
         {
             'remote file': self.sync_instance_delta_remote_file
-        }[data['disk']['type']](data['disk'], data['instance_name'], instance, config_from)
+        }[data['disk']['type']](data['disk'], data['instance_name'], instance)
 
         instance.start()
         LOG.debug("| | sync delta: done")
 
-    def sync_instance_delta_remote_file(self, disk_data, libvirt_name,instance, config_from):
+    def sync_instance_delta_remote_file(self, disk_data, libvirt_name,instance):
         LOG.debug("| | sync with remote file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         source_instance_name = libvirt_name
         dest_instance_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
         LOG.debug("| | copy file")
-        dest_path_disk = self.config['path_to_disk'] % instance.id
-        with settings(host_string=config_from['host']):
+        with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host']):
-                    out = run(("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'") % (disk_data['host'], source_instance_name))
-                    source_disk=out.split()[4]
-                    out = run(("ssh -oStrictHostKeyChecking=no -p 9999 localhost 'virsh domblklist %s'") % dest_instance_name)
-                    dest_disk=out.split()[4]
+                    out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" %
+                              (disk_data['host'], source_instance_name))
+                    source_disk = out.split()[4]
+                    out = run("ssh -oStrictHostKeyChecking=no -p 9999 localhost 'virsh domblklist %s'" %
+                              dest_instance_name)
+                    dest_disk = out.split()[4]
                     run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
                         "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
                         (disk_data['host'], source_disk, dest_disk))
 
-    def import_volumes(self, data, instance, config_from):
+    def import_volumes(self, data, instance):
         LOG.debug("| import volumes")
         LOG.debug("| | wait for instance activating")
         self.wait_for_status(self.nova_client.servers, instance.id, 'ACTIVE')
@@ -156,15 +174,15 @@ class Importer(osCommon.osCommon):
 
             {
                 'remote disk by id': self.import_volume_remote_disk_by_id
-            }[volume_info['type']](volume_info, instance, volume, config_from)
+            }[volume_info['type']](volume_info, instance, volume)
 
             LOG.debug("| | | | done")
 
-    def import_volume_remote_disk_by_id(self, volume_info, instance, volume, config_from):
+    def import_volume_remote_disk_by_id(self, volume_info, instance, volume):
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
-        with settings(host_string=config_from['host']):
+        with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host']):
                     run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=4M if=`ls /dev/disk/by-path/*%s-lun-1`' | "
                         + "ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=4M of=`ls /dev/disk/by-path/*%s*`'")
-                    % (volume_info['host'], volume_info['id'], volume.id))
+                        % (volume_info['host'], volume_info['id'], volume.id))

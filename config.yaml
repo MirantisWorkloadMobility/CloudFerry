@@ -5,14 +5,12 @@ clouds:
         user: admin
         password: admin
         tenant: admin
-        path_to_disk: /var/lib/nova/instances/%s/disk
     to:
         type: os
         host: 172.18.172.22
         user: admin
         password: admin
         tenant: admin
-        path_to_disk: /var/lib/nova/instances/%s/disk
         import_rules:
             default: {}
             overwrite:
