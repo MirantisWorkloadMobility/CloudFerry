@@ -1,7 +1,7 @@
 import osCommon
 import subprocess
 import logging
-from utils import forward_agent, up_ssh_tunnel
+from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid
 from fabric.api import run, settings, env
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
@@ -16,17 +16,20 @@ class Importer(osCommon.osCommon):
         super(Importer, self).__init__(self.config)
 
     def upload(self, data):
-        LOG.info("Start migrate instance")
-        LOG.info("| prepare env for creating new instance")
-        data_for_instance = self.prepare_for_creating_new_instance(data)
-        LOG.info("| creating new instance")
-        new_instance = self.create_instance(data_for_instance)
-        LOG.info("| wait for instance activating")
-        self.wait_for_status(self.nova_client.servers, new_instance.id, 'ACTIVE')
-        LOG.info("| sync delta")
-        self.import_instance_delta(data, new_instance)
-        LOG.info("| migrateVolumes")
-        self.import_volumes(data, new_instance)
+        try:
+            LOG.info("Start migrate instance")
+            LOG.info("| prepare env for creating new instance")
+            data_for_instance = self.prepare_for_creating_new_instance(data)
+            LOG.info("| creating new instance")
+            new_instance = self.create_instance(data_for_instance)
+            LOG.info("| wait for instance activating")
+            self.wait_for_status(self.nova_client.servers, new_instance.id, 'ACTIVE')
+            LOG.info("| sync delta")
+            self.import_instance_delta(data, new_instance)
+            LOG.info("| migrateVolumes")
+            self.import_volumes(data, new_instance)
+        except ChecksumImageInvalid as e:
+            LOG.error(e)
 
     def prepare_for_creating_new_instance(self, data):
         data_for_instance = {}
@@ -81,8 +84,11 @@ class Importer(osCommon.osCommon):
         glance_client_from = self.get_glance_client(keystone_client_from)
         pointer_file = glance_client_from.images.data(data["image"]["id"])._resp
         self.glance_client.images.upload(image_dest["id"], pointer_file)
-        # TODO: Add check checksum image on destination
-        return self.nova_client.images.get(image_dest.id)
+        image_dest = self.glance_client.images.get(image_dest["id"])
+        if image_dest.checksum != checksum:
+            LOG.error("Checksums is not equ")
+            raise ChecksumImageInvalid(checksum, image_dest.checksum)
+        return image_dest
 
     def get_flavor(self, flavor_info):
         if 'id' in flavor_info:

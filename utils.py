@@ -33,3 +33,12 @@ class up_ssh_tunnel:
     def __exit__(self, type, value, traceback):
         run(("pkill -f '"+self.cmd+"'") % (self.address_dest_compute, self.address_dest_controller))
 
+
+class ChecksumImageInvalid(Exception):
+    def __init__(self, checksum_source, checksum_dest):
+        self.checksum_source = checksum_source
+        self.checksum_dest = checksum_dest
+
+    def __str__(self):
+        return repr("Checksum of image source = %s Checksum of image dest = %s" %
+                    (self.checksum_source, self.checksum_dest))
