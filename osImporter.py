@@ -1,8 +1,9 @@
 import osCommon
-import subprocess
 import logging
 from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid
 from fabric.api import run, settings, env
+from glanceclient.common import utils
+
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
 hdlr = logging.FileHandler('importer.log')
@@ -75,16 +76,17 @@ class Importer(osCommon.osCommon):
             if image.checksum == checksum:
                 return image
         LOG.debug("Data image = %s", data)
-        image_dest = self.glance_client.images.create(name=data["image"]["name"] + "Migrate",
-                                                      container_format=data["image"]["container_format"],
-                                                      disk_format=data["image"]["disk_format"],
-                                                      visibility=data["image"]["visibility"],
-                                                      protected=data["image"]["protected"])
         keystone_client_from = self.get_keystone_client(self.config_from)
         glance_client_from = self.get_glance_client(keystone_client_from)
         pointer_file = glance_client_from.images.data(data["image"]["id"])._resp
-        self.glance_client.images.upload(image_dest["id"], pointer_file)
-        image_dest = self.glance_client.images.get(image_dest["id"])
+        image_dest = self.glance_client.images.create(name=data["image"]["name"] + "Migrate",
+                                                      container_format=data["image"]["container_format"],
+                                                      disk_format=data["image"]["disk_format"],
+                                                      is_public=data["image"]["is_public"],
+                                                      protected=data["image"]["protected"],
+                                                      data = pointer_file,
+                                                      size=data["image"]["size"])
+        LOG.debug("image data = %s", image_dest)
         if image_dest.checksum != checksum:
             LOG.error("Checksums is not equ")
             raise ChecksumImageInvalid(checksum, image_dest.checksum)

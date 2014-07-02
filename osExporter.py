@@ -36,7 +36,7 @@ class Exporter(osCommon.osCommon):
         return data
 
     def get_image(self, instance):
-        return self.glance_client.images.get(instance.image['id'])
+        return self.glance_client.images.get(instance.image['id']).__dict__
 
     def get_flavor(self, instance):
         return {'name': self.nova_client.flavors.get(instance.flavor['id']).name}

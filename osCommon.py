@@ -2,7 +2,7 @@ from novaclient.v1_1 import client as novaClient
 from cinderclient.v1 import client as cinderClient
 #from quantumclient.v2_0 import client as quantumClient
 from neutronclient.v2_0 import client as quantumClient
-from glanceclient.v2 import client as glanceClient
+from glanceclient.v1 import client as glanceClient
 from keystoneclient.v2_0 import client as keystoneClient
 import time
 
