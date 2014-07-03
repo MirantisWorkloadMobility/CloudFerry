@@ -7,7 +7,7 @@ clouds:
         tenant: admin
     to:
         type: os
-        host: 172.18.172.22
+        host: 172.18.172.20
         user: admin
         password: admin
         tenant: admin

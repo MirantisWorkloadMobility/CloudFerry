@@ -51,3 +51,9 @@ def migrate(name_config):
     for instance in search_instances_by_search_opts(config, exporter):
         LOG.debug("Migrate instance %s", instance)
         migrate_one_instance(instance, exporter, importer, config)
+
+@task
+def clean_dest_cloud(name_config, delete_image=False):
+    LOG.info("Init config migrate")
+    config, exporter, importer = init_migrate(name_config)
+    importer.clean_cloud(delete_image)

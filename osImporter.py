@@ -2,7 +2,6 @@ import osCommon
 import logging
 from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid
 from fabric.api import run, settings, env
-from glanceclient.common import utils
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
@@ -15,6 +14,15 @@ class Importer(osCommon.osCommon):
         self.config = config['clouds']['to']
         self.config_from = config['clouds']['from']
         super(Importer, self).__init__(self.config)
+
+    def clean_cloud(self, delete_images=False):
+        for inst in self.nova_client.servers.list():
+            inst.delete()
+        for volume in self.cinder_client.volumes.list():
+            volume.delete()
+        if delete_images:
+            for image in self.glance_client.images.list():
+                self.glance_client.images.delete(image.id)
 
     def upload(self, data):
         try:
@@ -46,12 +54,12 @@ class Importer(osCommon.osCommon):
         data_for_instance["security_groups"] = self.ensure_param(data, 'security_groups')
         LOG.debug("| | Get key name")
         data_for_instance["key_name"] = self.get_key_name(self.ensure_param(data, 'key'))
-        LOG.debug("| | Get nics")
-        data_for_instance["nics"] = self.prepare_networks(data['networks'])
         LOG.debug("| | Get config drive")
         data_for_instance["config_drive"] = self.ensure_param(data, 'config_drive')
         LOG.debug("| | Get disk config")
         data_for_instance["disk_config"] = self.ensure_param(data, 'diskConfig')
+        LOG.debug("| | Get nics")
+        data_for_instance["nics"] = self.prepare_networks(data['networks'])
          #availability_zone=self.ensure_param(data, 'availability_zone')
         return data_for_instance
 
@@ -113,6 +121,11 @@ class Importer(osCommon.osCommon):
                 network_info = networks_info[i]
             network = self.get_network(network_info)
             LOG.debug("| | network %s [%s]" % (network['name'], network['id']))
+            for item in self.quantum_client.list_ports(fields=['network_id', 'mac_address', 'id'])['ports']:
+                if (item['network_id'] == network['id']) and (item['mac_address'] == networks_info[i]['mac']):
+                    LOG.warn("Port with network_id exists after prev run of script %s" % item)
+                    LOG.warn("and will be delete")
+                    self.quantum_client.delete_port(item['id'])
             port = self.quantum_client.create_port({'port': {'network_id': network['id'],
                                                              'mac_address': networks_info[i]['mac']}})['port']
             params.append({'net-id': network['id'], 'port-id': port['id']})
