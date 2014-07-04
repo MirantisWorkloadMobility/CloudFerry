@@ -4,7 +4,6 @@ from cinderclient.v1 import client as cinderClient
 from neutronclient.v2_0 import client as quantumClient
 from glanceclient.v1 import client as glanceClient
 from keystoneclient.v2_0 import client as keystoneClient
-import time
 
 
 class osCommon(object):
@@ -70,7 +69,3 @@ class osCommon(object):
         return osCommon.get_public_endpoint_service_by_id(keystone_client, osCommon.get_id_service(keystone_client,
                                                                                                    name_service).id)
 
-    @staticmethod
-    def wait_for_status(getter, id, status):
-        while getter.get(id).status != status:
-            time.sleep(1)
