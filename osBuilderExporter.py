@@ -14,11 +14,11 @@ LOG.addHandler(hdlr)
 
 
 class osBuilderExporter:
-    def __init__(self, glance_client, cinder_client, nova_client, quantum_client, instance, config):
+    def __init__(self, glance_client, cinder_client, nova_client, neutron_client, instance, config):
         self.glance_client = glance_client
         self.cinder_client = cinder_client
         self.nova_client = nova_client
-        self.quantum_client = quantum_client
+        self.neutron_client = neutron_client
         self.data = dict()
         self.instance = instance
         self.config = config
@@ -140,7 +140,7 @@ class osBuilderExporter:
 
     def __getattr__(self, item):
         getter = {
-            'port_list': lambda: self.quantum_client.list_ports()["ports"]
+            'port_list': lambda: self.neutron_client.list_ports()["ports"]
         }[item]
 
         if getter is None:

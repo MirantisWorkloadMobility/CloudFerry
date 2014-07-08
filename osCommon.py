@@ -1,22 +1,34 @@
 from novaclient.v1_1 import client as novaClient
 from cinderclient.v1 import client as cinderClient
 #from quantumclient.v2_0 import client as quantumClient
-from neutronclient.v2_0 import client as quantumClient
+from neutronclient.v2_0 import client as neutronClient
 from glanceclient.v1 import client as glanceClient
 from keystoneclient.v2_0 import client as keystoneClient
 
 
+
+
+
 class osCommon(object):
+
+    """
+
+    Common class for getting openstack client objects
+
+    """
     
     def __init__(self, config):
         self.keystone_client = self.get_keystone_client(config)
         self.nova_client = self.get_nova_client(config)
         self.cinder_client = self.get_cinder_client(config)
-        self.quantum_client = self.get_quantum_client(config)
+        self.qneutron_client = self.get_neutron_client(config)
         self.glance_client = self.get_glance_client(self.keystone_client)
         
     @staticmethod
     def get_nova_client(params):
+
+        """ Getting nova client """
+
         return novaClient.Client(params["user"],
                                  params["password"],
                                  params["tenant"],
@@ -24,14 +36,20 @@ class osCommon(object):
 
     @staticmethod
     def get_cinder_client(params):
+
+        """ Getting cinder client """
+
         return cinderClient.Client(params["user"],
                                    params["password"],
                                    params["tenant"],
                                    "http://" + params["host"] + ":35357/v2.0/")
 
     @staticmethod
-    def get_quantum_client(params):
-        return quantumClient.Client(username=params["user"],
+    def get_neutron_client(params):
+
+        """ Getting neutron(quantun) client """
+
+        return neutronClient.Client(username=params["user"],
                                     password=params["password"],
                                     tenant_name=params["tenant"],
                                     auth_url="http://" + params["host"] + ":35357/v2.0/")

@@ -29,7 +29,7 @@ class Importer(osCommon.osCommon):
         builderImporter = osBuilderImporter(self.glance_client,
                                             self.cinder_client,
                                             self.nova_client,
-                                            self.quantum_client,
+                                            self.neutron_client,
                                             self.config,
                                             self.config_from,
                                             data)

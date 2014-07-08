@@ -23,7 +23,7 @@ class Exporter(osCommon.osCommon):
         data = osBuilderExporter(self.glance_client,
                                  self.cinder_client,
                                  self.nova_client,
-                                 self.quantum_client,
+                                 self.neutron_client,
                                  instance,
                                  self.config)\
             .get_name()\
