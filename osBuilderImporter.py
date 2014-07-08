@@ -215,6 +215,8 @@ class osBuilderImporter:
             self.__wait_for_status(self.cinder_client.volumes, volume.id, 'in-use')
             LOG.debug("| | | | delete image on source cloud")
             source_volume.delete()
+            LOG.debug("| | | | delete image on dest cloud")
+            self.glance_client.images.delete(image.id)
             LOG.debug("| | | | done")
         return self
 
