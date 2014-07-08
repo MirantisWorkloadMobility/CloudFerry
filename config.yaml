@@ -11,12 +11,15 @@ clouds:
         user: admin
         password: admin
         tenant: admin
+        temp: /root/merge
+        glance:
+          backend: ceph
         import_rules:
             default: {}
             overwrite:
                 key: {name: control}
                 networks:
-                 - name: "net04_ext"
+                 - name: "net04"
 key_filename:
     name: privkey
 instances:

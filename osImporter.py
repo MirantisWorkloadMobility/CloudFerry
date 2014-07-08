@@ -43,10 +43,15 @@ class Importer(osCommon.osCommon):
             LOG.error(e)
 
     def __detect_backend_glance(self):
-        return 'iscsi'
+        return self.config['glance']['backend']
 
     def __upload_ceph_backend(self, builderImporter):
-        pass
+        return builderImporter\
+            .prepare_for_creating_new_instance()\
+            .merge_delta_and_image()\
+            .create_instance()\
+            .import_volumes()\
+            .finish()
 
     def __upload_iscsi_backend(self, builderImporter):
         return builderImporter\

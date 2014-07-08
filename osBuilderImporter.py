@@ -73,6 +73,41 @@ class osBuilderImporter:
         LOG.debug("| | sync delta: done")
         return self
 
+    def merge_delta_and_image(self):
+        LOG.info("| | copying diff for instance (ceph case)")
+        self.__diff_copy(self.data['disk'],
+                         self.data['instance_name'],
+                         self.config['host'],
+                         dest_path=self.config['temp'])
+        LOG.debug("| | Starting base image downloading")
+        self.__download_image_from_glance(self.data_for_instance, self.config['temp'])
+        LOG.debug("| | Base image dowloaded")
+        return self
+
+    def __diff_copy(self, disk_data, libvirt_name, dest_host, dest_path="root"):
+        with settings(host_string=self.config_from['host']):
+            with forward_agent(env.key_filename):
+                out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" %
+                          (disk_data['host'], libvirt_name))
+                source_disk = out.split()[4]
+                run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' | " +
+                    "ssh -oStrictHostKeyChecking=no %s 'dd bs=1M of=%s/disk'") %
+                    (disk_data['host'], source_disk, dest_host, dest_path))
+
+    def __download_image_from_glance(self, data_for_instance, dest_path):
+        baseimage_id = data_for_instance["image"].id
+        with settings(host_string=self.config['host']):
+            with forward_agent(env.key_filename):
+                run(("glance --os-username=%s --os-password=%s --os-tenant-name=%s " +
+                     "--os-auth-url=http://%s:35357/v2.0 " +
+                    "image-download %s > %s/baseimage") %
+                    (self.config['user'],
+                     self.config['password'],
+                     self.config['tenant'],
+                     self.config['host'],
+                     baseimage_id,
+                     dest_path))
+
     def __sync_instance_delta_remote_file(self, disk_data, libvirt_name, instance):
         LOG.debug("| | sync with remote file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
