@@ -1,6 +1,9 @@
 import logging
 from utils import forward_agent
 from fabric.api import run, settings, env
+from osVolumeTransfer import VolumeTransfer
+from osImageTransfer import ImageTransfer
+import time
 
 __author__ = 'mirrorcoder'
 
@@ -48,7 +51,7 @@ class osBuilderExporter:
         return self
 
     def get_image(self):
-        self.data['image'] = self.glance_client.images.get(self.instance.image['id']).__dict__
+        self.data['image'] = ImageTransfer(self.instance.image['id'], self.glance_client)
         return self
 
     def get_flavor(self):
@@ -86,36 +89,29 @@ class osBuilderExporter:
 
     def get_volumes(self):
         images_from_volumes = []
+        print "---- volumes ----"
+        print self.nova_client.volumes.get_server_volumes(self.instance.id)
         for volume_info in self.nova_client.volumes.get_server_volumes(self.instance.id):
+            print "volume_info -------- ", volume_info
             volume = self.cinder_client.volumes.get(volume_info.volumeId)
             LOG.debug("| | uploading volume %s [%s] to image service" % (volume.display_name, volume.id))
             resp, image = self.cinder_client.volumes.upload_to_image(volume=volume,
                                                                      force=True,
                                                                      image_name=volume.id,
                                                                      container_format="bare",
-                                                                     disk_format="qcow2")
+                                                                     disk_format=self.config['cinder']['disk_format'])
             image_upload = image['os-volume_upload_image']
+            self.__wait_for_status(self.glance_client.images, image_upload['image_id'], 'active')
             print "--------------- volume -----------"
             print volume.__dict__
             print "------------------- image_upload ---------------"
             print image_upload
-            images_from_volumes.append(self.__merge_data_about_volume(volume, image_upload, self.instance))
+            images_from_volumes.append(VolumeTransfer(volume,
+                                                      self.instance,
+                                                      image_upload['image_id'],
+                                                      self.glance_client))
         self.data['volumes'] = images_from_volumes
         return self
-
-    def __merge_data_about_volume(self, volume, image_upload, instance):
-        return {
-                'type': 'remote disk by id',
-                'id': volume.id,
-                'size': volume.size,
-                'name': volume.display_name,
-                'description': volume.display_description,
-                'volume_type': volume.volume_type,
-                'availability_zone': volume.availability_zone,
-                'device': volume.attachments[0]['device'],
-                'host': getattr(instance, 'OS-EXT-SRV-ATTR:host'),
-                'image_id': image_upload['id']
-            }
 
     def __get_instance_diff_path(self, instance):
         disk_host = getattr(self.instance, 'OS-EXT-SRV-ATTR:host')
@@ -137,6 +133,10 @@ class osBuilderExporter:
         for port in self.port_list:
             if port["fixed_ips"][0]["ip_address"] == ip_address:
                 return port["mac_address"]
+
+    def __wait_for_status(self, getter, id, status):
+        while getter.get(id).status != status:
+            time.sleep(1)
 
     def __getattr__(self, item):
         getter = {

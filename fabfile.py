@@ -34,7 +34,7 @@ def search_instances_by_search_opts(config, exporter):
             yield instance
 
 
-def migrate_one_instance(instance, exporter, importer, config):
+def migrate_one_instance(instance, exporter, importer):
     data = exporter.export(instance)
     importer.upload(data)
 
@@ -50,7 +50,7 @@ def migrate(name_config):
     LOG.info("Migrating all instance by search opts")
     for instance in search_instances_by_search_opts(config, exporter):
         LOG.debug("Migrate instance %s", instance)
-        migrate_one_instance(instance, exporter, importer, config)
+        migrate_one_instance(instance, exporter, importer)
 
 @task
 def clean_dest_cloud(name_config, delete_image=False):

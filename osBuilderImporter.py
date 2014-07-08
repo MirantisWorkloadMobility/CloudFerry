@@ -1,5 +1,4 @@
 import logging
-from osCommon import osCommon
 from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid
 from fabric.api import run, settings, env
 import time
@@ -33,7 +32,7 @@ class osBuilderImporter:
         LOG.debug("| | Get name")
         self.data_for_instance["name"] = self.data["name"]
         LOG.debug("| | Get image")
-        self.data_for_instance["image"] = self.__get_image(self.data)
+        self.data_for_instance["image"] = self.__get_image(self.data['image'])
         LOG.debug("| | Get flavor")
         self.data_for_instance["flavor"] = self.__get_flavor(self.__ensure_param(self.data, 'flavor'))
         LOG.debug("| | Get metadata")
@@ -179,38 +178,26 @@ class osBuilderImporter:
         LOG.debug("| | wait for instance activating")
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'ACTIVE')
         for source_volume in self.data['volumes']:
-            LOG.debug("| | | volume %s" % source_volume)
+            LOG.debug("| | | volume %s" % source_volume.__dict__)
+            LOG.debug("| | | copy image of volume from source to dest")
+            image = self.__copy_from_glance_to_glance(source_volume)
             LOG.debug("| | | | creating volume")
-            if source_volume['volume_type'] == u'None':
-                source_volume['volume_type'] = None
-            volume = self.cinder_client.volumes.create(size=source_volume['size'],
-                                                       display_name=source_volume['name'],
-                                                       display_description=source_volume['description'],
-                                                       volume_type=source_volume['volume_type'],
-                                                       availability_zone=source_volume['availability_zone'])
+            volume = self.cinder_client.volumes.create(size=source_volume.size,
+                                                       display_name=source_volume.name,
+                                                       display_description=source_volume.description,
+                                                       volume_type=source_volume.volume_type,
+                                                       availability_zone=source_volume.availability_zone,
+                                                       imageRef=image.id)
             LOG.debug("| | | | wait for available")
             self.__wait_for_status(self.cinder_client.volumes, volume.id, 'available')
             LOG.debug("| | | | attach vol")
-            self.nova_client.volumes.create_server_volume(self.instance.id, volume.id, source_volume['device'])
+            self.nova_client.volumes.create_server_volume(self.instance.id, volume.id, source_volume.device)
             LOG.debug("| | | | wait for using")
             self.__wait_for_status(self.cinder_client.volumes, volume.id, 'in-use')
-            LOG.debug("| | | | sync data")
-
-            {
-                'remote disk by id': self.__import_volume_remote_disk_by_id
-            }[source_volume['type']](source_volume, self.instance, volume)
-
+            LOG.debug("| | | | delete image on source cloud")
+            source_volume.delete()
             LOG.debug("| | | | done")
         return self
-
-    def __import_volume_remote_disk_by_id(self, volume_info, instance, volume):
-        host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
-        with settings(host_string=self.config_from['host']):
-            with forward_agent(env.key_filename):
-                with up_ssh_tunnel(host, self.config['host']):
-                    run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=4M if=`ls /dev/disk/by-path/*%s-lun-1`' | "
-                        + "ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=4M of=`ls /dev/disk/by-path/*%s*`'")
-                        % (volume_info['host'], volume_info['id'], volume.id))
 
     def __ensure_param(self, data, name, rules_name=None):
         if rules_name is None:
@@ -224,27 +211,28 @@ class osBuilderImporter:
             return import_rules['default'][rules_name]
         return None
 
-    def __get_image(self, data):
-        checksum = data["image"]["checksum"]
+    def __get_image(self, image_transfer):
+        checksum = image_transfer.checksum
         for image in self.glance_client.images.list():
             if image.checksum == checksum:
                 return image
-        LOG.debug("Data image = %s", data)
-        keystone_client_from = osCommon.get_keystone_client(self.config_from)
-        glance_client_from = osCommon.get_glance_client(keystone_client_from)
-        pointer_file = glance_client_from.images.data(data["image"]["id"])._resp
-        image_dest = self.glance_client.images.create(name=data["image"]["name"] + "Migrate",
-                                                      container_format=data["image"]["container_format"],
-                                                      disk_format=data["image"]["disk_format"],
-                                                      is_public=data["image"]["is_public"],
-                                                      protected=data["image"]["protected"],
-                                                      data=pointer_file,
-                                                      size=data["image"]["size"])
+        LOG.debug("Data image = %s", image_transfer.__dict__)
+        image_dest = self.__copy_from_glance_to_glance(image_transfer)
         LOG.debug("image data = %s", image_dest)
         if image_dest.checksum != checksum:
             LOG.error("Checksums is not equ")
             raise ChecksumImageInvalid(checksum, image_dest.checksum)
         return image_dest
+
+    def __copy_from_glance_to_glance(self, transfer_object):
+        info_image_source = transfer_object.get_info_image()
+        return self.glance_client.images.create(name=info_image_source.name + "Migrate",
+                                                container_format=info_image_source.container_format,
+                                                disk_format=info_image_source.disk_format,
+                                                is_public=info_image_source.is_public,
+                                                protected=info_image_source.protected,
+                                                data=transfer_object.get_ref_image(),
+                                                size=info_image_source.size)
 
     def __get_flavor(self, flavor_info):
         if 'id' in flavor_info:

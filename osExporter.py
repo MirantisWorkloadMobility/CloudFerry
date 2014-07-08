@@ -41,4 +41,3 @@ class Exporter(osCommon.osCommon):
             .get_volumes()\
             .finish()
         return data
-

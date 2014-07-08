@@ -19,7 +19,7 @@ class Importer(osCommon.osCommon):
         for inst in self.nova_client.servers.list():
             inst.delete()
         for volume in self.cinder_client.volumes.list():
-            volume.delete()
+            volume.force_delete()
         if delete_images:
             for image in self.glance_client.images.list():
                 self.glance_client.images.delete(image.id)

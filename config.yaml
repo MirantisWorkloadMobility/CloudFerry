@@ -5,6 +5,8 @@ clouds:
         user: admin
         password: admin
         tenant: admin
+        cinder:
+          disk_format: qcow2
     to:
         type: os
         host: 172.18.172.20
