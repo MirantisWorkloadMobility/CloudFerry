@@ -56,6 +56,9 @@ class osCommon(object):
 
     @staticmethod
     def get_keystone_client(params):
+
+        """ Getting keystone client """
+
         keystoneClientForToken = keystoneClient.Client(username=params["user"],
                                                        password=params["password"],
                                                        tenant_name=params["tenant"],
@@ -65,11 +68,17 @@ class osCommon(object):
 
     @staticmethod
     def get_glance_client(keystone_client):
+
+        """ Getting glance client """
+
         endpoint_glance = osCommon.get_endpoint_by_name_service(keystone_client, 'glance')
         return glanceClient.Client(endpoint_glance, token=keystone_client.auth_token_from_user)
 
     @staticmethod
     def get_id_service(keystone_client, name_service):
+
+        """ Getting service_id from keystone """
+
         for service in keystone_client.services.list():
             if service.name == name_service:
                 return service

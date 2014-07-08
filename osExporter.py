@@ -11,6 +11,9 @@ LOG.addHandler(hdlr)
 class Exporter(osCommon.osCommon):
 
     def __init__(self, config):
+
+        """ config initialization"""
+
         self.config = config['clouds']['from']
         self.config_to = config['clouds']['to']
         super(Exporter, self).__init__(self.config)
@@ -19,6 +22,11 @@ class Exporter(osCommon.osCommon):
         return self.nova_client.servers.list(search_opts=search_opts)
 
     def export(self, instance):
+
+        """
+        The main method for gathering and exporting information from source cloud
+        """
+
         LOG.info("Exporting instance %s [%s]" % (instance.name, instance.id))
         data = osBuilderExporter(self.glance_client,
                                  self.cinder_client,

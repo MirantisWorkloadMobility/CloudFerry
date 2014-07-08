@@ -14,6 +14,12 @@ LOG.addHandler(hdlr)
 
 
 class osBuilderExporter:
+
+    """
+    The main class for gathering information from source cloud.
+    data -- main dictionary for filling with information from source cloud
+    """
+
     def __init__(self, glance_client, cinder_client, nova_client, neutron_client, instance, config):
         self.glance_client = glance_client
         self.cinder_client = cinder_client
@@ -80,6 +86,9 @@ class osBuilderExporter:
         return self
 
     def get_disk(self):
+
+        """Getting information about diff file of source instance"""
+
         self.data['disk'] = {
             'type': 'remote file',
             'host': getattr(self.instance, 'OS-EXT-SRV-ATTR:host'),
@@ -88,11 +97,13 @@ class osBuilderExporter:
         return self
 
     def get_volumes(self):
+
+        """
+            Gathering information about attached volumes to source instance and upload these volumes
+            to Glance for further importing through image-service on to destination cloud.
+        """
         images_from_volumes = []
-        print "---- volumes ----"
-        print self.nova_client.volumes.get_server_volumes(self.instance.id)
         for volume_info in self.nova_client.volumes.get_server_volumes(self.instance.id):
-            print "volume_info -------- ", volume_info
             volume = self.cinder_client.volumes.get(volume_info.volumeId)
             LOG.debug("| | uploading volume %s [%s] to image service" % (volume.display_name, volume.id))
             resp, image = self.cinder_client.volumes.upload_to_image(volume=volume,
@@ -102,10 +113,6 @@ class osBuilderExporter:
                                                                      disk_format=self.config['cinder']['disk_format'])
             image_upload = image['os-volume_upload_image']
             self.__wait_for_status(self.glance_client.images, image_upload['image_id'], 'active')
-            print "--------------- volume -----------"
-            print volume.__dict__
-            print "------------------- image_upload ---------------"
-            print image_upload
             images_from_volumes.append(VolumeTransfer(volume,
                                                       self.instance,
                                                       image_upload['image_id'],
@@ -114,6 +121,9 @@ class osBuilderExporter:
         return self
 
     def __get_instance_diff_path(self, instance):
+
+        """Return path of instance's diff file"""
+
         disk_host = getattr(self.instance, 'OS-EXT-SRV-ATTR:host')
         libvirt_name = getattr(self.instance, 'OS-EXT-SRV-ATTR:instance_name')
         with settings(host_string=self.config['host']):

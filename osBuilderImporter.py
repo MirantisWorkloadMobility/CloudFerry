@@ -12,6 +12,11 @@ LOG.addHandler(hdlr)
 
 
 class osBuilderImporter:
+
+    """
+    The main class for importing data from source cloud.
+    """
+
     def __init__(self, glance_client, cinder_client, nova_client, neutron_client, config, config_from, data):
         self.glance_client = glance_client
         self.cinder_client = cinder_client
@@ -58,6 +63,9 @@ class osBuilderImporter:
         return self
 
     def import_instance_delta(self):
+
+        """ Transfering instance's diff file """
+
         LOG.info("| sync delta")
         LOG.debug("| import instance delta")
         if self.instance.status == 'ACTIVE':
@@ -73,6 +81,9 @@ class osBuilderImporter:
         return self
 
     def merge_delta_and_image(self):
+
+        """ Merging diff file and base image of instance (ceph case)"""
+
         LOG.info("| | copying diff for instance (ceph case)")
         diff_disk_path = self.__diff_copy(self.data,
                                           self.data_for_instance,
@@ -173,6 +184,14 @@ class osBuilderImporter:
                             (disk_host, source_disk, dest_disk))
 
     def import_volumes(self):
+
+        """
+            Volumes migration through image-service.
+            Firstly: transferring image from source glance to destination glance
+            Secandary: create volume with referencing on to image, in which we already uploaded cinder
+            volume on source cloud.
+        """
+
         LOG.info("| migrateVolumes")
         LOG.debug("| import volumes")
         LOG.debug("| | wait for instance activating")

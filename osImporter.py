@@ -25,6 +25,10 @@ class Importer(osCommon.osCommon):
                 self.glance_client.images.delete(image.id)
 
     def upload(self, data):
+
+        """
+        The main method for data uploading from source cloud
+        """
         LOG.info("Start migrate instance")
         builderImporter = osBuilderImporter(self.glance_client,
                                             self.cinder_client,
@@ -46,6 +50,10 @@ class Importer(osCommon.osCommon):
         return self.config['glance']['backend']
 
     def __upload_ceph_backend(self, builderImporter):
+
+        """
+        Algorithm of migration for ceph destination backend for glance
+        """
         return builderImporter\
             .prepare_for_creating_new_instance()\
             .merge_delta_and_image()\
@@ -54,6 +62,9 @@ class Importer(osCommon.osCommon):
             .finish()
 
     def __upload_iscsi_backend(self, builderImporter):
+        """
+        Algorithm of migration for iscsi-like destination backend for glance
+        """
         return builderImporter\
             .prepare_for_creating_new_instance()\
             .create_instance()\

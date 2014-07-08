@@ -2,7 +2,7 @@ __author__ = 'mirrorcoder'
 
 
 class VolumeTransfer:
-
+    """ The main class for gathering information for volumes migration"""
     def __init__(self, volume, instance, image_id, glance_client):
         self.glance_client = glance_client
         self.id = volume.id
@@ -21,6 +21,9 @@ class VolumeTransfer:
         return self.__info
 
     def get_ref_image(self):
+        """
+        return file-like object which will be using on destination cloud for importing images (aka volumes)
+        """
         return self.glance_client.images.data(self.image_id)._resp
 
     def delete(self):

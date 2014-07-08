@@ -5,6 +5,11 @@ __author__ = 'mirrorcoder'
 
 
 class forward_agent:
+
+    """
+        Forwarding ssh-key for access on to source and destination clouds via ssh
+    """
+
     def __init__(self, key_file):
         self.key_file = key_file
 
@@ -22,6 +27,11 @@ class forward_agent:
 
 
 class up_ssh_tunnel:
+
+    """
+        Up ssh tunnel on dest controller node for transferring data
+    """
+
     def __init__(self, address_dest_compute, address_dest_controller):
         self.address_dest_compute = address_dest_compute
         self.address_dest_controller = address_dest_controller
