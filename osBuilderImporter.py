@@ -82,6 +82,9 @@ class osBuilderImporter:
         LOG.debug("| | Starting base image downloading")
         self.__download_image_from_glance(self.data_for_instance, self.config['temp'])
         LOG.debug("| | Base image dowloaded")
+        LOG.debug("| | Rebasing original diff file")
+        self.__diff_rebase(self.config['temp'])
+        LOG.debug("| | Diff file has been rebased")
         return self
 
     def __diff_copy(self, disk_data, libvirt_name, dest_host, dest_path="root"):
@@ -107,6 +110,11 @@ class osBuilderImporter:
                      self.config['host'],
                      baseimage_id,
                      dest_path))
+
+    def __diff_rebase(self, dest_path):
+        with settings(host_string=self.config['host']):
+            with forward_agent(env.key_filename):
+                run("cd %s && qemu-img rebase -u -b baseimage disk" % dest_path)
 
     def __sync_instance_delta_remote_file(self, disk_data, libvirt_name, instance):
         LOG.debug("| | sync with remote file")
