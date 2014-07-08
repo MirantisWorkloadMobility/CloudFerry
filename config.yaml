@@ -23,4 +23,4 @@ clouds:
 key_filename:
     name: privkey
 instances:
- - key_name: amazon
+ - key_name: key

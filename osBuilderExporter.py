@@ -84,22 +84,18 @@ class osBuilderExporter:
         return self
 
     def get_volumes(self):
-        volumes = []
+        images_from_volumes = []
         for volumeInfo in self.nova_client.volumes.get_server_volumes(self.instance.id):
             volume = self.cinder_client.volumes.get(volumeInfo.volumeId)
-            LOG.debug("| | volume %s [%s]" % (volume.display_name, volume.id))
-            volumes.append({
-                'type': 'remote disk by id',
-                'id': volume.id,
-                'size': volume.size,
-                'name': volume.display_name,
-                'description': volume.display_description,
-                'volume_type': volume.volume_type,
-                'availability_zone': volume.availability_zone,
-                'device': volume.attachments[0]['device'],
-                'host': getattr(self.instance, 'OS-EXT-SRV-ATTR:host')
-            })
-        self.data['volumes'] = volumes
+            LOG.debug("| | uploading volume %s [%s] to image service" % (volume.display_name, volume.id))
+            resp, image = self.cinder_client.volumes.upload_to_image(volume=volume,
+                                                                     force=True,
+                                                                     image_name=volume.id,
+                                                                     container_format="bare",
+                                                                     disk_format="qcow2")
+            image_id = image['os-volume_upload_image']['image_id']
+            images_from_volumes.append(image_id)
+        self.data['volumes'] = images_from_volumes
         return self
 
     def __get_instance_diff_path(self, instance):
