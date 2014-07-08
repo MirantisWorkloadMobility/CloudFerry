@@ -1,6 +1,7 @@
 import logging
 from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid
 from fabric.api import run, settings, env
+from wrapHttpLibResp import WrapHttpLibResp
 import time
 
 __author__ = 'mirrorcoder'
@@ -252,8 +253,12 @@ class osBuilderImporter:
                                                 disk_format=info_image_source.disk_format,
                                                 is_public=info_image_source.is_public,
                                                 protected=info_image_source.protected,
-                                                data=transfer_object.get_ref_image(),
+                                                data=WrapHttpLibResp(transfer_object.get_ref_image(),
+                                                                     self.__callback_print_progress),
                                                 size=info_image_source.size)
+
+    def __callback_print_progress(self, size, length):
+        print "Download {0} bytes of {1} ({2}%)".format(size, length, size*100/length)
 
     def __get_flavor(self, flavor_info):
         if 'id' in flavor_info:
