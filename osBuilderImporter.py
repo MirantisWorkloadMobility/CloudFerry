@@ -75,27 +75,35 @@ class osBuilderImporter:
 
     def merge_delta_and_image(self):
         LOG.info("| | copying diff for instance (ceph case)")
-        self.__diff_copy(self.data['disk'],
-                         self.data['instance_name'],
-                         self.config['host'],
-                         dest_path=self.config['temp'])
+        diff_disk_path = self.__diff_copy(self.data,
+                                          self.data_for_instance,
+                                          self.config['host'],
+                                          dest_path=self.config['temp'])
         LOG.debug("| | Starting base image downloading")
-        self.__download_image_from_glance(self.data_for_instance, self.config['temp'])
+        self.__download_image_from_glance(self.data_for_instance, diff_disk_path)
         LOG.debug("| | Base image dowloaded")
         LOG.debug("| | Rebasing original diff file")
-        self.__diff_rebase(self.config['temp'])
+        self.__diff_rebase(diff_disk_path)
         LOG.debug("| | Diff file has been rebased")
+        self.__diff_commit(diff_disk_path)
+        LOG.debug("| | Diff file has been commited to baseimage")
+        LOG.debug("| | Start uploading newimage to glance")
+        new_image_id = self.__upload_image_to_glance(diff_disk_path, self.data_for_instance)
+        LOG.debug("| | New image uploaded to glance")
+        self.data_for_instance["image"] = self.glance_client.images.get(new_image_id)
         return self
 
-    def __diff_copy(self, disk_data, libvirt_name, dest_host, dest_path="root"):
+    def __diff_copy(self, data, data_for_instance, dest_host, dest_path="root"):
+        dest_path = dest_path + "/" + data_for_instance["image"].id
+        with settings(host_string=self.config['host']):
+            with forward_agent(env.key_filename):
+                run("mkdir %s" % dest_path)
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
-                out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" %
-                          (disk_data['host'], libvirt_name))
-                source_disk = out.split()[4]
                 run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' | " +
-                    "ssh -oStrictHostKeyChecking=no %s 'dd bs=1M of=%s/disk'") %
-                    (disk_data['host'], source_disk, dest_host, dest_path))
+                     "ssh -oStrictHostKeyChecking=no %s 'dd bs=1M of=%s/disk'") %
+                    (data['disk']['host'], data['diff_path'], dest_host, dest_path))
+        return dest_path
 
     def __download_image_from_glance(self, data_for_instance, dest_path):
         baseimage_id = data_for_instance["image"].id
@@ -111,6 +119,29 @@ class osBuilderImporter:
                      baseimage_id,
                      dest_path))
 
+    def __diff_commit(self,dest_path):
+        with settings(host_string=self.config['host']):
+            with forward_agent(env.key_filename):
+                run("cd %s && qemu-img commit disk" % dest_path)
+
+    def __upload_image_to_glance(self, path_to_image, data_for_instance):
+        name = "new" + data_for_instance["image"].name
+        with settings(host_string=self.config['host']):
+            with forward_agent(env.key_filename):
+                out = run(("glance --os-username=%s --os-password=%s --os-tenant-name=%s " +
+                           "--os-auth-url=http://%s:35357/v2.0 " +
+                           "image-create --name %s --disk-format=qcow2 --container-format=bare --file %s/baseimage | " +
+                           "grep id") %
+                          (self.config['user'],
+                           self.config['password'],
+                           self.config['tenant'],
+                           self.config['host'],
+                           name,
+                           path_to_image))
+                new_image_id = out.split()[3]
+                print new_image_id
+        return new_image_id
+
     def __diff_rebase(self, dest_path):
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
@@ -123,11 +154,10 @@ class osBuilderImporter:
         disk_host = data['disk']['host']
         dest_instance_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
         LOG.debug("| | copy file")
-        with settings(host_string=self.config_from['host']):
+        with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host']):
-                    out = run("ssh -oStrictHostKeyChecking=no -p 9999 localhost 'virsh domblklist %s'" %
-                              dest_instance_name)
+                    out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" % (host, dest_instance_name))
                     dest_output = out.split()
                     dest_disk = None
                     for i in dest_output:
@@ -137,9 +167,10 @@ class osBuilderImporter:
                     if not dest_disk:
                         raise NameError("Can't find suitable name of the destination disk path")
                     LOG.debug("Dest disk %s" % dest_disk)
-                    run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
-                        "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
-                        (disk_host, source_disk, dest_disk))
+                    with settings(host_string=self.config_from['host']):
+                        run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
+                            "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
+                            (disk_host, source_disk, dest_disk))
 
     def import_volumes(self):
         LOG.info("| migrateVolumes")
