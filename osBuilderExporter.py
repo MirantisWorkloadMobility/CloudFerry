@@ -1,4 +1,6 @@
 import logging
+from utils import forward_agent
+from fabric.api import run, settings, env
 
 __author__ = 'mirrorcoder'
 
@@ -77,6 +79,7 @@ class osBuilderExporter:
         self.data['disk'] = {
             'type': 'remote file',
             'host': getattr(self.instance, 'OS-EXT-SRV-ATTR:host'),
+            'diff_path': self.__get_instance_diff_path(self.instance)
         }
         return self
 
@@ -98,6 +101,22 @@ class osBuilderExporter:
             })
         self.data['volumes'] = volumes
         return self
+
+    def __get_instance_diff_path(self, instance):
+        disk_host = getattr(self.instance, 'OS-EXT-SRV-ATTR:host')
+        libvirt_name = getattr(self.instance, 'OS-EXT-SRV-ATTR:instance_name')
+        with settings(host_string=self.config['host']):
+            with forward_agent(env.key_filename):
+                out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" %
+                          (disk_host, libvirt_name))
+                source_out = out.split()
+                source_disk = None
+                for i in source_out:
+                    if instance.id in i:
+                        source_disk = i
+                if not source_disk:
+                    raise NameError("Can't find suitable name of the source disk path")
+        return source_disk
 
     def __get_mac_by_ip(self, ip_address):
         for port in self.port_list:

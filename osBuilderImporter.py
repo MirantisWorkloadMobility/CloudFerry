@@ -68,7 +68,7 @@ class osBuilderImporter:
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'SHUTOFF')
         {
             'remote file': self.__sync_instance_delta_remote_file
-        }[self.data['disk']['type']](self.data['disk'], self.data['instance_name'], self.instance)
+        }[self.data['disk']['type']](self.data, self.instance)
         self.instance.start()
         LOG.debug("| | sync delta: done")
         return self
@@ -116,24 +116,30 @@ class osBuilderImporter:
             with forward_agent(env.key_filename):
                 run("cd %s && qemu-img rebase -u -b baseimage disk" % dest_path)
 
-    def __sync_instance_delta_remote_file(self, disk_data, libvirt_name, instance):
+    def __sync_instance_delta_remote_file(self, data, instance):
         LOG.debug("| | sync with remote file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
-        source_instance_name = libvirt_name
+        source_disk = data['disk']['diff_path']
+        disk_host = data['disk']['host']
         dest_instance_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
         LOG.debug("| | copy file")
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host']):
-                    out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" %
-                              (disk_data['host'], source_instance_name))
-                    source_disk = out.split()[4]
                     out = run("ssh -oStrictHostKeyChecking=no -p 9999 localhost 'virsh domblklist %s'" %
                               dest_instance_name)
-                    dest_disk = out.split()[4]
+                    dest_output = out.split()
+                    dest_disk = None
+                    for i in dest_output:
+                        print i
+                        if instance.id in i:
+                            dest_disk = i
+                    if not dest_disk:
+                        raise NameError("Can't find suitable name of the destination disk path")
+                    LOG.debug("Dest disk %s" % dest_disk)
                     run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
                         "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
-                        (disk_data['host'], source_disk, dest_disk))
+                        (disk_host, source_disk, dest_disk))
 
     def import_volumes(self):
         LOG.info("| migrateVolumes")
