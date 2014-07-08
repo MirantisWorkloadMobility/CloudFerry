@@ -24,7 +24,8 @@ class Exporter(osCommon.osCommon):
                                  self.cinder_client,
                                  self.nova_client,
                                  self.quantum_client,
-                                 instance)\
+                                 instance,
+                                 self.config)\
             .get_name()\
             .get_image()\
             .get_flavor()\

@@ -11,13 +11,14 @@ LOG.addHandler(hdlr)
 
 
 class osBuilderExporter:
-    def __init__(self, glance_client, cinder_client, nova_client, quantum_client, instance):
+    def __init__(self, glance_client, cinder_client, nova_client, quantum_client, instance, config):
         self.glance_client = glance_client
         self.cinder_client = cinder_client
         self.nova_client = nova_client
         self.quantum_client = quantum_client
         self.data = dict()
         self.instance = instance
+        self.config = config
 
     def finish(self):
         return self.data
@@ -85,18 +86,36 @@ class osBuilderExporter:
 
     def get_volumes(self):
         images_from_volumes = []
-        for volumeInfo in self.nova_client.volumes.get_server_volumes(self.instance.id):
-            volume = self.cinder_client.volumes.get(volumeInfo.volumeId)
+        for volume_info in self.nova_client.volumes.get_server_volumes(self.instance.id):
+            volume = self.cinder_client.volumes.get(volume_info.volumeId)
             LOG.debug("| | uploading volume %s [%s] to image service" % (volume.display_name, volume.id))
             resp, image = self.cinder_client.volumes.upload_to_image(volume=volume,
                                                                      force=True,
                                                                      image_name=volume.id,
                                                                      container_format="bare",
                                                                      disk_format="qcow2")
-            image_id = image['os-volume_upload_image']['image_id']
-            images_from_volumes.append(image_id)
+            image_upload = image['os-volume_upload_image']
+            print "--------------- volume -----------"
+            print volume.__dict__
+            print "------------------- image_upload ---------------"
+            print image_upload
+            images_from_volumes.append(self.__merge_data_about_volume(volume, image_upload, self.instance))
         self.data['volumes'] = images_from_volumes
         return self
+
+    def __merge_data_about_volume(self, volume, image_upload, instance):
+        return {
+                'type': 'remote disk by id',
+                'id': volume.id,
+                'size': volume.size,
+                'name': volume.display_name,
+                'description': volume.display_description,
+                'volume_type': volume.volume_type,
+                'availability_zone': volume.availability_zone,
+                'device': volume.attachments[0]['device'],
+                'host': getattr(instance, 'OS-EXT-SRV-ATTR:host'),
+                'image_id': image_upload['id']
+            }
 
     def __get_instance_diff_path(self, instance):
         disk_host = getattr(self.instance, 'OS-EXT-SRV-ATTR:host')

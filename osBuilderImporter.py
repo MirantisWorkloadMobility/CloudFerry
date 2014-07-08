@@ -97,12 +97,13 @@ class osBuilderImporter:
         dest_path = dest_path + "/" + data_for_instance["image"].id
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
+                run("rm -rf %s" % dest_path)
                 run("mkdir %s" % dest_path)
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
                 run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' | " +
                      "ssh -oStrictHostKeyChecking=no %s 'dd bs=1M of=%s/disk'") %
-                    (data['disk']['host'], data['diff_path'], dest_host, dest_path))
+                    (data['disk']['host'], data['disk']['diff_path'], dest_host, dest_path))
         return dest_path
 
     def __download_image_from_glance(self, data_for_instance, dest_path):
@@ -177,27 +178,27 @@ class osBuilderImporter:
         LOG.debug("| import volumes")
         LOG.debug("| | wait for instance activating")
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'ACTIVE')
-        for volume_info in self.data['volumes']:
-            LOG.debug("| | | volume %s" % volume_info['name'])
+        for source_volume in self.data['volumes']:
+            LOG.debug("| | | volume %s" % source_volume)
             LOG.debug("| | | | creating volume")
-            if volume_info['volume_type'] == u'None':
-                volume_info['volume_type'] = None
-            volume = self.cinder_client.volumes.create(size=volume_info['size'],
-                                                       display_name=volume_info['name'],
-                                                       display_description=volume_info['description'],
-                                                       volume_type=volume_info['volume_type'],
-                                                       availability_zone=volume_info['availability_zone'])
+            if source_volume['volume_type'] == u'None':
+                source_volume['volume_type'] = None
+            volume = self.cinder_client.volumes.create(size=source_volume['size'],
+                                                       display_name=source_volume['name'],
+                                                       display_description=source_volume['description'],
+                                                       volume_type=source_volume['volume_type'],
+                                                       availability_zone=source_volume['availability_zone'])
             LOG.debug("| | | | wait for available")
             self.__wait_for_status(self.cinder_client.volumes, volume.id, 'available')
             LOG.debug("| | | | attach vol")
-            self.nova_client.volumes.create_server_volume(self.instance.id, volume.id, volume_info['device'])
+            self.nova_client.volumes.create_server_volume(self.instance.id, volume.id, source_volume['device'])
             LOG.debug("| | | | wait for using")
             self.__wait_for_status(self.cinder_client.volumes, volume.id, 'in-use')
             LOG.debug("| | | | sync data")
 
             {
                 'remote disk by id': self.__import_volume_remote_disk_by_id
-            }[volume_info['type']](volume_info, self.instance, volume)
+            }[source_volume['type']](source_volume, self.instance, volume)
 
             LOG.debug("| | | | done")
         return self
