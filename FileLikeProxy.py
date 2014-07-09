@@ -8,7 +8,7 @@ class FileLikeProxy:
         self.length = self.resp.length if self.resp.length else transfer_object.get_info_image().size
         self.id = transfer_object.get_info_image().id
         self.name = transfer_object.get_info_image().name
-        self.percent = self.resp.length / 100
+        self.percent = self.length / 100
         self.res = 0
         self.delta = 0
 
