@@ -3,13 +3,15 @@ __author__ = 'mirrorcoder'
 
 
 class WrapHttpLibResp:
-    def __init__(self, resp, callback):
+    def __init__(self, resp, callback, id, name):
         self.resp = resp
         self.__callback = callback
         self.percent = self.resp.length / 100
         self.res = 0
         self.delta = 0
         self.length = self.resp.length
+        self.id = id
+        self.name = name
 
     def read(self, *args, **kwargs):
         res = self.resp.read(*args, **kwargs)
@@ -17,7 +19,7 @@ class WrapHttpLibResp:
         self.delta += len_data
         self.res += len_data
         if self.delta > self.percent:
-            self.__callback(self.res, self.length)
+            self.__callback(self.res, self.length, self.id, self.name)
             self.delta = 0
         return res
 

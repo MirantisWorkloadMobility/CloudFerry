@@ -254,11 +254,13 @@ class osBuilderImporter:
                                                 is_public=info_image_source.is_public,
                                                 protected=info_image_source.protected,
                                                 data=WrapHttpLibResp(transfer_object.get_ref_image(),
-                                                                     self.__callback_print_progress),
+                                                                     self.__callback_print_progress,
+                                                                     info_image_source.id,
+                                                                     info_image_source.name + "Migrate"),
                                                 size=info_image_source.size)
 
-    def __callback_print_progress(self, size, length):
-        print "Download {0} bytes of {1} ({2}%)".format(size, length, size*100/length)
+    def __callback_print_progress(self, size, length, id, name):
+        print "Download {0} bytes of {1} ({2}%) - id = {3} name = {4}".format(size, length, size*100/length, id, name)
 
     def __get_flavor(self, flavor_info):
         if 'id' in flavor_info:
