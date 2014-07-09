@@ -8,6 +8,11 @@ LOG.setLevel(logging.DEBUG)
 hdlr = logging.FileHandler('importer.log')
 LOG.addHandler(hdlr)
 
+ISCSI = "iscsi"
+CEPH = "ceph"
+BOOT_FROM_VOLUME = "boot_volume"
+BOOT_FROM_IMAGE = "boot_image"
+
 
 class Importer(osCommon.osCommon):
     def __init__(self, config):
@@ -39,15 +44,28 @@ class Importer(osCommon.osCommon):
                                             data)
         try:
             new_instance = {
-                'iscsi': self.__upload_iscsi_backend,
-                'ceph': self.__upload_ceph_backend
-            }[self.__detect_backend_glance()](builderImporter)
+                ISCSI: self.__upload_iscsi_backend,
+                CEPH: self.__upload_ceph_backend,
+                BOOT_FROM_VOLUME: self.__upload_boot_volume
+            }[self.__detect_algorithm_upload(data)](builderImporter)
             LOG.info("New instance on destantion cloud %s" % new_instance)
         except ChecksumImageInvalid as e:
             LOG.error(e)
 
+    def __detect_algorithm_upload(self, data):
+        mode_boot = self.__detect_mode_boot(data)
+        if mode_boot == BOOT_FROM_VOLUME:
+            return BOOT_FROM_VOLUME
+        return self.__detect_backend_glance()
+
     def __detect_backend_glance(self):
         return self.config['glance']['backend']
+
+    def __detect_mode_boot(self, data):
+        if data["boot_from_volume"]:
+            return BOOT_FROM_VOLUME
+        else:
+            return BOOT_FROM_IMAGE
 
     def __upload_ceph_backend(self, builderImporter):
 
@@ -72,3 +90,11 @@ class Importer(osCommon.osCommon):
             .import_volumes()\
             .finish()
 
+    def __upload_boot_volume(self, builderImporter):
+        return builderImporter\
+            .prepare_for_creating_new_instance()\
+            .prepare_for_boot_volume()\
+            .create_instance()\
+            .import_volumes()\
+            .delete_image_from_source_and_dest_cloud()\
+            .finish()

@@ -56,6 +56,23 @@ class osBuilderImporter:
          #availability_zone=self.ensure_param(data, 'availability_zone')
         return self
 
+    def prepare_for_boot_volume(self):
+        self.data_for_instance["block_device_mapping_v2"] = [{
+            "source_type": "image",
+            "uuid": self.data_for_instance["image"].id,
+            "destination_type": "volume",
+            "volume_size": self.data["boot_volume_size"],
+            "delete_on_termination": True,
+            "boot_index": 0
+        }]
+        self.data_for_instance["image"] = None
+        return self
+
+    def delete_image_from_source_and_dest_cloud(self):
+        self.glance_client.images.delete(self.data_for_instance["block_device_mapping_v2"][0]["uuid"])
+        self.data['image'].delete()
+        return self
+
     def create_instance(self):
         LOG.info("| creating new instance")
         self.instance = self.nova_client.servers.create(**self.data_for_instance)

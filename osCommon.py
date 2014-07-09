@@ -6,9 +6,6 @@ from glanceclient.v1 import client as glanceClient
 from keystoneclient.v2_0 import client as keystoneClient
 
 
-
-
-
 class osCommon(object):
 
     """

@@ -57,7 +57,12 @@ class osBuilderExporter:
         return self
 
     def get_image(self):
-        self.data['image'] = ImageTransfer(self.instance.image['id'], self.glance_client)
+        if self.instance.image:
+            self.data['image'] = ImageTransfer(self.instance.image['id'], self.glance_client)
+            self.data['boot_from_volume'] = False
+        else:
+            self.data['image'] = None
+            self.data['boot_from_volume'] = True
         return self
 
     def get_flavor(self):
@@ -88,12 +93,14 @@ class osBuilderExporter:
     def get_disk(self):
 
         """Getting information about diff file of source instance"""
-
-        self.data['disk'] = {
-            'type': 'remote file',
-            'host': getattr(self.instance, 'OS-EXT-SRV-ATTR:host'),
-            'diff_path': self.__get_instance_diff_path(self.instance)
-        }
+        if not self.data["boot_from_volume"]:
+            self.data['disk'] = {
+                'type': 'remote file',
+                'host': getattr(self.instance, 'OS-EXT-SRV-ATTR:host'),
+                'diff_path': self.__get_instance_diff_path(self.instance)
+            }
+        else:
+            self.data["boot_volume_size"] = {}
         return self
 
     def get_volumes(self):
@@ -113,10 +120,15 @@ class osBuilderExporter:
                                                                      disk_format=self.config['cinder']['disk_format'])
             image_upload = image['os-volume_upload_image']
             self.__wait_for_status(self.glance_client.images, image_upload['image_id'], 'active')
-            images_from_volumes.append(VolumeTransfer(volume,
-                                                      self.instance,
-                                                      image_upload['image_id'],
-                                                      self.glance_client))
+            if (not volume.bootable) or (not self.data["boot_from_volume"]):
+                images_from_volumes.append(VolumeTransfer(volume,
+                                                          self.instance,
+                                                          image_upload['image_id'],
+                                                          self.glance_client))
+            else:
+                self.data['image'] = ImageTransfer(image_upload['image_id'], self.glance_client)
+                self.data['boot_volume_size'] = volume.size
+
         self.data['volumes'] = images_from_volumes
         return self
 
