@@ -24,7 +24,9 @@ class VolumeTransfer:
         """
         return file-like object which will be using on destination cloud for importing images (aka volumes)
         """
-        return self.glance_client.images.data(self.image_id)._resp
+        resp = self.glance_client.images.data(self.image_id)._resp
+        print "resp = ", resp.__dict__
+        return resp
 
     def delete(self):
         self.glance_client.images.delete(self.image_id)

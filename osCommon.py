@@ -21,7 +21,7 @@ class osCommon(object):
         self.keystone_client = self.get_keystone_client(config)
         self.nova_client = self.get_nova_client(config)
         self.cinder_client = self.get_cinder_client(config)
-        self.qneutron_client = self.get_neutron_client(config)
+        self.neutron_client = self.get_neutron_client(config)
         self.glance_client = self.get_glance_client(self.keystone_client)
         
     @staticmethod

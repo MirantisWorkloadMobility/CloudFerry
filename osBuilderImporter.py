@@ -1,7 +1,7 @@
 import logging
 from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid
 from fabric.api import run, settings, env
-from wrapHttpLibResp import WrapHttpLibResp
+from FileLikeProxy import FileLikeProxy
 import time
 
 __author__ = 'mirrorcoder'
@@ -248,15 +248,14 @@ class osBuilderImporter:
 
     def __copy_from_glance_to_glance(self, transfer_object):
         info_image_source = transfer_object.get_info_image()
+        # TODO: added check of checksum on source and dest clouds
         return self.glance_client.images.create(name=info_image_source.name + "Migrate",
                                                 container_format=info_image_source.container_format,
                                                 disk_format=info_image_source.disk_format,
                                                 is_public=info_image_source.is_public,
                                                 protected=info_image_source.protected,
-                                                data=WrapHttpLibResp(transfer_object.get_ref_image(),
-                                                                     self.__callback_print_progress,
-                                                                     info_image_source.id,
-                                                                     info_image_source.name + "Migrate"),
+                                                data=FileLikeProxy(transfer_object,
+                                                                   self.__callback_print_progress),
                                                 size=info_image_source.size)
 
     def __callback_print_progress(self, size, length, id, name):

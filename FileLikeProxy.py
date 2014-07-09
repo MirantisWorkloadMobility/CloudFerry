@@ -1,27 +1,28 @@
-
 __author__ = 'mirrorcoder'
 
 
-class WrapHttpLibResp:
-    def __init__(self, resp, callback, id, name):
-        self.resp = resp
+class FileLikeProxy:
+    def __init__(self, transfer_object, callback):
         self.__callback = callback
+        self.resp = transfer_object.get_ref_image()
+        self.length = self.resp.length if self.resp.length else transfer_object.get_info_image().size
+        self.id = transfer_object.get_info_image().id
+        self.name = transfer_object.get_info_image().name
         self.percent = self.resp.length / 100
         self.res = 0
         self.delta = 0
-        self.length = self.resp.length
-        self.id = id
-        self.name = name
 
     def read(self, *args, **kwargs):
         res = self.resp.read(*args, **kwargs)
-        len_data = len(res)
+        self.__trigger_callback(len(res))
+        return res
+
+    def __trigger_callback(self, len_data):
         self.delta += len_data
         self.res += len_data
         if self.delta > self.percent:
             self.__callback(self.res, self.length, self.id, self.name)
             self.delta = 0
-        return res
 
     def close(self):
         self.resp.close()
