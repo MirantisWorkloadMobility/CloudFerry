@@ -199,21 +199,20 @@ class osBuilderImporter:
         LOG.debug("| | copy file")
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
+                out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" % (host, dest_instance_name))
+                dest_output = out.split()
+                dest_disk = None
+                for i in dest_output:
+                    print i
+                    if instance.id in i:
+                        dest_disk = i
+                if not dest_disk:
+                    raise NameError("Can't find suitable name of the destination disk path")
+                LOG.debug("Dest disk %s" % dest_disk)
+        with settings(host_string=self.config_from['host']):
+            with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host']):
-                    out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" % (host, dest_instance_name))
-                    dest_output = out.split()
-                    dest_disk = None
-                    for i in dest_output:
-                        print i
-                        if instance.id in i:
-                            dest_disk = i
-                    if not dest_disk:
-                        raise NameError("Can't find suitable name of the destination disk path")
-                    LOG.debug("Dest disk %s" % dest_disk)
-                    with settings(host_string=self.config_from['host']):
-                        run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
-                            "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
-                            (disk_host, source_disk, dest_disk))
+                    run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " + "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") % (disk_host, source_disk, dest_disk))
 
     def import_volumes(self):
 
