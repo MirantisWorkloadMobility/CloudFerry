@@ -16,6 +16,7 @@ clouds:
         temp: /root/merge
         glance:
           backend: ceph
+          convert_to_raw: yes
         import_rules:
             default: {}
             overwrite:

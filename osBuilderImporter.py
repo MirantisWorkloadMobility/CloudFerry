@@ -115,6 +115,11 @@ class osBuilderImporter:
         LOG.debug("| | Diff file has been rebased")
         self.__diff_commit(diff_disk_path)
         LOG.debug("| | Diff file has been commited to baseimage")
+        if self.config['glance']['convert_to_raw'] == True:
+            if self.data_for_instance['image'].disk_format != 'raw':
+                self.__convert_image_to_raw(self.data_for_instance, diff_disk_path)
+                self.data_for_instance['image'].disk_format = 'raw'
+                LOG.debug("| | Image converted to raw format")
         LOG.debug("| | Start uploading newimage to glance")
         new_image_id = self.__upload_image_to_glance(diff_disk_path, self.data_for_instance)
         LOG.debug("| | New image uploaded to glance")
@@ -153,19 +158,28 @@ class osBuilderImporter:
             with forward_agent(env.key_filename):
                 run("cd %s && qemu-img commit disk" % dest_path)
 
+    def __convert_image_to_raw(self, data_for_instance, path_to_image):
+        with settings(host_string=self.config['host']):
+            with forward_agent(env.key_filename):
+                run(("cd %s && qemu-img convert -f %s -O raw baseimage baseimage.tmp") %
+                    (path_to_image, data_for_instance['image'].disk_format))
+                run("cd %s && mv -f baseimage.tmp baseimage" % path_to_image)
+
     def __upload_image_to_glance(self, path_to_image, data_for_instance):
         name = "new" + data_for_instance["image"].name
+        image_format = data_for_instance["image"].disk_format
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
                 out = run(("glance --os-username=%s --os-password=%s --os-tenant-name=%s " +
                            "--os-auth-url=http://%s:35357/v2.0 " +
-                           "image-create --name %s --disk-format=qcow2 --container-format=bare --file %s/baseimage | " +
+                           "image-create --name %s --disk-format=%s --container-format=bare --file %s/baseimage | " +
                            "grep id") %
                           (self.config['user'],
                            self.config['password'],
                            self.config['tenant'],
                            self.config['host'],
                            name,
+                           image_format,
                            path_to_image))
                 new_image_id = out.split()[3]
                 print new_image_id
