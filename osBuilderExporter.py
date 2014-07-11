@@ -20,11 +20,11 @@ class osBuilderExporter:
     data -- main dictionary for filling with information from source cloud
     """
 
-    def __init__(self, glance_client, cinder_client, nova_client, neutron_client, instance, config):
+    def __init__(self, glance_client, cinder_client, nova_client, network_client, instance, config):
         self.glance_client = glance_client
         self.cinder_client = cinder_client
         self.nova_client = nova_client
-        self.neutron_client = neutron_client
+        self.network_client = network_client
         self.data = dict()
         self.instance = instance
         self.config = config
@@ -170,7 +170,7 @@ class osBuilderExporter:
 
     def __getattr__(self, item):
         getter = {
-            'port_list': lambda: self.neutron_client.list_ports()["ports"]
+            'port_list': lambda: self.network_client.list_ports()["ports"]
         }[item]
 
         if getter is None:

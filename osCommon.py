@@ -1,7 +1,5 @@
 from novaclient.v1_1 import client as novaClient
 from cinderclient.v1 import client as cinderClient
-#from quantumclient.v2_0 import client as quantumClient
-from neutronclient.v2_0 import client as neutronClient
 from glanceclient.v1 import client as glanceClient
 from keystoneclient.v2_0 import client as keystoneClient
 
@@ -18,7 +16,7 @@ class osCommon(object):
         self.keystone_client = self.get_keystone_client(config)
         self.nova_client = self.get_nova_client(config)
         self.cinder_client = self.get_cinder_client(config)
-        self.neutron_client = self.get_neutron_client(config)
+        self.network_client = self.get_network_client(config, self.detect_network_client(self.keystone_client))
         self.glance_client = self.get_glance_client(self.keystone_client)
         
     @staticmethod
@@ -42,14 +40,21 @@ class osCommon(object):
                                    "http://" + params["host"] + ":35357/v2.0/")
 
     @staticmethod
-    def get_neutron_client(params):
+    def detect_network_client(keystone):
+        if osCommon.get_name_service_by_type(keystone, 'network') == "quantum":
+            from quantumclient.v2_0 import client as networkClient
+        else:
+            from neutronclient.v2_0 import client as networkClient
+        return networkClient
 
+
+    @staticmethod
+    def get_network_client(params, network_client):
         """ Getting neutron(quantun) client """
-
-        return neutronClient.Client(username=params["user"],
-                                    password=params["password"],
-                                    tenant_name=params["tenant"],
-                                    auth_url="http://" + params["host"] + ":35357/v2.0/")
+        return network_client.Client(username=params["user"],
+                                     password=params["password"],
+                                     tenant_name=params["tenant"],
+                                     auth_url="http://" + params["host"] + ":35357/v2.0/")
 
     @staticmethod
     def get_keystone_client(params):
@@ -79,6 +84,16 @@ class osCommon(object):
         for service in keystone_client.services.list():
             if service.name == name_service:
                 return service
+        return None
+
+    @staticmethod
+    def get_name_service_by_type(keystone_client, type_service):
+
+        """ Getting service_name from keystone """
+
+        for service in keystone_client.services.list():
+            if service.type == type_service:
+                return service.name
         return None
 
     @staticmethod

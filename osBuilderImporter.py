@@ -19,11 +19,11 @@ class osBuilderImporter:
     The main class for importing data from source cloud.
     """
 
-    def __init__(self, glance_client, cinder_client, nova_client, neutron_client, config, config_from, data):
+    def __init__(self, glance_client, cinder_client, nova_client, network_client, config, config_from, data):
         self.glance_client = glance_client
         self.cinder_client = cinder_client
         self.nova_client = nova_client
-        self.neutron_client = neutron_client
+        self.network_client = network_client
         self.config = config
         self.config_from = config_from
         self.data = data
@@ -315,21 +315,21 @@ class osBuilderImporter:
                 network_info = networks_info[i]
             network = self.__get_network(network_info)
             LOG.debug("| | network %s [%s]" % (network['name'], network['id']))
-            for item in self.neutron_client.list_ports(fields=['network_id', 'mac_address', 'id'])['ports']:
+            for item in self.network_client.list_ports(fields=['network_id', 'mac_address', 'id'])['ports']:
                 if (item['network_id'] == network['id']) and (item['mac_address'] == networks_info[i]['mac']):
                     LOG.warn("Port with network_id exists after prev run of script %s" % item)
                     LOG.warn("and will be delete")
-                    self.neutron_client.delete_port(item['id'])
-            port = self.neutron_client.create_port({'port': {'network_id': network['id'],
+                    self.network_client.delete_port(item['id'])
+            port = self.network_client.create_port({'port': {'network_id': network['id'],
                                                              'mac_address': networks_info[i]['mac']}})['port']
             params.append({'net-id': network['id'], 'port-id': port['id']})
         return params
 
     def __get_network(self, network_info):
         if 'id' in network_info:
-            return self.neutron_client.list_networks(id=network_info['id'])['networks'][0]
+            return self.network_client.list_networks(id=network_info['id'])['networks'][0]
         if 'name' in network_info:
-            return self.neutron_client.list_networks(name=network_info['name'])['networks'][0]
+            return self.network_client.list_networks(name=network_info['name'])['networks'][0]
 
     def __wait_for_status(self, getter, id, status):
         while getter.get(id).status != status:
