@@ -2,6 +2,7 @@ import logging
 from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid
 from fabric.api import run, settings, env
 from FileLikeProxy import FileLikeProxy
+from novaclient.openstack.common.apiclient.exceptions import NotFound as NotFoundFlavor
 import time
 
 __author__ = 'mirrorcoder'
@@ -279,10 +280,25 @@ class osBuilderImporter:
         print "Download {0} bytes of {1} ({2}%) - id = {3} name = {4}".format(size, length, size*100/length, id, name)
 
     def __get_flavor(self, flavor_info):
-        if 'id' in flavor_info:
-            return self.nova_client.flavors.get(flavor_info['id'])
-        if 'name' in flavor_info:
-            return self.nova_client.flavors.find(name=flavor_info['name'])
+        flavor = None
+        try:
+            if 'id' in flavor_info:
+                flavor = self.nova_client.flavors.get(flavor_info['id'])
+            if 'name' in flavor_info:
+                flavor = self.nova_client.flavors.find(name=flavor_info['name'])
+        except NotFoundFlavor as e:
+            LOG.error("NotFoundFlavor %s" % flavor_info)
+
+        if not flavor:
+            flavor = self.nova_client.flavors.create(flavor_info["name"],
+                                                     flavor_info["ram"],
+                                                     flavor_info["vcpus"],
+                                                     flavor_info["disk"],
+                                                     ephemeral=flavor_info['ephemeral'],
+                                                     swap=flavor_info['swap'],
+                                                     rxtx_factor=flavor_info['rxtx_factor'],
+                                                     is_public=flavor_info['is_public'])
+        return flavor
 
     def __get_key_name(self, key):
         if 'public_key' in key:

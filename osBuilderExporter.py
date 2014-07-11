@@ -66,7 +66,15 @@ class osBuilderExporter:
         return self
 
     def get_flavor(self):
-        self.data['flavor'] = {'name': self.nova_client.flavors.get(self.instance.flavor['id']).name}
+        flav = self.nova_client.flavors.get(self.instance.flavor['id']).__dict__
+        self.data['flavor'] = {'name': flav["name"],
+                               'ram': flav["ram"],
+                               'vcpus': flav["vcpus"],
+                               'swap': flav["swap"],
+                               'is_public': flav["os-flavor-access:is_public"],
+                               'disk': flav['disk'],
+                               'ephemeral': flav['OS-FLV-EXT-DATA:ephemeral'],
+                               'rxtx_factor': flav['rxtx_factor']}
         return self
 
     def get_security_groups(self):
