@@ -2,7 +2,6 @@ import logging
 from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid
 from fabric.api import run, settings, env
 from FileLikeProxy import FileLikeProxy
-from novaclient.openstack.common.apiclient.exceptions import NotFound as NotFoundFlavor
 import time
 
 __author__ = 'mirrorcoder'
@@ -286,7 +285,8 @@ class osBuilderImporter:
                 flavor = self.nova_client.flavors.get(flavor_info['id'])
             if 'name' in flavor_info:
                 flavor = self.nova_client.flavors.find(name=flavor_info['name'])
-        except NotFoundFlavor as e:
+        except Exception as e:
+            LOG.error("Exp %s" % e)
             LOG.error("NotFoundFlavor %s" % flavor_info)
 
         if not flavor:
