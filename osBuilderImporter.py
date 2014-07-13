@@ -203,8 +203,7 @@ class osBuilderImporter:
                 dest_output = out.split()
                 dest_disk = None
                 for i in dest_output:
-                    print i
-                    if instance.id in i:
+                    if instance.id + "/disk" == i[-41:]:
                         dest_disk = i
                 if not dest_disk:
                     raise NameError("Can't find suitable name of the destination disk path")

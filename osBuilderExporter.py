@@ -153,7 +153,7 @@ class osBuilderExporter:
                 source_out = out.split()
                 source_disk = None
                 for i in source_out:
-                    if instance.id in i:
+                    if instance.id + "/disk" == i[-41:]:
                         source_disk = i
                 if not source_disk:
                     raise NameError("Can't find suitable name of the source disk path")
