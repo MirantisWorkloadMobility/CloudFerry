@@ -59,7 +59,7 @@ class Importer(osCommon.osCommon):
         return self.__detect_backend_glance()
 
     def __detect_backend_glance(self):
-        return self.config['glance']['backend']
+        return self.config['cinder']['backend']
 
     def __detect_mode_boot(self, data):
         if data["boot_from_volume"]:

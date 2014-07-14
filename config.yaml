@@ -14,8 +14,9 @@ clouds:
         password: admin
         tenant: admin
         temp: /root/merge
-        glance:
+        cinder:
           backend: iscsi
+        glance:
           convert_to_raw: yes
         import_rules:
             default: {}
