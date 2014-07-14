@@ -11,6 +11,10 @@ LOG.setLevel(logging.DEBUG)
 hdlr = logging.FileHandler('importer.log')
 LOG.addHandler(hdlr)
 
+DISK = "/disk"
+LOCAL = ".local"
+LEN_UUID_INSTANCE = 36
+
 
 class osBuilderImporter:
 
@@ -91,9 +95,14 @@ class osBuilderImporter:
             self.instance.stop()
         LOG.debug("| | wait for instances")
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'SHUTOFF')
-        {
-            'remote file': self.__sync_instance_delta_remote_file
-        }[self.data['disk']['type']](self.data, self.instance)
+        dest_disk = self.__detect_delta_file(self.instance, False)
+        self.__transfer_remote_file(self.instance, self.data["disk"]["host"], self.data["disk"]["diff_path"], dest_disk)
+        if self.data["disk"]["ephemeral"]:
+            dest_disk_ephemeral = self.__detect_delta_file(self.instance, True)
+            self.__transfer_remote_file(self.instance,
+                                        self.data["disk"]["host"],
+                                        self.data["disk"]["ephemeral"],
+                                        dest_disk_ephemeral)
         self.instance.start()
         LOG.debug("| | sync delta: done")
         return self
@@ -115,7 +124,7 @@ class osBuilderImporter:
         LOG.debug("| | Diff file has been rebased")
         self.__diff_commit(diff_disk_path)
         LOG.debug("| | Diff file has been commited to baseimage")
-        if self.config['glance']['convert_to_raw'] == True:
+        if self.config['glance']['convert_to_raw']:
             if self.data_for_instance['image'].disk_format != 'raw':
                 self.__convert_image_to_raw(self.data_for_instance, diff_disk_path)
                 self.data_for_instance['image'].disk_format = 'raw'
@@ -190,28 +199,33 @@ class osBuilderImporter:
             with forward_agent(env.key_filename):
                 run("cd %s && qemu-img rebase -u -b baseimage disk" % dest_path)
 
-    def __sync_instance_delta_remote_file(self, data, instance):
+    def __detect_delta_file(self, instance, is_ephemeral):
         LOG.debug("| | sync with remote file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
-        source_disk = data['disk']['diff_path']
-        disk_host = data['disk']['host']
         dest_instance_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
-        LOG.debug("| | copy file")
+        dest_disk = None
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
                 out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" % (host, dest_instance_name))
                 dest_output = out.split()
-                dest_disk = None
+                path_disk = (DISK + LOCAL) if is_ephemeral else DISK
                 for i in dest_output:
-                    if instance.id + "/disk" == i[-41:]:
+                    if instance.id + path_disk == i[-(LEN_UUID_INSTANCE+len(path_disk)):]:
                         dest_disk = i
                 if not dest_disk:
                     raise NameError("Can't find suitable name of the destination disk path")
                 LOG.debug("Dest disk %s" % dest_disk)
+        return dest_disk
+
+    def __transfer_remote_file(self, instance, disk_host, source_disk, dest_disk):
+        LOG.debug("| | copy file")
+        host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host']):
-                    run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " + "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") % (disk_host, source_disk, dest_disk))
+                    run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
+                         "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
+                        (disk_host, source_disk, dest_disk))
 
     def import_volumes(self):
 

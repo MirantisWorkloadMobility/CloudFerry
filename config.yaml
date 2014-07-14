@@ -1,9 +1,9 @@
 clouds:
     from:
         type: os
-        host: 172.18.172.43
+        host: 172.18.172.35
         user: admin
-        password: 37d3e39891914512
+        password: admin
         tenant: admin
         cinder:
           disk_format: qcow2
@@ -15,7 +15,7 @@ clouds:
         tenant: admin
         temp: /root/merge
         glance:
-          backend: ceph
+          backend: iscsi
           convert_to_raw: yes
         import_rules:
             default: {}

@@ -12,6 +12,10 @@ LOG.setLevel(logging.DEBUG)
 hdlr = logging.FileHandler('exporter.log')
 LOG.addHandler(hdlr)
 
+DISK = "/disk"
+LOCAL = ".local"
+LEN_UUID_INSTANCE = 36
+
 
 class osBuilderExporter:
 
@@ -66,7 +70,7 @@ class osBuilderExporter:
         return self
 
     def get_flavor(self):
-        flav = self.nova_client.flavors.get(self.instance.flavor['id']).__dict__
+        flav = self.__get_flavor_from_instance(self.instance)
         self.data['flavor'] = {'name': flav["name"],
                                'ram': flav["ram"],
                                'vcpus': flav["vcpus"],
@@ -99,13 +103,14 @@ class osBuilderExporter:
         return self
 
     def get_disk(self):
-
         """Getting information about diff file of source instance"""
+        is_ephemeral = self.__get_flavor_from_instance(self.instance)['OS-FLV-EXT-DATA:ephemeral'] > 0
         if not self.data["boot_from_volume"]:
             self.data['disk'] = {
                 'type': 'remote file',
                 'host': getattr(self.instance, 'OS-EXT-SRV-ATTR:host'),
-                'diff_path': self.__get_instance_diff_path(self.instance)
+                'diff_path': self.__get_instance_diff_path(self.instance, False),
+                'ephemeral': self.__get_instance_diff_path(self.instance, True) if is_ephemeral else None
             }
         else:
             self.data["boot_volume_size"] = {}
@@ -140,20 +145,24 @@ class osBuilderExporter:
         self.data['volumes'] = images_from_volumes
         return self
 
-    def __get_instance_diff_path(self, instance):
+    def __get_flavor_from_instance(self, instance):
+        return self.nova_client.flavors.get(instance.flavor['id']).__dict__
+
+    def __get_instance_diff_path(self, instance, is_ephemeral):
 
         """Return path of instance's diff file"""
 
         disk_host = getattr(self.instance, 'OS-EXT-SRV-ATTR:host')
         libvirt_name = getattr(self.instance, 'OS-EXT-SRV-ATTR:instance_name')
+        source_disk = None
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
                 out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" %
                           (disk_host, libvirt_name))
                 source_out = out.split()
-                source_disk = None
+                path_disk = (DISK + LOCAL) if is_ephemeral else DISK
                 for i in source_out:
-                    if instance.id + "/disk" == i[-41:]:
+                    if instance.id + path_disk == i[-(LEN_UUID_INSTANCE+len(path_disk)):]:
                         source_disk = i
                 if not source_disk:
                     raise NameError("Can't find suitable name of the source disk path")
