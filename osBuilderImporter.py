@@ -84,19 +84,23 @@ class osBuilderImporter:
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'ACTIVE')
         return self
 
-    def import_instance_delta(self):
+    def import_delta_file(self):
 
         """ Transfering instance's diff file """
 
-        LOG.info("| sync delta")
-        LOG.debug("| import instance delta")
         if self.instance.status == 'ACTIVE':
             LOG.info("| | instance is active. Stopping.")
             self.instance.stop()
-        LOG.debug("| | wait for instances")
-        self.__wait_for_status(self.nova_client.servers, self.instance.id, 'SHUTOFF')
-        dest_disk = self.__detect_delta_file(self.instance, False)
-        self.__transfer_remote_file(self.instance, self.data["disk"]["host"], self.data["disk"]["diff_path"], dest_disk)
+            LOG.debug("| | waiting shutoff state of instance")
+            self.__wait_for_status(self.nova_client.servers, self.instance.id, 'SHUTOFF')
+            LOG.debug("| | instance is stopped")
+
+        if not (self.config['cinder']['backend'] == 'ceph'):
+            LOG.info("| sync delta")
+            LOG.debug("| import instance delta")
+            dest_disk = self.__detect_delta_file(self.instance, False)
+            self.__transfer_remote_file(self.instance, self.data["disk"]["host"], self.data["disk"]["diff_path"], dest_disk)
+
         if self.data["disk"]["ephemeral"]:
             dest_disk_ephemeral = self.__detect_delta_file(self.instance, True)
             self.__transfer_remote_file(self.instance,

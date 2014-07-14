@@ -76,6 +76,7 @@ class Importer(osCommon.osCommon):
             .prepare_for_creating_new_instance()\
             .merge_delta_and_image()\
             .create_instance()\
+            .import_delta_file()\
             .import_volumes()\
             .finish()
 
@@ -86,7 +87,7 @@ class Importer(osCommon.osCommon):
         return builderImporter\
             .prepare_for_creating_new_instance()\
             .create_instance()\
-            .import_instance_delta()\
+            .import_delta_file()\
             .import_volumes()\
             .finish()
 
