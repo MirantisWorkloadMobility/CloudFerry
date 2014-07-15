@@ -102,11 +102,17 @@ class osBuilderImporter:
             self.__transfer_remote_file(self.instance, self.data["disk"]["host"], self.data["disk"]["diff_path"], dest_disk)
 
         if self.data["disk"]["ephemeral"]:
-            dest_disk_ephemeral = self.__detect_delta_file(self.instance, True)
-            self.__transfer_remote_file(self.instance,
-                                        self.data["disk"]["host"],
-                                        self.data["disk"]["ephemeral"],
-                                        dest_disk_ephemeral)
+            if self.config['ephemeral_drives'] != 'ceph':
+                dest_disk_ephemeral = self.__detect_delta_file(self.instance, True)
+                self.__transfer_remote_file(self.instance,
+                                            self.data["disk"]["host"],
+                                            self.data["disk"]["ephemeral"],
+                                            dest_disk_ephemeral)
+            if self.config['ephemeral_drives'] == 'ceph':
+                self.__transfer_remote_file_to_ceph(self.instance,
+                                                    self.data["disk"]["host"],
+                                                    self.data["disk"]["ephemeral"],
+                                                    self.config['host'])
         self.instance.start()
         LOG.debug("| | sync delta: done")
         return self
@@ -230,6 +236,21 @@ class osBuilderImporter:
                     run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
                          "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
                         (disk_host, source_disk, dest_disk))
+
+    def __transfer_remote_file_to_ceph(self, instance, disk_host, source_disk, dest_host):
+        temp_dir = source_disk[:-10]
+        print "!!!!!!!!!!!!!!!!!!!!!!!!temp_dir"
+        print temp_dir
+        LOG.debug("| | copy ephemeral file to destination ceph")
+        host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        with settings(host_string=dest_host):
+            with forward_agent(env.key_filename):
+                run(("rbd rm -p compute %s_disk.local") % instance.id)
+        with settings(host_string=self.config_from['host']):
+            with forward_agent(env.key_filename):
+                run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && "  +
+                    "qemu-img convert -O raw %s disk.local.temp && gzip -c disk.local.temp' | " +
+                    "ssh -oStrictHostKeyChecking=no %s 'gunzip | rbd import --image-format=2 - compute/%s_disk.local'") % (disk_host, temp_dir, source_disk, dest_host, instance.id))
 
     def import_volumes(self):
 
