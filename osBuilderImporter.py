@@ -239,8 +239,6 @@ class osBuilderImporter:
 
     def __transfer_remote_file_to_ceph(self, instance, disk_host, source_disk, dest_host):
         temp_dir = source_disk[:-10]
-        print "!!!!!!!!!!!!!!!!!!!!!!!!temp_dir"
-        print temp_dir
         LOG.debug("| | copy ephemeral file to destination ceph")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         with settings(host_string=dest_host):
@@ -251,6 +249,7 @@ class osBuilderImporter:
                 run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && "  +
                     "qemu-img convert -O raw %s disk.local.temp && gzip -c disk.local.temp' | " +
                     "ssh -oStrictHostKeyChecking=no %s 'gunzip | rbd import --image-format=2 - compute/%s_disk.local'") % (disk_host, temp_dir, source_disk, dest_host, instance.id))
+                run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && rm -f disk.local.temp") % (disk_host, temp_dir))
 
     def import_volumes(self):
 
