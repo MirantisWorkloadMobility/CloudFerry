@@ -87,34 +87,43 @@ class osBuilderImporter:
     def import_delta_file(self):
 
         """ Transfering instance's diff file """
+        LOG.info("| sync delta")
+        LOG.debug("| import instance delta")
+        dest_disk = self.__detect_delta_file(self.instance, False)
+        self.__transfer_remote_file(self.instance,
+                                    self.data["disk"]["host"],
+                                    self.data["disk"]["diff_path"],
+                                    dest_disk)
+        return self
 
+    def import_ephemeral_drive(self):
+        if self.config['ephemeral_drives'] != 'ceph':
+            dest_disk_ephemeral = self.__detect_delta_file(self.instance, True)
+            self.__transfer_remote_file(self.instance,
+                                        self.data["disk"]["host"],
+                                        self.data["disk"]["ephemeral"],
+                                        dest_disk_ephemeral)
+        if self.config['ephemeral_drives'] == 'ceph':
+            self.__transfer_remote_file_to_ceph(self.instance,
+                                                self.data["disk"]["host"],
+                                                self.data["disk"]["ephemeral"],
+                                                self.config['host'])
+        return self
+
+    def start_instance(self):
+        self.instance.start()
+        LOG.debug("| | sync delta: done")
+        return self
+
+    def stop_instance(self):
         if self.instance.status == 'ACTIVE':
             LOG.info("| | instance is active. Stopping.")
             self.instance.stop()
             LOG.debug("| | waiting shutoff state of instance")
             self.__wait_for_status(self.nova_client.servers, self.instance.id, 'SHUTOFF')
             LOG.debug("| | instance is stopped")
-
-        if not (self.config['cinder']['backend'] == 'ceph'):
-            LOG.info("| sync delta")
-            LOG.debug("| import instance delta")
-            dest_disk = self.__detect_delta_file(self.instance, False)
-            self.__transfer_remote_file(self.instance, self.data["disk"]["host"], self.data["disk"]["diff_path"], dest_disk)
-
-        if self.data["disk"]["ephemeral"]:
-            if self.config['ephemeral_drives'] != 'ceph':
-                dest_disk_ephemeral = self.__detect_delta_file(self.instance, True)
-                self.__transfer_remote_file(self.instance,
-                                            self.data["disk"]["host"],
-                                            self.data["disk"]["ephemeral"],
-                                            dest_disk_ephemeral)
-            if self.config['ephemeral_drives'] == 'ceph':
-                self.__transfer_remote_file_to_ceph(self.instance,
-                                                    self.data["disk"]["host"],
-                                                    self.data["disk"]["ephemeral"],
-                                                    self.config['host'])
-        self.instance.start()
-        LOG.debug("| | sync delta: done")
+        else:
+            LOG.info("| | instance is stopped")
         return self
 
     def merge_delta_and_image(self):
@@ -180,7 +189,7 @@ class osBuilderImporter:
     def __convert_image_to_raw(self, data_for_instance, path_to_image):
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
-                run(("cd %s && qemu-img convert -f %s -O raw baseimage baseimage.tmp") %
+                run("cd %s && qemu-img convert -f %s -O raw baseimage baseimage.tmp" %
                     (path_to_image, data_for_instance['image'].disk_format))
                 run("cd %s && mv -f baseimage.tmp baseimage" % path_to_image)
 
@@ -240,16 +249,16 @@ class osBuilderImporter:
     def __transfer_remote_file_to_ceph(self, instance, disk_host, source_disk, dest_host):
         temp_dir = source_disk[:-10]
         LOG.debug("| | copy ephemeral file to destination ceph")
-        host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         with settings(host_string=dest_host):
             with forward_agent(env.key_filename):
-                run(("rbd rm -p compute %s_disk.local") % instance.id)
+                run("rbd rm -p compute %s_disk.local" % instance.id)
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
-                run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && "  +
+                run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && "+
                     "qemu-img convert -O raw %s disk.local.temp && gzip -c disk.local.temp' | " +
-                    "ssh -oStrictHostKeyChecking=no %s 'gunzip | rbd import --image-format=2 - compute/%s_disk.local'") % (disk_host, temp_dir, source_disk, dest_host, instance.id))
-                run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && rm -f disk.local.temp") % (disk_host, temp_dir))
+                    "ssh -oStrictHostKeyChecking=no %s 'gunzip | rbd import --image-format=2 - compute/%s_disk.local'")
+                    % (disk_host, temp_dir, source_disk, dest_host, instance.id))
+                run("ssh -oStrictHostKeyChecking=no %s 'cd %s && rm -f disk.local.temp'" % (disk_host, temp_dir))
 
     def import_volumes(self):
 
