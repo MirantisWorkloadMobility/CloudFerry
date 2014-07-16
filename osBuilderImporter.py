@@ -111,8 +111,11 @@ class osBuilderImporter:
         return self
 
     def start_instance(self):
+        LOG.debug("| | Start instance")
         self.instance.start()
-        LOG.debug("| | sync delta: done")
+        print self.instance
+        print self.instance.__dict__
+        self.__wait_for_status(self.nova_client.servers, self.instance.id, 'ACTIVE')
         return self
 
     def stop_instance(self):
@@ -254,10 +257,23 @@ class osBuilderImporter:
                 run("rbd rm -p compute %s_disk.local" % instance.id)
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
-                run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && "+
-                    "qemu-img convert -O raw %s disk.local.temp && gzip -c disk.local.temp' | " +
-                    "ssh -oStrictHostKeyChecking=no %s 'gunzip | rbd import --image-format=2 - compute/%s_disk.local'")
-                    % (disk_host, temp_dir, source_disk, dest_host, instance.id))
+                if self.config["transfer_ephemeral"]["compress"] == "gzip":
+                    run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && " +
+                        "qemu-img convert -O raw %s disk.local.temp && gzip -%s -c disk.local.temp' | " +
+                        "ssh -oStrictHostKeyChecking=no %s 'gunzip | " +
+                        "rbd import --image-format=2 - compute/%s_disk.local'")
+                        % (disk_host,
+                           temp_dir,
+                           source_disk,
+                           self.config["transfer_ephemeral"]["level_compress"],
+                           dest_host,
+                           instance.id))
+                elif self.config["transfer_ephemeral"]["compress"] == "dd":
+                    run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && " +
+                        "qemu-img convert -O raw %s disk.local.temp && dd bs=1M if=disk.local.temp' | " +
+                        "ssh -oStrictHostKeyChecking=no %s '" +
+                        "rbd import --image-format=2 - compute/%s_disk.local'")
+                        % (disk_host, temp_dir, source_disk, dest_host, instance.id))
                 run("ssh -oStrictHostKeyChecking=no %s 'cd %s && rm -f disk.local.temp'" % (disk_host, temp_dir))
 
     def import_volumes(self):
@@ -272,7 +288,6 @@ class osBuilderImporter:
         LOG.info("| migrateVolumes")
         LOG.debug("| import volumes")
         LOG.debug("| | wait for instance activating")
-        self.__wait_for_status(self.nova_client.servers, self.instance.id, 'ACTIVE')
         for source_volume in self.data['volumes']:
             LOG.debug("| | | volume %s" % source_volume.__dict__)
             LOG.debug("| | | copy image of volume from source to dest")

@@ -19,6 +19,9 @@ clouds:
         glance:
           convert_to_raw: yes
         ephemeral_drives: ceph
+        transfer_ephemeral:
+          compress: gzip
+          level_compress: 9
         import_rules:
             default: {}
             overwrite:
