@@ -34,6 +34,7 @@ class Exporter(osCommon.osCommon):
                                  self.network_client,
                                  instance,
                                  self.config)\
+            .stop_instance()\
             .get_name()\
             .get_image()\
             .get_flavor()\

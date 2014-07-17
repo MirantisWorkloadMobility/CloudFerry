@@ -97,13 +97,13 @@ class osBuilderImporter:
         return self
 
     def import_ephemeral_drive(self):
-        if self.config['ephemeral_drives'] != 'ceph':
+        if not self.config['ephemeral_drives']['ceph']:
             dest_disk_ephemeral = self.__detect_delta_file(self.instance, True)
             self.__transfer_remote_file(self.instance,
                                         self.data["disk"]["host"],
                                         self.data["disk"]["ephemeral"],
                                         dest_disk_ephemeral)
-        if self.config['ephemeral_drives'] == 'ceph':
+        if self.config['ephemeral_drives']['ceph']:
             self.__transfer_remote_file_to_ceph(self.instance,
                                                 self.data["disk"]["host"],
                                                 self.data["disk"]["ephemeral"],

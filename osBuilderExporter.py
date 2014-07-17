@@ -4,6 +4,7 @@ from fabric.api import run, settings, env
 from osVolumeTransfer import VolumeTransfer
 from osImageTransfer import ImageTransfer
 import time
+import json
 
 __author__ = 'mirrorcoder'
 
@@ -35,6 +36,11 @@ class osBuilderExporter:
 
     def finish(self):
         return self.data
+
+    def stop_instance(self):
+        self.instance.stop()
+        self.__wait_for_status(self.nova_client.servers, self.instance.id, 'SHUTOFF')
+        return self
 
     def get_name(self):
         self.data['name'] = getattr(self.instance, 'name')
@@ -133,6 +139,11 @@ class osBuilderExporter:
                                                                      disk_format=self.config['cinder']['disk_format'])
             image_upload = image['os-volume_upload_image']
             self.__wait_for_status(self.glance_client.images, image_upload['image_id'], 'active')
+            if self.config["cinder"]["backend"] == "ceph":
+                image_from_glance = self.glance_client.images.get(image_upload['image_id'])
+                with settings(host_string=self.config['host']):
+                    out = json.loads(run("rbd -p images info %s --format json" % image_upload['image_id']))
+                    image_from_glance.update(size=out["size"])
             if (not volume.bootable) or (not self.data["boot_from_volume"]):
                 images_from_volumes.append(VolumeTransfer(volume,
                                                           self.instance,
