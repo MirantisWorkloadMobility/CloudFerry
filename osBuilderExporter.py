@@ -1,6 +1,6 @@
 import logging
 from utils import forward_agent
-from fabric.api import run, settings, env
+from fabric.api import run, settings, env, cd
 from osVolumeTransfer import VolumeTransfer
 from osImageTransfer import ImageTransfer
 import time
@@ -13,7 +13,7 @@ LOG.setLevel(logging.DEBUG)
 hdlr = logging.FileHandler('exporter.log')
 LOG.addHandler(hdlr)
 
-DISK = "/disk"
+DISK = "disk"
 LOCAL = ".local"
 LEN_UUID_INSTANCE = 36
 
@@ -112,15 +112,64 @@ class osBuilderExporter:
         """Getting information about diff file of source instance"""
         is_ephemeral = self.__get_flavor_from_instance(self.instance)['OS-FLV-EXT-DATA:ephemeral'] > 0
         if not self.data["boot_from_volume"]:
-            self.data['disk'] = {
-                'type': 'remote file',
-                'host': getattr(self.instance, 'OS-EXT-SRV-ATTR:host'),
-                'diff_path': self.__get_instance_diff_path(self.instance, False),
-                'ephemeral': self.__get_instance_diff_path(self.instance, True) if is_ephemeral else None
-            }
+            if self.config["ephemeral_drives"]['ceph']:
+                diff_path = self.__get_instance_diff_path(self.instance, False, True)
+                ephemeral = self.__get_instance_diff_path(self.instance, True, True) if is_ephemeral else None
+                self.__create_temp_directory(self.config['temp'])
+                self.data['disk'] = {
+                    'type': 'ceph',
+                    'host': self.config['host'],
+                    'diff_path': self.__transfer_rbd_to_glance(diff_path, self.config['temp'], "qcow2", "diff_path"),
+                    'ephemeral': self.__transfer_rbd_to_file(ephemeral, self.config['temp'], "qcow2", "disk.local")
+                }
+            else:
+                diff_path = self.__get_instance_diff_path(self.instance, False, False)
+                ephemeral = self.__get_instance_diff_path(self.instance, True, False) if is_ephemeral else None
+                self.data['disk'] = {
+                    'type': 'remote file',
+                    'host': getattr(self.instance, 'OS-EXT-SRV-ATTR:host'),
+                    'diff_path': diff_path,
+                    'ephemeral': ephemeral
+                }
         else:
             self.data["boot_volume_size"] = {}
         return self
+
+    def __create_temp_directory(self, temp_path):
+        with settings(host_string=self.config['host']):
+            run("rm -rf %s" % temp_path)
+            run("mkdir %s" % temp_path)
+
+    def __transfer_rbd_to_glance(self, diff_path, temp_path, image_format, name):
+        name_file_diff_path = "disk"
+        print diff_path, temp_path, image_format, name
+        self.__transfer_rbd_to_file(diff_path, temp_path, image_format, name_file_diff_path)
+        with settings(host_string=self.config['host']):
+            with cd(temp_path):
+                out = run(("glance --os-username=%s --os-password=%s --os-tenant-name=%s " +
+                           "--os-auth-url=http://%s:35357/v2.0 " +
+                           "image-create --name %s --disk-format=%s --container-format=bare --file %s| " +
+                           "grep id") %
+                          (self.config['user'],
+                           self.config['password'],
+                           self.config['tenant'],
+                           self.config['host'],
+                           name,
+                           image_format,
+                           name_file_diff_path))
+                id = out.split("|")[2].replace(' ', '')
+                return ImageTransfer(id, self.glance_client)
+
+    def __transfer_rbd_to_file(self, diff_path, temp_path, image_format, name_file_diff_path):
+        if not diff_path:
+            return None
+        with settings(host_string=self.config['host']):
+            with cd(temp_path):
+                run("qemu-img convert -O %s rbd:%s %s" % (image_format, diff_path, name_file_diff_path))
+        if temp_path[-1] == "/":
+            return temp_path+name_file_diff_path
+        else:
+            return temp_path+"/"+name_file_diff_path
 
     def get_volumes(self):
 
@@ -159,7 +208,7 @@ class osBuilderExporter:
     def __get_flavor_from_instance(self, instance):
         return self.nova_client.flavors.get(instance.flavor['id']).__dict__
 
-    def __get_instance_diff_path(self, instance, is_ephemeral):
+    def __get_instance_diff_path(self, instance, is_ephemeral, is_ceph_ephemeral):
 
         """Return path of instance's diff file"""
 
@@ -172,9 +221,16 @@ class osBuilderExporter:
                           (disk_host, libvirt_name))
                 source_out = out.split()
                 path_disk = (DISK + LOCAL) if is_ephemeral else DISK
-                for i in source_out:
-                    if instance.id + path_disk == i[-(LEN_UUID_INSTANCE+len(path_disk)):]:
-                        source_disk = i
+                if not is_ceph_ephemeral:
+                    path_disk = "/" + path_disk
+                    for i in source_out:
+                        if instance.id + path_disk == i[-(LEN_UUID_INSTANCE+len(path_disk)):]:
+                            source_disk = i
+                else:
+                    path_disk = "_" + path_disk
+                    for i in source_out:
+                        if ("compute/%s%s" % (instance.id, path_disk)) == i:
+                            source_disk = i
                 if not source_disk:
                     raise NameError("Can't find suitable name of the source disk path")
         return source_disk

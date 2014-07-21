@@ -1,24 +1,25 @@
 clouds:
     from:
         type: os
-        host: 172.18.172.20
+        host: 172.18.172.50
         user: admin
         password: admin
         tenant: admin
         ephemeral_drives:
-          ceph: no
+          ceph: yes
         cinder:
           backend: ceph
           disk_format: qcow2
+        temp: /root/temp
     to:
         type: os
-        host: 172.18.172.35
+        host: 172.18.172.20
         user: admin
         password: admin
         tenant: admin
         temp: /root/merge
         cinder:
-          backend: iscsi
+          backend: ceph
         glance:
           convert_to_raw: yes
         ephemeral_drives:
@@ -35,4 +36,4 @@ clouds:
 key_filename:
     name: privkey
 instances:
- - key_name: key
+ - key_name: control

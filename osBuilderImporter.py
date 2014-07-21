@@ -1,5 +1,5 @@
 import logging
-from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid
+from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid, CEPH, REMOTE_FILE, QCOW2
 from fabric.api import run, settings, env
 from FileLikeProxy import FileLikeProxy
 import time
@@ -14,6 +14,7 @@ LOG.addHandler(hdlr)
 DISK = "/disk"
 LOCAL = ".local"
 LEN_UUID_INSTANCE = 36
+TEMP_PREFIX = ".temp"
 
 
 class osBuilderImporter:
@@ -43,6 +44,9 @@ class osBuilderImporter:
         self.data_for_instance["name"] = self.data["name"]
         LOG.debug("| | Get image")
         self.data_for_instance["image"] = self.__get_image(self.data['image'])
+        if self.data['disk']['type'] == CEPH:
+            self.data_for_instance["image"] = self.__get_image(self.data['disk']['diff_path'])
+            self.data['disk']['diff_path'].delete()
         LOG.debug("| | Get flavor")
         self.data_for_instance["flavor"] = self.__get_flavor(self.__ensure_param(self.data, 'flavor'))
         LOG.debug("| | Get metadata")
@@ -99,16 +103,49 @@ class osBuilderImporter:
     def import_ephemeral_drive(self):
         if not self.config['ephemeral_drives']['ceph']:
             dest_disk_ephemeral = self.__detect_delta_file(self.instance, True)
-            self.__transfer_remote_file(self.instance,
-                                        self.data["disk"]["host"],
-                                        self.data["disk"]["ephemeral"],
-                                        dest_disk_ephemeral)
+            if self.data['disk']['type'] == CEPH:
+                backing_disk_ephemeral = self.__detect_backing_file(dest_disk_ephemeral, self.instance)
+                print backing_disk_ephemeral
+                self.__delete_remote_file_on_compute(backing_disk_ephemeral, self.instance)
+                self.__delete_remote_file_on_compute(dest_disk_ephemeral, self.instance)
+                self.__transfer_remote_file(self.instance,
+                                            self.data["disk"]["host"],
+                                            self.data["disk"]["ephemeral"],
+                                            backing_disk_ephemeral+TEMP_PREFIX)
+                self.__convert_to_raw_file(self.instance, backing_disk_ephemeral+TEMP_PREFIX, backing_disk_ephemeral)
+                self.__create_diff(self.instance, QCOW2, backing_disk_ephemeral, dest_disk_ephemeral)
+            else:
+                self.__transfer_remote_file(self.instance,
+                                            self.data["disk"]["host"],
+                                            self.data["disk"]["ephemeral"],
+                                            dest_disk_ephemeral)
         if self.config['ephemeral_drives']['ceph']:
-            self.__transfer_remote_file_to_ceph(self.instance,
-                                                self.data["disk"]["host"],
-                                                self.data["disk"]["ephemeral"],
-                                                self.config['host'])
+            if not (self.data['disk']['type'] == CEPH):
+                self.__transfer_remote_file_to_ceph(self.instance,
+                                                    self.data["disk"]["host"],
+                                                    self.data["disk"]["ephemeral"],
+                                                    self.config['host'])
         return self
+
+    def __create_diff(self, instance, format_file, backing_file, diff_file):
+        host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        with settings(host_string=self.config['host']):
+            with forward_agent(env.key_filename):
+                run("ssh -oStrictHostKeyChecking=no %s  'qemu-img create -f %s -b %s %s'" %
+                    (host, format_file, backing_file, diff_file))
+
+    def __delete_remote_file_on_compute(self, path_file, instance):
+        host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        with settings(host_string=self.config['host']):
+            with forward_agent(env.key_filename):
+                run("ssh -oStrictHostKeyChecking=no %s  'rm -rf %s'" % (host, path_file))
+
+    def __convert_to_raw_file(self, instance, from_file, to_file):
+        host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        with settings(host_string=self.config['host']):
+            with forward_agent(env.key_filename):
+                run("ssh -oStrictHostKeyChecking=no %s  'qemu-img convert -O raw %s %s'" %
+                    (host, from_file, to_file))
 
     def start_instance(self):
         LOG.debug("| | Start instance")
@@ -195,6 +232,20 @@ class osBuilderImporter:
                 run("cd %s && qemu-img convert -f %s -O raw baseimage baseimage.tmp" %
                     (path_to_image, data_for_instance['image'].disk_format))
                 run("cd %s && mv -f baseimage.tmp baseimage" % path_to_image)
+
+    def __detect_backing_file(self, dest_disk_ephemeral, instance):
+        host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        with settings(host_string=self.config['host']):
+            with forward_agent(env.key_filename):
+                out = run("ssh -oStrictHostKeyChecking=no %s 'qemu-img info %s | grep \"backing file\"'" %
+                          (host, dest_disk_ephemeral)).split('\n')
+                backing_file = ""
+                for i in out:
+                    print i
+                    line_out = i.split(":")
+                    if line_out[0] == "backing file":
+                        backing_file = line_out[1].replace(" ", "")
+                return backing_file
 
     def __upload_image_to_glance(self, path_to_image, data_for_instance):
         name = "new" + data_for_instance["image"].name
