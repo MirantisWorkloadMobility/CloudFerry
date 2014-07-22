@@ -8,10 +8,11 @@ CEPH = "ceph"
 BOOT_FROM_VOLUME = "boot_volume"
 BOOT_FROM_IMAGE = "boot_image"
 ANY = "any"
-NOT_EPHEMERAL = "not_ephemeral"
+NO = "no"
 EPHEMERAL = "ephemeral"
 REMOTE_FILE = "remote file"
 QCOW2 = "qcow2"
+YES = "yes"
 
 
 class forward_agent:

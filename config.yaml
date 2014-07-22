@@ -29,6 +29,9 @@ clouds:
         transfer_ephemeral:
           compress: gzip
           level_compress: 9
+        transfer_file:
+          compress: dd
+          level_compress: 9
         import_rules:
             default: {}
             overwrite:

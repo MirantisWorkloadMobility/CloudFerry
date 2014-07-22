@@ -1,5 +1,5 @@
 import logging
-from utils import forward_agent
+from utils import forward_agent, CEPH, REMOTE_FILE
 from fabric.api import run, settings, env, cd
 from osVolumeTransfer import VolumeTransfer
 from osImageTransfer import ImageTransfer
@@ -117,7 +117,7 @@ class osBuilderExporter:
                 ephemeral = self.__get_instance_diff_path(self.instance, True, True) if is_ephemeral else None
                 self.__create_temp_directory(self.config['temp'])
                 self.data['disk'] = {
-                    'type': 'ceph',
+                    'type': CEPH,
                     'host': self.config['host'],
                     'diff_path': self.__transfer_rbd_to_glance(diff_path,
                                                                self.config['temp'],
@@ -132,12 +132,23 @@ class osBuilderExporter:
                 diff_path = self.__get_instance_diff_path(self.instance, False, False)
                 ephemeral = self.__get_instance_diff_path(self.instance, True, False) if is_ephemeral else None
                 self.data['disk'] = {
-                    'type': 'remote file',
+                    'type': REMOTE_FILE,
                     'host': getattr(self.instance, 'OS-EXT-SRV-ATTR:host'),
                     'diff_path': diff_path,
                     'ephemeral': ephemeral
                 }
         else:
+            ephemeral = self.__get_instance_diff_path(self.instance, True, True) if is_ephemeral else None
+            self.__create_temp_directory(self.config['temp'])
+            self.data['disk'] = {
+                'type': CEPH if self.config["ephemeral_drives"]['ceph'] else REMOTE_FILE,
+                'host': self.config['host'] if self.config["ephemeral_drives"]['ceph']
+                else getattr(self.instance, 'OS-EXT-SRV-ATTR:host'),
+                'ephemeral': self.__transfer_rbd_to_file(ephemeral,
+                                                         self.config['temp'],
+                                                         self.config['ephemeral_drives']['convert_ephemeral_drive'],
+                                                         "disk.local")
+            }
             self.data["boot_volume_size"] = {}
         return self
 

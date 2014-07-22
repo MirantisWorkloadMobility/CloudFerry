@@ -44,7 +44,7 @@ class osBuilderImporter:
         self.data_for_instance["name"] = self.data["name"]
         LOG.debug("| | Get image")
         self.data_for_instance["image"] = self.__get_image(self.data['image'])
-        if self.data['disk']['type'] == CEPH:
+        if (self.data['disk']['type'] == CEPH) and ('diff_path' in self.data['disk']):
             self.data_for_instance["image"] = self.__get_image(self.data['disk']['diff_path'])
             self.data['disk']['diff_path'].delete()
         LOG.debug("| | Get flavor")
@@ -84,7 +84,7 @@ class osBuilderImporter:
     def create_instance(self):
         LOG.info("| creating new instance")
         self.instance = self.nova_client.servers.create(**self.data_for_instance)
-        LOG.info("| wait for instance activa    ting")
+        LOG.info("| wait for instance activating")
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'ACTIVE')
         return self
 
@@ -296,9 +296,14 @@ class osBuilderImporter:
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host']):
-                    run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
-                         "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
-                        (disk_host, source_disk, dest_disk))
+                    if self.config['transfer_file']['compress'] == "dd":
+                        run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
+                             "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
+                            (disk_host, source_disk, dest_disk))
+                    elif self.config['transfer_file']['compress'] == "gzip":
+                        run(("ssh -oStrictHostKeyChecking=no %s 'gzip -%s -c %s' " +
+                             "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'gunzip | dd bs=1M of=%s'") %
+                            (self.config['transfer_file']['level_compress'], disk_host, source_disk, dest_disk))
 
     def __transfer_remote_file_to_ceph(self, instance, disk_host, source_disk, dest_host, is_source_ceph):
         temp_dir = source_disk[:-10]
