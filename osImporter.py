@@ -1,7 +1,7 @@
 import osCommon
 import logging
 from utils import ChecksumImageInvalid, ISCSI, CEPH, BOOT_FROM_IMAGE, \
-    BOOT_FROM_VOLUME, INDIFFERENT, NOT_EPHEMERAL, EPHEMERAL, REMOTE_FILE
+    BOOT_FROM_VOLUME, ANY, NOT_EPHEMERAL, EPHEMERAL, REMOTE_FILE
 from osBuilderImporter import osBuilderImporter
 
 LOG = logging.getLogger(__name__)
@@ -13,17 +13,14 @@ LOG.addHandler(hdlr)
 class MultiCaseAlgorithm:
     def __init__(self, mode_boot,
                  backend_cinder_dest,
-                 ephemeral_back_dest,
                  ephemeral_back_source):
         self.mode_boot = mode_boot
         self.backend_cinder_dest = backend_cinder_dest
-        self.ephemeral_back_dest = ephemeral_back_dest
         self.ephemeral_back_source = ephemeral_back_source
 
     def __hash__(self):
         return hash((self.mode_boot,
                      self.backend_cinder_dest,
-                     self.ephemeral_back_dest,
                      self.ephemeral_back_source))
 
     def __eq__(self, other):
@@ -60,12 +57,13 @@ class Importer(osCommon.osCommon):
                                             data)
         try:
             new_instance = {
-                MultiCaseAlgorithm(BOOT_FROM_IMAGE, ISCSI, INDIFFERENT, NOT_EPHEMERAL): self.__upload_iscsi_backend,
-                MultiCaseAlgorithm(BOOT_FROM_IMAGE, CEPH, INDIFFERENT, NOT_EPHEMERAL): self.__upload_ceph_backend,
-                MultiCaseAlgorithm(BOOT_FROM_VOLUME, INDIFFERENT, INDIFFERENT, NOT_EPHEMERAL): self.__upload_boot_volume,
-                MultiCaseAlgorithm(BOOT_FROM_IMAGE, ISCSI, INDIFFERENT, REMOTE_FILE): self.__upload_iscsi_backend_ephemeral,
-                MultiCaseAlgorithm(BOOT_FROM_IMAGE, CEPH, INDIFFERENT, REMOTE_FILE): self.__upload_ceph_backend_ephemeral,
-                MultiCaseAlgorithm(BOOT_FROM_IMAGE, INDIFFERENT, INDIFFERENT, CEPH): self.__upload_ephemeral_on_ceph
+                # mode_boot, backend_cinder_dest, ephemeral_back_dest, ephemeral_back_source
+                MultiCaseAlgorithm(BOOT_FROM_IMAGE, ISCSI, NOT_EPHEMERAL): self.__upload_iscsi_backend,
+                MultiCaseAlgorithm(BOOT_FROM_IMAGE, CEPH, NOT_EPHEMERAL): self.__upload_ceph_backend,
+                MultiCaseAlgorithm(BOOT_FROM_IMAGE, ISCSI, REMOTE_FILE): self.__upload_iscsi_backend_ephemeral,
+                MultiCaseAlgorithm(BOOT_FROM_IMAGE, CEPH, REMOTE_FILE): self.__upload_ceph_backend_ephemeral,
+                MultiCaseAlgorithm(BOOT_FROM_IMAGE, ANY, CEPH): self.__upload_ephemeral_on_ceph,
+                MultiCaseAlgorithm(BOOT_FROM_VOLUME, ANY, NOT_EPHEMERAL): self.__upload_boot_volume,
             }[self.__detect_algorithm_upload(data)](builderImporter)
             LOG.info("New instance on destantion cloud %s" % new_instance)
         except ChecksumImageInvalid as e:
@@ -74,11 +72,11 @@ class Importer(osCommon.osCommon):
     def __detect_algorithm_upload(self, data):
         mode_boot = self.__detect_mode_boot(data)
         ephemeral = self.__detect_backend_ephemeral(data) if self.__is_ephemeral(data) == EPHEMERAL else NOT_EPHEMERAL
-        backend_cinder = self.__detect_backend_cinder() if ephemeral != CEPH else INDIFFERENT
+        backend_cinder = self.__detect_backend_cinder() if ephemeral != CEPH else ANY
         if mode_boot == BOOT_FROM_VOLUME:
-            return MultiCaseAlgorithm(BOOT_FROM_VOLUME, INDIFFERENT, INDIFFERENT, NOT_EPHEMERAL)
+            return MultiCaseAlgorithm(BOOT_FROM_VOLUME, ANY, NOT_EPHEMERAL)
         else:
-            return MultiCaseAlgorithm(BOOT_FROM_IMAGE, backend_cinder, INDIFFERENT, ephemeral)
+            return MultiCaseAlgorithm(BOOT_FROM_IMAGE, backend_cinder, ephemeral)
 
     def __detect_backend_ephemeral(self, data):
         if data['disk']['type'] == CEPH:

@@ -119,8 +119,14 @@ class osBuilderExporter:
                 self.data['disk'] = {
                     'type': 'ceph',
                     'host': self.config['host'],
-                    'diff_path': self.__transfer_rbd_to_glance(diff_path, self.config['temp'], "qcow2", "diff_path"),
-                    'ephemeral': self.__transfer_rbd_to_file(ephemeral, self.config['temp'], "qcow2", "disk.local")
+                    'diff_path': self.__transfer_rbd_to_glance(diff_path,
+                                                               self.config['temp'],
+                                                               self.config['ephemeral_drives']['convert_diff_file'],
+                                                               "diff_path"),
+                    'ephemeral': self.__transfer_rbd_to_file(ephemeral,
+                                                             self.config['temp'],
+                                                             self.config['ephemeral_drives']['convert_ephemeral_drive'],
+                                                             "disk.local")
                 }
             else:
                 diff_path = self.__get_instance_diff_path(self.instance, False, False)

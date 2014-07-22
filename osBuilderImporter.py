@@ -84,7 +84,7 @@ class osBuilderImporter:
     def create_instance(self):
         LOG.info("| creating new instance")
         self.instance = self.nova_client.servers.create(**self.data_for_instance)
-        LOG.info("| wait for instance activating")
+        LOG.info("| wait for instance activa    ting")
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'ACTIVE')
         return self
 
@@ -105,7 +105,6 @@ class osBuilderImporter:
             dest_disk_ephemeral = self.__detect_delta_file(self.instance, True)
             if self.data['disk']['type'] == CEPH:
                 backing_disk_ephemeral = self.__detect_backing_file(dest_disk_ephemeral, self.instance)
-                print backing_disk_ephemeral
                 self.__delete_remote_file_on_compute(backing_disk_ephemeral, self.instance)
                 self.__delete_remote_file_on_compute(dest_disk_ephemeral, self.instance)
                 self.__transfer_remote_file(self.instance,
@@ -113,6 +112,7 @@ class osBuilderImporter:
                                             self.data["disk"]["ephemeral"],
                                             backing_disk_ephemeral+TEMP_PREFIX)
                 self.__convert_to_raw_file(self.instance, backing_disk_ephemeral+TEMP_PREFIX, backing_disk_ephemeral)
+                self.__delete_remote_file_on_compute(backing_disk_ephemeral+TEMP_PREFIX, self.instance)
                 self.__create_diff(self.instance, QCOW2, backing_disk_ephemeral, dest_disk_ephemeral)
             else:
                 self.__transfer_remote_file(self.instance,
@@ -120,11 +120,11 @@ class osBuilderImporter:
                                             self.data["disk"]["ephemeral"],
                                             dest_disk_ephemeral)
         if self.config['ephemeral_drives']['ceph']:
-            if not (self.data['disk']['type'] == CEPH):
-                self.__transfer_remote_file_to_ceph(self.instance,
-                                                    self.data["disk"]["host"],
-                                                    self.data["disk"]["ephemeral"],
-                                                    self.config['host'])
+            self.__transfer_remote_file_to_ceph(self.instance,
+                                                self.data["disk"]["host"],
+                                                self.data["disk"]["ephemeral"],
+                                                self.config['host'],
+                                                self.data['disk']['type'] == CEPH)
         return self
 
     def __create_diff(self, instance, format_file, backing_file, diff_file):
@@ -300,7 +300,7 @@ class osBuilderImporter:
                          "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
                         (disk_host, source_disk, dest_disk))
 
-    def __transfer_remote_file_to_ceph(self, instance, disk_host, source_disk, dest_host):
+    def __transfer_remote_file_to_ceph(self, instance, disk_host, source_disk, dest_host, is_source_ceph):
         temp_dir = source_disk[:-10]
         LOG.debug("| | copy ephemeral file to destination ceph")
         with settings(host_string=dest_host):
@@ -309,23 +309,40 @@ class osBuilderImporter:
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
                 if self.config["transfer_ephemeral"]["compress"] == "gzip":
-                    run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && " +
-                        "qemu-img convert -O raw %s disk.local.temp && gzip -%s -c disk.local.temp' | " +
-                        "ssh -oStrictHostKeyChecking=no %s 'gunzip | " +
-                        "rbd import --image-format=2 - compute/%s_disk.local'")
-                        % (disk_host,
-                           temp_dir,
-                           source_disk,
-                           self.config["transfer_ephemeral"]["level_compress"],
-                           dest_host,
-                           instance.id))
+                    if not is_source_ceph:
+                        run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && " +
+                            "qemu-img convert -O raw %s disk.local.temp && gzip -%s -c disk.local.temp' | " +
+                            "ssh -oStrictHostKeyChecking=no %s 'gunzip | " +
+                            "rbd import --image-format=2 - compute/%s_disk.local'")
+                            % (disk_host,
+                               temp_dir,
+                               source_disk,
+                               self.config["transfer_ephemeral"]["level_compress"],
+                               dest_host,
+                               instance.id))
+                    else:
+                        run(("gzip -%s -c %s | " +
+                            "ssh -oStrictHostKeyChecking=no %s 'gunzip | " +
+                            "rbd import --image-format=2 - compute/%s_disk.local'")
+                            % (self.config["transfer_ephemeral"]["level_compress"],
+                               source_disk,
+                               dest_host,
+                               instance.id))
                 elif self.config["transfer_ephemeral"]["compress"] == "dd":
-                    run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && " +
-                        "qemu-img convert -O raw %s disk.local.temp && dd bs=1M if=disk.local.temp' | " +
-                        "ssh -oStrictHostKeyChecking=no %s '" +
-                        "rbd import --image-format=2 - compute/%s_disk.local'")
-                        % (disk_host, temp_dir, source_disk, dest_host, instance.id))
-                run("ssh -oStrictHostKeyChecking=no %s 'cd %s && rm -f disk.local.temp'" % (disk_host, temp_dir))
+                    if not source_disk:
+                        run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && " +
+                            "qemu-img convert -O raw %s disk.local.temp && dd bs=1M if=disk.local.temp' | " +
+                            "ssh -oStrictHostKeyChecking=no %s '" +
+                            "rbd import --image-format=2 - compute/%s_disk.local'")
+                            % (disk_host, temp_dir, source_disk, dest_host, instance.id))
+                    else:
+                        run(("dd bs=1M if=%s | " +
+                            "ssh -oStrictHostKeyChecking=no %s '" +
+                            "rbd import --image-format=2 - compute/%s_disk.local'")
+                            % (source_disk,
+                               dest_host,
+                               instance.id))
+                run("rm -f %s" % source_disk)
 
     def import_volumes(self):
 

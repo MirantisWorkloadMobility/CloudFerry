@@ -7,13 +7,15 @@ clouds:
         tenant: admin
         ephemeral_drives:
           ceph: yes
+          convert_diff_file: qcow2
+          convert_ephemeral_drive: raw
         cinder:
           backend: ceph
           disk_format: qcow2
         temp: /root/temp
     to:
         type: os
-        host: 172.18.172.20
+        host: 172.18.172.55
         user: admin
         password: admin
         tenant: admin
@@ -23,7 +25,7 @@ clouds:
         glance:
           convert_to_raw: yes
         ephemeral_drives:
-          ceph: no
+          ceph: yes
         transfer_ephemeral:
           compress: gzip
           level_compress: 9
