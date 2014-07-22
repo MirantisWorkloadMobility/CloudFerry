@@ -38,7 +38,8 @@ class osBuilderExporter:
         return self.data
 
     def stop_instance(self):
-        self.instance.stop()
+        if self.__get_status(self.nova_client.servers, self.instance.id).lower() is 'active':
+            self.instance.stop()
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'SHUTOFF')
         return self
 
@@ -257,8 +258,11 @@ class osBuilderExporter:
             if port["fixed_ips"][0]["ip_address"] == ip_address:
                 return port["mac_address"]
 
+    def __get_status(self, getter, id):
+        return getter.get(id).status
+
     def __wait_for_status(self, getter, id, status):
-        while getter.get(id).status != status:
+        while self.__get_status(getter, id) != status:
             time.sleep(1)
 
     def __getattr__(self, item):
