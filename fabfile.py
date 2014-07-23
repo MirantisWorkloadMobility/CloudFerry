@@ -7,6 +7,9 @@ import logging
 env.forward_agent = True
 env.user = 'root'
 LOG = logging.getLogger(__name__)
+LOG.setLevel(logging.DEBUG)
+hdlr = logging.FileHandler('migrate.log')
+LOG.addHandler(hdlr)
 
 
 def get_exporter(config):

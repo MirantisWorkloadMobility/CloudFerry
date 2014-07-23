@@ -4,7 +4,7 @@ from osBuilderExporter import osBuilderExporter
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
-hdlr = logging.FileHandler('exporter.log')
+hdlr = logging.FileHandler('migrate.log')
 LOG.addHandler(hdlr)
 
 

@@ -10,7 +10,7 @@ __author__ = 'mirrorcoder'
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
-hdlr = logging.FileHandler('exporter.log')
+hdlr = logging.FileHandler('migrate.log')
 LOG.addHandler(hdlr)
 
 DISK = "disk"
@@ -38,8 +38,9 @@ class osBuilderExporter:
         return self.data
 
     def stop_instance(self):
-        if self.__get_status(self.nova_client.servers, self.instance.id).lower() is 'active':
+        if self.__get_status(self.nova_client.servers, self.instance.id).lower() == 'active':
             self.instance.stop()
+        LOG.debug("wait for instance shutoff")
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'SHUTOFF')
         return self
 
@@ -139,7 +140,8 @@ class osBuilderExporter:
                     'ephemeral': ephemeral
                 }
         else:
-            ephemeral = self.__get_instance_diff_path(self.instance, True, True) if is_ephemeral else None
+            ephemeral = self.__get_instance_diff_path(self.instance, True, self.config["ephemeral_drives"]['ceph']) \
+                if is_ephemeral else None
             self.__create_temp_directory(self.config['temp'])
             self.data['disk'] = {
                 'type': CEPH if self.config["ephemeral_drives"]['ceph'] else REMOTE_FILE,
@@ -149,6 +151,7 @@ class osBuilderExporter:
                                                          self.config['temp'],
                                                          self.config['ephemeral_drives']['convert_ephemeral_drive'],
                                                          "disk.local")
+                if self.config["ephemeral_drives"]['ceph'] else ephemeral
             }
             self.data["boot_volume_size"] = {}
         return self
@@ -211,7 +214,7 @@ class osBuilderExporter:
                 with settings(host_string=self.config['host']):
                     out = json.loads(run("rbd -p images info %s --format json" % image_upload['image_id']))
                     image_from_glance.update(size=out["size"])
-            if (not volume.bootable) or (not self.data["boot_from_volume"]):
+            if (volume.bootable != "true") or (not self.data["boot_from_volume"]):
                 images_from_volumes.append(VolumeTransfer(volume,
                                                           self.instance,
                                                           image_upload['image_id'],

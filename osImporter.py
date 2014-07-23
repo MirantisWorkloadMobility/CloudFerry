@@ -6,7 +6,7 @@ from osBuilderImporter import osBuilderImporter
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
-hdlr = logging.FileHandler('importer.log')
+hdlr = logging.FileHandler('migrate.log')
 LOG.addHandler(hdlr)
 
 

@@ -8,7 +8,7 @@ __author__ = 'mirrorcoder'
 
 LOG = logging.getLogger(__name__)
 LOG.setLevel(logging.DEBUG)
-hdlr = logging.FileHandler('importer.log')
+hdlr = logging.FileHandler('migrate.log')
 LOG.addHandler(hdlr)
 
 DISK = "/disk"
@@ -221,7 +221,7 @@ class osBuilderImporter:
                      baseimage_id,
                      dest_path))
 
-    def __diff_commit(self,dest_path):
+    def __diff_commit(self, dest_path):
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
                 run("cd %s && qemu-img commit disk" % dest_path)
