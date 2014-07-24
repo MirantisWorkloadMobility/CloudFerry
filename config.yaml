@@ -42,3 +42,4 @@ key_filename:
     name: privkey
 instances:
  - key_name: control
+speed_limit: 10MB

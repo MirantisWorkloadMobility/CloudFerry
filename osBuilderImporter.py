@@ -419,7 +419,8 @@ class osBuilderImporter:
                                                 is_public=info_image_source.is_public,
                                                 protected=info_image_source.protected,
                                                 data=FileLikeProxy(transfer_object,
-                                                                   self.__callback_print_progress),
+                                                                   self.__callback_print_progress,
+                                                                   self.config['speed_limit']),
                                                 size=info_image_source.size)
 
     def __callback_print_progress(self, size, length, id, name):
