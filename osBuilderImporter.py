@@ -105,15 +105,12 @@ class osBuilderImporter:
             dest_disk_ephemeral = self.__detect_delta_file(self.instance, True)
             if self.data['disk']['type'] == CEPH:
                 backing_disk_ephemeral = self.__detect_backing_file(dest_disk_ephemeral, self.instance)
-                self.__delete_remote_file_on_compute(backing_disk_ephemeral, self.instance)
                 self.__delete_remote_file_on_compute(dest_disk_ephemeral, self.instance)
                 self.__transfer_remote_file(self.instance,
                                             self.data["disk"]["host"],
                                             self.data["disk"]["ephemeral"],
-                                            backing_disk_ephemeral+TEMP_PREFIX)
-                self.__convert_to_raw_file(self.instance, backing_disk_ephemeral+TEMP_PREFIX, backing_disk_ephemeral)
-                self.__delete_remote_file_on_compute(backing_disk_ephemeral+TEMP_PREFIX, self.instance)
-                self.__create_diff(self.instance, QCOW2, backing_disk_ephemeral, dest_disk_ephemeral)
+                                            dest_disk_ephemeral)
+                self.__diff_rebase(backing_disk_ephemeral, dest_disk_ephemeral, self.instance)
             else:
                 self.__transfer_remote_file(self.instance,
                                             self.data["disk"]["host"],
@@ -140,12 +137,12 @@ class osBuilderImporter:
             with forward_agent(env.key_filename):
                 run("ssh -oStrictHostKeyChecking=no %s  'rm -rf %s'" % (host, path_file))
 
-    def __convert_to_raw_file(self, instance, from_file, to_file):
+    def __convert_file(self, instance, from_file, to_file, format_file):
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
-                run("ssh -oStrictHostKeyChecking=no %s  'qemu-img convert -O raw %s %s'" %
-                    (host, from_file, to_file))
+                run("ssh -oStrictHostKeyChecking=no %s  'qemu-img convert -O %s %s %s'" %
+                    (host, format_file, from_file, to_file))
 
     def start_instance(self):
         LOG.debug("| | Start instance")
@@ -179,7 +176,7 @@ class osBuilderImporter:
         self.__download_image_from_glance(self.data_for_instance, diff_disk_path)
         LOG.debug("| | Base image dowloaded")
         LOG.debug("| | Rebasing original diff file")
-        self.__diff_rebase(diff_disk_path)
+        self.__diff_rebase("%s/baseimage" % diff_disk_path, "%s/disk" % diff_disk_path)
         LOG.debug("| | Diff file has been rebased")
         self.__diff_commit(diff_disk_path)
         LOG.debug("| | Diff file has been commited to baseimage")
@@ -267,10 +264,15 @@ class osBuilderImporter:
                 print new_image_id
         return new_image_id
 
-    def __diff_rebase(self, dest_path):
+    def __diff_rebase(self, baseimage, disk, instance=None):
+        cmd = "qemu-img rebase -u -b %s %s" % (baseimage, disk)
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
-                run("cd %s && qemu-img rebase -u -b baseimage disk" % dest_path)
+                if instance:
+                    host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+                    run("ssh -oStrictHostKeyChecking=no %s '%s'" % (host, cmd))
+                else:
+                    run(cmd)
 
     def __detect_delta_file(self, instance, is_ephemeral):
         LOG.debug("| | sync with remote file")
