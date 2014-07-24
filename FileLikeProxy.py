@@ -19,18 +19,27 @@ class FileLikeProxy:
         self.buffer = ''
         self.prev_send_time = 0
         self.speed_limit = self.__parse_speed_limit(speed_limit)
+        if self.speed_limit != 0:
+            self.read = self.speed_limited_read
+
 
     def __parse_speed_limit(self, speed_limit):
+        if speed_limit is '-':
+            return 0
         array = filter(None, re.split(r'(\d+)', speed_limit))
         mult = {
            'b' : 1,
            'kb' : 1024,
            'mb' : 1024 * 1024,
-           'gb' : 1024 * 1024,
         }[array[1].lower()]
         return int(array[0]) * mult
 
     def read(self, *args, **kwargs):
+        res = self.resp.read(*args, **kwargs)
+        self.__trigger_callback(len(res))
+        return res
+
+    def speed_limited_read(self, *args, **kwargs):
         if len(self.buffer) < CHUNK_SIZE:
             self.buffer += self.resp.read(*args, **kwargs)
 
