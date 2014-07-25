@@ -1,11 +1,9 @@
 import osCommon
-import logging
-from osBuilderExporter import osBuilderExporter
 
-LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG)
-hdlr = logging.FileHandler('migrate.log')
-LOG.addHandler(hdlr)
+from osBuilderExporter import osBuilderExporter
+from utils import log_step, get_log
+
+LOG = get_log(__name__)
 
 
 class Exporter(osCommon.osCommon):
@@ -18,9 +16,11 @@ class Exporter(osCommon.osCommon):
         self.config_to = config['clouds']['to']
         super(Exporter, self).__init__(self.config)
 
+    @log_step(2, LOG)
     def find_instances(self, search_opts):
         return self.nova_client.servers.list(search_opts=search_opts)
 
+    @log_step(1, LOG)
     def export(self, instance):
 
         """

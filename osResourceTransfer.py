@@ -1,12 +1,10 @@
 """
 Package with OpenStack resources export/import utilities.
 """
+import osCommon
+from utils import log_step, get_log
 
-import logging, osCommon
-
-LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG)
-LOG.addHandler(logging.FileHandler('migrate.log'))
+LOG = get_log(__name__)
 
 
 class ResourceExporter(osCommon.osCommon):
@@ -19,10 +17,12 @@ class ResourceExporter(osCommon.osCommon):
         self.data = dict()
         super(ResourceExporter, self).__init__(conf['clouds']['from'])
 
+    @log_step(2, LOG)
     def get_tenants(self):
         self.data['tenants'] = self.keystone_client.tenants.list()
         return self
 
+    @log_step(2, LOG)
     def build(self):
         return self.data
 
@@ -36,9 +36,11 @@ class ResourceImporter(osCommon.osCommon):
     def __init__(self, conf):
         super(ResourceImporter, self).__init__(conf['clouds']['to'])
 
+    @log_step(2, LOG)
     def upload(self, data):
         self.__upload_tenants(data['tenants'])
 
+    @log_step(3, LOG)
     def __upload_tenants(self, tenants):
         # do not import a tenant if one with the same name already exists
         existing = frozenset((t.name for t in self.keystone_client.tenants.list()))

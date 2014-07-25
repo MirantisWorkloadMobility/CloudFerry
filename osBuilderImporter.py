@@ -1,15 +1,11 @@
-import logging
-from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid, CEPH, REMOTE_FILE, QCOW2
+from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid, CEPH, REMOTE_FILE, QCOW2, log_step, get_log
 from fabric.api import run, settings, env
 from FileLikeProxy import FileLikeProxy
 import time
 
 __author__ = 'mirrorcoder'
 
-LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG)
-hdlr = logging.FileHandler('migrate.log')
-LOG.addHandler(hdlr)
+LOG = get_log(__name__)
 
 DISK = "/disk"
 LOCAL = ".local"
@@ -34,36 +30,29 @@ class osBuilderImporter:
         self.data_for_instance = dict()
         self.instance = object()
 
+    @log_step(3, LOG)
     def finish(self):
         LOG.info("| instance be migrated")
         return self.instance
 
+    @log_step(3, LOG)
     def prepare_for_creating_new_instance(self):
-        LOG.info("| prepare env for creating new instance")
-        LOG.debug("| | Get name")
         self.data_for_instance["name"] = self.data["name"]
-        LOG.debug("| | Get image")
         self.data_for_instance["image"] = self.__get_image(self.data['image'])
         if (self.data['disk']['type'] == CEPH) and ('diff_path' in self.data['disk']):
             self.data_for_instance["image"] = self.__get_image(self.data['disk']['diff_path'])
             self.data['disk']['diff_path'].delete()
-        LOG.debug("| | Get flavor")
         self.data_for_instance["flavor"] = self.__get_flavor(self.__ensure_param(self.data, 'flavor'))
-        LOG.debug("| | Get metadata")
         self.data_for_instance["meta"] = self.__ensure_param(self.data, 'metadata')
-        LOG.debug("| | Get security groups")
         self.data_for_instance["security_groups"] = self.__ensure_param(self.data, 'security_groups')
-        LOG.debug("| | Get key name")
         self.data_for_instance["key_name"] = self.__get_key_name(self.__ensure_param(self.data, 'key'))
-        LOG.debug("| | Get config drive")
         self.data_for_instance["config_drive"] = self.__ensure_param(self.data, 'config_drive')
-        LOG.debug("| | Get disk config")
         self.data_for_instance["disk_config"] = self.__ensure_param(self.data, 'diskConfig')
-        LOG.debug("| | Get nics")
         self.data_for_instance["nics"] = self.__prepare_networks(self.data['networks'])
          #availability_zone=self.ensure_param(data, 'availability_zone')
         return self
 
+    @log_step(3, LOG)
     def prepare_for_boot_volume(self):
         self.data_for_instance["block_device_mapping_v2"] = [{
             "source_type": "image",
@@ -76,23 +65,25 @@ class osBuilderImporter:
         self.data_for_instance["image"] = None
         return self
 
+    @log_step(3, LOG)
     def delete_image_from_source_and_dest_cloud(self):
         self.glance_client.images.delete(self.data_for_instance["block_device_mapping_v2"][0]["uuid"])
         self.data['image'].delete()
         return self
 
+    @log_step(3, LOG)
     def create_instance(self):
-        LOG.info("| creating new instance")
+        LOG.info("  creating new instance")
         self.instance = self.nova_client.servers.create(**self.data_for_instance)
-        LOG.info("| wait for instance activating")
+        LOG.info("  wait for instance activating")
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'ACTIVE')
         return self
 
+    @log_step(3, LOG)
     def import_delta_file(self):
 
         """ Transfering instance's diff file """
-        LOG.info("| sync delta")
-        LOG.debug("| import instance delta")
+
         dest_disk = self.__detect_delta_file(self.instance, False)
         self.__transfer_remote_file(self.instance,
                                     self.data["disk"]["host"],
@@ -100,6 +91,7 @@ class osBuilderImporter:
                                     dest_disk)
         return self
 
+    @log_step(3, LOG)
     def import_ephemeral_drive(self):
         if not self.config['ephemeral_drives']['ceph']:
             dest_disk_ephemeral = self.__detect_delta_file(self.instance, True)
@@ -124,6 +116,7 @@ class osBuilderImporter:
                                                 self.data['disk']['type'] == CEPH)
         return self
 
+    @log_step(4, LOG)
     def __create_diff(self, instance, format_file, backing_file, diff_file):
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         with settings(host_string=self.config['host']):
@@ -131,12 +124,14 @@ class osBuilderImporter:
                 run("ssh -oStrictHostKeyChecking=no %s  'qemu-img create -f %s -b %s %s'" %
                     (host, format_file, backing_file, diff_file))
 
+    @log_step(4, LOG)
     def __delete_remote_file_on_compute(self, path_file, instance):
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
                 run("ssh -oStrictHostKeyChecking=no %s  'rm -rf %s'" % (host, path_file))
 
+    @log_step(4, LOG)
     def __convert_file(self, instance, from_file, to_file, format_file):
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         with settings(host_string=self.config['host']):
@@ -144,53 +139,46 @@ class osBuilderImporter:
                 run("ssh -oStrictHostKeyChecking=no %s  'qemu-img convert -O %s %s %s'" %
                     (host, format_file, from_file, to_file))
 
+    @log_step(3, LOG)
     def start_instance(self):
-        LOG.debug("| | Start instance")
+        LOG.debug("    Start instance")
         self.instance.start()
-        print self.instance
-        print self.instance.__dict__
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'ACTIVE')
         return self
 
+    @log_step(3, LOG)
     def stop_instance(self):
         if self.instance.status == 'ACTIVE':
-            LOG.info("| | instance is active. Stopping.")
+            LOG.info("    instance is active. Stopping.")
             self.instance.stop()
-            LOG.debug("| | waiting shutoff state of instance")
+            LOG.debug("    waiting shutoff state of instance")
             self.__wait_for_status(self.nova_client.servers, self.instance.id, 'SHUTOFF')
-            LOG.debug("| | instance is stopped")
+            LOG.debug("    instance is stopped")
         else:
-            LOG.info("| | instance is stopped")
+            LOG.info("    instance is stopped")
         return self
 
+    @log_step(3, LOG)
     def merge_delta_and_image(self):
 
         """ Merging diff file and base image of instance (ceph case)"""
 
-        LOG.info("| | copying diff for instance (ceph case)")
         diff_disk_path = self.__diff_copy(self.data,
                                           self.data_for_instance,
                                           self.config['host'],
                                           dest_path=self.config['temp'])
-        LOG.debug("| | Starting base image downloading")
         self.__download_image_from_glance(self.data_for_instance, diff_disk_path)
-        LOG.debug("| | Base image dowloaded")
-        LOG.debug("| | Rebasing original diff file")
         self.__diff_rebase("%s/baseimage" % diff_disk_path, "%s/disk" % diff_disk_path)
-        LOG.debug("| | Diff file has been rebased")
         self.__diff_commit(diff_disk_path)
-        LOG.debug("| | Diff file has been commited to baseimage")
         if self.config['glance']['convert_to_raw']:
             if self.data_for_instance['image'].disk_format != 'raw':
                 self.__convert_image_to_raw(self.data_for_instance, diff_disk_path)
                 self.data_for_instance['image'].disk_format = 'raw'
-                LOG.debug("| | Image converted to raw format")
-        LOG.debug("| | Start uploading newimage to glance")
         new_image_id = self.__upload_image_to_glance(diff_disk_path, self.data_for_instance)
-        LOG.debug("| | New image uploaded to glance")
         self.data_for_instance["image"] = self.glance_client.images.get(new_image_id)
         return self
 
+    @log_step(4, LOG)
     def __diff_copy(self, data, data_for_instance, dest_host, dest_path="root"):
         dest_path = dest_path + "/" + data_for_instance["image"].id
         with settings(host_string=self.config['host']):
@@ -204,6 +192,7 @@ class osBuilderImporter:
                     (data['disk']['host'], data['disk']['diff_path'], dest_host, dest_path))
         return dest_path
 
+    @log_step(4, LOG)
     def __download_image_from_glance(self, data_for_instance, dest_path):
         baseimage_id = data_for_instance["image"].id
         with settings(host_string=self.config['host']):
@@ -218,11 +207,13 @@ class osBuilderImporter:
                      baseimage_id,
                      dest_path))
 
+    @log_step(4, LOG)
     def __diff_commit(self, dest_path):
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
                 run("cd %s && qemu-img commit disk" % dest_path)
 
+    @log_step(4, LOG)
     def __convert_image_to_raw(self, data_for_instance, path_to_image):
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
@@ -230,6 +221,7 @@ class osBuilderImporter:
                     (path_to_image, data_for_instance['image'].disk_format))
                 run("cd %s && mv -f baseimage.tmp baseimage" % path_to_image)
 
+    @log_step(5, LOG)
     def __detect_backing_file(self, dest_disk_ephemeral, instance):
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         with settings(host_string=self.config['host']):
@@ -244,6 +236,7 @@ class osBuilderImporter:
                         backing_file = line_out[1].replace(" ", "")
                 return backing_file
 
+    @log_step(4, LOG)
     def __upload_image_to_glance(self, path_to_image, data_for_instance):
         name = "new" + data_for_instance["image"].name
         image_format = data_for_instance["image"].disk_format
@@ -264,6 +257,7 @@ class osBuilderImporter:
                 print new_image_id
         return new_image_id
 
+    @log_step(4, LOG)
     def __diff_rebase(self, baseimage, disk, instance=None):
         cmd = "qemu-img rebase -u -b %s %s" % (baseimage, disk)
         with settings(host_string=self.config['host']):
@@ -274,6 +268,7 @@ class osBuilderImporter:
                 else:
                     run(cmd)
 
+    @log_step(5, LOG)
     def __detect_delta_file(self, instance, is_ephemeral):
         LOG.debug("| | sync with remote file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
@@ -289,9 +284,10 @@ class osBuilderImporter:
                         dest_disk = i
                 if not dest_disk:
                     raise NameError("Can't find suitable name of the destination disk path")
-                LOG.debug("Dest disk %s" % dest_disk)
+                LOG.debug("    Dest disk %s" % dest_disk)
         return dest_disk
 
+    @log_step(4, LOG)
     def __transfer_remote_file(self, instance, disk_host, source_disk, dest_disk):
         LOG.debug("| | copy file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
@@ -307,9 +303,10 @@ class osBuilderImporter:
                              "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'gunzip | dd bs=1M of=%s'") %
                             (self.config['transfer_file']['level_compress'], disk_host, source_disk, dest_disk))
 
+    @log_step(4, LOG)
     def __transfer_remote_file_to_ceph(self, instance, disk_host, source_disk, dest_host, is_source_ceph):
         temp_dir = source_disk[:-10]
-        LOG.debug("| | copy ephemeral file to destination ceph")
+        LOG.debug("    copy ephemeral file to destination ceph")
         with settings(host_string=dest_host):
             with forward_agent(env.key_filename):
                 run("rbd rm -p compute %s_disk.local" % instance.id)
@@ -351,6 +348,7 @@ class osBuilderImporter:
                                instance.id))
                 run("rm -f %s" % source_disk)
 
+    @log_step(3, LOG)
     def import_volumes(self):
 
         """
@@ -359,32 +357,26 @@ class osBuilderImporter:
             Secandary: create volume with referencing on to image, in which we already uploaded cinder
             volume on source cloud.
         """
-
-        LOG.info("| migrateVolumes")
-        LOG.debug("| import volumes")
-        LOG.debug("| | wait for instance activating")
         for source_volume in self.data['volumes']:
-            LOG.debug("| | | volume %s" % source_volume.__dict__)
-            LOG.debug("| | | copy image of volume from source to dest")
+            LOG.debug("      volume %s" % source_volume.__dict__)
             image = self.__copy_from_glance_to_glance(source_volume)
-            LOG.debug("| | | | creating volume")
             volume = self.cinder_client.volumes.create(size=source_volume.size,
                                                        display_name=source_volume.name,
                                                        display_description=source_volume.description,
                                                        volume_type=source_volume.volume_type,
                                                        availability_zone=source_volume.availability_zone,
                                                        imageRef=image.id)
-            LOG.debug("| | | | wait for available")
+            LOG.debug("        wait for available")
             self.__wait_for_status(self.cinder_client.volumes, volume.id, 'available')
-            LOG.debug("| | | | attach vol")
+            LOG.debug("        attach vol")
             self.nova_client.volumes.create_server_volume(self.instance.id, volume.id, source_volume.device)
-            LOG.debug("| | | | wait for using")
+            LOG.debug("        wait for using")
             self.__wait_for_status(self.cinder_client.volumes, volume.id, 'in-use')
-            LOG.debug("| | | | delete image on source cloud")
+            LOG.debug("        delete image on source cloud")
             source_volume.delete()
-            LOG.debug("| | | | delete image on dest cloud")
+            LOG.debug("        delete image on dest cloud")
             self.glance_client.images.delete(image.id)
-            LOG.debug("| | | | done")
+            LOG.debug("        done")
         return self
 
     def __ensure_param(self, data, name, rules_name=None):
@@ -399,6 +391,7 @@ class osBuilderImporter:
             return import_rules['default'][rules_name]
         return None
 
+    @log_step(4, LOG)
     def __get_image(self, image_transfer):
         checksum = image_transfer.checksum
         for image in self.glance_client.images.list():
@@ -412,6 +405,7 @@ class osBuilderImporter:
             raise ChecksumImageInvalid(checksum, image_dest.checksum)
         return image_dest
 
+    @log_step(4, LOG)
     def __copy_from_glance_to_glance(self, transfer_object):
         info_image_source = transfer_object.get_info_image()
         # TODO: added check of checksum on source and dest clouds
@@ -428,6 +422,7 @@ class osBuilderImporter:
     def __callback_print_progress(self, size, length, id, name):
         print "Download {0} bytes of {1} ({2}%) - id = {3} name = {4}".format(size, length, size*100/length, id, name)
 
+    @log_step(4, LOG)
     def __get_flavor(self, flavor_info):
         flavor = None
         try:
@@ -450,21 +445,22 @@ class osBuilderImporter:
                                                      is_public=flavor_info['is_public'])
         return flavor
 
+    @log_step(4, LOG)
     def __get_key_name(self, key):
         if 'public_key' in key:
             pass  # TODO must import this key
         return key['name']
 
+    @log_step(4, LOG)
     def __prepare_networks(self, networks_info):
         params = []
-        LOG.debug("| process networks")
         for i in range(0, len(networks_info)):
             if len(self.config['import_rules']['overwrite']['networks']) > i:
                 network_info = self.config['import_rules']['overwrite']['networks'][i]
             else:
                 network_info = networks_info[i]
             network = self.__get_network(network_info)
-            LOG.debug("| | network %s [%s]" % (network['name'], network['id']))
+            LOG.debug("    network %s [%s]" % (network['name'], network['id']))
             for item in self.network_client.list_ports(fields=['network_id', 'mac_address', 'id'])['ports']:
                 if (item['network_id'] == network['id']) and (item['mac_address'] == networks_info[i]['mac']):
                     LOG.warn("Port with network_id exists after prev run of script %s" % item)
@@ -475,6 +471,7 @@ class osBuilderImporter:
             params.append({'net-id': network['id'], 'port-id': port['id']})
         return params
 
+    @log_step(4, LOG)
     def __get_network(self, network_info):
         if 'id' in network_info:
             return self.network_client.list_networks(id=network_info['id'])['networks'][0]

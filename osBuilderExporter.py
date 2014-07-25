@@ -1,17 +1,12 @@
-import logging
-from utils import forward_agent, CEPH, REMOTE_FILE
+from utils import forward_agent, CEPH, REMOTE_FILE, log_step, get_log
 from fabric.api import run, settings, env, cd
 from osVolumeTransfer import VolumeTransfer
 from osImageTransfer import ImageTransfer
 import time
 import json
-
 __author__ = 'mirrorcoder'
 
-LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG)
-hdlr = logging.FileHandler('migrate.log')
-LOG.addHandler(hdlr)
+LOG = get_log(__name__)
 
 DISK = "disk"
 LOCAL = ".local"
@@ -34,9 +29,11 @@ class osBuilderExporter:
         self.instance = instance
         self.config = config
 
+    @log_step(2, LOG)
     def finish(self):
         return self.data
 
+    @log_step(2, LOG)
     def stop_instance(self):
         if self.__get_status(self.nova_client.servers, self.instance.id).lower() == 'active':
             self.instance.stop()
@@ -44,30 +41,37 @@ class osBuilderExporter:
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'SHUTOFF')
         return self
 
+    @log_step(2, LOG)
     def get_name(self):
         self.data['name'] = getattr(self.instance, 'name')
         return self
 
+    @log_step(2, LOG)
     def get_metadata(self):
         self.data['metadata'] = getattr(self.instance, 'metadata')
         return self
 
+    @log_step(2, LOG)
     def get_availability_zone(self):
         self.data['availability_zone'] = getattr(self.instance, 'OS-EXT-AZ:availability_zone')
         return self
 
+    @log_step(2, LOG)
     def get_config_drive(self):
         self.data['config_drive'] = getattr(self.instance, 'config_drive')
         return self
 
+    @log_step(2, LOG)
     def get_disk_config(self):
         self.data['disk_config'] = getattr(self.instance, 'OS-DCF:diskConfig')
         return self
 
+    @log_step(2, LOG)
     def get_instance_name(self):
         self.data['instance_name'] = getattr(self.instance, 'OS-EXT-SRV-ATTR:instance_name')
         return self
 
+    @log_step(2, LOG)
     def get_image(self):
         if self.instance.image:
             self.data['image'] = ImageTransfer(self.instance.image['id'], self.glance_client)
@@ -77,6 +81,7 @@ class osBuilderExporter:
             self.data['boot_from_volume'] = True
         return self
 
+    @log_step(2, LOG)
     def get_flavor(self):
         flav = self.__get_flavor_from_instance(self.instance)
         self.data['flavor'] = {'name': flav["name"],
@@ -89,14 +94,17 @@ class osBuilderExporter:
                                'rxtx_factor': flav['rxtx_factor']}
         return self
 
+    @log_step(2, LOG)
     def get_security_groups(self):
         self.data['security_groups'] = [security_group['name'] for security_group in self.instance.security_groups]
         return self
 
+    @log_step(2, LOG)
     def get_key(self):
         self.data['key'] = {'name': self.instance.key_name}
         return self
 
+    @log_step(2, LOG)
     def get_networks(self):
         networks = []
 
@@ -110,6 +118,7 @@ class osBuilderExporter:
         self.data['networks'] = networks
         return self
 
+    @log_step(2, LOG)
     def get_disk(self):
         """Getting information about diff file of source instance"""
         is_ephemeral = self.__get_flavor_from_instance(self.instance)['OS-FLV-EXT-DATA:ephemeral'] > 0
@@ -156,11 +165,13 @@ class osBuilderExporter:
             self.data["boot_volume_size"] = {}
         return self
 
+    @log_step(3, LOG)
     def __create_temp_directory(self, temp_path):
         with settings(host_string=self.config['host']):
             run("rm -rf %s" % temp_path)
             run("mkdir %s" % temp_path)
 
+    @log_step(3, LOG)
     def __transfer_rbd_to_glance(self, diff_path, temp_path, image_format, name):
         name_file_diff_path = "disk"
         print diff_path, temp_path, image_format, name
@@ -181,6 +192,7 @@ class osBuilderExporter:
                 id = out.split("|")[2].replace(' ', '')
                 return ImageTransfer(id, self.glance_client)
 
+    @log_step(3, LOG)
     def __transfer_rbd_to_file(self, diff_path, temp_path, image_format, name_file_diff_path):
         if not diff_path:
             return None
@@ -192,6 +204,7 @@ class osBuilderExporter:
         else:
             return temp_path+"/"+name_file_diff_path
 
+    @log_step(2, LOG)
     def get_volumes(self):
 
         """
@@ -226,9 +239,11 @@ class osBuilderExporter:
         self.data['volumes'] = images_from_volumes
         return self
 
+    @log_step(3, LOG)
     def __get_flavor_from_instance(self, instance):
         return self.nova_client.flavors.get(instance.flavor['id']).__dict__
 
+    @log_step(3, LOG)
     def __get_instance_diff_path(self, instance, is_ephemeral, is_ceph_ephemeral):
 
         """Return path of instance's diff file"""
