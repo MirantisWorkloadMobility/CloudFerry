@@ -56,6 +56,7 @@ def migrate(name_config):
     env.key_filename = config['key_filename']['name']
     LOG.info("Migrating all resources")
     resources = res_exporter.get_tenants()\
+                            .get_roles()\
                             .get_flavors()\
                             .build()
     res_importer.upload(resources)
