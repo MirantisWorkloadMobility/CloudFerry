@@ -55,7 +55,7 @@ class ResourceImporter(osCommon.osCommon):
     @log_step(3, LOG)
     def __upload_roles(self, roles):
         # do not import a role if one with the same name already exists
-        existing = frozenset(r.name for r in self.keystone_client.roles.list())
+        existing = {r.name for r in self.keystone_client.roles.list()}
         for role in roles:
             if role.name not in existing:
                 self.keystone_client.roles.create(role.name)
@@ -89,13 +89,6 @@ class ResourceImporter(osCommon.osCommon):
                 for role in user.list_roles(tenant):
                     if role.name not in dest_user_roles:
                         dest_tenant.add_user(dest_user, roles[role.name])
-        # do not import a tenant if one with the same name already exists
-        existing = {t.name for t in self.keystone_client.tenants.list()}
-        for tenant in tenants:
-            if tenant.name not in existing:
-                self.keystone_client.tenants.create(tenant_name=tenant.name,
-                                                    description=tenant.description,
-                                                    enabled=tenant.enabled)
 
     @log_step(3, LOG)
     def __upload_flavors(self, flavors):
