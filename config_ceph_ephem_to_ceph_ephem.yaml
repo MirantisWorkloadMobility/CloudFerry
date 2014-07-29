@@ -1,0 +1,48 @@
+clouds:
+    from:
+        type: os
+        host: 172.18.172.50
+        user: admin
+        password: admin
+        tenant: admin
+        ephemeral_drives:
+          ceph: yes
+          convert_diff_file: qcow2
+          convert_ephemeral_drive: qcow2
+        cinder:
+          backend: ceph
+          disk_format: qcow2
+        temp: /root/temp
+    to:
+        type: os
+        host: 172.18.172.55
+        user: admin
+        password: admin
+        tenant: admin
+        temp: /root/merge
+        mysql:
+          user: root
+          password:
+        cinder:
+          backend: ceph
+        glance:
+          convert_to_raw: yes
+        ephemeral_drives:
+          ceph: yes
+        transfer_ephemeral:
+          compress: gzip
+          level_compress: 9
+        transfer_file:
+          compress: dd
+          level_compress: 9
+        import_rules:
+            default: {}
+            overwrite:
+                key: {name: control}
+                networks:
+                 - name: "net04"
+        speed_limit: 10MB
+key_filename:
+    name: privkey
+instances:
+ - key_name: control
