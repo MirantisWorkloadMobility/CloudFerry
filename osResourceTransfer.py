@@ -1,13 +1,10 @@
 """
 Package with OpenStack resources export/import utilities.
 """
-
-import logging
 import osCommon
+from utils import log_step, get_log
 
-LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG)
-LOG.addHandler(logging.FileHandler('migrate.log'))
+LOG = get_log(__name__)
 
 
 class ResourceExporter(osCommon.osCommon):
@@ -20,14 +17,22 @@ class ResourceExporter(osCommon.osCommon):
         self.data = dict()
         super(ResourceExporter, self).__init__(conf['clouds']['from'])
 
+    @log_step(2, LOG)
+    def get_flavors(self):
+        self.data['flavors'] = self.nova_client.flavors.list(is_public=None)
+        return self
+
+    @log_step(2, LOG)
     def get_tenants(self):
         self.data['tenants'] = self.keystone_client.tenants.list()
         return self
 
+    @log_step(2, LOG)
     def get_roles(self):
         self.data['roles'] = self.keystone_client.roles.list()
         return self
-
+    
+    @log_step(2, LOG)
     def build(self):
         return self.data
 
@@ -41,17 +46,21 @@ class ResourceImporter(osCommon.osCommon):
     def __init__(self, conf):
         super(ResourceImporter, self).__init__(conf['clouds']['to'])
 
+    @log_step(2, LOG)
     def upload(self, data):
         self.__upload_roles(data['roles'])
         self.__upload_tenants(data['tenants'])
+        self.__upload_flavors(data['flavors'])
 
+    @log_step(3, LOG)
     def __upload_roles(self, roles):
         # do not import a role if one with the same name already exists
-        existing = frozenset(r.name for r in self.keystone_client.roles.list())
+        existing = {r.name for r in self.keystone_client.roles.list()}
         for role in roles:
             if role.name not in existing:
                 self.keystone_client.roles.create(role.name)
-
+ 
+    @log_step(3, LOG)
     def __upload_tenants(self, tenants):
         # do not import tenants or users if ones with the same name already exist
         existing_tenants = {t.name: t for t in self.keystone_client.tenants.list()}
@@ -80,3 +89,18 @@ class ResourceImporter(osCommon.osCommon):
                 for role in user.list_roles(tenant):
                     if role.name not in dest_user_roles:
                         dest_tenant.add_user(dest_user, roles[role.name])
+
+    @log_step(3, LOG)
+    def __upload_flavors(self, flavors):
+        # do not import a flavor if one with the same name already exists
+        existing = {f.name for f in self.nova_client.flavors.list(is_public=None)}
+        for flavor in flavors:
+            if flavor.name not in existing:
+                self.nova_client.flavors.create(name=flavor.name,
+                                                ram=flavor.ram,
+                                                vcpus=flavor.vcpus,
+                                                disk=flavor.disk,
+                                                swap=flavor.swap,
+                                                rxtx_factor=flavor.rxtx_factor,
+                                                ephemeral=flavor.ephemeral,
+                                                is_public=flavor.is_public)

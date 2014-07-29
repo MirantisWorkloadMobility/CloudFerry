@@ -1,6 +1,7 @@
 from fabric.api import local, run
 import os
-
+import logging
+import sys
 __author__ = 'mirrorcoder'
 
 ISCSI = "iscsi"
@@ -13,6 +14,32 @@ EPHEMERAL = "ephemeral"
 REMOTE_FILE = "remote file"
 QCOW2 = "qcow2"
 YES = "yes"
+NAME_LOG_FILE = 'migrate.log'
+
+
+def get_log(name):
+    LOG = logging.getLogger(name)
+    LOG.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s : %(message)s')
+    hdlr = logging.FileHandler(NAME_LOG_FILE)
+    hdlr.setFormatter(formatter)
+    LOG.addHandler(hdlr)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.DEBUG)
+    formatter_out = logging.Formatter('%(asctime)s: %(message)s')
+    ch.setFormatter(formatter_out)
+    LOG.addHandler(ch)
+    return LOG
+
+
+def log_step(level, log):
+    def decorator(func):
+        def inner(*args, **kwargs):
+            log.info("%s> Step %s" % ("- - "*level, func.__name__))
+            res = func(*args, **kwargs)
+            return res
+        return inner
+    return decorator
 
 
 class forward_agent:
@@ -25,11 +52,12 @@ class forward_agent:
         self.key_file = key_file
 
     def __enter__(self):
-            info_agent = local("eval `ssh-agent` && echo $SSH_AUTH_SOCK && ssh-add %s" % (self.key_file), capture=True).split("\n")
-            self.pid = info_agent[0].split(" ")[-1]
-            self.ssh_auth_sock = info_agent[1]
-            os.environ["SSH_AGENT_PID"] = self.pid
-            os.environ["SSH_AUTH_SOCK"] = self.ssh_auth_sock
+        info_agent = local("eval `ssh-agent` && echo $SSH_AUTH_SOCK && ssh-add %s" %
+                           (self.key_file), capture=True).split("\n")
+        self.pid = info_agent[0].split(" ")[-1]
+        self.ssh_auth_sock = info_agent[1]
+        os.environ["SSH_AGENT_PID"] = self.pid
+        os.environ["SSH_AUTH_SOCK"] = self.ssh_auth_sock
 
     def __exit__(self, type, value, traceback):
         local("kill -9 %s"%(self.pid))

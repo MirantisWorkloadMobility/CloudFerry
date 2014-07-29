@@ -1,12 +1,12 @@
 clouds:
     from:
         type: os
-        host: 172.18.172.20
+        host: 172.18.172.50
         user: admin
         password: admin
         tenant: admin
         ephemeral_drives:
-          ceph: no
+          ceph: yes
           convert_diff_file: qcow2
           convert_ephemeral_drive: qcow2
         cinder:
@@ -20,6 +20,9 @@ clouds:
         password: admin
         tenant: admin
         temp: /root/merge
+        mysql:
+          user: root
+          password:
         cinder:
           backend: iscsi
         glance:
@@ -38,8 +41,8 @@ clouds:
                 key: {name: control}
                 networks:
                  - name: "net04"
+        speed_limit: 10MB
 key_filename:
     name: privkey
 instances:
  - key_name: control
-speed_limit: 10MB

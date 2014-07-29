@@ -3,28 +3,29 @@ import osResourceTransfer
 import osExporter
 import osImporter
 from fabric.api import task, env
-import logging
+from utils import log_step, get_log
 
 env.forward_agent = True
 env.user = 'root'
-LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG)
-hdlr = logging.FileHandler('migrate.log')
-LOG.addHandler(hdlr)
+
+LOG = get_log(__name__)
 
 
+@log_step(2, LOG)
 def get_exporter(config):
     return {
         'os': lambda info: (osResourceTransfer.ResourceExporter(info), osExporter.Exporter(info))
     }[config['clouds']['from']['type']](config)
 
 
+@log_step(2, LOG)
 def get_importer(config):
     return {
         'os': lambda info: (osResourceTransfer.ResourceImporter(info), osImporter.Importer(info))
     }[config['clouds']['to']['type']](config)
 
 
+@log_step(1, LOG)
 def init_migrate(name_config):
     config = yaml.load(open(name_config, 'r'))
     exporter = get_exporter(config)
@@ -32,12 +33,14 @@ def init_migrate(name_config):
     return config, exporter, importer
 
 
+@log_step(1, LOG)
 def search_instances_by_search_opts(config, exporter):
     for instance_search_opts in config['instances']:
         for instance in exporter.find_instances(instance_search_opts):
             yield instance
 
 
+@log_step(1, LOG)
 def migrate_one_instance(instance, exporter, importer):
     data = exporter.export(instance)
     importer.upload(data)
@@ -54,6 +57,7 @@ def migrate(name_config):
     LOG.info("Migrating all resources")
     resources = res_exporter.get_tenants()\
                             .get_roles()\
+                            .get_flavors()\
                             .build()
     res_importer.upload(resources)
     LOG.info("Migrating all instance by search opts")
