@@ -368,6 +368,8 @@ class osBuilderImporter:
                                                        imageRef=image.id)
             LOG.debug("        wait for available")
             self.__wait_for_status(self.cinder_client.volumes, volume.id, 'available')
+            LOG.debug("        update volume")
+            self.__patch_option_bootable_of_volume(volume.id, source_volume.bootable)
             LOG.debug("        attach vol")
             self.nova_client.volumes.create_server_volume(self.instance.id, volume.id, source_volume.device)
             LOG.debug("        wait for using")
@@ -378,6 +380,19 @@ class osBuilderImporter:
             self.glance_client.images.delete(image.id)
             LOG.debug("        done")
         return self
+
+    @log_step(4, LOG)
+    def __patch_option_bootable_of_volume(self, volume_id, bootable):
+        cmd = 'use cinder;update volumes set volumes.bootable=%s where volumes.id="%s"' % (int(bootable), volume_id)
+        self.__cmd_mysql_on_dest_controller(cmd)
+
+    def __cmd_mysql_on_dest_controller(self, cmd):
+        with settings(host_string=self.config['host']):
+            run('mysql %s %s -e \'%s\'' % (("-u "+self.config['mysql']['user'])
+                                           if self.config['mysql']['user'] else "",
+                                           "-p"+self.config['mysql']['password']
+                                           if self.config['mysql']['password'] else "",
+                                           cmd))
 
     def __ensure_param(self, data, name, rules_name=None):
         if rules_name is None:

@@ -214,7 +214,8 @@ class osBuilderExporter:
         images_from_volumes = []
         for volume_info in self.nova_client.volumes.get_server_volumes(self.instance.id):
             volume = self.cinder_client.volumes.get(volume_info.volumeId)
-            LOG.debug("| | uploading volume %s [%s] to image service" % (volume.display_name, volume.id))
+            LOG.debug("| | uploading volume %s [%s] to image service bootable=%s" %
+                      (volume.display_name, volume.id, volume.bootable))
             resp, image = self.cinder_client.volumes.upload_to_image(volume=volume,
                                                                      force=True,
                                                                      image_name=volume.id,

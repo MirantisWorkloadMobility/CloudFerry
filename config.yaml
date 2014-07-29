@@ -20,6 +20,9 @@ clouds:
         password: admin
         tenant: admin
         temp: /root/merge
+        mysql:
+          user: root
+          password:
         cinder:
           backend: iscsi
         glance:

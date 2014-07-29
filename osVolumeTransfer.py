@@ -14,6 +14,7 @@ class VolumeTransfer:
         self.device = volume.attachments[0]['device']
         self.host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         self.image_id = image_id
+        self.bootable = True if volume.bootable == 'true' else False
         self.__info = self.glance_client.images.get(self.image_id)
         self.checksum = self.__info.checksum
 
