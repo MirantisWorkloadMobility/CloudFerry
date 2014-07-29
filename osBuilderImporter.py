@@ -438,26 +438,14 @@ class osBuilderImporter:
         print "Download {0} bytes of {1} ({2}%) - id = {3} name = {4}".format(size, length, size*100/length, id, name)
 
     @log_step(4, LOG)
-    def __get_flavor(self, flavor_info):
+    def __get_flavor(self, flavor_name):
         flavor = None
         try:
-            if 'id' in flavor_info:
-                flavor = self.nova_client.flavors.get(flavor_info['id'])
-            if 'name' in flavor_info:
-                flavor = self.nova_client.flavors.find(name=flavor_info['name'])
+            flavor = self.nova_client.flavors.find(name=flavor_name)
         except Exception as e:
             LOG.error("Exp %s" % e)
-            LOG.error("NotFoundFlavor %s" % flavor_info)
+            LOG.error("NotFoundFlavor %s" % flavor_name)
 
-        if not flavor:
-            flavor = self.nova_client.flavors.create(flavor_info["name"],
-                                                     flavor_info["ram"],
-                                                     flavor_info["vcpus"],
-                                                     flavor_info["disk"],
-                                                     ephemeral=flavor_info['ephemeral'],
-                                                     swap=flavor_info['swap'],
-                                                     rxtx_factor=flavor_info['rxtx_factor'],
-                                                     is_public=flavor_info['is_public'])
         return flavor
 
     @log_step(4, LOG)

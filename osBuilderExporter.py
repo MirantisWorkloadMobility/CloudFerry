@@ -83,15 +83,7 @@ class osBuilderExporter:
 
     @log_step(2, LOG)
     def get_flavor(self):
-        flav = self.__get_flavor_from_instance(self.instance)
-        self.data['flavor'] = {'name': flav["name"],
-                               'ram': flav["ram"],
-                               'vcpus': flav["vcpus"],
-                               'swap': flav["swap"],
-                               'is_public': flav["os-flavor-access:is_public"],
-                               'disk': flav['disk'],
-                               'ephemeral': flav['OS-FLV-EXT-DATA:ephemeral'],
-                               'rxtx_factor': flav['rxtx_factor']}
+        self.data['flavor'] = self.__get_flavor_from_instance(self.instance).name
         return self
 
     @log_step(2, LOG)
@@ -121,7 +113,7 @@ class osBuilderExporter:
     @log_step(2, LOG)
     def get_disk(self):
         """Getting information about diff file of source instance"""
-        is_ephemeral = self.__get_flavor_from_instance(self.instance)['OS-FLV-EXT-DATA:ephemeral'] > 0
+        is_ephemeral = self.__get_flavor_from_instance(self.instance).ephemeral > 0
         if not self.data["boot_from_volume"]:
             if self.config["ephemeral_drives"]['ceph']:
                 diff_path = self.__get_instance_diff_path(self.instance, False, True)
@@ -242,7 +234,7 @@ class osBuilderExporter:
 
     @log_step(3, LOG)
     def __get_flavor_from_instance(self, instance):
-        return self.nova_client.flavors.get(instance.flavor['id']).__dict__
+        return self.nova_client.flavors.get(instance.flavor['id'])
 
     @log_step(3, LOG)
     def __get_instance_diff_path(self, instance, is_ephemeral, is_ceph_ephemeral):
