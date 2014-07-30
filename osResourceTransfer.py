@@ -21,7 +21,15 @@ class ResourceExporter(osCommon.osCommon):
 
     @log_step(2, LOG)
     def get_flavors(self):
-        self.data['flavors'] = self.nova_client.flavors.list(is_public=None)
+        def process_flavor(flavor):
+            if flavor.is_public:
+                return (flavor, [])
+            else:
+                tenants = self.nova_client.flavor_access.list(flavor=flavor)
+                tenants = [self.keystone_client.tenants.get(t.tenant_id).name for t in tenants]
+                return (flavor, tenants)
+
+        self.data['flavors'] = map(process_flavor, self.nova_client.flavors.list(is_public=False))
         return self
 
     @log_step(2, LOG)
@@ -145,17 +153,21 @@ class ResourceImporter(osCommon.osCommon):
     @log_step(3, LOG)
     def __upload_flavors(self, flavors):
         # do not import a flavor if one with the same name already exists
-        existing = {f.name for f in self.nova_client.flavors.list(is_public=None)}
-        for flavor in flavors:
+        existing = {f.name for f in self.nova_client.flavors.list(is_public=False)}
+        for (flavor, tenants) in flavors:
             if flavor.name not in existing:
-                self.nova_client.flavors.create(name=flavor.name,
-                                                ram=flavor.ram,
-                                                vcpus=flavor.vcpus,
-                                                disk=flavor.disk,
-                                                swap=flavor.swap,
-                                                rxtx_factor=flavor.rxtx_factor,
-                                                ephemeral=flavor.ephemeral,
-                                                is_public=flavor.is_public)
+                dest_flavor = self.nova_client.flavors.create(name=flavor.name,
+                                                              ram=flavor.ram,
+                                                              vcpus=flavor.vcpus,
+                                                              disk=flavor.disk,
+                                                              swap=flavor.swap,
+                                                              rxtx_factor=flavor.rxtx_factor,
+                                                              ephemeral=flavor.ephemeral,
+                                                              is_public=flavor.is_public)
+                for tenant in tenants:
+                    dest_tenant = self.keystone_client.tenants.find(name=tenant)
+                    self.nova_client.flavor_access.add_tenant_access(dest_flavor, dest_tenant.id)
+
 
     @log_step(3, LOG)
     def __upload_user_passwords(self, users):
