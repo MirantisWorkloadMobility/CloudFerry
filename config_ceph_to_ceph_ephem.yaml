@@ -30,7 +30,7 @@ clouds:
         glance:
           convert_to_raw: yes
         ephemeral_drives:
-          ceph: no
+          ceph: yes
         transfer_ephemeral:
           compress: gzip
           level_compress: 9

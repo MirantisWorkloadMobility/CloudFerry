@@ -2,6 +2,7 @@ from fabric.api import local, run
 import os
 import logging
 import sys
+import time
 __author__ = 'mirrorcoder'
 
 ISCSI = "iscsi"
@@ -78,9 +79,11 @@ class up_ssh_tunnel:
 
     def __enter__(self):
         run(self.cmd % (self.address_dest_compute, self.address_dest_controller))
+        time.sleep(5)
 
     def __exit__(self, type, value, traceback):
         run(("pkill -f '"+self.cmd+"'") % (self.address_dest_compute, self.address_dest_controller))
+        time.sleep(5)
 
 
 class ChecksumImageInvalid(Exception):

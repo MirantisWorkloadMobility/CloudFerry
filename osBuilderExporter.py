@@ -161,7 +161,7 @@ class osBuilderExporter:
     def __create_temp_directory(self, temp_path):
         with settings(host_string=self.config['host']):
             run("rm -rf %s" % temp_path)
-            run("mkdir %s" % temp_path)
+            run("mkdir -p %s" % temp_path)
 
     @log_step(3, LOG)
     def __transfer_rbd_to_glance(self, diff_path, temp_path, image_format, name):

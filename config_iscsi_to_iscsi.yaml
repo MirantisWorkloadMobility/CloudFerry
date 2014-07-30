@@ -1,7 +1,7 @@
 clouds:
     from:
         type: os
-        host: 172.18.172.22
+        host: 172.18.172.35
         user: admin
         password: admin
         tenant: admin
@@ -17,7 +17,7 @@ clouds:
           connection: mysql+mysqlconnector
     to:
         type: os
-        host: 172.18.172.35
+        host: 172.18.172.22
         user: admin
         password: admin
         tenant: admin

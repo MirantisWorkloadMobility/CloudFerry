@@ -74,6 +74,9 @@ class osBuilderImporter:
     @log_step(3, LOG)
     def create_instance(self):
         LOG.info("  creating new instance")
+        LOG.debug("params:")
+        for param in self.data_for_instance:
+            LOG.debug("%s = %s" % (param, self.data_for_instance[param]))
         self.instance = self.nova_client.servers.create(**self.data_for_instance)
         LOG.info("  wait for instance activating")
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'ACTIVE')
@@ -184,7 +187,7 @@ class osBuilderImporter:
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):
                 run("rm -rf %s" % dest_path)
-                run("mkdir %s" % dest_path)
+                run("mkdir -p %s" % dest_path)
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
                 run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' | " +
@@ -440,6 +443,9 @@ class osBuilderImporter:
     @log_step(4, LOG)
     def __get_flavor(self, flavor_name):
         flavor = None
+        for flav in self.nova_client.flavors.list():
+            print flav
+            print flav.name == flavor_name
         try:
             flavor = self.nova_client.flavors.find(name=flavor_name)
         except Exception as e:
