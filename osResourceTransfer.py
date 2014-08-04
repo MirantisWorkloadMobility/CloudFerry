@@ -3,6 +3,7 @@ Package with OpenStack resources export/import utilities.
 """
 import osCommon
 from utils import log_step, get_log
+import sqlalchemy
 
 LOG = get_log(__name__)
 
@@ -31,7 +32,19 @@ class ResourceExporter(osCommon.osCommon):
     def get_roles(self):
         self.data['roles'] = self.keystone_client.roles.list()
         return self
-    
+
+    @log_step(2, LOG)
+    def get_user_info(self):
+        users = self.keystone_client.users.list()
+        info = {}
+        with sqlalchemy.create_engine(self.keystone_db_conn_url).begin() as connection:
+            for user in users:
+                for password in connection.execute(sqlalchemy.text("SELECT password FROM user WHERE id = :user_id"),
+                                                   user_id=user.id):
+                    info[user.name] = password[0]
+        self.data['users'] = info
+        return self
+
     @log_step(2, LOG)
     def build(self):
         return self.data
@@ -50,6 +63,7 @@ class ResourceImporter(osCommon.osCommon):
     def upload(self, data):
         self.__upload_roles(data['roles'])
         self.__upload_tenants(data['tenants'])
+        self.__upload_user_passwords(data['users'])
         self.__upload_flavors(data['flavors'])
 
     @log_step(3, LOG)
@@ -59,7 +73,7 @@ class ResourceImporter(osCommon.osCommon):
         for role in roles:
             if role.name not in existing:
                 self.keystone_client.roles.create(role.name)
- 
+
     @log_step(3, LOG)
     def __upload_tenants(self, tenants):
         # do not import tenants or users if ones with the same name already exist
@@ -104,3 +118,13 @@ class ResourceImporter(osCommon.osCommon):
                                                 rxtx_factor=flavor.rxtx_factor,
                                                 ephemeral=flavor.ephemeral,
                                                 is_public=flavor.is_public)
+
+    @log_step(3, LOG)
+    def __upload_user_passwords(self, users):
+        # upload user password if the user exists both on source and destination
+        with sqlalchemy.create_engine(self.keystone_db_conn_url).begin() as connection:
+            for user in self.keystone_client.users.list():
+                if user.name in users:
+                    connection.execute(sqlalchemy.text("UPDATE user SET password = :password WHERE id = :user_id"),
+                                       user_id=user.id,
+                                       password=users[user.name])

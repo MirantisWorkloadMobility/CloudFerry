@@ -11,14 +11,15 @@ class osCommon(object):
     Common class for getting openstack client objects
 
     """
-    
+
     def __init__(self, config):
         self.keystone_client = self.get_keystone_client(config)
         self.nova_client = self.get_nova_client(config)
         self.cinder_client = self.get_cinder_client(config)
         self.network_client = self.get_network_client(config, self.detect_network_client(self.keystone_client))
         self.glance_client = self.get_glance_client(self.keystone_client)
-        
+        self.keystone_db_conn_url = self.compose_keystone_db_conn_url(config)
+
     @staticmethod
     def get_nova_client(params):
 
@@ -108,3 +109,10 @@ class osCommon(object):
         return osCommon.get_public_endpoint_service_by_id(keystone_client, osCommon.get_id_service(keystone_client,
                                                                                                    name_service).id)
 
+    @staticmethod
+    def compose_keystone_db_conn_url(params):
+
+        """ Compose keystone database connection url for SQLAlchemy """
+
+        return '{}://{}:{}@{}/keystone'.format(params['identity']['connection'], params['user'], params['password'],
+                                               params['host'])

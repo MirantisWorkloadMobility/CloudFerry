@@ -13,6 +13,8 @@ clouds:
           backend: ceph
           disk_format: qcow2
         temp: /root/temp
+        identity:
+          connection: mysql+mysqlconnector
     to:
         type: os
         host: 172.18.172.55
@@ -42,6 +44,8 @@ clouds:
                 networks:
                  - name: "net04"
         speed_limit: 10MB
+        identity:
+          connection: mysql+mysqlconnector
 key_filename:
     name: privkey
 instances:

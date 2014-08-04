@@ -58,6 +58,7 @@ def migrate(name_config):
     resources = res_exporter.get_tenants()\
                             .get_roles()\
                             .get_flavors()\
+                            .get_user_info()\
                             .build()
     res_importer.upload(resources)
     LOG.info("Migrating all instance by search opts")
