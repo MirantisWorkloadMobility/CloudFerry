@@ -464,7 +464,8 @@ class osBuilderImporter:
     def __prepare_networks(self, networks_info):
         params = []
         for i in range(0, len(networks_info)):
-            if len(self.config['import_rules']['overwrite']['networks']) > i:
+            net_overwrite = self.config['import_rules']['overwrite']['networks']
+            if net_overwrite and (len(net_overwrite) > i):
                 network_info = self.config['import_rules']['overwrite']['networks'][i]
             else:
                 network_info = networks_info[i]

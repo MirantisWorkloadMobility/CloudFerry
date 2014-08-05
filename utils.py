@@ -3,6 +3,12 @@ import os
 import logging
 import sys
 import time
+import random
+import string
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 __author__ = 'mirrorcoder'
 
 ISCSI = "iscsi"
@@ -16,6 +22,58 @@ REMOTE_FILE = "remote file"
 QCOW2 = "qcow2"
 YES = "yes"
 NAME_LOG_FILE = 'migrate.log'
+
+
+class GeneratorPassword:
+    def __init__(self, length=7):
+        self.length = length
+        self.chars = string.ascii_letters + string.digits + '@#$%&*'
+
+    def get_random_password(self):
+        return self.__generate_password()
+
+    def __generate_password(self):
+        random.seed = (os.urandom(1024))
+        return ''.join(random.choice(self.chars) for i in range(self.length))
+
+
+class Postman:
+    def __init__(self, username, password, from_addr, mail_server):
+        self.username = username
+        self.password = password
+        self.from_addr = from_addr
+        self.mail_server = mail_server
+
+    def __enter__(self):
+        self.server = smtplib.SMTP(self.mail_server)
+        self.server.ehlo()
+        self.server.starttls()
+        self.server.login(self.username, self.password)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.server.quit()
+
+    def send(self, to, subject, msg):
+        msg_mime = MIMEMultipart('alternative')
+        msg_mime.attach(MIMEText(msg, 'html'))
+        msg_mime['Subject'] = subject
+        msg_mime['From'] = self.from_addr
+        msg_mime['To'] = to
+        self.server.sendmail(self.from_addr, to, msg_mime.as_string())
+
+    def close(self):
+        self.server.quit()
+
+
+class Templater:
+    def render(self, name_file, args):
+        temp_file = open(name_file, 'r')
+        temp_render = temp_file.read()
+        for arg in args:
+            temp_render = temp_render.replace("{{%s}}" % arg, args[arg])
+        temp_file.close()
+        return temp_render
 
 
 def get_log(name):

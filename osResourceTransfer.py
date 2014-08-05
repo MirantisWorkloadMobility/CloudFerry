@@ -2,7 +2,7 @@
 Package with OpenStack resources export/import utilities.
 """
 import osCommon
-from utils import log_step, get_log
+from utils import log_step, get_log, GeneratorPassword, Postman, Templater
 import sqlalchemy
 
 LOG = get_log(__name__)
@@ -16,7 +16,8 @@ class ResourceExporter(osCommon.osCommon):
 
     def __init__(self, conf):
         self.data = dict()
-        super(ResourceExporter, self).__init__(conf['clouds']['from'])
+        self.config = conf['clouds']['from']
+        super(ResourceExporter, self).__init__(self.config)
 
     @log_step(2, LOG)
     def get_flavors(self):
@@ -35,15 +36,19 @@ class ResourceExporter(osCommon.osCommon):
 
     @log_step(2, LOG)
     def get_user_info(self):
+        self.__get_user_info(self.config['keep_user_passwords'])
+        return self
+
+    def __get_user_info(self, with_password):
         users = self.keystone_client.users.list()
         info = {}
-        with sqlalchemy.create_engine(self.keystone_db_conn_url).begin() as connection:
-            for user in users:
-                for password in connection.execute(sqlalchemy.text("SELECT password FROM user WHERE id = :user_id"),
-                                                   user_id=user.id):
-                    info[user.name] = password[0]
+        if with_password:
+            with sqlalchemy.create_engine(self.keystone_db_conn_url).begin() as connection:
+                for user in users:
+                    for password in connection.execute(sqlalchemy.text("SELECT password FROM user WHERE id = :user_id"),
+                                                       user_id=user.id):
+                        info[user.name] = password[0]
         self.data['users'] = info
-        return self
 
     @log_step(2, LOG)
     def build(self):
@@ -57,14 +62,32 @@ class ResourceImporter(osCommon.osCommon):
     """
 
     def __init__(self, conf):
-        super(ResourceImporter, self).__init__(conf['clouds']['to'])
+        self.config = conf['clouds']['to']
+        if 'mail' in conf:
+            self.postman = Postman(**conf['mail'])
+        self.templater = Templater()
+        super(ResourceImporter, self).__init__(self.config)
+
+    def __send_msg(self, to, subject, msg):
+        if self.postman:
+            with self.postman as p:
+                p.sendmail(to, subject, msg)
+
+    def __render_template(self, name_file, args):
+        if self.templater:
+            return self.templater.render(name_file, args)
+        else:
+            return None
 
     @log_step(2, LOG)
     def upload(self, data):
         self.__upload_roles(data['roles'])
         self.__upload_tenants(data['tenants'])
-        self.__upload_user_passwords(data['users'])
         self.__upload_flavors(data['flavors'])
+        if data['users']:
+            self.__upload_user_passwords(data['users'])
+        else:
+            self.__send_email_notifications()
 
     @log_step(3, LOG)
     def __upload_roles(self, roles):
@@ -81,6 +104,8 @@ class ResourceImporter(osCommon.osCommon):
         existing_users = {u.name: u for u in self.keystone_client.users.list()}
         # by this time roles on source and destination should be synchronized
         roles = {r.name: r for r in self.keystone_client.roles.list()}
+        generator = GeneratorPassword()
+        self.users_notifications = {}
         for tenant in tenants:
             if tenant.name not in existing_tenants:
                 dest_tenant = self.keystone_client.tenants.create(tenant_name=tenant.name,
@@ -91,11 +116,16 @@ class ResourceImporter(osCommon.osCommon):
             # import users of this tenant that don't exist yet
             for user in tenant.list_users():
                 if user.name not in existing_users:
+                    new_password = generator.get_random_password()
                     dest_user = self.keystone_client.users.create(name=user.name,
-                                                                  password='changeme',
+                                                                  password=new_password,
                                                                   email=user.email,
                                                                   tenant_id=dest_tenant.id,
                                                                   enabled=user.enabled)
+                    self.users_notifications[user.name] = {
+                        'email': user.email,
+                        'password': new_password
+                    }
                 else:
                     dest_user = existing_users[user.name]
                 # import roles of this user within the tenant that are not already assigned
@@ -128,3 +158,11 @@ class ResourceImporter(osCommon.osCommon):
                     connection.execute(sqlalchemy.text("UPDATE user SET password = :password WHERE id = :user_id"),
                                        user_id=user.id,
                                        password=users[user.name])
+
+    def __send_email_notifications(self):
+        for name in self.users_notifications:
+            self.__send_msg(self.users_notifications[name]['email'],
+                            'New password notification',
+                            self.__render_template('email.html',
+                                                   {'name': name,
+                                                    'password': self.users_notifications[name]['password']}))
