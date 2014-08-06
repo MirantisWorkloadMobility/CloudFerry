@@ -50,7 +50,7 @@ clouds:
 mail:
     mail_server: smtp.gmail.com:587
     username: dsozinov@mirantis.com
-    password:
+    password: need_password
     from_addr: dsozinov@mirantis.com
 key_filename:
     name: id_rsa

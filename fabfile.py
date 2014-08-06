@@ -47,12 +47,14 @@ def migrate_one_instance(instance, exporter, importer):
 
 
 @task
-def migrate(name_config):
+def migrate(name_config, name_instance=None):
     """
         :name_config - name of config yaml-file, example 'config.yaml'
     """
     LOG.info("Init migration config")
     config, (res_exporter, inst_exporter), (res_importer, inst_importer) = init_migrate(name_config)
+    if name_instance:
+        config['instances'] = [{'name': name_instance}]
     env.key_filename = config['key_filename']['name']
     LOG.info("Migrating all resources")
     resources = res_exporter.get_tenants()\
