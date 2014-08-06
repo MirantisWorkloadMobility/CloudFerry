@@ -2,6 +2,7 @@ from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid, CEPH, REMO
 from fabric.api import run, settings, env
 from FileLikeProxy import FileLikeProxy
 import time
+import ipaddr
 
 __author__ = 'mirrorcoder'
 
@@ -19,7 +20,8 @@ class osBuilderImporter:
     The main class for importing data from source cloud.
     """
 
-    def __init__(self, glance_client, cinder_client, nova_client, network_client, config, config_from, data):
+    def __init__(self, keystone_client, glance_client, cinder_client, nova_client, network_client, config, config_from, data):
+        self.keystone_client = keystone_client
         self.glance_client = glance_client
         self.cinder_client = cinder_client
         self.nova_client = nova_client
@@ -462,6 +464,7 @@ class osBuilderImporter:
 
     @log_step(4, LOG)
     def __prepare_networks(self, networks_info):
+        LOG.debug("networks_info %s" % networks_info)
         params = []
         for i in range(0, len(networks_info)):
             net_overwrite = self.config['import_rules']['overwrite']['networks']
@@ -469,7 +472,7 @@ class osBuilderImporter:
                 network_info = self.config['import_rules']['overwrite']['networks'][i]
             else:
                 network_info = networks_info[i]
-            network = self.__get_network(network_info)
+            network = self.__get_network(network_info, keep_ip=self.config['keep_ip'])
             LOG.debug("    network %s [%s]" % (network['name'], network['id']))
             for item in self.network_client.list_ports(fields=['network_id', 'mac_address', 'id'])['ports']:
                 if (item['network_id'] == network['id']) and (item['mac_address'] == networks_info[i]['mac']):
@@ -477,16 +480,29 @@ class osBuilderImporter:
                     LOG.warn("and will be delete")
                     self.network_client.delete_port(item['id'])
             port = self.network_client.create_port({'port': {'network_id': network['id'],
-                                                             'mac_address': networks_info[i]['mac']}})['port']
+                                                             'mac_address': networks_info[i]['mac'],
+                                                             'fixed_ips': [{"ip_address": networks_info[i]['ip']}]}})['port']
             params.append({'net-id': network['id'], 'port-id': port['id']})
         return params
 
     @log_step(4, LOG)
-    def __get_network(self, network_info):
+    def __get_network(self, network_info, keep_ip=False):
+        tenant_id = self.__get_tenant_id_by_name(self.config['tenant'])
+        instance_addr = ipaddr.IPAddress(network_info['ip'])
+        if keep_ip:
+            for i in self.network_client.list_subnets()['subnets']:
+                if i['tenant_id'] == tenant_id:
+                    if ipaddr.IPNetwork(i['cidr']).Contains(instance_addr):
+                        return self.network_client.list_networks(id=i['network_id'])['networks'][0]
         if 'id' in network_info:
             return self.network_client.list_networks(id=network_info['id'])['networks'][0]
         if 'name' in network_info:
             return self.network_client.list_networks(name=network_info['name'])['networks'][0]
+
+    def __get_tenant_id_by_name(self, name):
+        for i in self.keystone_client.tenants.list():
+            if i.name == name:
+                return i.id
 
     def __wait_for_status(self, getter, id, status):
         while getter.get(id).status != status:

@@ -1,10 +1,10 @@
 clouds:
     from:
         type: os
-        host: 172.18.172.35
-        user: admin
-        password: admin
-        tenant: admin
+        host: 172.18.172.73
+        user: source-user-1
+        password: migration
+        tenant: source_proj-1
         ephemeral_drives:
           ceph: no
           convert_diff_file: qcow2
@@ -18,10 +18,10 @@ clouds:
         keep_user_passwords: no
     to:
         type: os
-        host: 172.18.172.22
-        user: admin
-        password: admin
-        tenant: admin
+        host: 172.18.172.77
+        user: dest-user-1
+        password: migration
+        tenant: dest-proj-1
         temp: /root/merge
         mysql:
           user: root
@@ -41,18 +41,18 @@ clouds:
         import_rules:
             default: {}
             overwrite:
-                key: {name: control}
+                key: {name: dest-key-1}
                 networks:
-                 - name: "net04"
+        keep_ip: no
         speed_limit: 10MB
         identity:
           connection: mysql+mysqlconnector
 mail:
     mail_server: smtp.gmail.com:587
     username: dsozinov@mirantis.com
-    password: -
+    password:
     from_addr: dsozinov@mirantis.com
 key_filename:
-    name: privkey
+    name: id_rsa
 instances:
- - key_name: control
+ - key_name: source-key-1

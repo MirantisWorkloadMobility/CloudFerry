@@ -49,7 +49,8 @@ class Importer(osCommon.osCommon):
         The main method for data uploading from source cloud
         """
         LOG.info("  Start migrate instance")
-        builderImporter = osBuilderImporter(self.glance_client,
+        builderImporter = osBuilderImporter(self.keystone_client,
+                                            self.glance_client,
                                             self.cinder_client,
                                             self.nova_client,
                                             self.network_client,
