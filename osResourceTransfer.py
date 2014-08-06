@@ -65,7 +65,10 @@ class ResourceImporter(osCommon.osCommon):
         self.config = conf['clouds']['to']
         if 'mail' in conf:
             self.postman = Postman(**conf['mail'])
+        else:
+            self.postman = None
         self.templater = Templater()
+        self.generator = GeneratorPassword()
         super(ResourceImporter, self).__init__(self.config)
 
     def __send_msg(self, to, subject, msg):
@@ -76,6 +79,12 @@ class ResourceImporter(osCommon.osCommon):
     def __render_template(self, name_file, args):
         if self.templater:
             return self.templater.render(name_file, args)
+        else:
+            return None
+
+    def __generate_password(self):
+        if self.generator:
+            return self.generator.get_random_password()
         else:
             return None
 
@@ -104,7 +113,6 @@ class ResourceImporter(osCommon.osCommon):
         existing_users = {u.name: u for u in self.keystone_client.users.list()}
         # by this time roles on source and destination should be synchronized
         roles = {r.name: r for r in self.keystone_client.roles.list()}
-        generator = GeneratorPassword()
         self.users_notifications = {}
         for tenant in tenants:
             if tenant.name not in existing_tenants:
@@ -116,7 +124,7 @@ class ResourceImporter(osCommon.osCommon):
             # import users of this tenant that don't exist yet
             for user in tenant.list_users():
                 if user.name not in existing_users:
-                    new_password = generator.get_random_password()
+                    new_password = self.__generate_password()
                     dest_user = self.keystone_client.users.create(name=user.name,
                                                                   password=new_password,
                                                                   email=user.email,
