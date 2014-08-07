@@ -49,5 +49,4 @@ class Exporter(osCommon.osCommon):
             .get_instance_name()\
             .get_volumes()\
             .finish()
-        print "------------------data--------------------", data
         return data

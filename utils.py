@@ -136,12 +136,11 @@ class up_ssh_tunnel:
         self.cmd = "ssh -oStrictHostKeyChecking=no -L 9999:%s:22 -R 9999:localhost:9999 %s -Nf"
 
     def __enter__(self):
-        run(self.cmd % (self.address_dest_compute, self.address_dest_controller))
-        time.sleep(5)
+        run(self.cmd % (self.address_dest_compute, self.address_dest_controller) + " && sleep 2")
 
     def __exit__(self, type, value, traceback):
         run(("pkill -f '"+self.cmd+"'") % (self.address_dest_compute, self.address_dest_controller))
-        time.sleep(5)
+        time.sleep(2)
 
 
 class ChecksumImageInvalid(Exception):

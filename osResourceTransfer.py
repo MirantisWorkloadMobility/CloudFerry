@@ -74,7 +74,7 @@ class ResourceImporter(osCommon.osCommon):
     def __send_msg(self, to, subject, msg):
         if self.postman:
             with self.postman as p:
-                p.sendmail(to, subject, msg)
+                p.send(to, subject, msg)
 
     def __render_template(self, name_file, args):
         if self.templater:
