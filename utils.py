@@ -105,6 +105,28 @@ def log_step(log):
     return decorator
 
 
+def inspect_func(func):
+    def wrapper(self):
+        self.funcs.append(Function(func, self))
+        return self
+    return wrapper
+
+
+def supertask(func):
+    def wrapper(self):
+        return func(self)
+    return wrapper
+
+
+class Function:
+    def __init__(self, func, args):
+        self.f = func
+        self.args = args
+
+    def __call__(self, *args, **kwargs):
+        return self.f(self.args)
+
+
 class forward_agent:
 
     """
