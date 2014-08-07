@@ -19,7 +19,7 @@ class ResourceExporter(osCommon.osCommon):
         self.config = conf['clouds']['from']
         super(ResourceExporter, self).__init__(self.config)
 
-    @log_step(2, LOG)
+    @log_step(LOG)
     def get_flavors(self):
         def process_flavor(flavor):
             if flavor.is_public:
@@ -32,17 +32,17 @@ class ResourceExporter(osCommon.osCommon):
         self.data['flavors'] = map(process_flavor, self.nova_client.flavors.list(is_public=False))
         return self
 
-    @log_step(2, LOG)
+    @log_step(LOG)
     def get_tenants(self):
         self.data['tenants'] = self.keystone_client.tenants.list()
         return self
 
-    @log_step(2, LOG)
+    @log_step(LOG)
     def get_roles(self):
         self.data['roles'] = self.keystone_client.roles.list()
         return self
 
-    @log_step(2, LOG)
+    @log_step(LOG)
     def get_user_info(self):
         self.__get_user_info(self.config['keep_user_passwords'])
         return self
@@ -58,7 +58,7 @@ class ResourceExporter(osCommon.osCommon):
                         info[user.name] = password[0]
         self.data['users'] = info
 
-    @log_step(2, LOG)
+    @log_step(LOG)
     def build(self):
         return self.data
 
@@ -96,7 +96,7 @@ class ResourceImporter(osCommon.osCommon):
         else:
             return None
 
-    @log_step(2, LOG)
+    @log_step(LOG)
     def upload(self, data):
         self.__upload_roles(data['roles'])
         self.__upload_tenants(data['tenants'])
@@ -106,7 +106,7 @@ class ResourceImporter(osCommon.osCommon):
         else:
             self.__send_email_notifications()
 
-    @log_step(3, LOG)
+    @log_step(LOG)
     def __upload_roles(self, roles):
         # do not import a role if one with the same name already exists
         existing = {r.name for r in self.keystone_client.roles.list()}
@@ -114,7 +114,7 @@ class ResourceImporter(osCommon.osCommon):
             if role.name not in existing:
                 self.keystone_client.roles.create(role.name)
 
-    @log_step(3, LOG)
+    @log_step(LOG)
     def __upload_tenants(self, tenants):
         # do not import tenants or users if ones with the same name already exist
         existing_tenants = {t.name: t for t in self.keystone_client.tenants.list()}
@@ -150,7 +150,7 @@ class ResourceImporter(osCommon.osCommon):
                     if role.name not in dest_user_roles:
                         dest_tenant.add_user(dest_user, roles[role.name])
 
-    @log_step(3, LOG)
+    @log_step(LOG)
     def __upload_flavors(self, flavors):
         # do not import a flavor if one with the same name already exists
         existing = {f.name for f in self.nova_client.flavors.list(is_public=False)}
@@ -169,7 +169,7 @@ class ResourceImporter(osCommon.osCommon):
                     self.nova_client.flavor_access.add_tenant_access(dest_flavor, dest_tenant.id)
 
 
-    @log_step(3, LOG)
+    @log_step(LOG)
     def __upload_user_passwords(self, users):
         # upload user password if the user exists both on source and destination
         with sqlalchemy.create_engine(self.keystone_db_conn_url).begin() as connection:

@@ -22,7 +22,6 @@ class FileLikeProxy:
         if self.speed_limit != 0:
             self.read = self.speed_limited_read
 
-
     def __parse_speed_limit(self, speed_limit):
         if speed_limit is '-':
             return 0

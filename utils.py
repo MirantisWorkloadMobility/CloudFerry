@@ -90,12 +90,16 @@ def get_log(name):
     LOG.addHandler(ch)
     return LOG
 
+stack_call_functions = []
 
-def log_step(level, log):
+
+def log_step(log):
     def decorator(func):
         def inner(*args, **kwargs):
-            log.info("%s> Step %s" % ("- - "*level, func.__name__))
+            stack_call_functions.append(func.__name__)
+            log.info("%s> Step %s" % ("- - "*len(stack_call_functions), func.__name__))
             res = func(*args, **kwargs)
+            stack_call_functions.pop()
             return res
         return inner
     return decorator

@@ -11,21 +11,21 @@ env.user = 'root'
 LOG = get_log(__name__)
 
 
-@log_step(2, LOG)
+@log_step(LOG)
 def get_exporter(config):
     return {
         'os': lambda info: (osResourceTransfer.ResourceExporter(info), osExporter.Exporter(info))
     }[config['clouds']['from']['type']](config)
 
 
-@log_step(2, LOG)
+@log_step(LOG)
 def get_importer(config):
     return {
         'os': lambda info: (osResourceTransfer.ResourceImporter(info), osImporter.Importer(info))
     }[config['clouds']['to']['type']](config)
 
 
-@log_step(1, LOG)
+@log_step(LOG)
 def init_migrate(name_config):
     config = yaml.load(open(name_config, 'r'))
     exporter = get_exporter(config)
@@ -33,14 +33,14 @@ def init_migrate(name_config):
     return config, exporter, importer
 
 
-@log_step(1, LOG)
+@log_step(LOG)
 def search_instances_by_search_opts(config, exporter):
     for instance_search_opts in config['instances']:
         for instance in exporter.find_instances(instance_search_opts):
             yield instance
 
 
-@log_step(1, LOG)
+@log_step(LOG)
 def migrate_one_instance(instance, exporter, importer):
     data = exporter.export(instance)
     importer.upload(data)

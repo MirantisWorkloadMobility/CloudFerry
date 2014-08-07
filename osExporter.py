@@ -16,11 +16,11 @@ class Exporter(osCommon.osCommon):
         self.config_to = config['clouds']['to']
         super(Exporter, self).__init__(self.config)
 
-    @log_step(2, LOG)
+    @log_step(LOG)
     def find_instances(self, search_opts):
         return self.nova_client.servers.list(search_opts=search_opts)
 
-    @log_step(1, LOG)
+    @log_step(LOG)
     def export(self, instance):
 
         """
@@ -28,12 +28,19 @@ class Exporter(osCommon.osCommon):
         """
 
         LOG.info("Exporting instance %s [%s]" % (instance.name, instance.id))
-        data = osBuilderExporter(self.glance_client,
-                                 self.cinder_client,
-                                 self.nova_client,
-                                 self.network_client,
-                                 instance,
-                                 self.config)\
+        return self.get_algorithm_export(instance)
+
+    def get_algorithm_export(self, instance):
+        builder = osBuilderExporter(self.glance_client,
+                                    self.cinder_client,
+                                    self.nova_client,
+                                    self.network_client,
+                                    instance,
+                                    self.config)
+        return self.__algorithm_export(builder)
+
+    def __algorithm_export(self, builder):
+        return builder\
             .stop_instance()\
             .get_name()\
             .get_image()\
@@ -49,4 +56,3 @@ class Exporter(osCommon.osCommon):
             .get_instance_name()\
             .get_volumes()\
             .finish()
-        return data
