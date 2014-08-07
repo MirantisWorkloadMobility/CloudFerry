@@ -16,6 +16,7 @@ clouds:
         identity:
           connection: mysql+mysqlconnector
         keep_user_passwords: no
+        ssh_transfer_port: 9999
     to:
         type: os
         host: 172.18.172.77
@@ -43,15 +44,16 @@ clouds:
             overwrite:
                 key: {name: dest-key-1}
                 networks:
-        keep_ip: no
+        keep_ip: yes
         speed_limit: 10MB
         identity:
           connection: mysql+mysqlconnector
+
 mail:
-    mail_server: smtp.gmail.com:587
-    username: dsozinov@mirantis.com
-    password: need_password
-    from_addr: dsozinov@mirantis.com
+    mail_server: smtp.yandex.ru:25
+    username: source-cloud-1@yandex.ru
+    password: need_pass
+    from_addr: source-cloud-1@yandex.ru
 key_filename:
     name: id_rsa
 instances:

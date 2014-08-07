@@ -130,16 +130,19 @@ class up_ssh_tunnel:
         Up ssh tunnel on dest controller node for transferring data
     """
 
-    def __init__(self, address_dest_compute, address_dest_controller):
+    def __init__(self, address_dest_compute, address_dest_controller, ssh_port=9999):
         self.address_dest_compute = address_dest_compute
         self.address_dest_controller = address_dest_controller
-        self.cmd = "ssh -oStrictHostKeyChecking=no -L 9999:%s:22 -R 9999:localhost:9999 %s -Nf"
+        self.ssh_port = ssh_port
+        self.cmd = "ssh -oStrictHostKeyChecking=no -L %s:%s:22 -R %s:localhost:%s %s -Nf"
 
     def __enter__(self):
-        run(self.cmd % (self.address_dest_compute, self.address_dest_controller) + " && sleep 2")
+        run(self.cmd % (self.ssh_port, self.address_dest_compute, self.ssh_port, self.ssh_port,
+                        self.address_dest_controller) + " && sleep 2")
 
     def __exit__(self, type, value, traceback):
-        run(("pkill -f '"+self.cmd+"'") % (self.address_dest_compute, self.address_dest_controller))
+        run(("pkill -f '"+self.cmd+"'") % (self.ssh_port, self.address_dest_compute, self.ssh_port, self.ssh_port,
+                                           self.address_dest_controller))
         time.sleep(2)
 
 

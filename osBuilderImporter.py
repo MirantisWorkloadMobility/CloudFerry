@@ -298,7 +298,7 @@ class osBuilderImporter:
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
-                with up_ssh_tunnel(host, self.config['host']):
+                with up_ssh_tunnel(host, self.config['host'], self.config_from['ssh_transfer_port']):
                     if self.config['transfer_file']['compress'] == "dd":
                         run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
                              "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
