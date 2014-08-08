@@ -98,6 +98,7 @@ class ResourceImporter(osCommon.osCommon):
 
     @log_step(LOG)
     def upload(self, data):
+
         self.__upload_roles(data['roles'])
         self.__upload_tenants(data['tenants'])
         self.__upload_flavors(data['flavors'])

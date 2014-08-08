@@ -8,6 +8,8 @@ import string
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+import yaml
+
 
 __author__ = 'mirrorcoder'
 
@@ -107,7 +109,10 @@ def log_step(log):
 
 def inspect_func(func):
     def wrapper(self):
-        self.funcs.append(Function(func, self))
+        if func.__name__ == supertask.__name__:
+            return func(self)
+        else:
+            self.funcs.append(Function(func, self))
         return self
     return wrapper
 
@@ -124,7 +129,7 @@ class Function:
         self.args = args
 
     def __call__(self, *args, **kwargs):
-        return self.f(self.args)
+        return self.f(self.args, *args, **kwargs)
 
 
 class forward_agent:
@@ -180,3 +185,4 @@ class ChecksumImageInvalid(Exception):
     def __str__(self):
         return repr("Checksum of image source = %s Checksum of image dest = %s" %
                     (self.checksum_source, self.checksum_dest))
+

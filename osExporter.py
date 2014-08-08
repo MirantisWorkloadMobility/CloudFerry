@@ -26,18 +26,16 @@ class Exporter(osCommon.osCommon):
         """
         The main method for gathering and exporting information from source cloud
         """
-
-        LOG.info("Exporting instance %s [%s]" % (instance.name, instance.id))
-        return self.get_algorithm_export(instance)
-
-    def get_algorithm_export(self, instance):
         builder = osBuilderExporter(self.glance_client,
                                     self.cinder_client,
                                     self.nova_client,
                                     self.network_client,
                                     instance,
                                     self.config)
-        return self.__algorithm_export(builder)
+        return self.get_algorithm_export()(builder)
+
+    def get_algorithm_export(self):
+        return self.__algorithm_export
 
     def __algorithm_export(self, builder):
         return builder\
@@ -54,5 +52,4 @@ class Exporter(osCommon.osCommon):
             .get_networks()\
             .get_disk()\
             .get_instance_name()\
-            .get_volumes()\
-            .finish()
+            .get_volumes()

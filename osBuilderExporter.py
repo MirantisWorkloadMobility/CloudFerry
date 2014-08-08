@@ -1,4 +1,4 @@
-from utils import forward_agent, CEPH, REMOTE_FILE, log_step, get_log
+from utils import forward_agent, CEPH, REMOTE_FILE, log_step, get_log, inspect_func, supertask
 from fabric.api import run, settings, env, cd
 from osVolumeTransfer import VolumeTransfer
 from osImageTransfer import ImageTransfer
@@ -25,14 +25,25 @@ class osBuilderExporter:
         self.cinder_client = cinder_client
         self.nova_client = nova_client
         self.network_client = network_client
-        self.data = dict()
-        self.instance = instance
         self.config = config
+        self.instance = instance
 
-    @log_step(LOG)
+        self.data = dict()
+
     def finish(self):
+        for f in self.funcs:
+            f()
         return self.data
 
+    def get_tasks(self):
+        return self.funcs
+
+    def get_state(self):
+        return {
+            'data': self.data
+        }
+
+    @inspect_func
     @log_step(LOG)
     def stop_instance(self):
         if self.__get_status(self.nova_client.servers, self.instance.id).lower() == 'active':
@@ -41,36 +52,43 @@ class osBuilderExporter:
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'SHUTOFF')
         return self
 
+    @inspect_func
     @log_step(LOG)
     def get_name(self):
         self.data['name'] = getattr(self.instance, 'name')
         return self
 
+    @inspect_func
     @log_step(LOG)
     def get_metadata(self):
         self.data['metadata'] = getattr(self.instance, 'metadata')
         return self
 
+    @inspect_func
     @log_step(LOG)
     def get_availability_zone(self):
         self.data['availability_zone'] = getattr(self.instance, 'OS-EXT-AZ:availability_zone')
         return self
 
+    @inspect_func
     @log_step(LOG)
     def get_config_drive(self):
         self.data['config_drive'] = getattr(self.instance, 'config_drive')
         return self
 
+    @inspect_func
     @log_step(LOG)
     def get_disk_config(self):
         self.data['disk_config'] = getattr(self.instance, 'OS-DCF:diskConfig')
         return self
 
+    @inspect_func
     @log_step(LOG)
     def get_instance_name(self):
         self.data['instance_name'] = getattr(self.instance, 'OS-EXT-SRV-ATTR:instance_name')
         return self
 
+    @inspect_func
     @log_step(LOG)
     def get_image(self):
         if self.instance.image:
@@ -81,21 +99,25 @@ class osBuilderExporter:
             self.data['boot_from_volume'] = True
         return self
 
+    @inspect_func
     @log_step(LOG)
     def get_flavor(self):
         self.data['flavor'] = self.__get_flavor_from_instance(self.instance).name
         return self
 
+    @inspect_func
     @log_step(LOG)
     def get_security_groups(self):
         self.data['security_groups'] = [security_group['name'] for security_group in self.instance.security_groups]
         return self
 
+    @inspect_func
     @log_step(LOG)
     def get_key(self):
         self.data['key'] = {'name': self.instance.key_name}
         return self
 
+    @inspect_func
     @log_step(LOG)
     def get_networks(self):
         networks = []
@@ -110,6 +132,7 @@ class osBuilderExporter:
         self.data['networks'] = networks
         return self
 
+    @inspect_func
     @log_step(LOG)
     def get_disk(self):
         """Getting information about diff file of source instance"""
@@ -196,6 +219,7 @@ class osBuilderExporter:
         else:
             return temp_path+"/"+name_file_diff_path
 
+    @inspect_func
     @log_step(LOG)
     def get_volumes(self):
 

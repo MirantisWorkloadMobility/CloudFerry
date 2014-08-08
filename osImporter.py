@@ -56,12 +56,7 @@ class Importer(osCommon.osCommon):
                                             self.config,
                                             self.config_from,
                                             data)
-        try:
-            LOG.info("  Start migrate instance")
-            new_instance = self.get_algorithm_import(data)(builderImporter)
-            LOG.info("  New instance on destantion cloud %s" % new_instance)
-        except ChecksumImageInvalid as e:
-            LOG.error(e)
+        return self.get_algorithm_import(data)(builderImporter)
 
     def get_algorithm_import(self, data):
         return {
@@ -115,8 +110,7 @@ class Importer(osCommon.osCommon):
             .prepare_for_creating_new_instance()\
             .merge_delta_and_image()\
             .create_instance()\
-            .import_volumes()\
-            .finish()
+            .import_volumes()
 
     @log_step(LOG)
     def __upload_iscsi_backend(self, builderImporter):
@@ -129,8 +123,7 @@ class Importer(osCommon.osCommon):
             .stop_instance()\
             .import_delta_file()\
             .start_instance()\
-            .import_volumes()\
-            .finish()
+            .import_volumes()
 
     @log_step(LOG)
     def __upload_ceph_backend_ephemeral(self, builderImporter):
@@ -145,8 +138,7 @@ class Importer(osCommon.osCommon):
             .stop_instance()\
             .import_ephemeral_drive()\
             .start_instance()\
-            .import_volumes()\
-            .finish()
+            .import_volumes()
 
     @log_step(LOG)
     def __upload_iscsi_backend_ephemeral(self, builderImporter):
@@ -160,8 +152,7 @@ class Importer(osCommon.osCommon):
             .import_delta_file()\
             .import_ephemeral_drive()\
             .start_instance()\
-            .import_volumes()\
-            .finish()
+            .import_volumes()
 
     @log_step(LOG)
     def __upload_boot_volume(self, builderImporter):
@@ -170,8 +161,7 @@ class Importer(osCommon.osCommon):
             .prepare_for_boot_volume()\
             .create_instance()\
             .import_volumes()\
-            .delete_image_from_source_and_dest_cloud()\
-            .finish()
+            .delete_image_from_source_and_dest_cloud()
 
     @log_step(LOG)
     def __upload_boot_volume_with_ephem_disk(self, builderImporter):
@@ -183,8 +173,7 @@ class Importer(osCommon.osCommon):
             .import_ephemeral_drive()\
             .start_instance()\
             .import_volumes()\
-            .delete_image_from_source_and_dest_cloud()\
-            .finish()
+            .delete_image_from_source_and_dest_cloud()
 
     @log_step(LOG)
     def __upload_ephemeral_on_ceph(self, builderImporter):
@@ -197,13 +186,11 @@ class Importer(osCommon.osCommon):
             .stop_instance()\
             .import_ephemeral_drive()\
             .start_instance()\
-            .import_volumes()\
-            .finish()
+            .import_volumes()
 
     @log_step(LOG)
     def __upload_ephemeral_on_ceph_without_disk(self, builderImporter):
         return builderImporter\
             .prepare_for_creating_new_instance()\
             .create_instance()\
-            .import_volumes()\
-            .finish()
+            .import_volumes()
