@@ -1,6 +1,7 @@
-from Task import Task
-from SuperTask import SuperTask
-from utils import *
+from scheduler.SuperTask import SuperTask
+from scheduler.Task import Task
+from utils import get_log
+
 __author__ = 'mirrorcoder'
 
 LOG = get_log(__name__)
@@ -18,7 +19,7 @@ class SuperTaskExportResource(SuperTask):
 
 class TaskExportTenantsResource(Task):
 
-    def func(self, res_exporter=None, **kwargs):
+    def run(self, res_exporter=None, **kwargs):
         resources = res_exporter.get_tenants()
         return {
             'resources': resources
@@ -27,7 +28,7 @@ class TaskExportTenantsResource(Task):
 
 class TaskExportRolesResource(Task):
 
-    def func(self, res_exporter=None, **kwargs):
+    def run(self, res_exporter=None, **kwargs):
         resources = res_exporter.get_roles()
         return {
             'resources': resources
@@ -36,7 +37,7 @@ class TaskExportRolesResource(Task):
 
 class TaskFlavorsTenantsResource(Task):
 
-    def func(self, res_exporter=None, **kwargs):
+    def run(self, res_exporter=None, **kwargs):
         resources = res_exporter.get_flavors()
         return {
             'resources': resources
@@ -45,7 +46,7 @@ class TaskFlavorsTenantsResource(Task):
 
 class TaskUserInfoTenantsResource(Task):
 
-    def func(self, res_exporter=None, **kwargs):
+    def run(self, res_exporter=None, **kwargs):
         resources = res_exporter.get_user_info()
         return {
             'resources': resources
@@ -54,7 +55,7 @@ class TaskUserInfoTenantsResource(Task):
 
 class TaskBuildResource(Task):
 
-    def func(self, res_exporter=None, **kwargs):
+    def run(self, res_exporter=None, **kwargs):
         resources = res_exporter.build()
         return {
             'resources': resources

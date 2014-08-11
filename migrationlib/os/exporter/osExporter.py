@@ -1,6 +1,6 @@
-import osCommon
-
+from migrationlib.os import osCommon
 from osBuilderExporter import osBuilderExporter
+
 from utils import log_step, get_log
 
 LOG = get_log(__name__)

@@ -2,7 +2,7 @@ __author__ = 'mirrorcoder'
 
 
 class VolumeTransfer:
-    """ The main class for gathering information for volumes migration"""
+    """ The main class for gathering information for volumes migrationlib"""
     def __init__(self, volume, instance, image_id, glance_client):
         self.glance_client = glance_client
         self.id = volume.id

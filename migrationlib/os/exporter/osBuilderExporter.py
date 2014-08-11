@@ -1,9 +1,12 @@
-from utils import forward_agent, CEPH, REMOTE_FILE, log_step, get_log, inspect_func, supertask
-from fabric.api import run, settings, env, cd
-from osVolumeTransfer import VolumeTransfer
-from osImageTransfer import ImageTransfer
 import time
 import json
+
+from utils import forward_agent, CEPH, REMOTE_FILE, log_step, get_log
+from scheduler.builder_wrapper import inspect_func, supertask
+from fabric.api import run, settings, env, cd
+from migrationlib.os.utils.osVolumeTransfer import VolumeTransfer
+from migrationlib.os.utils.osImageTransfer import ImageTransfer
+
 __author__ = 'mirrorcoder'
 
 LOG = get_log(__name__)
@@ -27,6 +30,7 @@ class osBuilderExporter:
         self.network_client = network_client
         self.config = config
         self.instance = instance
+        self.funcs = []
 
         self.data = dict()
 
@@ -45,7 +49,8 @@ class osBuilderExporter:
 
     @inspect_func
     @log_step(LOG)
-    def stop_instance(self):
+    def stop_instance(self, **kwargs):
+        print "self.instance=", self.instance
         if self.__get_status(self.nova_client.servers, self.instance.id).lower() == 'active':
             self.instance.stop()
         LOG.debug("wait for instance shutoff")
@@ -54,43 +59,43 @@ class osBuilderExporter:
 
     @inspect_func
     @log_step(LOG)
-    def get_name(self):
+    def get_name(self, **kwargs):
         self.data['name'] = getattr(self.instance, 'name')
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_metadata(self):
+    def get_metadata(self, **kwargs):
         self.data['metadata'] = getattr(self.instance, 'metadata')
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_availability_zone(self):
+    def get_availability_zone(self, **kwargs):
         self.data['availability_zone'] = getattr(self.instance, 'OS-EXT-AZ:availability_zone')
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_config_drive(self):
+    def get_config_drive(self, **kwargs):
         self.data['config_drive'] = getattr(self.instance, 'config_drive')
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_disk_config(self):
+    def get_disk_config(self, **kwargs):
         self.data['disk_config'] = getattr(self.instance, 'OS-DCF:diskConfig')
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_instance_name(self):
+    def get_instance_name(self, **kwargs):
         self.data['instance_name'] = getattr(self.instance, 'OS-EXT-SRV-ATTR:instance_name')
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_image(self):
+    def get_image(self, **kwargs):
         if self.instance.image:
             self.data['image'] = ImageTransfer(self.instance.image['id'], self.glance_client)
             self.data['boot_from_volume'] = False
@@ -101,25 +106,25 @@ class osBuilderExporter:
 
     @inspect_func
     @log_step(LOG)
-    def get_flavor(self):
+    def get_flavor(self, **kwargs):
         self.data['flavor'] = self.__get_flavor_from_instance(self.instance).name
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_security_groups(self):
+    def get_security_groups(self, **kwargs):
         self.data['security_groups'] = [security_group['name'] for security_group in self.instance.security_groups]
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_key(self):
+    def get_key(self, **kwargs):
         self.data['key'] = {'name': self.instance.key_name}
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_networks(self):
+    def get_networks(self, **kwargs):
         networks = []
 
         for network in self.instance.networks.items():
@@ -134,7 +139,7 @@ class osBuilderExporter:
 
     @inspect_func
     @log_step(LOG)
-    def get_disk(self):
+    def get_disk(self, **kwargs):
         """Getting information about diff file of source instance"""
         is_ephemeral = self.__get_flavor_from_instance(self.instance).ephemeral > 0
         if not self.data["boot_from_volume"]:
@@ -221,7 +226,7 @@ class osBuilderExporter:
 
     @inspect_func
     @log_step(LOG)
-    def get_volumes(self):
+    def get_volumes(self, **kwargs):
 
         """
             Gathering information about attached volumes to source instance and upload these volumes

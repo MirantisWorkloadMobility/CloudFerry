@@ -1,7 +1,7 @@
-import osCommon
+from migrationlib.os import osCommon
+from osBuilderImporter import osBuilderImporter
 from utils import ChecksumImageInvalid, ISCSI, CEPH, BOOT_FROM_IMAGE, \
     BOOT_FROM_VOLUME, ANY, NO, EPHEMERAL, REMOTE_FILE, YES, log_step, get_log
-from osBuilderImporter import osBuilderImporter
 
 
 LOG = get_log(__name__)
@@ -58,6 +58,7 @@ class Importer(osCommon.osCommon):
                                             data)
         return self.get_algorithm_import(data)(builderImporter)
 
+    @log_step(LOG)
     def get_algorithm_import(self, data):
         return {
             # mode_boot, backend_cinder_dest, ephemeral_back_source, is_ephemeral_disk
@@ -104,7 +105,7 @@ class Importer(osCommon.osCommon):
     def __upload_ceph_backend(self, builderImporter):
 
         """
-        Algorithm of migration for ceph destination backend for cinder
+        Algorithm of migrationlib for ceph destination backend for cinder
         """
         return builderImporter\
             .prepare_for_creating_new_instance()\
@@ -115,7 +116,7 @@ class Importer(osCommon.osCommon):
     @log_step(LOG)
     def __upload_iscsi_backend(self, builderImporter):
         """
-        Algorithm of migration for iscsi-like destination backend for cinder
+        Algorithm of migrationlib for iscsi-like destination backend for cinder
         """
         return builderImporter\
             .prepare_for_creating_new_instance()\
@@ -129,7 +130,7 @@ class Importer(osCommon.osCommon):
     def __upload_ceph_backend_ephemeral(self, builderImporter):
 
         """
-        Algorithm of migration for ceph destination backend for cinder and ephemeral drive
+        Algorithm of migrationlib for ceph destination backend for cinder and ephemeral drive
         """
         return builderImporter\
             .prepare_for_creating_new_instance()\
@@ -143,7 +144,7 @@ class Importer(osCommon.osCommon):
     @log_step(LOG)
     def __upload_iscsi_backend_ephemeral(self, builderImporter):
         """
-        Algorithm of migration for iscsi-like destination backend for cinder and ephemeral drive
+        Algorithm of migrationlib for iscsi-like destination backend for cinder and ephemeral drive
         """
         return builderImporter\
             .prepare_for_creating_new_instance()\
@@ -178,7 +179,7 @@ class Importer(osCommon.osCommon):
     @log_step(LOG)
     def __upload_ephemeral_on_ceph(self, builderImporter):
         """
-        Algorithm of migration for iscsi-like destination backend for cinder and ephemeral drive
+        Algorithm of migrationlib for iscsi-like destination backend for cinder and ephemeral drive
         """
         return builderImporter\
             .prepare_for_creating_new_instance()\

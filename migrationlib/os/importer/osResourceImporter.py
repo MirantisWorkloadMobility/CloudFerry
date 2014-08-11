@@ -1,66 +1,12 @@
 """
 Package with OpenStack resources export/import utilities.
 """
-import osCommon
+from migrationlib.os import osCommon
 from utils import log_step, get_log, GeneratorPassword, Postman, Templater
+from scheduler.builder_wrapper import inspect_func, supertask
 import sqlalchemy
 
 LOG = get_log(__name__)
-
-
-class ResourceExporter(osCommon.osCommon):
-    """
-    Exports various cloud resources (tenants, users, flavors, etc.) to a container
-    to be later imported by ResourceImporter
-    """
-
-    def __init__(self, conf):
-        self.data = dict()
-        self.config = conf['clouds']['from']
-        super(ResourceExporter, self).__init__(self.config)
-
-    @log_step(LOG)
-    def get_flavors(self):
-        def process_flavor(flavor):
-            if flavor.is_public:
-                return (flavor, [])
-            else:
-                tenants = self.nova_client.flavor_access.list(flavor=flavor)
-                tenants = [self.keystone_client.tenants.get(t.tenant_id).name for t in tenants]
-                return (flavor, tenants)
-
-        self.data['flavors'] = map(process_flavor, self.nova_client.flavors.list(is_public=False))
-        return self
-
-    @log_step(LOG)
-    def get_tenants(self):
-        self.data['tenants'] = self.keystone_client.tenants.list()
-        return self
-
-    @log_step(LOG)
-    def get_roles(self):
-        self.data['roles'] = self.keystone_client.roles.list()
-        return self
-
-    @log_step(LOG)
-    def get_user_info(self):
-        self.__get_user_info(self.config['keep_user_passwords'])
-        return self
-
-    def __get_user_info(self, with_password):
-        users = self.keystone_client.users.list()
-        info = {}
-        if with_password:
-            with sqlalchemy.create_engine(self.keystone_db_conn_url).begin() as connection:
-                for user in users:
-                    for password in connection.execute(sqlalchemy.text("SELECT password FROM user WHERE id = :user_id"),
-                                                       user_id=user.id):
-                        info[user.name] = password[0]
-        self.data['users'] = info
-
-    @log_step(LOG)
-    def build(self):
-        return self.data
 
 
 class ResourceImporter(osCommon.osCommon):
@@ -69,7 +15,7 @@ class ResourceImporter(osCommon.osCommon):
     prepared by ResourceExporter
     """
 
-    def __init__(self, conf):
+    def __init__(self, conf, data={}, users_notifications={}):
         self.config = conf['clouds']['to']
         if 'mail' in conf:
             self.postman = Postman(**conf['mail'])
@@ -77,6 +23,9 @@ class ResourceImporter(osCommon.osCommon):
             self.postman = None
         self.templater = Templater()
         self.generator = GeneratorPassword()
+        self.users_notifications = users_notifications
+        self.data = data
+        self.funcs = []
         super(ResourceImporter, self).__init__(self.config)
 
     def __send_msg(self, to, subject, msg):
@@ -96,27 +45,46 @@ class ResourceImporter(osCommon.osCommon):
         else:
             return None
 
-    @log_step(LOG)
-    def upload(self, data):
+    def get_tasks(self):
+        return self.funcs
 
-        self.__upload_roles(data['roles'])
-        self.__upload_tenants(data['tenants'])
-        self.__upload_flavors(data['flavors'])
-        if data['users']:
-            self.__upload_user_passwords(data['users'])
-        else:
-            self.__send_email_notifications()
+    def get_state(self):
+        return {
+            'users_notifications': self.users_notifications,
+        }
 
+    def finish(self):
+        for f in self.funcs:
+            f()
+        LOG.info("| Resource migrated")
+
+    @inspect_func
+    @supertask
+    def upload(self, data=None, **kwargs):
+        self.data = data if data else self.data
+        self\
+            .upload_roles()\
+            .upload_tenants()\
+            .upload_flavors()\
+            .upload_user_passwords()\
+            .send_email_notifications()
+        return self
+
+    @inspect_func
     @log_step(LOG)
-    def __upload_roles(self, roles):
+    def upload_roles(self, data=None, **kwargs):
+        roles = data['roles'] if data else self.data['roles']
         # do not import a role if one with the same name already exists
         existing = {r.name for r in self.keystone_client.roles.list()}
         for role in roles:
             if role.name not in existing:
                 self.keystone_client.roles.create(role.name)
+        return self
 
+    @inspect_func
     @log_step(LOG)
-    def __upload_tenants(self, tenants):
+    def upload_tenants(self, data=None, **kwargs):
+        tenants = data['tenants'] if data else self.data['tenants']
         # do not import tenants or users if ones with the same name already exist
         existing_tenants = {t.name: t for t in self.keystone_client.tenants.list()}
         existing_users = {u.name: u for u in self.keystone_client.users.list()}
@@ -150,9 +118,12 @@ class ResourceImporter(osCommon.osCommon):
                 for role in user.list_roles(tenant):
                     if role.name not in dest_user_roles:
                         dest_tenant.add_user(dest_user, roles[role.name])
+        return self
 
+    @inspect_func
     @log_step(LOG)
-    def __upload_flavors(self, flavors):
+    def upload_flavors(self, data=None, **kwargs):
+        flavors = data['flavors'] if data else self.data['flavors']
         # do not import a flavor if one with the same name already exists
         existing = {f.name for f in self.nova_client.flavors.list(is_public=False)}
         for (flavor, tenants) in flavors:
@@ -168,22 +139,30 @@ class ResourceImporter(osCommon.osCommon):
                 for tenant in tenants:
                     dest_tenant = self.keystone_client.tenants.find(name=tenant)
                     self.nova_client.flavor_access.add_tenant_access(dest_flavor, dest_tenant.id)
+        return self
 
-
+    @inspect_func
     @log_step(LOG)
-    def __upload_user_passwords(self, users):
+    def upload_user_passwords(self, data=None, **kwargs):
+        users = data['users'] if data else self.data['users']
         # upload user password if the user exists both on source and destination
-        with sqlalchemy.create_engine(self.keystone_db_conn_url).begin() as connection:
-            for user in self.keystone_client.users.list():
-                if user.name in users:
-                    connection.execute(sqlalchemy.text("UPDATE user SET password = :password WHERE id = :user_id"),
-                                       user_id=user.id,
-                                       password=users[user.name])
+        if users:
+            with sqlalchemy.create_engine(self.keystone_db_conn_url).begin() as connection:
+                for user in self.keystone_client.users.list():
+                    if user.name in users:
+                        connection.execute(sqlalchemy.text("UPDATE user SET password = :password WHERE id = :user_id"),
+                                           user_id=user.id,
+                                           password=users[user.name])
+        return self
 
-    def __send_email_notifications(self):
-        for name in self.users_notifications:
-            self.__send_msg(self.users_notifications[name]['email'],
+    @inspect_func
+    @log_step(LOG)
+    def send_email_notifications(self, users_notifications=None, template='templates/email.html', **kwargs):
+        users_notifications = users_notifications if users_notifications else self.users_notifications
+        for name in users_notifications:
+            self.__send_msg(users_notifications[name]['email'],
                             'New password notification',
-                            self.__render_template('email.html',
+                            self.__render_template(template,
                                                    {'name': name,
-                                                    'password': self.users_notifications[name]['password']}))
+                                                    'password': users_notifications[name]['password']}))
+        return self

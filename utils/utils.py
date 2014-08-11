@@ -1,5 +1,3 @@
-from fabric.api import local, run
-import os
 import logging
 import sys
 import time
@@ -8,6 +6,10 @@ import string
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from functools import wraps
+
+from fabric.api import local, run
+import os
 import yaml
 
 
@@ -97,6 +99,7 @@ stack_call_functions = []
 
 def log_step(log):
     def decorator(func):
+        @wraps(func)
         def inner(*args, **kwargs):
             stack_call_functions.append(func.__name__)
             log.info("%s> Step %s" % ("- - "*len(stack_call_functions), func.__name__))
@@ -105,31 +108,6 @@ def log_step(log):
             return res
         return inner
     return decorator
-
-
-def inspect_func(func):
-    def wrapper(self):
-        if func.__name__ == supertask.__name__:
-            return func(self)
-        else:
-            self.funcs.append(Function(func, self))
-        return self
-    return wrapper
-
-
-def supertask(func):
-    def wrapper(self):
-        return func(self)
-    return wrapper
-
-
-class Function:
-    def __init__(self, func, args):
-        self.f = func
-        self.args = args
-
-    def __call__(self, *args, **kwargs):
-        return self.f(self.args, *args, **kwargs)
 
 
 class forward_agent:

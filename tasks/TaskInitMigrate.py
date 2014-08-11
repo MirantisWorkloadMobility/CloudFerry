@@ -1,11 +1,10 @@
-from Task import Task
-from utils import *
+from migrationlib.os.exporter import osExporter, osResourceExporter
+from migrationlib.os.importer import osImporter, osResourceImporter
+from scheduler.Task import Task
 from fabric.api import env
+from utils import get_log
 import yaml
-import osResourceTransfer
-import osExporter
 
-import osImporter
 __author__ = 'mirrorcoder'
 
 LOG = get_log(__name__)
@@ -16,13 +15,13 @@ class TaskInitMigrate(Task):
     @staticmethod
     def get_exporter(config):
         return {
-            'os': lambda info: (osResourceTransfer.ResourceExporter(info), osExporter.Exporter(info))
+            'os': lambda info: (osResourceExporter.ResourceExporter(info), osExporter.Exporter(info))
         }[config['clouds']['from']['type']](config)
 
     @staticmethod
     def get_importer(config):
         return {
-            'os': lambda info: (osResourceTransfer.ResourceImporter(info), osImporter.Importer(info))
+            'os': lambda info: (osResourceImporter.ResourceImporter(info), osImporter.Importer(info))
         }[config['clouds']['to']['type']](config)
 
     @staticmethod
@@ -32,9 +31,9 @@ class TaskInitMigrate(Task):
         importer = TaskInitMigrate.get_importer(config)
         return config, exporter, importer
 
-    def func(self, name_config="", name_instance="", **kwargs):
+    def run(self, name_config="", name_instance="", **kwargs):
         print name_config, name_instance
-        LOG.info("Init migration config")
+        LOG.info("Init migrationlib config")
         config, (res_exporter, inst_exporter), (res_importer, inst_importer) = TaskInitMigrate.init_migrate(name_config)
         if name_instance:
             config['instances'] = [{'name': name_instance}]

@@ -1,6 +1,6 @@
-from Namespace import Namespace
-from Task import Task
 from SuperTask import SuperTask
+from Namespace import Namespace
+
 __author__ = 'mirrorcoder'
 
 
@@ -13,11 +13,16 @@ class Scheduler:
     def addTask(self, task):
         self.tasks.insert(0, task)
 
+    def push(self, task):
+        self.tasks.append(task)
+
     def run(self):
         while self.tasks:
             task = self.tasks.pop()
             if isinstance(task, SuperTask):
-                [self.addTask(subtask) for subtask in task.split_task(namespace=self.namespace)]
+                list_subtasks = [subtask for subtask in task.split_task(namespace=self.namespace)]
+                list_subtasks.reverse()
+                [self.push(subtask) for subtask in list_subtasks]
             else:
-                task(self.namespace)
+                task(namespace=self.namespace)
             self.tasks_runned.append(task)
