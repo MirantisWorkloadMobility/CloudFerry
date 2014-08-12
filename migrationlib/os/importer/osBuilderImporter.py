@@ -1,6 +1,6 @@
 import time
 
-from migrationlib.os.utils import FileLikeProxy
+from migrationlib.os.utils.FileLikeProxy import FileLikeProxy
 from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid, \
     CEPH, REMOTE_FILE, QCOW2, log_step, get_log
 from scheduler.builder_wrapper import inspect_func, supertask
@@ -52,6 +52,7 @@ class osBuilderImporter:
     def finish(self):
         for f in self.funcs:
             f()
+        self.funcs = []
         LOG.info("| instance be migrated")
         return self.instance
 
@@ -70,101 +71,117 @@ class osBuilderImporter:
     @supertask
     def prepare_for_creating_new_instance(self,
                                           data=None,
-                                          data_for_instance=None,
-                                          instance=None,
-                                          volumes=None,
                                           **kwargs):
+        data = data if data else self.data
         self\
-            .prepare_name()\
-            .prepare_image()\
-            .prepare_flavor()\
-            .prepare_metadata()\
-            .prepare_security_groups()\
-            .prepare_key_name()\
-            .prepare_config_drive()\
-            .prepare_disk_config()\
-            .prepare_nics()
+            .prepare_name(data=data)\
+            .prepare_image(data=data)\
+            .prepare_flavor(data=data)\
+            .prepare_metadata(data=data)\
+            .prepare_security_groups(data=data)\
+            .prepare_key_name(data=data)\
+            .prepare_config_drive(data=data)\
+            .prepare_disk_config(data=data)\
+            .prepare_nics(data=data)
         return self
 
     @inspect_func
     @log_step(LOG)
     def prepare_name(self, data=None, **kwargs):
-        self.data_for_instance["name"] = self.data["name"]
+        data_name = data['name'] if data else self.data['name']
+        self.data_for_instance["name"] = data_name
         return self
 
     @inspect_func
     @supertask
     def prepare_image(self, data=None, **kwargs):
+        data = data if data else self.data
         self\
-            .prepare_image_from_base()\
-            .prepare_image_from_diff_path_if_ephemeral_ceph()
+            .prepare_image_from_base(data=data)\
+            .prepare_image_from_diff_path_if_ephemeral_ceph(data=data)
         return self
 
     @inspect_func
     @log_step(LOG)
     def prepare_image_from_base(self, data=None, **kwargs):
-        self.data_for_instance["image"] = self.__get_image(self.data['image'])
+        data_image = data['image'] if data else self.data['image']
+        self.data_for_instance["image"] = self.__get_image(data_image)
         return self
 
     @inspect_func
     @log_step(LOG)
     def prepare_image_from_diff_path_if_ephemeral_ceph(self, data=None, **kwargs):
-        if (self.data['disk']['type'] == CEPH) and ('diff_path' in self.data['disk']):
-            self.data_for_instance["image"] = self.__get_image(self.data['disk']['diff_path'])
-            self.data['disk']['diff_path'].delete()
+        data = data if data else self.data
+        disk_type = data['disk']['type']
+        disk_diff_path = data['disk']['diff_path'] if 'diff_path' in data['disk'] else None
+        if (disk_type == CEPH) and disk_diff_path:
+            self.data_for_instance["image"] = self.__get_image(disk_diff_path)
+            disk_diff_path.delete()
         return self
 
     @inspect_func
     @log_step(LOG)
     def prepare_flavor(self, data=None, **kwargs):
-        self.data_for_instance["flavor"] = self.__get_flavor(self.__ensure_param(self.data, 'flavor'))
+        data = data if data else self.data
+        flavor = data['flavor']
+        self.data_for_instance["flavor"] = self.__get_flavor(self.__ensure_param(data, 'flavor'))
         return self
 
     @inspect_func
     @log_step(LOG)
     def prepare_metadata(self, data=None, **kwargs):
-        self.data_for_instance["meta"] = self.__ensure_param(self.data, 'metadata')
+        data = data if data else self.data
+        self.data_for_instance["meta"] = self.__ensure_param(data, 'metadata')
         return self
 
     @inspect_func
     @log_step(LOG)
     def prepare_security_groups(self, data=None, **kwargs):
-        self.data_for_instance["security_groups"] = self.__ensure_param(self.data, 'security_groups')
+        data = data if data else self.data
+        self.data_for_instance["security_groups"] = self.__ensure_param(data, 'security_groups')
         return self
 
     @inspect_func
     @log_step(LOG)
     def prepare_key_name(self, data=None, **kwargs):
-        self.data_for_instance["key_name"] = self.__get_key_name(self.__ensure_param(self.data, 'key'))
+        data = data if data else self.data
+        self.data_for_instance["key_name"] = self.__get_key_name(self.__ensure_param(data, 'key'))
         return self
 
     @inspect_func
     @log_step(LOG)
     def prepare_config_drive(self, data=None, **kwargs):
-        self.data_for_instance["config_drive"] = self.__ensure_param(self.data, 'config_drive')
+        data = data if data else self.data
+        self.data_for_instance["config_drive"] = self.__ensure_param(data, 'config_drive')
         return self
 
     @inspect_func
     @log_step(LOG)
     def prepare_disk_config(self, data=None, **kwargs):
-        self.data_for_instance["disk_config"] = self.__ensure_param(self.data, 'diskConfig')
+        data = data if data else self.data
+        self.data_for_instance["disk_config"] = self.__ensure_param(data, 'diskConfig')
         return self
 
     @inspect_func
     @log_step(LOG)
     def prepare_nics(self, data=None, **kwargs):
-        self.data_for_instance["nics"] = self.__prepare_networks(self.data['networks'])
+        data = data if data else self.data
+        networks = data['networks']
+        self.data_for_instance["nics"] = self.__prepare_networks(networks)
         return self
 
     @inspect_func
     @log_step(LOG)
     def prepare_for_boot_volume(self, data=None, data_for_instance=None, **kwargs):
-        uuid_image = self.data_for_instance["image"].id
+        data = data if data else self.data
+        data_for_instance = data_for_instance if data_for_instance else self.data_for_instance
+        uuid_image = data_for_instance["image"].id
+        boot_volume_size = data["boot_volume_size"]
         self.data_for_instance["block_device_mapping_v2"] = [{
             "source_type": "image",
             "uuid": uuid_image,
             "destination_type": "volume",
-            "volume_size": self.data["boot_volume_size"],
+            "volume_size": boot_volume_size,
             "delete_on_termination": True,
             "boot_index": 0
         }]
@@ -174,18 +191,22 @@ class osBuilderImporter:
     @inspect_func
     @log_step(LOG)
     def delete_image_from_source_and_dest_cloud(self, data=None, data_for_instance=None, **kwargs):
-        self.glance_client.images.delete(self.data_for_instance["block_device_mapping_v2"][0]["uuid"])
-        self.data['image'].delete()
+        data = data if data else self.data
+        data_for_instance = data_for_instance if data_for_instance else self.data_for_instance
+        uuid_image = data_for_instance["block_device_mapping_v2"][0]["uuid"]
+        self.glance_client.images.delete(uuid_image)
+        data['image'].delete()
         return self
 
     @inspect_func
     @log_step(LOG)
     def create_instance(self, data_for_instance=None, **kwargs):
+        data_for_instance = data_for_instance if data_for_instance else self.data_for_instance
         LOG.info("  creating new instance")
         LOG.debug("params:")
-        for param in self.data_for_instance:
-            LOG.debug("%s = %s" % (param, self.data_for_instance[param]))
-        self.instance = self.nova_client.servers.create(**self.data_for_instance)
+        for param in data_for_instance:
+            LOG.debug("%s = %s" % (param, data_for_instance[param]))
+        self.instance = self.nova_client.servers.create(**data_for_instance)
         LOG.info("  wait for instance activating")
         self.__wait_for_status(self.nova_client.servers, self.instance.id, 'ACTIVE')
         return self
@@ -196,37 +217,46 @@ class osBuilderImporter:
 
         """ Transfering instance's diff file """
 
-        dest_disk = self.__detect_delta_file(self.instance, False)
-        self.__transfer_remote_file(self.instance,
-                                    self.data["disk"]["host"],
-                                    self.data["disk"]["diff_path"],
+        data = data if data else self.data
+        disk_host = data["disk"]["host"]
+        disk_diff_path = data["disk"]["diff_path"]
+        instance = instance if instance else self.instance
+        dest_disk = self.__detect_delta_file(instance, False)
+        self.__transfer_remote_file(instance,
+                                    disk_host,
+                                    disk_diff_path,
                                     dest_disk)
         return self
 
     @inspect_func
     @log_step(LOG)
     def import_ephemeral_drive(self, data=None, instance=None, **kwargs):
+        data = data if data else self.data
+        disk_host = data["disk"]["host"]
+        disk_ephemeral = data["disk"]["ephemeral"]
+        disk_type = data['disk']['type']
+        instance = instance if instance else self.instance
         if not self.config['ephemeral_drives']['ceph']:
-            dest_disk_ephemeral = self.__detect_delta_file(self.instance, True)
+            dest_disk_ephemeral = self.__detect_delta_file(instance, True)
             if self.data['disk']['type'] == CEPH:
-                backing_disk_ephemeral = self.__detect_backing_file(dest_disk_ephemeral, self.instance)
-                self.__delete_remote_file_on_compute(dest_disk_ephemeral, self.instance)
-                self.__transfer_remote_file(self.instance,
-                                            self.data["disk"]["host"],
-                                            self.data["disk"]["ephemeral"],
+                backing_disk_ephemeral = self.__detect_backing_file(dest_disk_ephemeral, instance)
+                self.__delete_remote_file_on_compute(dest_disk_ephemeral, instance)
+                self.__transfer_remote_file(instance,
+                                            disk_host,
+                                            disk_ephemeral,
                                             dest_disk_ephemeral)
-                self.__diff_rebase(backing_disk_ephemeral, dest_disk_ephemeral, self.instance)
+                self.__diff_rebase(backing_disk_ephemeral, dest_disk_ephemeral, instance)
             else:
-                self.__transfer_remote_file(self.instance,
-                                            self.data["disk"]["host"],
-                                            self.data["disk"]["ephemeral"],
+                self.__transfer_remote_file(instance,
+                                            disk_host,
+                                            disk_ephemeral,
                                             dest_disk_ephemeral)
         if self.config['ephemeral_drives']['ceph']:
-            self.__transfer_remote_file_to_ceph(self.instance,
-                                                self.data["disk"]["host"],
-                                                self.data["disk"]["ephemeral"],
+            self.__transfer_remote_file_to_ceph(instance,
+                                                disk_host,
+                                                disk_ephemeral,
                                                 self.config['host'],
-                                                self.data['disk']['type'] == CEPH)
+                                                disk_type == CEPH)
         return self
 
     @log_step(LOG)
@@ -255,19 +285,21 @@ class osBuilderImporter:
     @inspect_func
     @log_step(LOG)
     def start_instance(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
         LOG.debug("    Start instance")
-        self.instance.start()
-        self.__wait_for_status(self.nova_client.servers, self.instance.id, 'ACTIVE')
+        instance.start()
+        self.__wait_for_status(self.nova_client.servers, instance.id, 'ACTIVE')
         return self
 
     @inspect_func
     @log_step(LOG)
     def stop_instance(self, instance=None, **kwargs):
-        if self.instance.status == 'ACTIVE':
+        instance = instance if instance else self.instance
+        if instance.status == 'ACTIVE':
             LOG.info("    instance is active. Stopping.")
-            self.instance.stop()
+            instance.stop()
             LOG.debug("    waiting shutoff state of instance")
-            self.__wait_for_status(self.nova_client.servers, self.instance.id, 'SHUTOFF')
+            self.__wait_for_status(self.nova_client.servers, instance.id, 'SHUTOFF')
             LOG.debug("    instance is stopped")
         else:
             LOG.info("    instance is stopped")
@@ -278,19 +310,21 @@ class osBuilderImporter:
     def merge_delta_and_image(self, data=None, data_for_instance=None, **kwargs):
 
         """ Merging diff file and base image of instance (ceph case)"""
+        data = data if data else self.data
+        data_for_instance = data_for_instance if data_for_instance else self.data_for_instance
 
-        diff_disk_path = self.__diff_copy(self.data,
-                                          self.data_for_instance,
+        diff_disk_path = self.__diff_copy(data,
+                                          data_for_instance,
                                           self.config['host'],
                                           dest_path=self.config['temp'])
-        self.__download_image_from_glance(self.data_for_instance, diff_disk_path)
+        self.__download_image_from_glance(data_for_instance, diff_disk_path)
         self.__diff_rebase("%s/baseimage" % diff_disk_path, "%s/disk" % diff_disk_path)
         self.__diff_commit(diff_disk_path)
         if self.config['glance']['convert_to_raw']:
-            if self.data_for_instance['image'].disk_format != 'raw':
-                self.__convert_image_to_raw(self.data_for_instance, diff_disk_path)
+            if data_for_instance['image'].disk_format != 'raw':
+                self.__convert_image_to_raw(data_for_instance, diff_disk_path)
                 self.data_for_instance['image'].disk_format = 'raw'
-        new_image_id = self.__upload_image_to_glance(diff_disk_path, self.data_for_instance)
+        new_image_id = self.__upload_image_to_glance(diff_disk_path, data_for_instance)
         self.data_for_instance["image"] = self.glance_client.images.get(new_image_id)
         return self
 
@@ -474,15 +508,19 @@ class osBuilderImporter:
             Secandary: create volume with referencing on to image, in which we already uploaded cinder
             volume on source cloud.
         """
+        data = data if data else self.data
+        instance = instance if instance else self.instance
         self\
-            .transfer_volumes()\
-            .attaching_volume()
+            .transfer_volumes(data=data)\
+            .attaching_volume(data=data, instance=instance)
         return self
 
     @inspect_func
     @log_step(LOG)
     def transfer_volumes(self, data=None, **kwargs):
-        for source_volume in self.data['volumes']:
+        data = data if data else self.data
+        volumes = data['volumes']
+        for source_volume in volumes:
             LOG.debug("      volume %s" % source_volume.__dict__)
             image = self.__copy_from_glance_to_glance(source_volume)
             volume = self.cinder_client.volumes.create(size=source_volume.size,
@@ -505,9 +543,14 @@ class osBuilderImporter:
     @inspect_func
     @log_step(LOG)
     def attaching_volume(self, data=None, instance=None, volumes=None, **kwargs):
-        for (source_volume, volume) in zip(self.data['volumes'], self.volumes):
+        data = data if data else self.data
+        data_volumes = data['volumes']
+        volumes = volumes if volumes else self.volumes
+        instance = instance if instance else self.instance
+        id_inst = instance.id
+        for (source_volume, volume) in zip(data_volumes, volumes):
             LOG.debug("        attach vol")
-            self.nova_client.volumes.create_server_volume(self.instance.id, volume.id, source_volume.device)
+            self.nova_client.volumes.create_server_volume(id_inst, volume.id, source_volume.device)
             LOG.debug("        wait for using")
             self.__wait_for_status(self.cinder_client.volumes, volume.id, 'in-use')
             LOG.debug("        done")

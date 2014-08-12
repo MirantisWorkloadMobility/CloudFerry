@@ -37,6 +37,7 @@ class osBuilderExporter:
     def finish(self):
         for f in self.funcs:
             f()
+        self.funcs = []
         return self.data
 
     def get_tasks(self):
@@ -49,55 +50,62 @@ class osBuilderExporter:
 
     @inspect_func
     @log_step(LOG)
-    def stop_instance(self, **kwargs):
-        print "self.instance=", self.instance
-        if self.__get_status(self.nova_client.servers, self.instance.id).lower() == 'active':
-            self.instance.stop()
+    def stop_instance(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
+        if self.__get_status(self.nova_client.servers, instance.id).lower() == 'active':
+            instance.stop()
         LOG.debug("wait for instance shutoff")
-        self.__wait_for_status(self.nova_client.servers, self.instance.id, 'SHUTOFF')
+        self.__wait_for_status(self.nova_client.servers, instance.id, 'SHUTOFF')
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_name(self, **kwargs):
-        self.data['name'] = getattr(self.instance, 'name')
+    def get_name(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
+        self.data['name'] = getattr(instance, 'name')
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_metadata(self, **kwargs):
-        self.data['metadata'] = getattr(self.instance, 'metadata')
+    def get_metadata(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
+        self.data['metadata'] = getattr(instance, 'metadata')
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_availability_zone(self, **kwargs):
-        self.data['availability_zone'] = getattr(self.instance, 'OS-EXT-AZ:availability_zone')
+    def get_availability_zone(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
+        self.data['availability_zone'] = getattr(instance, 'OS-EXT-AZ:availability_zone')
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_config_drive(self, **kwargs):
-        self.data['config_drive'] = getattr(self.instance, 'config_drive')
+    def get_config_drive(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
+        self.data['config_drive'] = getattr(instance, 'config_drive')
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_disk_config(self, **kwargs):
-        self.data['disk_config'] = getattr(self.instance, 'OS-DCF:diskConfig')
+    def get_disk_config(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
+        self.data['disk_config'] = getattr(instance, 'OS-DCF:diskConfig')
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_instance_name(self, **kwargs):
-        self.data['instance_name'] = getattr(self.instance, 'OS-EXT-SRV-ATTR:instance_name')
+    def get_instance_name(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
+        self.data['instance_name'] = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_image(self, **kwargs):
-        if self.instance.image:
-            self.data['image'] = ImageTransfer(self.instance.image['id'], self.glance_client)
+    def get_image(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
+        if instance.image:
+            self.data['image'] = ImageTransfer(instance.image['id'], self.glance_client)
             self.data['boot_from_volume'] = False
         else:
             self.data['image'] = None
@@ -106,28 +114,32 @@ class osBuilderExporter:
 
     @inspect_func
     @log_step(LOG)
-    def get_flavor(self, **kwargs):
-        self.data['flavor'] = self.__get_flavor_from_instance(self.instance).name
+    def get_flavor(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
+        self.data['flavor'] = self.__get_flavor_from_instance(instance).name
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_security_groups(self, **kwargs):
-        self.data['security_groups'] = [security_group['name'] for security_group in self.instance.security_groups]
+    def get_security_groups(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
+        self.data['security_groups'] = [security_group['name'] for security_group in instance.security_groups]
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_key(self, **kwargs):
-        self.data['key'] = {'name': self.instance.key_name}
+    def get_key(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
+        self.data['key'] = {'name': instance.key_name}
         return self
 
     @inspect_func
     @log_step(LOG)
-    def get_networks(self, **kwargs):
+    def get_networks(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
         networks = []
 
-        for network in self.instance.networks.items():
+        for network in instance.networks.items():
             networks.append({
                 'name': network[0],
                 'ip': network[1][0],
@@ -139,13 +151,16 @@ class osBuilderExporter:
 
     @inspect_func
     @log_step(LOG)
-    def get_disk(self, **kwargs):
+    def get_disk(self, instance=None, data=None, **kwargs):
         """Getting information about diff file of source instance"""
-        is_ephemeral = self.__get_flavor_from_instance(self.instance).ephemeral > 0
-        if not self.data["boot_from_volume"]:
+        instance = instance if instance else self.instance
+        boot_from_volume = data['boot_from_volume'] if data else self.data['boot_from_volume']
+        is_ephemeral = self.__get_flavor_from_instance(instance).ephemeral > 0
+
+        if not boot_from_volume:
             if self.config["ephemeral_drives"]['ceph']:
-                diff_path = self.__get_instance_diff_path(self.instance, False, True)
-                ephemeral = self.__get_instance_diff_path(self.instance, True, True) if is_ephemeral else None
+                diff_path = self.__get_instance_diff_path(instance, False, True)
+                ephemeral = self.__get_instance_diff_path(instance, True, True) if is_ephemeral else None
                 self.__create_temp_directory(self.config['temp'])
                 self.data['disk'] = {
                     'type': CEPH,
@@ -160,22 +175,22 @@ class osBuilderExporter:
                                                              "disk.local")
                 }
             else:
-                diff_path = self.__get_instance_diff_path(self.instance, False, False)
-                ephemeral = self.__get_instance_diff_path(self.instance, True, False) if is_ephemeral else None
+                diff_path = self.__get_instance_diff_path(instance, False, False)
+                ephemeral = self.__get_instance_diff_path(instance, True, False) if is_ephemeral else None
                 self.data['disk'] = {
                     'type': REMOTE_FILE,
-                    'host': getattr(self.instance, 'OS-EXT-SRV-ATTR:host'),
+                    'host': getattr(instance, 'OS-EXT-SRV-ATTR:host'),
                     'diff_path': diff_path,
                     'ephemeral': ephemeral
                 }
         else:
-            ephemeral = self.__get_instance_diff_path(self.instance, True, self.config["ephemeral_drives"]['ceph']) \
+            ephemeral = self.__get_instance_diff_path(instance, True, self.config["ephemeral_drives"]['ceph']) \
                 if is_ephemeral else None
             self.__create_temp_directory(self.config['temp'])
             self.data['disk'] = {
                 'type': CEPH if self.config["ephemeral_drives"]['ceph'] else REMOTE_FILE,
                 'host': self.config['host'] if self.config["ephemeral_drives"]['ceph']
-                else getattr(self.instance, 'OS-EXT-SRV-ATTR:host'),
+                else getattr(instance, 'OS-EXT-SRV-ATTR:host'),
                 'ephemeral': self.__transfer_rbd_to_file(ephemeral,
                                                          self.config['temp'],
                                                          self.config['ephemeral_drives']['convert_ephemeral_drive'],
@@ -226,14 +241,14 @@ class osBuilderExporter:
 
     @inspect_func
     @log_step(LOG)
-    def get_volumes(self, **kwargs):
-
+    def get_volumes(self, instance=None, **kwargs):
         """
             Gathering information about attached volumes to source instance and upload these volumes
             to Glance for further importing through image-service on to destination cloud.
         """
+        instance = instance if instance else self.instance
         images_from_volumes = []
-        for volume_info in self.nova_client.volumes.get_server_volumes(self.instance.id):
+        for volume_info in self.nova_client.volumes.get_server_volumes(instance.id):
             volume = self.cinder_client.volumes.get(volume_info.volumeId)
             LOG.debug("| | uploading volume %s [%s] to image service bootable=%s" %
                       (volume.display_name, volume.id, volume.bootable))
@@ -251,7 +266,7 @@ class osBuilderExporter:
                     image_from_glance.update(size=out["size"])
             if (volume.bootable != "true") or (not self.data["boot_from_volume"]):
                 images_from_volumes.append(VolumeTransfer(volume,
-                                                          self.instance,
+                                                          instance,
                                                           image_upload['image_id'],
                                                           self.glance_client))
             else:
@@ -270,8 +285,8 @@ class osBuilderExporter:
 
         """Return path of instance's diff file"""
 
-        disk_host = getattr(self.instance, 'OS-EXT-SRV-ATTR:host')
-        libvirt_name = getattr(self.instance, 'OS-EXT-SRV-ATTR:instance_name')
+        disk_host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        libvirt_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
         source_disk = None
         with settings(host_string=self.config['host']):
             with forward_agent(env.key_filename):

@@ -56,6 +56,7 @@ class ResourceImporter(osCommon.osCommon):
     def finish(self):
         for f in self.funcs:
             f()
+        self.funcs = []
         LOG.info("| Resource migrated")
 
     @inspect_func
