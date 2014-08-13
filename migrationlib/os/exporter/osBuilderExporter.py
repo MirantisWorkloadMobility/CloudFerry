@@ -325,8 +325,9 @@ class osBuilderExporter:
                 cmd = "virsh dumpxml %s | grep 'mac address' | cut -d\\' -f2" % libvirt_name
                 out = run("ssh -oStrictHostKeyChecking=no %s %s" %
                           (compute_node, cmd))
-                mac_address=out
-        return mac_address
+                mac_addresses=out.split()
+        mac_iter = iter(mac_addresses)
+        return next(mac_iter)
 
     def __get_status(self, getter, id):
         return getter.get(id).status
