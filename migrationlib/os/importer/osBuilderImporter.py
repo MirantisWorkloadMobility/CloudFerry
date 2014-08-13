@@ -629,13 +629,14 @@ class osBuilderImporter:
     def __prepare_networks(self, networks_info, security_groups):
         LOG.debug("networks_info %s" % networks_info)
         params = []
+        keep_ip = self.config['keep_ip']
         for i in range(0, len(networks_info)):
             net_overwrite = self.config['import_rules']['overwrite']['networks']
-            if net_overwrite and (len(net_overwrite) > i):
+            if not keep_ip and net_overwrite and (len(net_overwrite) > i):
                 network_info = self.config['import_rules']['overwrite']['networks'][i]
             else:
                 network_info = networks_info[i]
-            network = self.__get_network(network_info, keep_ip=self.config['keep_ip'])
+            network = self.__get_network(network_info, keep_ip=keep_ip)
             LOG.debug("    network %s [%s]" % (network['name'], network['id']))
             for item in self.network_client.list_ports(fields=['network_id', 'mac_address', 'id'])['ports']:
                 if (item['network_id'] == network['id']) and (item['mac_address'] == networks_info[i]['mac']):
@@ -646,10 +647,12 @@ class osBuilderImporter:
             for sg in self.nova_client.security_groups.list():
                 if sg.name in security_groups:
                     sg_ids.append(sg.id)
-            port = self.network_client.create_port({'port': {'network_id': network['id'],
-                                                             'mac_address': networks_info[i]['mac'],
-                                                             'security_groups': sg_ids,
-                                                             'fixed_ips': [{"ip_address": networks_info[i]['ip']}]}})['port']
+            param_create_port = {'network_id': network['id'],
+                                 'mac_address': networks_info[i]['mac'],
+                                 'security_groups': sg_ids}
+            if keep_ip:
+                param_create_port['fixed_ips'] = [{"ip_address": networks_info[i]['ip']}]
+            port = self.network_client.create_port({'port': param_create_port})['port']
             params.append({'net-id': network['id'], 'port-id': port['id']})
         return params
 
