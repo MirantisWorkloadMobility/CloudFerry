@@ -68,7 +68,8 @@ class ResourceImporter(osCommon.osCommon):
             .upload_tenants()\
             .upload_flavors()\
             .upload_user_passwords()\
-            .send_email_notifications()
+            .send_email_notifications()\
+            .upload_security_groups()
         return self
 
     @inspect_func
@@ -167,3 +168,73 @@ class ResourceImporter(osCommon.osCommon):
                                                    {'name': name,
                                                     'password': users_notifications[name]['password']}))
         return self
+
+    def __upload_nova_security_groups(self, security_groups):
+        existing = {sg.name for sg in self.nova_client.security_groups.list()}
+        for security_group in security_groups:
+            if security_group.name not in existing:
+                dest_security_group = self.nova_client.security_groups.create(name=security_group.name,
+                                                                              description=security_group.description)
+                for rule in security_group.rules:
+                    self.nova_client.security_group_rules.create(parent_group_id=dest_security_group.id,
+                                                                 ip_protocol=rule['ip_protocol'],
+                                                                 from_port=rule['from_port'],
+                                                                 to_port=rule['to_port'],
+                                                                 cidr=rule['ip_range']['cidr'])
+
+    def __upload_neutron_security_groups(self, security_groups):
+        # existing = {sg['name'] for sg in self.network_client.list_security_groups()['security_groups']}
+        existing = {sg.name for sg in self.nova_client.security_groups.list()}
+        for security_group in security_groups:
+            if security_group['name'] not in existing:
+                dest_security_group = self.network_client.create_security_group({"security_group":{"name":security_group['name'],
+                                                                                 "description":security_group['description']}})
+                for rule in security_group['security_group_rules']:
+                    if rule['protocol']:
+                        self.network_client.create_security_group_rule({"security_group_rule":{
+                                                                        "direction":rule["direction"],
+                                                                        "port_range_min":rule["port_range_min"],
+                                                                        "ethertype":rule["ethertype"],
+                                                                        "port_range_max":rule["port_range_max"],
+                                                                        "protocol":rule["protocol"],
+                                                                        "remote_ip_prefix": rule['remote_ip_prefix'],
+                                                                        "remote_group_id":dest_security_group['security_group']['security_group_rules'][0]['remote_group_id'],
+                                                                        "security_group_id":dest_security_group['security_group']['security_group_rules'][0]['security_group_id']}})
+
+    @inspect_func
+    @log_step(LOG)
+    def upload_security_groups(self, data=None, **kwargs):
+        network_config = self.config['network_service']
+        data = data if data else self.data
+        security_groups_info = data['security_groups_info']
+        if security_groups_info['service'] == "nova" and network_config == "nova":
+            self.__upload_nova_security_groups(security_groups_info['security_groups'])
+        if security_groups_info['service'] == "neutron" and network_config == "neutron":
+            self.__upload_neutron_security_groups(security_groups_info['security_groups'])
+        if security_groups_info['service'] == "nova" and network_config == "neutron":
+            converted_groups = self.__convert_sg_nova_to_neutron(security_groups_info['security_groups'])
+            self.__upload_neutron_security_groups(converted_groups)
+        return self
+
+    def __convert_sg_nova_to_neutron(self, security_groups):
+        converted_groups = []
+        for sg in security_groups:
+            converted_group={}
+            converted_group['name'] = sg.name
+            converted_group['description'] = sg.description
+            converted_group['security_group_rules']=[]
+            for direction in ["egress", "ingress"]:
+                for rule in sg.rules:
+                    if direction == "ingress": port = rule['from_port']
+                    if direction == "egress": port = rule['to_port']
+                    if port == -1: port=None
+                    cidr = None
+                    if rule['ip_range']: cidr = rule['ip_range']['cidr']
+                    converted_group['security_group_rules'].append({"direction": direction,
+                                                                    "port_range_min": port,
+                                                                    "ethertype": "IPv4",
+                                                                    "port_range_max": port,
+                                                                    "protocol": rule['ip_protocol'],
+                                                                    "remote_ip_prefix": cidr})
+            converted_groups.append(converted_group)
+        return converted_groups

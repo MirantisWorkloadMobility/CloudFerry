@@ -14,6 +14,7 @@ class SuperTaskExportResource(SuperTask):
                 TaskExportRolesResource(),
                 TaskFlavorsTenantsResource(),
                 TaskUserInfoTenantsResource(),
+                TaskSecurityGroupsResource(),
                 TaskBuildResource()]
 
 
@@ -52,6 +53,13 @@ class TaskUserInfoTenantsResource(Task):
             'resources': resources
         }
 
+class TaskSecurityGroupsResource(Task):
+
+    def run(self, res_exporter=None, **kwargs):
+        resources = res_exporter.get_security_groups()
+        return {
+            'resources': resources
+        }
 
 class TaskBuildResource(Task):
 

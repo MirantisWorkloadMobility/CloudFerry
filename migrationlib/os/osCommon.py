@@ -3,6 +3,8 @@ from cinderclient.v1 import client as cinderClient
 from glanceclient.v1 import client as glanceClient
 from keystoneclient.v2_0 import client as keystoneClient
 
+NOVA_SERVICE = "nova"
+
 
 class osCommon(object):
 
@@ -44,18 +46,26 @@ class osCommon(object):
     def detect_network_client(keystone):
         if osCommon.get_name_service_by_type(keystone, 'network') == "quantum":
             from quantumclient.v2_0 import client as networkClient
-        else:
+        if osCommon.get_name_service_by_type(keystone, 'network') == "neutron":
             from neutronclient.v2_0 import client as networkClient
+        else:
+            return None
         return networkClient
 
 
     @staticmethod
     def get_network_client(params, network_client):
-        """ Getting neutron(quantun) client """
-        return network_client.Client(username=params["user"],
-                                     password=params["password"],
-                                     tenant_name=params["tenant"],
-                                     auth_url="http://" + params["host"] + ":35357/v2.0/")
+        """ Getting neutron(quantun) or nova client """
+        if network_client:
+            return network_client.Client(username=params["user"],
+                                         password=params["password"],
+                                         tenant_name=params["tenant"],
+                                         auth_url="http://" + params["host"] + ":35357/v2.0/")
+        else:
+            return novaClient.Client(params["user"],
+                                     params["password"],
+                                     params["tenant"],
+                                     "http://" + params["host"] + ":35357/v2.0/")
 
     @staticmethod
     def get_keystone_client(params):
@@ -95,7 +105,7 @@ class osCommon(object):
         for service in keystone_client.services.list():
             if service.type == type_service:
                 return service.name
-        return None
+        return NOVA_SERVICE
 
     @staticmethod
     def get_public_endpoint_service_by_id(keystone_client, service_id):

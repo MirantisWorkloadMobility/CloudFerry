@@ -72,13 +72,11 @@ class osBuilderImporter:
     def prepare_for_creating_new_instance(self,
                                           data=None,
                                           **kwargs):
-        data = data if data else self.data
         self\
             .prepare_name(data=data)\
             .prepare_image(data=data)\
             .prepare_flavor(data=data)\
             .prepare_metadata(data=data)\
-            .prepare_security_groups(data=data)\
             .prepare_key_name(data=data)\
             .prepare_config_drive(data=data)\
             .prepare_disk_config(data=data)\
@@ -167,7 +165,8 @@ class osBuilderImporter:
     def prepare_nics(self, data=None, **kwargs):
         data = data if data else self.data
         networks = data['networks']
-        self.data_for_instance["nics"] = self.__prepare_networks(networks)
+        security_groups = self.__ensure_param(data, 'security_groups')
+        self.data_for_instance["nics"] = self.__prepare_networks(networks, security_groups)
         return self
 
     @inspect_func
@@ -508,8 +507,6 @@ class osBuilderImporter:
             Secandary: create volume with referencing on to image, in which we already uploaded cinder
             volume on source cloud.
         """
-        data = data if data else self.data
-        instance = instance if instance else self.instance
         self\
             .transfer_volumes(data=data)\
             .attaching_volume(data=data, instance=instance)
@@ -629,20 +626,30 @@ class osBuilderImporter:
         return key['name']
 
     @log_step(LOG)
-    def __prepare_networks(self, networks_info):
+    def __prepare_networks(self, networks_info, security_groups):
         LOG.debug("networks_info %s" % networks_info)
         params = []
         for i in range(0, len(networks_info)):
-            network_info = self.__processing_network_info(i, networks_info)
-            if self.config['keep_ip']:
-                network = self.__get_network_by_cidr(network_info)
+            net_overwrite = self.config['import_rules']['overwrite']['networks']
+            if net_overwrite and (len(net_overwrite) > i):
+                network_info = self.config['import_rules']['overwrite']['networks'][i]
             else:
-                network = self.__get_network(network_info)
+                network_info = networks_info[i]
+            network = self.__get_network(network_info, keep_ip=self.config['keep_ip'])
             LOG.debug("    network %s [%s]" % (network['name'], network['id']))
-            self.__delete_exist_port(network, i, networks_info)
+            for item in self.network_client.list_ports(fields=['network_id', 'mac_address', 'id'])['ports']:
+                if (item['network_id'] == network['id']) and (item['mac_address'] == networks_info[i]['mac']):
+                    LOG.warn("Port with network_id exists after prev run of script %s" % item)
+                    LOG.warn("and will be delete")
+                    self.network_client.delete_port(item['id'])
+            sg_ids = []
+            for sg in self.nova_client.security_groups.list():
+                if sg.name in security_groups:
+                    sg_ids.append(sg.id)
             port = self.network_client.create_port({'port': {'network_id': network['id'],
                                                              'mac_address': networks_info[i]['mac'],
-                                                             'fixed_ips':[{"ip_address": networks_info[i]['ip']}]}})['port']
+                                                             'security_groups': sg_ids,
+                                                             'fixed_ips': [{"ip_address": networks_info[i]['ip']}]}})['port']
             params.append({'net-id': network['id'], 'port-id': port['id']})
         return params
 
@@ -664,7 +671,14 @@ class osBuilderImporter:
         return network_info
 
     @log_step(LOG)
-    def __get_network(self, network_info):
+    def __get_network(self, network_info, keep_ip=False):
+        tenant_id = self.__get_tenant_id_by_name(self.config['tenant'])
+        if keep_ip:
+            instance_addr = ipaddr.IPAddress(network_info['ip'])
+            for i in self.network_client.list_subnets()['subnets']:
+                if i['tenant_id'] == tenant_id:
+                    if ipaddr.IPNetwork(i['cidr']).Contains(instance_addr):
+                        return self.network_client.list_networks(id=i['network_id'])['networks'][0]
         if 'id' in network_info:
             return self.network_client.list_networks(id=network_info['id'])['networks'][0]
         if 'name' in network_info:

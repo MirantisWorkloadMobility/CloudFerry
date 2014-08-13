@@ -48,6 +48,21 @@ class ResourceExporter(osCommon.osCommon):
         self.__get_user_info(self.config['keep_user_passwords'])
         return self
 
+    @log_step(LOG)
+    def get_security_groups(self):
+        network_service = self.config['network_service']
+        security_groups = self.__get_neutron_security_groups() \
+            if network_service == "neutron" else \
+            self.__get_nova_security_groups()
+        self.data['security_groups_info'] = {'service': network_service, 'security_groups': security_groups}
+        return self
+
+    def __get_nova_security_groups(self):
+        return self.nova_client.security_groups.list()
+
+    def __get_neutron_security_groups(self):
+        return self.network_client.list_security_groups()['security_groups']
+
     def __get_user_info(self, with_password):
         users = self.keystone_client.users.list()
         info = {}

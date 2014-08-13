@@ -1,10 +1,10 @@
 clouds:
     from:
         type: os
-        host: 172.18.172.73
-        user: source-user-1
-        password: migration
-        tenant: source_proj-1
+        host: 172.18.172.96
+        user: admin
+        password: admin
+        tenant: admin
         ephemeral_drives:
           ceph: no
           convert_diff_file: qcow2
@@ -17,12 +17,13 @@ clouds:
           connection: mysql+mysqlconnector
         keep_user_passwords: no
         ssh_transfer_port: 9999
+        network_service: nova
     to:
         type: os
         host: 172.18.172.77
-        user: dest-user-1
-        password: migration
-        tenant: dest-proj-1
+        user: admin
+        password: admin
+        tenant: admin
         temp: /root/merge
         mysql:
           user: root
@@ -44,10 +45,12 @@ clouds:
             overwrite:
                 key: {name: dest-key-1}
                 networks:
-        keep_ip: yes
+                 - name: "net04"
+        keep_ip: no
         speed_limit: 10MB
         identity:
           connection: mysql+mysqlconnector
+        network_service: neutron
 
 mail:
     mail_server: smtp.yandex.ru:25
@@ -57,4 +60,4 @@ mail:
 key_filename:
     name: id_rsa
 instances:
- - key_name: source-key-1
+ - key_name: source-key

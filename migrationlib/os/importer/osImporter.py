@@ -1,3 +1,4 @@
+
 from migrationlib.os import osCommon
 from osBuilderImporter import osBuilderImporter
 from utils import ChecksumImageInvalid, ISCSI, CEPH, BOOT_FROM_IMAGE, \

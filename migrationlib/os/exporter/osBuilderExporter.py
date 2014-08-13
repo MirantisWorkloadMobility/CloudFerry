@@ -138,12 +138,16 @@ class osBuilderExporter:
     def get_networks(self, instance=None, **kwargs):
         instance = instance if instance else self.instance
         networks = []
-
-        for network in instance.networks.items():
+        is_not_match_client = not type(self.nova_client) == type(self.network_client)
+        if is_not_match_client:
+            get_mac_func = self.__get_mac_by_ip
+        else:
+            get_mac_func = self.__get_mac_nova_network
+        for network in self.instance.networks.items():
             networks.append({
                 'name': network[0],
                 'ip': network[1][0],
-                'mac': self.__get_mac_by_ip(network[1][0])
+                'mac': get_mac_func(network[1][0] if is_not_match_client else instance)
             })
 
         self.data['networks'] = networks
@@ -312,6 +316,17 @@ class osBuilderExporter:
         for port in self.port_list:
             if port["fixed_ips"][0]["ip_address"] == ip_address:
                 return port["mac_address"]
+
+    def __get_mac_nova_network(self, instance):
+        compute_node = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        libvirt_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
+        with settings(host_string=self.config['host']):
+            with forward_agent(env.key_filename):
+                cmd = "virsh dumpxml %s | grep 'mac address' | cut -d\\' -f2" % libvirt_name
+                out = run("ssh -oStrictHostKeyChecking=no %s %s" %
+                          (compute_node, cmd))
+                mac_address=out
+        return mac_address
 
     def __get_status(self, getter, id):
         return getter.get(id).status
