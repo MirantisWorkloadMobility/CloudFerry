@@ -11,3 +11,9 @@ class Task(object):
         namespace = self.namespace if not namespace else namespace
         result = self.run(**namespace.vars)
         namespace.vars.update(result)
+
+    def __hash__(self):
+        return hash(Task.__name__)
+
+    def __eq__(self, other):
+        return hash(self) == hash(other)
