@@ -14,6 +14,7 @@ class SuperTaskExportResource(SuperTask):
                 TaskExportRolesResource(),
                 TaskFlavorsTenantsResource(),
                 TaskUserInfoTenantsResource(),
+                TaskNetworkServiceInfoResource(),
                 TaskSecurityGroupsResource(),
                 TaskBuildResource()]
 
@@ -49,6 +50,14 @@ class TaskUserInfoTenantsResource(Task):
 
     def run(self, res_exporter=None, **kwargs):
         resources = res_exporter.get_user_info()
+        return {
+            'resources': resources
+        }
+
+class TaskNetworkServiceInfoResource(Task):
+
+    def run(self, res_exporter=None, **kwargs):
+        resources = res_exporter.detect_neutron()
         return {
             'resources': resources
         }

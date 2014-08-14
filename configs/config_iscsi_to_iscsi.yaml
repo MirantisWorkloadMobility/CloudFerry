@@ -17,7 +17,6 @@ clouds:
           connection: mysql+mysqlconnector
         keep_user_passwords: no
         ssh_transfer_port: 9999
-        network_service: nova
     to:
         type: os
         host: 172.18.172.77
@@ -46,11 +45,11 @@ clouds:
                 key: {name: dest-key-1}
                 networks:
                  - name: "net04"
-        keep_ip: no
+                 - name: "test-net"
+        keep_ip: yes
         speed_limit: 10MB
         identity:
           connection: mysql+mysqlconnector
-        network_service: neutron
 
 mail:
     mail_server: smtp.yandex.ru:25

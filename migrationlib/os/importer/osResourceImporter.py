@@ -204,14 +204,13 @@ class ResourceImporter(osCommon.osCommon):
     @inspect_func
     @log_step(LOG)
     def upload_security_groups(self, data=None, **kwargs):
-        network_config = self.config['network_service']
         data = data if data else self.data
-        security_groups_info = data['security_groups_info']
-        if security_groups_info['service'] == "nova" and network_config == "nova":
+        security_groups_info = data['network_service_info']
+        if security_groups_info['service'] == "nova" and osCommon.osCommon.network_service(self) == "nova":
             self.__upload_nova_security_groups(security_groups_info['security_groups'])
-        if security_groups_info['service'] == "neutron" and network_config == "neutron":
+        if security_groups_info['service'] == "neutron" and osCommon.osCommon.network_service(self) == "neutron":
             self.__upload_neutron_security_groups(security_groups_info['security_groups'])
-        if security_groups_info['service'] == "nova" and network_config == "neutron":
+        if security_groups_info['service'] == "nova" and osCommon.osCommon.network_service(self) == "neutron":
             converted_groups = self.__convert_sg_nova_to_neutron(security_groups_info['security_groups'])
             self.__upload_neutron_security_groups(converted_groups)
         return self

@@ -67,6 +67,10 @@ class osCommon(object):
                                      params["tenant"],
                                      "http://" + params["host"] + ":35357/v2.0/")
 
+    def network_service(self):
+        return 'nova' if type(self.nova_client) == type(self.network_client) \
+            else 'neutron'
+
     @staticmethod
     def get_keystone_client(params):
 

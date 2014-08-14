@@ -49,13 +49,23 @@ class ResourceExporter(osCommon.osCommon):
         return self
 
     @log_step(LOG)
+    def detect_neutron(self):
+        self.__data_network_service_dict_init()
+        # self.data['network_service_info']['service']  = self.__get_is_neutron()
+        self.data['network_service_info']['service'] = osCommon.osCommon.network_service(self)
+
+    @log_step(LOG)
     def get_security_groups(self):
-        network_service = self.config['network_service']
+        self.__data_network_service_dict_init()
         security_groups = self.__get_neutron_security_groups() \
-            if network_service == "neutron" else \
+            if osCommon.osCommon.network_service(self) == 'neutron'  else \
             self.__get_nova_security_groups()
-        self.data['security_groups_info'] = {'service': network_service, 'security_groups': security_groups}
+        self.data['network_service_info']['security_groups'] = security_groups
         return self
+
+    def __data_network_service_dict_init(self):
+        if not 'network_service_info' in self.data:
+            self.data['network_service_info']= {}
 
     def __get_nova_security_groups(self):
         return self.nova_client.security_groups.list()
