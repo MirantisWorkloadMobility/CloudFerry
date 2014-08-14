@@ -138,16 +138,12 @@ class osBuilderExporter:
     def get_networks(self, instance=None, **kwargs):
         instance = instance if instance else self.instance
         networks = []
-        is_not_match_client = not type(self.nova_client) == type(self.network_client)
-        if is_not_match_client:
-            get_mac_func = self.__get_mac_by_ip
-        else:
-            get_mac_func = self.__get_mac_nova_network
+        func_mac_address = self.__get_func_mac_address(instance)
         for network in self.instance.networks.items():
             networks.append({
                 'name': network[0],
                 'ip': network[1][0],
-                'mac': get_mac_func(network[1][0] if is_not_match_client else instance)
+                'mac': func_mac_address(network[1][0])
             })
 
         self.data['networks'] = networks
@@ -312,6 +308,14 @@ class osBuilderExporter:
                     raise NameError("Can't find suitable name of the source disk path")
         return source_disk
 
+    def __get_func_mac_address(self, instance=None):
+        is_not_match_client = not type(self.nova_client) == type(self.network_client)
+        if is_not_match_client:
+            return self.__get_mac_by_ip
+        else:
+            list_mac = self.__get_mac_nova_network(instance)
+            return lambda x: next(list_mac)
+
     def __get_mac_by_ip(self, ip_address):
         for port in self.port_list:
             if port["fixed_ips"][0]["ip_address"] == ip_address:
@@ -327,7 +331,7 @@ class osBuilderExporter:
                           (compute_node, cmd))
                 mac_addresses=out.split()
         mac_iter = iter(mac_addresses)
-        return next(mac_iter)
+        return mac_iter
 
     def __get_status(self, getter, id):
         return getter.get(id).status
