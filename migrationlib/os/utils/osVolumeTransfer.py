@@ -4,7 +4,6 @@ __author__ = 'mirrorcoder'
 class VolumeTransfer:
     """ The main class for gathering information for volumes migrationlib"""
     def __init__(self, volume, instance, image_id, glance_client):
-        self.glance_client = glance_client
         self.id = volume.id
         self.size = volume.size
         self.name = volume.display_name
@@ -15,6 +14,7 @@ class VolumeTransfer:
         self.host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         self.image_id = image_id
         self.bootable = True if volume.bootable == 'true' else False
+        self.glance_client = glance_client
         self.__info = self.glance_client.images.get(self.image_id)
         self.checksum = self.__info.checksum
 
@@ -30,3 +30,18 @@ class VolumeTransfer:
 
     def delete(self):
         self.glance_client.images.delete(self.image_id)
+
+    def convert_to_dict(self):
+        return {
+            '_type_class': VolumeTransfer.__name__,
+            'id': self.id,
+            'size': self.size,
+            'name': self.name,
+            'description': self.description,
+            'volume_type': self.volume_type,
+            'availability_zone': self.availability_zone,
+            'device': self.device,
+            'host': self.host,
+            'image_id': self.image_id,
+            'bootable': self.bootable
+        }

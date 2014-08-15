@@ -17,3 +17,9 @@ class ImageTransfer:
 
     def delete(self):
         self.glance_client.images.delete(self.image_id)
+
+    def convert_to_dict(self):
+        return {
+            '_type_class': ImageTransfer.__name__,
+            'image_id': self.image_id
+        }

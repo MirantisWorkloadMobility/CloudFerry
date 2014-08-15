@@ -6,7 +6,6 @@ from tasks.SuperTaskImportResource import SuperTaskImportResource
 from tasks.TaskInitMigrate import TaskInitMigrate
 from tasks.SuperTaskExportResource import SuperTaskExportResource
 from tasks.SuperTaskMigrateInstances import SuperTaskMigrateInstances
-
 from utils import log_step, get_log
 
 env.forward_agent = True
@@ -24,8 +23,8 @@ def migrate(name_config, name_instance=None):
                            'name_instance': name_instance})
     scheduler = Scheduler(namespace)
     scheduler.addTask(TaskInitMigrate())
-    scheduler.addTask(SuperTaskExportResource())
-    scheduler.addTask(SuperTaskImportResource())
+    # scheduler.addTask(SuperTaskExportResource())
+    # scheduler.addTask(SuperTaskImportResource())
     scheduler.addTask(SuperTaskMigrateInstances())
     print "RUN!!"
     scheduler.run()

@@ -53,3 +53,8 @@ class Exporter(osCommon.osCommon):
             .get_disk()\
             .get_instance_name()\
             .get_volumes()
+
+    def convert_to_dict(self):
+        res = {}
+        res['_type_class'] = Exporter.__name__
+        return res

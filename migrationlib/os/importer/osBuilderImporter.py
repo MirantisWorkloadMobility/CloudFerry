@@ -67,6 +67,11 @@ class osBuilderImporter:
             'volumes': self.volumes
         }
 
+    def convert_to_dict(self):
+        res = self.get_state()
+        res['_type_class'] = osBuilderImporter.__name__
+        return res
+
     @inspect_func
     @supertask
     def prepare_for_creating_new_instance(self,

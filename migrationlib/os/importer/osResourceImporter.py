@@ -53,6 +53,11 @@ class ResourceImporter(osCommon.osCommon):
             'users_notifications': self.users_notifications,
         }
 
+    def convert_to_dict(self):
+        res = self.get_state()
+        res['_type_class'] = ResourceImporter.__name__
+        return res
+
     def finish(self):
         for f in self.funcs:
             f()

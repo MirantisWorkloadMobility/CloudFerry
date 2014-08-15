@@ -196,3 +196,8 @@ class Importer(osCommon.osCommon):
             .prepare_for_creating_new_instance()\
             .create_instance()\
             .import_volumes()
+
+    def convert_to_dict(self):
+        res = {}
+        res['_type_class'] = Importer.__name__
+        return res

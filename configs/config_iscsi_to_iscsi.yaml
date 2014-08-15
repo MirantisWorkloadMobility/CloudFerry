@@ -1,7 +1,7 @@
 clouds:
     from:
         type: os
-        host: 172.18.172.102
+        host: 172.18.172.35
         user: admin
         password: admin
         tenant: admin
@@ -20,7 +20,7 @@ clouds:
         network_service: nova
     to:
         type: os
-        host: 172.18.172.77
+        host: 172.18.172.22
         user: admin
         password: admin
         tenant: admin
@@ -43,7 +43,7 @@ clouds:
         import_rules:
             default: {}
             overwrite:
-                key: {name: dest-key-1}
+                key: {name: key}
                 networks:
                  - name: "net04"
         keep_ip: no
@@ -58,6 +58,6 @@ mail:
     password: need_pass
     from_addr: source-cloud-1@yandex.ru
 key_filename:
-    name: id_rsa
+    name: privkey
 instances:
- - key_name: source-key
+ - key_name: qwerty

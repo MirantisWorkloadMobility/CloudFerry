@@ -8,18 +8,19 @@ ERROR = 255
 class TransactionsListener(object):
     def __init__(self):
         self.status = NO_ERROR
+        self.prefix = "transaction/"
 
     def event_begin(self, namespace=None):
-        pass
+        return True
 
-    def event_task(self, namespace=None, task=None):
-        pass
+    def event_task(self, namespace=None, task=None, skip=None):
+        return True
 
     def event_error(self, namespace=None, task=None, exception=None):
-        pass
+        return True
 
     def event_end(self, namespace=None):
-        pass
+        return False
 
 
 class TaskTransactionBegin(object):

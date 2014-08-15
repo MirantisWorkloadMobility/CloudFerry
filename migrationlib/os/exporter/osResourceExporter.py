@@ -20,6 +20,11 @@ class ResourceExporter(osCommon.osCommon):
         self.funcs = []
         super(ResourceExporter, self).__init__(self.config)
 
+    def convert_to_dict(self):
+        res = {'data': self.data}
+        res['_type_class'] = ResourceExporter.__name__
+        return res
+
     @log_step(LOG)
     def get_flavors(self):
         def process_flavor(flavor):

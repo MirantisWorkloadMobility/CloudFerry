@@ -23,7 +23,7 @@ class osBuilderExporter:
     data -- main dictionary for filling with information from source cloud
     """
 
-    def __init__(self, glance_client, cinder_client, nova_client, network_client, instance, config):
+    def __init__(self, glance_client, cinder_client, nova_client, network_client, instance, config, data=dict()):
         self.glance_client = glance_client
         self.cinder_client = cinder_client
         self.nova_client = nova_client
@@ -32,7 +32,7 @@ class osBuilderExporter:
         self.instance = instance
         self.funcs = []
 
-        self.data = dict()
+        self.data = data
 
     def finish(self):
         for f in self.funcs:
@@ -47,6 +47,11 @@ class osBuilderExporter:
         return {
             'data': self.data
         }
+
+    def convert_to_dict(self):
+        res = self.get_state()
+        res['_type_class'] = osBuilderExporter.__name__
+        return res
 
     @inspect_func
     @log_step(LOG)

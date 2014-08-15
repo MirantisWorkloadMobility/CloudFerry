@@ -22,7 +22,7 @@ def supertask(func):
 
 class Function(object):
 
-    def __init__(self, func, self_cls, args, kwargs):
+    def __init__(self, func=None, self_cls=None, args=None, kwargs=None):
         self.f = func
         self.self_cls = self_cls
         self.args = args if args else list()
@@ -41,3 +41,9 @@ class Function(object):
     def __repr__(self):
         repr = super(Function, self).__repr__()
         return "<Name function: %s - - - %s" % (self.f.__name__, repr)
+
+    def __hash__(self):
+        return hash(Function.__name__)
+
+    def __eq__(self, other):
+        return hash(self) == hash(other)

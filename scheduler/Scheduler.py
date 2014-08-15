@@ -2,7 +2,8 @@ from Task import Task
 from SuperTask import SuperTask
 from Namespace import Namespace
 from transaction.TaskTransaction import *
-
+from builder_wrapper import Function
+import traceback
 __author__ = 'mirrorcoder'
 
 
@@ -15,11 +16,13 @@ class Scheduler:
         self.transactions_listener = []
         self.status_error = NO_ERROR
         self.map_func_task = {
-            SuperTask: self.__add_tasks_from_supertask,
-            Task: self.__task_run,
-            TaskTransactionBegin: self.__task_begin_trans,
-            TaskTransactionEnd: self.__task_end_trans
+            SuperTask(): self.__add_tasks_from_supertask,
+            Task(): self.__task_run,
+            Function(): self.__task_run,
+            TaskTransactionBegin(): self.__task_begin_trans,
+            TaskTransactionEnd(): self.__task_end_trans
         }
+        self.task_exclusion = [TaskTransactionEnd]
 
     def addTask(self, task):
         self.tasks.insert(0, task)
@@ -40,11 +43,14 @@ class Scheduler:
         return self.transactions_listener.pop()
 
     def get_last_listener(self):
-        return self.transactions_listener[-1]
+        if len(self.transactions_listener):
+            return self.transactions_listener[-1]
+        else:
+            return None
 
     def trigger_listener(self, name_event, listener=None, args={}):
         if listener:
-            self.trigger(name_event, listener, args)
+            return self.trigger(name_event, listener, args)
         else:
             for index in range(len(self.transactions_listener)-1, -1, -1):
                 if not self.trigger(name_event, self.transactions_listener[index], args):
@@ -58,15 +64,28 @@ class Scheduler:
             'event_error': listener.event_error
         }[name_event](**args)
 
+    def __can_run_next_task(self, task):
+        if self.status_error == NO_ERROR:
+            return True
+        elif self.status_error == ERROR:
+            return task in self.task_exclusion
+
     def run(self):
         while self.tasks:
             task = self.tasks.pop()
             try:
-                self.map_func_task[task](task)
-                self.trigger_listener('event_task', args={'namespace': self.namespace, 'task': task})
+                skip = True
+                if self.__can_run_next_task(task):
+                    self.map_func_task[task](task)
+                    skip = False
+                self.trigger_listener('event_task', args={'namespace': self.namespace, 'task': task, 'skip': skip})
             except Exception as e:
                 self.status_error = ERROR
-                self.trigger_listener('event_error', args={'namespace': self.namespace, 'task': task, 'exception': e})
+                self.exception = e
+                print "Exp msg = ", traceback.print_exc()
+                self.trigger_listener('event_error', self.get_last_listener(), args={'namespace': self.namespace,
+                                                                                     'task': task,
+                                                                                     'exception': e})
             finally:
                 self.tasks_runned.append(task)
 
@@ -76,6 +95,7 @@ class Scheduler:
         [self.push(subtask) for subtask in list_subtasks]
 
     def __task_run(self, task):
+        print task
         task(namespace=self.namespace)
 
     def __task_begin_trans(self, task):
@@ -85,4 +105,12 @@ class Scheduler:
 
     def __task_end_trans(self, task):
         self.pop_transaction()
-        self.trigger_listener('event_end', self.pop_listener_trans(), args={'namespace': self.namespace})
+        res = self.trigger_listener('event_end', self.pop_listener_trans(), args={'namespace': self.namespace})
+        if res:
+            self.status_error = NO_ERROR
+        else:
+            self.status_error = ERROR
+            self.trigger_listener('event_error', args={'namespace': self.namespace,
+                                                       'task': task,
+                                                       'exception': self.exception})
+
