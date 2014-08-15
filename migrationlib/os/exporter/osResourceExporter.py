@@ -30,7 +30,8 @@ class ResourceExporter(osCommon.osCommon):
                 tenants = [self.keystone_client.tenants.get(t.tenant_id).name for t in tenants]
                 return flavor, tenants
 
-        self.data['flavors'] = map(process_flavor, self.nova_client.flavors.list(is_public=False))
+        flavor_list = self.nova_client.flavors.list()
+        self.data['flavors'] = map(process_flavor, flavor_list)
         return self
 
     @log_step(LOG)
