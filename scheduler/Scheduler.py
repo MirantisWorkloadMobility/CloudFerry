@@ -22,7 +22,7 @@ class Scheduler:
             TaskTransactionBegin(): self.__task_begin_trans,
             TaskTransactionEnd(): self.__task_end_trans
         }
-        self.task_exclusion = [TaskTransactionEnd]
+        self.task_exclusion = [TaskTransactionEnd()]
 
     def addTask(self, task):
         self.tasks.insert(0, task)
