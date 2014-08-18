@@ -11,7 +11,7 @@ from functools import wraps
 from fabric.api import local, run
 import os
 import yaml
-
+import inspect
 
 __author__ = 'mirrorcoder'
 
@@ -26,6 +26,43 @@ REMOTE_FILE = "remote file"
 QCOW2 = "qcow2"
 YES = "yes"
 NAME_LOG_FILE = 'migrate.log'
+
+
+primitive = [int, long, bool, float, type(None), str, unicode]
+
+
+def convert_to_dict(obj, ident=0, limit_ident=6):
+    ident += 1
+    if type(obj) in primitive:
+        return obj
+    if isinstance(obj, inspect.types.InstanceType) or (type(obj) not in (list, tuple, dict)):
+        if ident <= limit_ident:
+            try:
+                obj = obj.convert_to_dict()
+            except AttributeError as e:
+                try:
+                    obj = obj.__dict__
+                    obj['_type_class'] = obj.__class__
+                except AttributeError as e:
+                    return obj.__class__
+        else:
+            return obj.__class__
+    if type(obj) is dict:
+        res = {}
+        for item in obj:
+            if ident <= limit_ident:
+                res[item] = convert_to_dict(obj[item], ident)
+            else:
+                res[item] = str(obj[item])
+        return res
+    if type(obj) in (list, tuple):
+        res = []
+        for item in obj:
+            if ident <= limit_ident:
+                res.append(convert_to_dict(item, ident))
+            else:
+                res.append(str(item))
+        return res if type(obj) is list else tuple(res)
 
 
 class GeneratorPassword:

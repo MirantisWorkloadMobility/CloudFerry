@@ -19,7 +19,7 @@ def migrate(name_config, name_instance=None):
     """
         :name_config - name of config yaml-file, example 'config.yaml'
     """
-    namespace = Namespace({'name_config': name_config,
+    namespace = Namespace({'__name_config__': name_config,
                            'name_instance': name_instance})
     scheduler = Scheduler(namespace)
     scheduler.addTask(TaskInitMigrate())

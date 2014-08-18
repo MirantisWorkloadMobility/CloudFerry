@@ -31,10 +31,11 @@ class TaskInitMigrate(Task):
         importer = TaskInitMigrate.get_importer(config)
         return config, exporter, importer
 
-    def run(self, name_config="", name_instance="", **kwargs):
-        print name_config, name_instance
+    def run(self, __name_config__="", name_instance="", **kwargs):
+        print __name_config__, name_instance
         LOG.info("Init migrationlib config")
-        config, (res_exporter, inst_exporter), (res_importer, inst_importer) = TaskInitMigrate.init_migrate(name_config)
+        config, (res_exporter, inst_exporter), (res_importer, inst_importer) = \
+            TaskInitMigrate.init_migrate(__name_config__)
         if name_instance:
             config['instances'] = [{'name': name_instance}]
         env.key_filename = config['key_filename']['name']

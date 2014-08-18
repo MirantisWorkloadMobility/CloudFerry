@@ -346,10 +346,12 @@ class osBuilderExporter:
             time.sleep(1)
 
     def __getattr__(self, item):
-        getter = {
+        list_getters = {
             'port_list': lambda: self.network_client.list_ports()["ports"]
-        }[item]
-
+        }
+        getter = None
+        if item in list_getters:
+            getter = list_getters[item]
         if getter is None:
             raise AttributeError("Exporter has no attribute %s" % item)
 
