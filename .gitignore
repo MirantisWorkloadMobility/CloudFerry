@@ -3,3 +3,4 @@
 *.log
 id_rsa
 transaction
+snapshots

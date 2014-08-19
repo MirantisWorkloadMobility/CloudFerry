@@ -2,13 +2,14 @@ from Task import Task
 from SuperTask import SuperTask
 from Namespace import Namespace
 from transaction.TaskTransaction import *
+from tasks.TaskCreateSnapshotOs import TaskCreateSnapshotOs
 from builder_wrapper import Function
 import traceback
 __author__ = 'mirrorcoder'
 
 
 class Scheduler:
-    def __init__(self, namespace=None):
+    def __init__(self, namespace=None, task_exclusion=[TaskTransactionEnd]):
         self.namespace = namespace if namespace else Namespace()
         self.tasks = []
         self.tasks_runned = []
@@ -22,10 +23,13 @@ class Scheduler:
             TaskTransactionBegin(): self.__task_begin_trans,
             TaskTransactionEnd(): self.__task_end_trans
         }
-        self.task_exclusion = [TaskTransactionEnd()]
+        self.task_exclusion = task_exclusion
 
     def addTask(self, task):
         self.tasks.insert(0, task)
+
+    def addTaskExclusion(self, task_class):
+        self.task_exclusion.append(task_class)
 
     def push(self, task):
         self.tasks.append(task)
@@ -68,7 +72,10 @@ class Scheduler:
         if self.status_error == NO_ERROR:
             return True
         elif self.status_error == ERROR:
-            return task in self.task_exclusion
+            return self.__is_task_exclusion(task)
+
+    def __is_task_exclusion(self, task):
+        return reduce(lambda result, obj: result or isinstance(task, obj), self.task_exclusion, False)
 
     def run(self):
         while self.tasks:

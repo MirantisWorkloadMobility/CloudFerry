@@ -1,4 +1,7 @@
+import time
+
 __author__ = 'mirrorcoder'
+
 
 ADD = "add"
 CHANGE = "change"
@@ -25,6 +28,7 @@ class Snapshot:
         self.tenants = {}
         self.users = {}
         self.security_groups = {}
+        self.timestamp = time.time()
 
     def add(self, id, category, diff_obj):
         self.__dict__[category][id] = diff_obj
@@ -55,5 +59,6 @@ class Snapshot:
             'volumes': self.volumes,
             'tenants': self.tenants,
             'users': self.users,
-            'security_groups': self.security_groups
+            'security_groups': self.security_groups,
+            'timestamp': self.timestamp
         }

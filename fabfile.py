@@ -5,6 +5,7 @@ from scheduler.Scheduler import Scheduler
 from tasks.SuperTaskImportResource import SuperTaskImportResource
 from tasks.TaskInitMigrate import TaskInitMigrate
 from tasks.SuperTaskExportResource import SuperTaskExportResource
+from tasks.TaskCreateSnapshotOs import TaskCreateSnapshotOs
 from tasks.SuperTaskMigrateInstances import SuperTaskMigrateInstances
 from utils import log_step, get_log
 
@@ -22,6 +23,7 @@ def migrate(name_config, name_instance=None):
     namespace = Namespace({'__name_config__': name_config,
                            'name_instance': name_instance})
     scheduler = Scheduler(namespace)
+    scheduler.addTaskExclusion(TaskCreateSnapshotOs)
     scheduler.addTask(TaskInitMigrate())
     # scheduler.addTask(SuperTaskExportResource())
     # scheduler.addTask(SuperTaskImportResource())
