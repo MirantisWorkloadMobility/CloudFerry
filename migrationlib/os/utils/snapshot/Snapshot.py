@@ -26,23 +26,27 @@ class Snapshot:
         self.users = {}
         self.security_groups = {}
 
-    def addInstance(self, id, **kwargs):
-        self.instances[id] = kwargs
+    def add(self, id, category, diff_obj):
+        self.__dict__[category][id] = diff_obj
 
-    def addImage(self, id, **kwargs):
-        self.images[id] = kwargs
+    def addInstance(self, id, diff_obj=None, **kwargs):
+        self.instances[id] = kwargs if not diff_obj else diff_obj
 
-    def addVolume(self, id, **kwargs):
-        self.volumes[id] = kwargs
+    def addImage(self, id, diff_obj=None, **kwargs):
+        self.images[id] = kwargs if not diff_obj else diff_obj
 
-    def addTenant(self, id, **kwargs):
-        self.tenants[id] = kwargs
+    def addVolume(self, id, diff_obj=None, **kwargs):
+        print kwargs
+        self.volumes[id] = kwargs if not diff_obj else diff_obj
 
-    def addUser(self, id, **kwargs):
-        self.users[id] = kwargs
+    def addTenant(self, id, diff_obj=None, **kwargs):
+        self.tenants[id] = kwargs if not diff_obj else diff_obj
 
-    def addSecurityGroup(self, id, **kwargs):
-        self.security_groups[id] = kwargs
+    def addUser(self, id, diff_obj=None, **kwargs):
+        self.users[id] = kwargs if not diff_obj else diff_obj
+
+    def addSecurityGroup(self, id, diff_obj=None, **kwargs):
+        self.security_groups[id] = kwargs if not diff_obj else diff_obj
 
     def convert_to_dict(self):
         return {

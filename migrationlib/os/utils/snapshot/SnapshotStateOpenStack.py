@@ -41,8 +41,15 @@ class SnapshotStateOpenStack:
         snapshot_one_res = snapshot_one.convert_to_dict()
         snapshot_two_res = snapshot_two.convert_to_dict()
         snapshot_diff = Snapshot()
-        for item_two, item_one in zip(snapshot_two_res, snapshot_one_res):
-            for obj in item_two:
-                if not obj in item_one:
-                    
-        return Snapshot()
+        for item_two in snapshot_two_res:
+            for obj in snapshot_two_res[item_two]:
+                if not obj in snapshot_one_res[item_two]:
+                    snapshot_diff.add(obj, item_two, DiffObject(ADD, snapshot_two_res[item_two][obj]))
+                elif snapshot_two_res[item_two][obj] != snapshot_one_res[item_two][obj]:
+                    snapshot_diff.add(obj, item_two, DiffObject(CHANGE,
+                                                                DiffValue(snapshot_one_res[item_two][obj],
+                                                                          snapshot_two_res[item_two][obj])))
+            for obj in snapshot_one_res[item_two]:
+                if not obj in snapshot_two_res[item_two]:
+                    snapshot_diff.add(obj, item_two, DiffObject(DELETE, snapshot_one_res[item_two][obj]))
+        return snapshot_diff
