@@ -52,6 +52,17 @@ class Snapshot:
     def addSecurityGroup(self, id, diff_obj=None, **kwargs):
         self.security_groups[id] = kwargs if not diff_obj else diff_obj
 
+    def union(self, snapshot, exclude=['timestamp']):
+        snapshot_dict = self.excluding_fields(snapshot.convert_to_dict(), exclude)
+        for item in snapshot_dict:
+            self.__dict__[item].update(snapshot_dict[item])
+
+    def excluding_fields(self, snapshot_dict, exclude):
+        for item in exclude:
+            if item in snapshot_dict:
+                del snapshot_dict[item]
+        return snapshot_dict
+
     def convert_to_dict(self):
         return {
             'instances': self.instances,

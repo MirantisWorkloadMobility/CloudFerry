@@ -21,19 +21,10 @@ class TransactionsListenerOs(TransactionsListener):
             self.transaction['instance'] = self.instance.id
         else:
             self.prefix += path + ("/" if path[-1] != "/" else "")
-        if rewrite and os.path.exists(self.prefix):
-            shutil.rmtree(self.prefix)
+        self.__init_directory(self.prefix, self.prefix_path, rewrite)
 
     def event_begin(self, namespace=None):
-        if not os.path.exists(self.prefix_path):
-            os.makedirs(self.prefix_path)
         self.f = open(self.prefix_path+"tasks.trans", "a+")
-        self.transaction['timestamp'] = time.time()
-        if not os.path.exists(self.prefix_path+"source/"):
-            os.makedirs(self.prefix_path+"source/")
-        if not os.path.exists(self.prefix_path+"dest/"):
-            os.makedirs(self.prefix_path+"dest/")
-
         if 'snapshots' in namespace.vars:
             self.__save_snapshots(namespace.vars['snapshots'])
         self.__add_obj_to_file(self.transaction, self.f)
@@ -60,10 +51,24 @@ class TransactionsListenerOs(TransactionsListener):
     def event_end(self, namespace=None):
         if 'snapshots' in namespace.vars:
             self.__save_snapshots(namespace.vars['snapshots'])
+        task_end = dict()
+        task_end['event'] = 'event end'
+        self.__add_obj_to_file(task_end, self.f)
         self.f.close()
         return True
 
+    def __init_directory(self, prefix, prefix_path, rewrite):
+        if rewrite and os.path.exists(prefix_path):
+            shutil.rmtree(prefix_path)
+        if not os.path.exists(self.prefix_path):
+            os.makedirs(self.prefix_path)
+        if not os.path.exists(prefix_path+"source/"):
+            os.makedirs(prefix_path+"source/")
+        if not os.path.exists(prefix_path+"dest/"):
+            os.makedirs(prefix_path+"dest/")
+
     def __add_obj_to_file(self, obj_dict, file):
+        obj_dict['timestamp'] = time.time()
         json.dump(obj_dict, file)
         file.write("\n")
 
@@ -75,10 +80,10 @@ class TransactionsListenerOs(TransactionsListener):
         return result
 
     def __save_snapshots(self, snapshots):
-            timestamp_source = snapshots['source'][-1].timestamp
-            timestamp_dest = snapshots['dest'][-1].timestamp
-            with open((self.prefix_path+"source/%s.snapshot") % timestamp_source, "w+") as f:
-                self.__add_obj_to_file(convert_to_dict(snapshots['source'][-1]), f)
-            with open((self.prefix_path+"dest/%s.snapshot") % timestamp_dest, "w+") as f:
-                self.__add_obj_to_file(convert_to_dict(snapshots['dest'][-1]), f)
+        timestamp_source = snapshots['source'][-1].timestamp
+        timestamp_dest = snapshots['dest'][-1].timestamp
+        with open((self.prefix_path+"source/%s.snapshot") % timestamp_source, "w+") as f:
+            self.__add_obj_to_file(convert_to_dict(snapshots['source'][-1]), f)
+        with open((self.prefix_path+"dest/%s.snapshot") % timestamp_dest, "w+") as f:
+            self.__add_obj_to_file(convert_to_dict(snapshots['dest'][-1]), f)
 

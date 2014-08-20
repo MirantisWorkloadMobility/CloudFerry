@@ -2,7 +2,6 @@ from Task import Task
 from SuperTask import SuperTask
 from Namespace import Namespace
 from transaction.TaskTransaction import *
-from tasks.TaskCreateSnapshotOs import TaskCreateSnapshotOs
 from builder_wrapper import Function
 import traceback
 __author__ = 'mirrorcoder'
@@ -94,7 +93,7 @@ class Scheduler:
                                                                                      'task': task,
                                                                                      'exception': e})
             finally:
-                self.tasks_runned.append(task)
+                self.tasks_runned.append(str(task))
 
     def __add_tasks_from_supertask(self, task):
         list_subtasks = [subtask for subtask in task.split_task(namespace=self.namespace)]
@@ -102,7 +101,6 @@ class Scheduler:
         [self.push(subtask) for subtask in list_subtasks]
 
     def __task_run(self, task):
-        print task
         task(namespace=self.namespace)
 
     def __task_begin_trans(self, task):

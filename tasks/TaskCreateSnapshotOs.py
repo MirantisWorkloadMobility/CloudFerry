@@ -25,10 +25,7 @@ class TaskCreateSnapshotOs(Task):
     def __init__(self, namespace=None):
         self.prefix = "snapshots"
         super(TaskCreateSnapshotOs, self).__init__(namespace=namespace)
-        if not os.path.exists("%s/source" % self.prefix):
-            os.makedirs("%s/source" % self.prefix)
-        if not os.path.exists("%s/dest" % self.prefix):
-            os.makedirs("%s/dest" % self.prefix)
+        self.__init_directory(self.prefix)
 
     def run(self, inst_exporter=None, inst_importer=None, snapshots={'source': [], 'dest': []}, **kwargs):
         snapshot_source = SnapshotStateOpenStack(inst_exporter).create_snapshot()
@@ -40,6 +37,12 @@ class TaskCreateSnapshotOs(Task):
         return {
             'snapshots': snapshots
         }
+
+    def __init_directory(self, prefix):
+        if not os.path.exists("%s/source" % prefix):
+            os.makedirs("%s/source" % prefix)
+        if not os.path.exists("%s/dest" % prefix):
+            os.makedirs("%s/dest" % prefix)
 
     def __dump_to_file(self, prefix, snapshot):
         with open("%s/%s.snapshot" % (prefix, snapshot.timestamp), "w+") as f:
