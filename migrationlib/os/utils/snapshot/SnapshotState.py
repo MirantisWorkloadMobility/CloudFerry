@@ -12,20 +12,11 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 from Snapshot import *
+from migrationlib.os.utils.statecloud.StateCloud import StateCloud
 __author__ = 'mirrorcoder'
 
 
-class SnapshotState(object):
-    def __init__(self, cloud, config_snapshots=[]):
-        self.cloud = cloud
-        self.keystone_client = cloud.keystone_client
-        self.nova_client = cloud.nova_client
-        self.cinder_client = cloud.cinder_client
-        self.network_client = cloud.network_client
-        self.glance_client = cloud.glance_client
-        self.keystone_db_conn_url = cloud.keystone_client
-        self.config_snapshots = [inst(cloud) for inst in config_snapshots]
-
+class SnapshotState(StateCloud):
     def create_snapshot(self):
         return Snapshot()
 

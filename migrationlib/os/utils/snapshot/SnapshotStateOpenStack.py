@@ -13,11 +13,11 @@ class SnapshotStateOpenStack(SnapshotState):
     #TODO: list security groups
     #TODO: list users
     #TODO: list tenants
-    def __init__(self, cloud, config_snapshots=[SnapshotInstances, SnapshotVolumes, SnapshotImages]):
-        super(SnapshotStateOpenStack, self).__init__(cloud, config_snapshots)
+    def __init__(self, cloud, list_subclass=[SnapshotInstances, SnapshotVolumes, SnapshotImages]):
+        super(SnapshotStateOpenStack, self).__init__(cloud, list_subclass)
 
     def create_snapshot(self):
         snapshot = Snapshot()
-        for snapshot_class in self.config_snapshots:
+        for snapshot_class in self.list_subclass:
             snapshot.union(snapshot_class.create_snapshot())
         return snapshot

@@ -19,6 +19,18 @@ class DiffObject:
         self.status = status
         self.value = value
 
+    def getStatus(self):
+        return self.status
+
+    def isAdd(self):
+        return self.status == ADD
+
+    def isChange(self):
+        return self.status == CHANGE
+
+    def isDelete(self):
+        return self.status == DELETE
+
 
 class Snapshot:
     def __init__(self):
