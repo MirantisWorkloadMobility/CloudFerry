@@ -46,7 +46,6 @@ class TaskInitMigrate(Task):
         return config, exporter, importer
 
     def run(self, name_config="", name_instance="", **kwargs):
-        print name_config, name_instance
         LOG.info("Init migrationlib config")
         config, (res_exporter, inst_exporter), (res_importer, inst_importer) = TaskInitMigrate.init_migrate(name_config)
         if name_instance:

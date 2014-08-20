@@ -1,7 +1,7 @@
 clouds:
     source:
         type: os
-        host: 172.18.172.102
+        host: 172.18.172.73
         user: admin
         password: admin
         tenant: admin
@@ -45,8 +45,7 @@ clouds:
                 key: {name: dest-key-1}
                 networks:
                  - name: "net04"
-                 - name: "test-net"
-        keep_ip: yes
+        keep_ip: no
         speed_limit: 10MB
         identity:
           connection: mysql+mysqlconnector
@@ -59,4 +58,4 @@ mail:
 key_filename:
     name: id_rsa
 instances:
- - key_name: source-key
+ - key_name: qwerty

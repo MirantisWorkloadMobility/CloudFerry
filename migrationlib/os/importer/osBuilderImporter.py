@@ -394,7 +394,6 @@ class osBuilderImporter:
                           (host, dest_disk_ephemeral)).split('\n')
                 backing_file = ""
                 for i in out:
-                    print i
                     line_out = i.split(":")
                     if line_out[0] == "backing file":
                         backing_file = line_out[1].replace(" ", "")
@@ -418,7 +417,6 @@ class osBuilderImporter:
                            image_format,
                            path_to_image))
                 new_image_id = out.split()[3]
-                print new_image_id
         return new_image_id
 
     @log_step(LOG)
@@ -622,7 +620,8 @@ class osBuilderImporter:
                                                 size=info_image_source.size)
 
     def __callback_print_progress(self, size, length, id, name):
-        print "Download {0} bytes of {1} ({2}%) - id = {3} name = {4}".format(size, length, size*100/length, id, name)
+        LOG.info("Download {0} bytes of {1} ({2}%) - id = {3} name = {4}"
+                 .format(size, length, size*100/length, id, name))
 
     @log_step(LOG)
     def __get_flavor(self, flavor_name):

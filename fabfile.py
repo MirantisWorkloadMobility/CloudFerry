@@ -41,10 +41,7 @@ def migrate(name_config, name_instance=None):
     scheduler.addTask(SuperTaskExportResource())
     scheduler.addTask(SuperTaskImportResource())
     scheduler.addTask(SuperTaskMigrateInstances())
-    print "RUN!!"
     scheduler.run()
-    print scheduler.tasks_runned
-
 
 @task
 def clean_dest_cloud(name_config, delete_image=False):

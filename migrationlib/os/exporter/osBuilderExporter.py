@@ -223,7 +223,6 @@ class osBuilderExporter:
     @log_step(LOG)
     def __transfer_rbd_to_glance(self, diff_path, temp_path, image_format, name):
         name_file_diff_path = "disk"
-        print diff_path, temp_path, image_format, name
         self.__transfer_rbd_to_file(diff_path, temp_path, image_format, name_file_diff_path)
         with settings(host_string=self.config['host']):
             with cd(temp_path):
