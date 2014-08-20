@@ -26,8 +26,8 @@ class Exporter(osCommon.osCommon):
 
         """ config initialization"""
 
-        self.config = config['clouds']['from']
-        self.config_to = config['clouds']['to']
+        self.config = config['clouds']['source']
+        self.config_to = config['clouds']['destination']
         super(Exporter, self).__init__(self.config)
 
     @log_step(LOG)

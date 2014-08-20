@@ -30,13 +30,13 @@ class TaskInitMigrate(Task):
     def get_exporter(config):
         return {
             'os': lambda info: (osResourceExporter.ResourceExporter(info), osExporter.Exporter(info))
-        }[config['clouds']['from']['type']](config)
+        }[config['clouds']['source']['type']](config)
 
     @staticmethod
     def get_importer(config):
         return {
             'os': lambda info: (osResourceImporter.ResourceImporter(info), osImporter.Importer(info))
-        }[config['clouds']['to']['type']](config)
+        }[config['clouds']['destination']['type']](config)
 
     @staticmethod
     def init_migrate(name_config):

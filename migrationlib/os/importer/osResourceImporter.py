@@ -30,7 +30,7 @@ class ResourceImporter(osCommon.osCommon):
     """
 
     def __init__(self, conf, data={}, users_notifications={}):
-        self.config = conf['clouds']['to']
+        self.config = conf['clouds']['destination']
         if 'mail' in conf:
             self.postman = Postman(**conf['mail'])
         else:

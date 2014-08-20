@@ -1,5 +1,5 @@
 clouds:
-    from:
+    source:
         type: os
         host: 172.18.172.35
         user: admin
@@ -15,7 +15,7 @@ clouds:
         temp: /root/temp
         identity:
           connection: mysql+mysqlconnector
-    to:
+    destination:
         type: os
         host: 172.18.172.55
         user: admin
@@ -32,11 +32,11 @@ clouds:
         ephemeral_drives:
           ceph: yes
         transfer_ephemeral:
-          compress: gzip
-          level_compress: 9
+          compression: gzip
+          level_compression: 9
         transfer_file:
-          compress: dd
-          level_compress: 9
+          compression: dd
+          level_compression: 9
         import_rules:
             default: {}
             overwrite:

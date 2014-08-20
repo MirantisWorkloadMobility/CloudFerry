@@ -458,14 +458,14 @@ class osBuilderImporter:
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host'], self.config_from['ssh_transfer_port']):
-                    if self.config['transfer_file']['compress'] == "dd":
+                    if self.config['transfer_file']['compression'] == "dd":
                         run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
                              "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
                             (disk_host, source_disk, dest_disk))
-                    elif self.config['transfer_file']['compress'] == "gzip":
+                    elif self.config['transfer_file']['compression'] == "gzip":
                         run(("ssh -oStrictHostKeyChecking=no %s 'gzip -%s -c %s' " +
                              "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'gunzip | dd bs=1M of=%s'") %
-                            (self.config['transfer_file']['level_compress'], disk_host, source_disk, dest_disk))
+                            (self.config['transfer_file']['level_compression'], disk_host, source_disk, dest_disk))
 
     @log_step(LOG)
     def __transfer_remote_file_to_ceph(self, instance, disk_host, source_disk, dest_host, is_source_ceph):
@@ -476,7 +476,7 @@ class osBuilderImporter:
                 run("rbd rm -p compute %s_disk.local" % instance.id)
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
-                if self.config["transfer_ephemeral"]["compress"] == "gzip":
+                if self.config["transfer_ephemeral"]["compression"] == "gzip":
                     if not is_source_ceph:
                         run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && " +
                             "qemu-img convert -O raw %s disk.local.temp && gzip -%s -c disk.local.temp' | " +
@@ -485,18 +485,18 @@ class osBuilderImporter:
                             % (disk_host,
                                temp_dir,
                                source_disk,
-                               self.config["transfer_ephemeral"]["level_compress"],
+                               self.config["transfer_ephemeral"]["level_compression"],
                                dest_host,
                                instance.id))
                     else:
                         run(("gzip -%s -c %s | " +
                             "ssh -oStrictHostKeyChecking=no %s 'gunzip | " +
                             "rbd import --image-format=2 - compute/%s_disk.local'")
-                            % (self.config["transfer_ephemeral"]["level_compress"],
+                            % (self.config["transfer_ephemeral"]["level_compression"],
                                source_disk,
                                dest_host,
                                instance.id))
-                elif self.config["transfer_ephemeral"]["compress"] == "dd":
+                elif self.config["transfer_ephemeral"]["compression"] == "dd":
                     if not source_disk:
                         run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && " +
                             "qemu-img convert -O raw %s disk.local.temp && dd bs=1M if=disk.local.temp' | " +

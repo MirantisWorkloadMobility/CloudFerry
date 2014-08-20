@@ -31,7 +31,7 @@ class ResourceExporter(osCommon.osCommon):
 
     def __init__(self, conf):
         self.data = dict()
-        self.config = conf['clouds']['from']
+        self.config = conf['clouds']['source']
         self.funcs = []
         super(ResourceExporter, self).__init__(self.config)
 

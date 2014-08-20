@@ -1,5 +1,5 @@
 clouds:
-    from:
+    source:
         type: os
         host: 172.18.172.102
         user: admin
@@ -17,7 +17,7 @@ clouds:
           connection: mysql+mysqlconnector
         keep_user_passwords: no
         ssh_transfer_port: 9999
-    to:
+    destination:
         type: os
         host: 172.18.172.77
         user: admin
@@ -34,11 +34,11 @@ clouds:
         ephemeral_drives:
           ceph: no
         transfer_ephemeral:
-          compress: gzip
-          level_compress: 9
+          compression: gzip
+          level_compression: 9
         transfer_file:
-          compress: dd
-          level_compress: 9
+          compression: dd
+          level_compression: 9
         import_rules:
             default: {}
             overwrite:

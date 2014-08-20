@@ -43,8 +43,8 @@ class MultiCaseAlgorithm:
 
 class Importer(osCommon.osCommon):
     def __init__(self, config):
-        self.config = config['clouds']['to']
-        self.config_from = config['clouds']['from']
+        self.config = config['clouds']['destination']
+        self.config_from = config['clouds']['source']
         super(Importer, self).__init__(self.config)
 
     def clean_cloud(self, delete_images=False):
