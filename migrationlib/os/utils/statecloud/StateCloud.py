@@ -24,4 +24,4 @@ class StateCloud(object):
         self.network_client = cloud.network_client
         self.glance_client = cloud.glance_client
         self.keystone_db_conn_url = cloud.keystone_client
-        self.config_snapshots = [inst(cloud) for inst in list_subclass]
+        self.list_subclass = [inst(cloud) for inst in list_subclass]

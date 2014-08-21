@@ -31,7 +31,7 @@ NAME_LOG_FILE = 'migrate.log'
 primitive = [int, long, bool, float, type(None), str, unicode]
 
 
-def convert_to_dict(obj, ident=0, limit_ident=6):
+def convert_to_dict(obj, ident=0, limit_ident=8):
     ident += 1
     if type(obj) in primitive:
         return obj
@@ -41,12 +41,13 @@ def convert_to_dict(obj, ident=0, limit_ident=6):
                 obj = obj.convert_to_dict()
             except AttributeError as e:
                 try:
-                    obj = obj.__dict__
-                    obj['_type_class'] = obj.__class__
+                    t = obj.__dict__
+                    t['_type_class'] = str(obj.__class__)
+                    obj = t
                 except AttributeError as e:
-                    return obj.__class__
+                    return str(obj.__class__)
         else:
-            return obj.__class__
+            return str(obj.__class__)
     if type(obj) is dict:
         res = {}
         for item in obj:

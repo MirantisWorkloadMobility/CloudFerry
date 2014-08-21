@@ -17,14 +17,18 @@ __author__ = 'mirrorcoder'
 
 
 class SnapshotState(StateCloud):
+    def __init__(self, cloud, list_subclass=[]):
+        super(SnapshotState, self).__init__(cloud, list_subclass)
+
     def create_snapshot(self):
         return Snapshot()
 
     @staticmethod
     def diff_snapshot(snapshot_one, snapshot_two):
-        snapshot_one_res = snapshot_one.convert_to_dict()
-        snapshot_two_res = snapshot_two.convert_to_dict()
+        snapshot_one_res = Snapshot.excluding_fields(snapshot_one.convert_to_dict(), ['timestamp'])
+        snapshot_two_res = Snapshot.excluding_fields(snapshot_two.convert_to_dict(), ['timestamp'])
         snapshot_diff = Snapshot()
+        snapshot_diff.timestamp = snapshot_two.timestamp - snapshot_one.timestamp
         for item_two in snapshot_two_res:
             for obj in snapshot_two_res[item_two]:
                 if not obj in snapshot_one_res[item_two]:

@@ -52,7 +52,6 @@ class Snapshot:
         self.images[id] = kwargs if not diff_obj else diff_obj
 
     def addVolume(self, id, diff_obj=None, **kwargs):
-        print kwargs
         self.volumes[id] = kwargs if not diff_obj else diff_obj
 
     def addTenant(self, id, diff_obj=None, **kwargs):
@@ -69,7 +68,8 @@ class Snapshot:
         for item in snapshot_dict:
             self.__dict__[item].update(snapshot_dict[item])
 
-    def excluding_fields(self, snapshot_dict, exclude):
+    @staticmethod
+    def excluding_fields(snapshot_dict, exclude):
         for item in exclude:
             if item in snapshot_dict:
                 del snapshot_dict[item]

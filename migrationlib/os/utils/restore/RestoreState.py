@@ -24,20 +24,20 @@ class RestoreState(StateCloud):
     def restore(self, diff_snapshot):
         return Report()
 
-    def __fix(self, id_obj, obj):
+    def fix(self, id_obj, obj):
         return {
-            ADD: self.__fix_add,
-            DELETE: self.__fix_delete,
-            CHANGE: self.__fix_change
+            ADD: self.fix_add,
+            DELETE: self.fix_delete,
+            CHANGE: self.fix_change
         }[obj.getStatus()](id_obj, obj)
 
-    def __fix_add(self, id_obj, obj):
+    def fix_add(self, id_obj, obj):
         raise NotImplemented()
 
-    def __fix_delete(self, id_obj, obj):
+    def fix_delete(self, id_obj, obj):
         raise NotImplemented()
 
-    def __fix_change(self, id_obj, obj):
+    def fix_change(self, id_obj, obj):
         raise NotImplemented()
 
     def __wait_for_status(self, getter, id, status):

@@ -28,18 +28,22 @@ class RestoreInstances(RestoreState):
         report = Report()
         instances = diff_snapshot.convert_to_dict()['instances']
         for id_obj in instances:
-            report.addInstance(id_obj, self.__fix(id_obj, instances[id_obj]))
+            report.addInstance(id_obj, self.fix(id_obj, instances[id_obj]))
         return report
 
-    def __fix_add(self, id_obj, obj):
+    def fix(self, id_obj, instance):
+        return super(RestoreInstances, self).fix(id_obj, instance)
+
+    def fix_add(self, id_obj, obj):
         self.nova_client.servers.get(id_obj).delete()
         return ReportObjConflict(id_obj, obj, "Fix via delete", FIX)
 
-    def __fix_delete(self, id_obj, obj):
+    def fix_delete(self, id_obj, obj):
         return ReportObjConflict(id_obj, obj, "Delete instance. Need help of user", CONFLICT)
 
-    def __fix_change(self, id_obj, obj):
+    def fix_change(self, id_obj, obj):
         res = []
+
         for was_prop in obj.value.was:
             res.append({
                 'status': self.__fix_change_status,
@@ -110,7 +114,7 @@ class RestoreInstances(RestoreState):
         if was != curr:
             instance = self.nova_client.servers.get(id_obj)
             try:
-                reduce(lambda res, f: f(instance), map_status[curr][was])
+                reduce(lambda res, f: f(instance), map_status[curr][was], None)
             except TimeoutException as e:
                 return error_report
             if curr in map_status:

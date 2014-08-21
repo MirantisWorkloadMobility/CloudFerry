@@ -26,7 +26,7 @@ class TaskRestoreSourceCloud(Task):
 
     def run(self, inst_exporter=None, snapshots={'source': [], 'dest': []}, **kwargs):
         report = NoReport()
-        if len(snapshots['source']) > 2:
+        if len(snapshots['source']) > 1:
             snapshot_one = snapshots['source'][-2]
             snapshot_two = snapshots['source'][-1]
             report = RestoreStateOpenStack(inst_exporter).restore(SnapshotStateOpenStack.diff_snapshot(snapshot_one,

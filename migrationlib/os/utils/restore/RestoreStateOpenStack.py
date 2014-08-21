@@ -28,5 +28,5 @@ class RestoreStateOpenStack(RestoreState):
     def restore(self, diff_snapshot):
         report = Report()
         for report_class in self.list_subclass:
-            report.union(report_class.restore(report))
+            report.union(report_class.restore(diff_snapshot))
         return report
