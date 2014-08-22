@@ -16,10 +16,9 @@
 __author__ = 'mirrorcoder'
 
 
-class VolumeTransfer:
+class VolumeTransfer(object):
     """ The main class for gathering information for volumes migrationlib"""
-    def __init__(self, volume, instance, image_id, glance_client):
-        self.glance_client = glance_client
+    def __init__(self, volume, instance):
         self.id = volume.id
         self.size = volume.size
         self.name = volume.display_name
@@ -28,8 +27,25 @@ class VolumeTransfer:
         self.availability_zone = volume.availability_zone
         self.device = volume.attachments[0]['device']
         self.host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        if hasattr(volume, 'bootable'):
+            self.bootable = True if volume.bootable == 'true' else False
+        else:
+            self.bootable = False
+
+class VolumeTransferDirectly(VolumeTransfer):
+    def __init__(self, volume, instance, volume_path):
+        super(VolumeTransferDirectly, self).__init__(volume, instance)
+        self.volume_path = volume_path
+
+    def get_volume_path(self):
+        return self.volume_path
+
+class VolumeTransferViaImage(VolumeTransfer):
+
+    def __init__(self, volume, instance, image_id, glance_client):
+        super(VolumeTransferViaImage, self).__init__(volume, instance)
+        self.glance_client = glance_client
         self.image_id = image_id
-        self.bootable = True if volume.bootable == 'true' else False
         self.__info = self.glance_client.images.get(self.image_id)
         self.checksum = self.__info.checksum
 

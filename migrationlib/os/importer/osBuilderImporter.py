@@ -431,7 +431,7 @@ class osBuilderImporter:
                     run(cmd)
 
     @log_step(LOG)
-    def __detect_delta_file(self, instance, is_ephemeral):
+    def __detect_delta_file(self, instance, is_ephemeral, volume_id=None):
         LOG.debug("| | sync with remote file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         dest_instance_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
@@ -441,6 +441,11 @@ class osBuilderImporter:
                 out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" % (host, dest_instance_name))
                 dest_output = out.split()
                 path_disk = (DISK + LOCAL) if is_ephemeral else DISK
+                if volume_id:
+                    path_disk = "volume-" + volume_id
+                    for device in dest_output:
+                        if path_disk in device:
+                            return device
                 for i in dest_output:
                     if instance.id + path_disk == i[-(LEN_UUID_INSTANCE+len(path_disk)):]:
                         dest_disk = i
@@ -463,7 +468,7 @@ class osBuilderImporter:
                     elif self.config['transfer_file']['compression'] == "gzip":
                         run(("ssh -oStrictHostKeyChecking=no %s 'gzip -%s -c %s' " +
                              "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'gunzip | dd bs=1M of=%s'") %
-                            (self.config['transfer_file']['level_compression'], disk_host, source_disk, dest_disk))
+                            (disk_host, self.config['transfer_file']['level_compression'], source_disk, dest_disk))
 
     @log_step(LOG)
     def __transfer_remote_file_to_ceph(self, instance, disk_host, source_disk, dest_host, is_source_ceph):
@@ -520,25 +525,62 @@ class osBuilderImporter:
             Secandary: create volume with referencing on to image, in which we already uploaded cinder
             volume on source cloud.
         """
-        self\
-            .transfer_volumes(data=data)\
-            .attaching_volume(data=data, instance=instance)
+        if self.config_from['cinder']['transfer_via_glance']:
+            self\
+                .transfer_volumes_via_glance(data=data)\
+                .attaching_volume(data=data, instance=instance)
+        else:
+            self\
+                .create_new_volume(data=data)\
+                .attaching_volume(data=data, instance=instance)\
+                .transfer_volume_directly(data=data, instance=instance)
         return self
 
     @inspect_func
     @log_step(LOG)
-    def transfer_volumes(self, data=None, **kwargs):
+    def create_new_volume(self, data=None, **kwargs):
+        data = data if data else self.data
+        volumes = data['volumes']
+        for source_volume in volumes:
+            LOG.debug("      volume %s" % source_volume.__dict__)
+            volume = self.cinder_client.volumes.create(size=source_volume.size,
+                                                        display_name=source_volume.name,
+                                                        display_description=source_volume.description,
+                                                        volume_type=source_volume.volume_type,
+                                                        availability_zone=source_volume.availability_zone,
+                                                        metadata = {'source_id': source_volume.id})
+            LOG.debug("        wait for available")
+            self.__wait_for_status(self.cinder_client.volumes, volume.id, 'available')
+            self.volumes.append(volume)
+        return self
+
+    @inspect_func
+    @log_step(LOG)
+    def transfer_volume_directly(self, data=None, **kwargs):
+        data = data if data else self.data
+        volume_host = data["disk"]["host"]
+        source_volumes = data['volumes']
+        for source_volume in source_volumes:
+            for dest_volume in self.volumes:
+                if source_volume.id == dest_volume.metadata['source_id']:
+                    dest_volume_path = self.__detect_delta_file(self.instance, False, volume_id=dest_volume.id)
+                    self.__transfer_remote_file(self.instance, volume_host, source_volume.volume_path, dest_volume_path)
+        return self
+
+    @inspect_func
+    @log_step(LOG)
+    def transfer_volumes_via_glance(self, data=None, **kwargs):
         data = data if data else self.data
         volumes = data['volumes']
         for source_volume in volumes:
             LOG.debug("      volume %s" % source_volume.__dict__)
             image = self.__copy_from_glance_to_glance(source_volume)
             volume = self.cinder_client.volumes.create(size=source_volume.size,
-                                                       display_name=source_volume.name,
-                                                       display_description=source_volume.description,
-                                                       volume_type=source_volume.volume_type,
-                                                       availability_zone=source_volume.availability_zone,
-                                                       imageRef=image.id)
+                                                        display_name=source_volume.name,
+                                                        display_description=source_volume.description,
+                                                        volume_type=source_volume.volume_type,
+                                                        availability_zone=source_volume.availability_zone,
+                                                        imageRef=image.id)
             LOG.debug("        wait for available")
             self.__wait_for_status(self.cinder_client.volumes, volume.id, 'available')
             LOG.debug("        update volume")

@@ -19,6 +19,8 @@ from utils import log_step, get_log
 
 LOG = get_log(__name__)
 
+VOLUMES_VIA_GLANCE = 'volumes_via_glance'
+VOLUMES = 'volumes'
 
 class Exporter(osCommon.osCommon):
 
@@ -49,9 +51,15 @@ class Exporter(osCommon.osCommon):
         return self.get_algorithm_export()(builder)
 
     def get_algorithm_export(self):
-        return self.__algorithm_export
+        return {
+          VOLUMES_VIA_GLANCE: lambda builder: self.__general_algorithm_export(builder).get_volumes_via_glance(),
+          VOLUMES: lambda builder: self.__general_algorithm_export(builder).get_volumes()
+        }[self.__config_transfer_volumes()]
 
-    def __algorithm_export(self, builder):
+    def __config_transfer_volumes(self):
+        return VOLUMES if not self.config['cinder']['transfer_via_glance'] else VOLUMES_VIA_GLANCE
+
+    def __general_algorithm_export(self, builder):
         return builder\
             .stop_instance()\
             .get_name()\
@@ -65,5 +73,4 @@ class Exporter(osCommon.osCommon):
             .get_disk_config()\
             .get_networks()\
             .get_disk()\
-            .get_instance_name()\
-            .get_volumes()
+            .get_instance_name()

@@ -18,7 +18,7 @@ import json
 from utils import forward_agent, CEPH, REMOTE_FILE, log_step, get_log
 from scheduler.builder_wrapper import inspect_func, supertask
 from fabric.api import run, settings, env, cd
-from migrationlib.os.utils.osVolumeTransfer import VolumeTransfer
+from migrationlib.os.utils.osVolumeTransfer import VolumeTransferDirectly, VolumeTransferViaImage
 from migrationlib.os.utils.osImageTransfer import ImageTransfer
 
 __author__ = 'mirrorcoder'
@@ -90,7 +90,8 @@ class osBuilderExporter:
     @log_step(LOG)
     def get_availability_zone(self, instance=None, **kwargs):
         instance = instance if instance else self.instance
-        self.data['availability_zone'] = getattr(instance, 'OS-EXT-AZ:availability_zone')
+        self.data['availability_zone'] = getattr(instance, 'OS-EXT-AZ:availability_zone') \
+            if hasattr(instance, 'OS-EXT-AZ:availability_zone') else None
         return self
 
     @inspect_func
@@ -254,7 +255,7 @@ class osBuilderExporter:
 
     @inspect_func
     @log_step(LOG)
-    def get_volumes(self, instance=None, **kwargs):
+    def get_volumes_via_glance(self, instance=None, **kwargs):
         """
             Gathering information about attached volumes to source instance and upload these volumes
             to Glance for further importing through image-service on to destination cloud.
@@ -264,7 +265,7 @@ class osBuilderExporter:
         for volume_info in self.nova_client.volumes.get_server_volumes(instance.id):
             volume = self.cinder_client.volumes.get(volume_info.volumeId)
             LOG.debug("| | uploading volume %s [%s] to image service bootable=%s" %
-                      (volume.display_name, volume.id, volume.bootable))
+                      (volume.display_name, volume.id, volume.bootable if hasattr(volume, 'bootable') else False))
             resp, image = self.cinder_client.volumes.upload_to_image(volume=volume,
                                                                      force=True,
                                                                      image_name=volume.id,
@@ -277,8 +278,9 @@ class osBuilderExporter:
                 with settings(host_string=self.config['host']):
                     out = json.loads(run("rbd -p images info %s --format json" % image_upload['image_id']))
                     image_from_glance.update(size=out["size"])
-            if (volume.bootable != "true") or (not self.data["boot_from_volume"]):
-                images_from_volumes.append(VolumeTransfer(volume,
+
+            if ((volume.bootable if hasattr(volume, 'bootable') else False) != "true") or (not self.data["boot_from_volume"]):
+                images_from_volumes.append(VolumeTransferViaImage(volume,
                                                           instance,
                                                           image_upload['image_id'],
                                                           self.glance_client))
@@ -289,12 +291,24 @@ class osBuilderExporter:
         self.data['volumes'] = images_from_volumes
         return self
 
+    @inspect_func
+    @log_step(LOG)
+    def get_volumes(self, instance=None, **kwargs):
+        instance = instance if instance else self.instance
+        self.data['volumes'] = []
+        for volume_info in self.nova_client.volumes.get_server_volumes(instance.id):
+            volume = self.cinder_client.volumes.get(volume_info.volumeId)
+            volume_path = self.__get_instance_diff_path(instance, False, False, volume.id)
+            self.data['volumes'].append(VolumeTransferDirectly(volume, instance, volume_path))
+        return self
+
+
     @log_step(LOG)
     def __get_flavor_from_instance(self, instance):
         return self.nova_client.flavors.get(instance.flavor['id'])
 
     @log_step(LOG)
-    def __get_instance_diff_path(self, instance, is_ephemeral, is_ceph_ephemeral):
+    def __get_instance_diff_path(self, instance, is_ephemeral, is_ceph_ephemeral, volume_id=None):
 
         """Return path of instance's diff file"""
 
@@ -307,10 +321,17 @@ class osBuilderExporter:
                           (disk_host, libvirt_name))
                 source_out = out.split()
                 path_disk = (DISK + LOCAL) if is_ephemeral else DISK
+                if volume_id:
+                    path_disk = "volume-" + volume_id
+                    for device in source_out:
+                        if path_disk in device:
+                            return device
                 if not is_ceph_ephemeral:
                     path_disk = "/" + path_disk
                     for i in source_out:
                         if instance.id + path_disk == i[-(LEN_UUID_INSTANCE+len(path_disk)):]:
+                            source_disk = i
+                        if libvirt_name + path_disk == i[-(len(libvirt_name)+len(path_disk)):]:
                             source_disk = i
                 else:
                     path_disk = "_" + path_disk
