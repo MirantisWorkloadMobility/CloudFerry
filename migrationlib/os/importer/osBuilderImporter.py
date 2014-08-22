@@ -455,20 +455,22 @@ class osBuilderImporter:
         return dest_disk
 
     @log_step(LOG)
-    def __transfer_remote_file(self, instance, disk_host, source_disk, dest_disk):
+    def __transfer_remote_file(self, instance, disk_host, source_disk, dest_disk, ssh_port=None):
         LOG.debug("| | copy file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        ssh_port = ssh_port if ssh_port else self.config_from['ssh_transfer_port']
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
-                with up_ssh_tunnel(host, self.config['host'], self.config_from['ssh_transfer_port']):
+                with up_ssh_tunnel(host, self.config['host'], ssh_port):
                     if self.config['transfer_file']['compression'] == "dd":
                         run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
-                             "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
-                            (disk_host, source_disk, dest_disk))
+                             "| ssh -oStrictHostKeyChecking=no -p %s localhost 'dd bs=1M of=%s'") %
+                            (disk_host, source_disk, ssh_port, dest_disk))
                     elif self.config['transfer_file']['compression'] == "gzip":
                         run(("ssh -oStrictHostKeyChecking=no %s 'gzip -%s -c %s' " +
-                             "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'gunzip | dd bs=1M of=%s'") %
-                            (disk_host, self.config['transfer_file']['level_compression'], source_disk, dest_disk))
+                             "| ssh -oStrictHostKeyChecking=no -p %s localhost 'gunzip | dd bs=1M of=%s'") %
+                            (disk_host, self.config['transfer_file']['level_compression'],
+                             source_disk, ssh_port, dest_disk))
 
     @log_step(LOG)
     def __transfer_remote_file_to_ceph(self, instance, disk_host, source_disk, dest_host, is_source_ceph):
@@ -515,12 +517,50 @@ class osBuilderImporter:
                                instance.id))
                 run("rm -f %s" % source_disk)
 
+    @log_step(LOG)
+    def __transfer_volume_from_iscsi_to_ceph(self, source_volume_host, source_volume_path,
+                                             dest_volume, dest_host = None, ceph_pool="volumes"):
+        dest_host= dest_host if dest_host else self.config['host']
+        with settings(host_string=dest_host):
+            with forward_agent(env.key_filename):
+                run(("rbd rm -p %s volume-%s") % (ceph_pool, dest_volume.id))
+        with settings(host_string=self.config_from['host']):
+            with forward_agent(env.key_filename):
+                run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' | " +
+                    "ssh -oStrictHostKeyChecking=no %s 'rbd import --image-format=2 - %s/volume-%s'") %
+                    (source_volume_host, source_volume_path, dest_host, ceph_pool, dest_volume.id))
+
+    @log_step(LOG)
+    def __transfer_volume_from_ceph_to_ceph(self, source_volume, dest_volume, dest_host=None,
+                                            source_ceph_pool='volumes', dest_ceph_pool='volumes'):
+        dest_host= dest_host if dest_host else self.config['host']
+        with settings(host_string=dest_host):
+            with forward_agent(env.key_filename):
+                run(("rbd rm -p %s volume-%s") % (dest_ceph_pool, dest_volume.id))
+        with settings(host_string=self.config_from['host']):
+            with forward_agent(env.key_filename):
+                run(("rbd export -p %s volume-%s | " +
+                     "ssh -oStrictHostKeyChecking=no %s 'rbd import --image-format=2 - %s/volume-%s'") %
+                    (source_ceph_pool, source_volume.id, dest_host, dest_ceph_pool, dest_volume.id))
+
+    @log_step(LOG)
+    def __transfer_volume_from_ceph_to_iscsi(self, source_volume, dest_volume_path, instance=None,
+                                             source_ceph_pool='volumes', ssh_port=None):
+        instance = instance if instance else self.instance
+        ssh_port = ssh_port if ssh_port else self.config_from['ssh_transfer_port']
+        host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        with settings(host_string=self.config_from['host']):
+            with forward_agent(env.key_filename):
+                with up_ssh_tunnel(host, self.config['host'], ssh_port):
+                    run(("rbd export -p %s volume-%s | ssh -oStrictHostKeyChecking=no -p %s localhost " +
+                         "'dd bs=1M of=%s'") % (source_ceph_pool, source_volume.id, ssh_port, dest_volume_path))
+
     @inspect_func
     @supertask
     def import_volumes(self, data=None, instance=None, **kwargs):
 
         """
-            Volumes migrationlib through image-service.
+            Volumes migration through image-service.
             Firstly: transferring image from source glance to destination glance
             Secandary: create volume with referencing on to image, in which we already uploaded cinder
             volume on source cloud.
@@ -529,11 +569,18 @@ class osBuilderImporter:
             self\
                 .transfer_volumes_via_glance(data=data)\
                 .attaching_volume(data=data, instance=instance)
+        elif self.config['cinder']['backend'] == 'iscsi':
+            self\
+                .create_new_volume(data=data)\
+                .attaching_volume(data=data, instance=instance) \
+                .transfer_volume_directly(self.config_from['cinder']['backend'], self.config['cinder']['backend'],
+                                          data=data, instance=instance)
         else:
             self\
                 .create_new_volume(data=data)\
-                .attaching_volume(data=data, instance=instance)\
-                .transfer_volume_directly(data=data, instance=instance)
+                .transfer_volume_directly(self.config_from['cinder']['backend'], self.config['cinder']['backend'],
+                                          data=data, instance=instance)\
+                .attaching_volume(data=data, instance=instance)
         return self
 
     @inspect_func
@@ -556,15 +603,27 @@ class osBuilderImporter:
 
     @inspect_func
     @log_step(LOG)
-    def transfer_volume_directly(self, data=None, **kwargs):
+    def transfer_volume_directly(self, source_backend, dest_backend, data=None, **kwargs):
         data = data if data else self.data
         volume_host = data["disk"]["host"]
         source_volumes = data['volumes']
         for source_volume in source_volumes:
             for dest_volume in self.volumes:
                 if source_volume.id == dest_volume.metadata['source_id']:
-                    dest_volume_path = self.__detect_delta_file(self.instance, False, volume_id=dest_volume.id)
-                    self.__transfer_remote_file(self.instance, volume_host, source_volume.volume_path, dest_volume_path)
+                    if source_backend == 'iscsi' and dest_backend == 'iscsi':
+                        dest_volume_path = self.__detect_delta_file(self.instance, False, volume_id=dest_volume.id)
+                        self.__transfer_remote_file(self.instance, volume_host,
+                                                    source_volume.volume_path, dest_volume_path)
+                    elif source_backend == 'iscsi' and dest_backend == 'ceph':
+                        self.__transfer_volume_from_iscsi_to_ceph(volume_host, source_volume.volume_path,
+                                                                  dest_volume)
+                    elif source_backend == 'ceph' and dest_backend == 'ceph':
+                        self.__transfer_volume_from_ceph_to_ceph(source_volume, dest_volume)
+                    elif source_backend == 'ceph' and dest_backend == 'iscsi':
+                        dest_volume_path = self.__detect_delta_file(self.instance, False, volume_id=dest_volume.id)
+                        self.__transfer_volume_from_ceph_to_iscsi(source_volume, dest_volume_path, self.instance)
+                    else:
+                        raise NameError("Can't determine cinder storage backend from config file!")
         return self
 
     @inspect_func

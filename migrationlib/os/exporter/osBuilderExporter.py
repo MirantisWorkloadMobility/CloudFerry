@@ -298,7 +298,9 @@ class osBuilderExporter:
         self.data['volumes'] = []
         for volume_info in self.nova_client.volumes.get_server_volumes(instance.id):
             volume = self.cinder_client.volumes.get(volume_info.volumeId)
-            volume_path = self.__get_instance_diff_path(instance, False, False, volume.id)
+            volume_path = None
+            if self.config['cinder']['backend'] == 'iscsi':
+                volume_path = self.__get_instance_diff_path(instance, False, False, volume.id)
             self.data['volumes'].append(VolumeTransferDirectly(volume, instance, volume_path))
         return self
 
