@@ -235,7 +235,7 @@ class osBuilderImporter:
         disk_host = data["disk"]["host"]
         disk_diff_path = data["disk"]["diff_path"]
         instance = instance if instance else self.instance
-        dest_disk = self.__detect_delta_file(instance, False)
+        dest_disk = self.__detect_file_path(instance, False)
         self.__transfer_remote_file(instance,
                                     disk_host,
                                     disk_diff_path,
@@ -251,7 +251,7 @@ class osBuilderImporter:
         disk_type = data['disk']['type']
         instance = instance if instance else self.instance
         if not self.config['ephemeral_drives']['ceph']:
-            dest_disk_ephemeral = self.__detect_delta_file(instance, True)
+            dest_disk_ephemeral = self.__detect_file_path(instance, True)
             if self.data['disk']['type'] == CEPH:
                 backing_disk_ephemeral = self.__detect_backing_file(dest_disk_ephemeral, instance)
                 self.__delete_remote_file_on_compute(dest_disk_ephemeral, instance)
@@ -431,7 +431,7 @@ class osBuilderImporter:
                     run(cmd)
 
     @log_step(LOG)
-    def __detect_delta_file(self, instance, is_ephemeral, volume_id=None):
+    def __detect_file_path(self, instance, is_ephemeral, volume_id=None):
         LOG.debug("| | sync with remote file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         dest_instance_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
@@ -539,7 +539,7 @@ class osBuilderImporter:
                 run(("rbd rm -p %s volume-%s") % (dest_ceph_pool, dest_volume.id))
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
-                run(("rbd export -p %s volume-%s | " +
+                run(("rbd export -p %s volume-%s - | " +
                      "ssh -oStrictHostKeyChecking=no %s 'rbd import --image-format=2 - %s/volume-%s'") %
                     (source_ceph_pool, source_volume.id, dest_host, dest_ceph_pool, dest_volume.id))
 
@@ -552,8 +552,10 @@ class osBuilderImporter:
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
                 with up_ssh_tunnel(host, self.config['host'], ssh_port):
-                    run(("rbd export -p %s volume-%s | ssh -oStrictHostKeyChecking=no -p %s localhost " +
+                    run(("rbd export -p %s volume-%s - | ssh -oStrictHostKeyChecking=no -p %s localhost " +
                          "'dd bs=1M of=%s'") % (source_ceph_pool, source_volume.id, ssh_port, dest_volume_path))
+
+
 
     @inspect_func
     @supertask
@@ -562,7 +564,7 @@ class osBuilderImporter:
         """
             Volumes migration through image-service.
             Firstly: transferring image from source glance to destination glance
-            Secandary: create volume with referencing on to image, in which we already uploaded cinder
+            Secondary: create volume with referencing on to image, in which we already uploaded cinder
             volume on source cloud.
         """
         if self.config_from['cinder']['transfer_via_glance']:
@@ -611,7 +613,7 @@ class osBuilderImporter:
             for dest_volume in self.volumes:
                 if source_volume.id == dest_volume.metadata['source_id']:
                     if source_backend == 'iscsi' and dest_backend == 'iscsi':
-                        dest_volume_path = self.__detect_delta_file(self.instance, False, volume_id=dest_volume.id)
+                        dest_volume_path = self.__detect_file_path(self.instance, False, volume_id=dest_volume.id)
                         self.__transfer_remote_file(self.instance, volume_host,
                                                     source_volume.volume_path, dest_volume_path)
                     elif source_backend == 'iscsi' and dest_backend == 'ceph':
@@ -620,7 +622,7 @@ class osBuilderImporter:
                     elif source_backend == 'ceph' and dest_backend == 'ceph':
                         self.__transfer_volume_from_ceph_to_ceph(source_volume, dest_volume)
                     elif source_backend == 'ceph' and dest_backend == 'iscsi':
-                        dest_volume_path = self.__detect_delta_file(self.instance, False, volume_id=dest_volume.id)
+                        dest_volume_path = self.__detect_file_path(self.instance, False, volume_id=dest_volume.id)
                         self.__transfer_volume_from_ceph_to_iscsi(source_volume, dest_volume_path, self.instance)
                     else:
                         raise NameError("Can't determine cinder storage backend from config file!")
