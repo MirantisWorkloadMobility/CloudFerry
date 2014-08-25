@@ -62,6 +62,7 @@ class Scheduler:
     def trigger(self, name_event, listener, args):
         return {
             'event_begin': listener.event_begin,
+            'event_can_run_next_task': listener.event_can_run_next_task,
             'event_end': listener.event_end,
             'event_task': listener.event_task,
             'event_error': listener.event_error
@@ -69,7 +70,9 @@ class Scheduler:
 
     def __can_run_next_task(self, task):
         if self.status_error == NO_ERROR:
-            return True
+            return self.trigger_listener('event_can_run_next_task',
+                                         self.get_last_listener(),
+                                         args={'namespace': self.namespace, 'task': task})
         elif self.status_error == ERROR:
             return self.__is_task_exclusion(task)
 

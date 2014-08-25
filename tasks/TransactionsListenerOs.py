@@ -21,14 +21,19 @@ class TransactionsListenerOs(TransactionsListener):
             self.transaction['instance'] = self.instance.id
         else:
             self.prefix += path + ("/" if path[-1] != "/" else "")
-        self.__init_directory(self.prefix, self.prefix_path, rewrite)
+        self.rewrite = rewrite
 
     def event_begin(self, namespace=None):
+        self.__init_directory(self.prefix, self.prefix_path, self.rewrite)
         self.f = open(self.prefix_path+"tasks.trans", "a+")
         if 'snapshots' in namespace.vars:
             self.__save_snapshots(namespace.vars['snapshots'])
         self.__add_obj_to_file(self.transaction, self.f)
         return False
+
+    def event_can_run_next_task(self, namespace=None, task=None, skip=None):
+        
+        return True
 
     def event_task(self, namespace=None, task=None, skip=None):
         task_obj = dict()

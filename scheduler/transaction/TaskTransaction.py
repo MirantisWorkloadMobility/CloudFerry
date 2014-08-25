@@ -16,11 +16,17 @@ class TransactionsListener(object):
     def event_task(self, namespace=None, task=None, skip=None):
         return True
 
+    def event_can_run_next_task(self, namespace=None, task=None, skip=None):
+        return True
+
     def event_error(self, namespace=None, task=None, exception=None):
         return True
 
     def event_end(self, namespace=None):
         return False
+
+    def __repr__(self):
+        return "%s|%s" % (TransactionsListener.__name__, self.__class__.__name__)
 
 
 class TaskTransactionBegin(object):
@@ -37,6 +43,9 @@ class TaskTransactionBegin(object):
     def __eq__(self, other):
         return hash(self) == hash(other)
 
+    def __repr__(self):
+        return "%s|%s" % (TaskTransactionBegin.__name__, self.__class__.__name__)
+
 
 class TaskTransactionEnd(object):
 
@@ -48,3 +57,6 @@ class TaskTransactionEnd(object):
 
     def __eq__(self, other):
         return hash(self) == hash(other)
+
+    def __repr__(self):
+        return "%s|%s" % (TaskTransactionEnd.__name__, self.__class__.__name__)

@@ -39,8 +39,7 @@ class Function(object):
         return self.f(self.self_cls, *args, **kwargs_copy)
 
     def __repr__(self):
-        repr = super(Function, self).__repr__()
-        return "<Name function: %s - - - %s" % (self.f.__name__, repr)
+        return "%s|%s" % (Function.__name__, self.f.__name__)
 
     def __hash__(self):
         return hash(Function.__name__)
