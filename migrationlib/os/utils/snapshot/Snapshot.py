@@ -52,6 +52,7 @@ class Snapshot:
         self.images[id] = kwargs if not diff_obj else diff_obj
 
     def addVolume(self, id, diff_obj=None, **kwargs):
+        print "volumes=", kwargs
         self.volumes[id] = kwargs if not diff_obj else diff_obj
 
     def addTenant(self, id, diff_obj=None, **kwargs):

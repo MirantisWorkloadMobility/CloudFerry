@@ -21,14 +21,18 @@ class RestoreImages(RestoreState):
         report = Report()
         images = diff_snapshot.convert_to_dict()['images']
         for id_obj in images:
-            report.addImage(id_obj, self.__fix(id_obj, images[id_obj]))
+            report.addImage(id_obj, self.fix(id_obj, images[id_obj]))
         return report
 
-    def __fix_add(self, id_obj, obj):
-        return ReportObjConflict(id_obj, obj, "Fix via delete", FIX)
+    def fix(self, id_obj, instance):
+        return super(RestoreImages, self).fix(id_obj, instance)
 
-    def __fix_delete(self, id_obj, obj):
-        return None
+    def fix_add(self, id_obj, obj):
+        self.glance_client.images.delete(id_obj)
+        return ReportObjConflict(id_obj, obj, "Fix via image delete id = %s" % id_obj, FIX)
 
-    def __fix_change(self, id_obj, obj):
-        return None
+    def fix_delete(self, id_obj, obj):
+        return ReportObjConflict(id_obj, obj, "Delete image. Need help of user id = %s " % id_obj, CONFLICT)
+
+    def fix_change(self, id_obj, obj):
+        return ReportObjConflict(id_obj, obj, "Change image. Need help of user id = %s" % id_obj, CONFLICT)

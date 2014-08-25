@@ -133,7 +133,7 @@ class RestoreInstances(RestoreState):
                 raise TimeoutException(getter.get(id).status.lower(), status, "Timeout exp")
 
     def __fix_change_name(self, id_obj, obj):
-        # TODO: Restore name
-        return ReportObjConflict(id_obj, obj, "Error restore name instance %s -> %s" % (obj.value.curr['status'],
-                                                                                        obj.value.was['status']),
-                                 CONFLICT)
+        if obj.value.was != obj.value.curr:
+            return ReportObjConflict(id_obj, obj, "Error restore name instance %s -> %s" % (obj.value.curr['status'],
+                                                                                            obj.value.was['status']),
+                                     CONFLICT)
