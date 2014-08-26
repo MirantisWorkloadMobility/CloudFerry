@@ -14,4 +14,29 @@
 
 __author__ = 'mirrorcoder'
 
+CONTINUE = "continue"
+ABORT = "abort"
+SKIP = "skip"
+RESTART = "restart"
 
+
+class Rollback(object):
+    def __call__(self, __rollback_status__=RESTART, *args, **kwargs):
+        return {
+            CONTINUE: self.continue_status,
+            ABORT: self.abort_status,
+            SKIP: self.skip_status,
+            RESTART: self.restart_status
+        }[__rollback_status__](*args, **kwargs)
+
+    def continue_status(self, *args, **kwargs):
+        return True
+
+    def abort_status(self, *args, **kwargs):
+        return True
+
+    def skip_status(self, *args, **kwargs):
+        return True
+
+    def restart_status(self, *args, **kwargs):
+        return True

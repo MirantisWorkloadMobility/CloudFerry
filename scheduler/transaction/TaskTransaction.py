@@ -10,6 +10,7 @@ class TransactionsListener(object):
         self.status = NO_ERROR
         self.prefix = "transaction/"
 
+
     def event_begin(self, namespace=None):
         return True
 

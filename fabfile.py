@@ -8,7 +8,9 @@ from tasks.SuperTaskExportResource import SuperTaskExportResource
 from tasks.TaskCreateSnapshotOs import TaskCreateSnapshotOs
 from tasks.SuperTaskMigrateInstances import SuperTaskMigrateInstances
 from utils import log_step, get_log
-
+import os
+import shutil
+from migrationlib.os.utils.rollback.Rollback import RESTART
 env.forward_agent = True
 env.user = 'root'
 
@@ -20,8 +22,14 @@ def migrate(name_config, name_instance=None):
     """
         :name_config - name of config yaml-file, example 'config.yaml'
     """
+    if os.path.exists("transaction"):
+        shutil.rmtree("transaction")
+    if os.path.exists("snapshots"):
+        shutil.rmtree("snapshots")
+    rollback_status = RESTART
     namespace = Namespace({'__name_config__': name_config,
-                           'name_instance': name_instance})
+                           'name_instance': name_instance,
+                           '__rollback_status__': rollback_status})
     scheduler = Scheduler(namespace)
     scheduler.addTaskExclusion(TaskCreateSnapshotOs)
     scheduler.addTask(TaskInitMigrate())

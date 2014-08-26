@@ -36,6 +36,9 @@ class Scheduler:
     def push_transaction(self, task):
         self.transactions.append(task)
 
+    def has_transactions(self):
+        return bool(self.transactions)
+
     def pop_transaction(self):
         return self.transactions.pop()
 
@@ -71,9 +74,12 @@ class Scheduler:
 
     def __can_run_next_task(self, task):
         if self.status_error == NO_ERROR:
-            return self.trigger_listener('event_can_run_next_task',
-                                         self.get_last_listener(),
-                                         args={'namespace': self.namespace, 'task': task})
+            if self.has_transactions():
+                return self.trigger_listener('event_can_run_next_task',
+                                             self.get_last_listener(),
+                                             args={'namespace': self.namespace, 'task': task})
+            else:
+                return True
         elif self.status_error == ERROR:
             return self.__is_task_exclusion(task)
 
@@ -113,6 +119,8 @@ class Scheduler:
         self.trigger_listener('event_begin', task(), args={'namespace': self.namespace})
 
     def __task_end_trans(self, task):
+        if not self.has_transactions():
+            return False
         self.pop_transaction()
         res = self.trigger_listener('event_end', self.pop_listener_trans(), args={'namespace': self.namespace})
         if res:
