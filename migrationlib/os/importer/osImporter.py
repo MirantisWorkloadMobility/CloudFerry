@@ -137,8 +137,8 @@ class Importer(osCommon.osCommon):
             .create_instance()\
             .stop_instance()\
             .import_delta_file()\
-            .start_instance()\
-            .import_volumes()
+            .import_volumes()\
+            .start_instance()
 
     @log_step(LOG)
     def __upload_ceph_backend_ephemeral(self, builderImporter):
@@ -155,6 +155,7 @@ class Importer(osCommon.osCommon):
             .start_instance()\
             .import_volumes()
 
+
     @log_step(LOG)
     def __upload_iscsi_backend_ephemeral(self, builderImporter):
         """
@@ -166,8 +167,8 @@ class Importer(osCommon.osCommon):
             .stop_instance()\
             .import_delta_file()\
             .import_ephemeral_drive()\
-            .start_instance()\
-            .import_volumes()
+            .import_volumes()\
+            .start_instance()
 
     @log_step(LOG)
     def __upload_boot_volume(self, builderImporter):
@@ -175,7 +176,9 @@ class Importer(osCommon.osCommon):
             .prepare_for_creating_new_instance()\
             .prepare_for_boot_volume()\
             .create_instance()\
+            .stop_instance()\
             .import_volumes()\
+            .start_instance()\
             .delete_image_from_source_and_dest_cloud()
 
     @log_step(LOG)

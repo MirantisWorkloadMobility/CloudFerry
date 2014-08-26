@@ -266,11 +266,7 @@ class osBuilderExporter:
             volume = self.cinder_client.volumes.get(volume_info.volumeId)
             LOG.debug("| | uploading volume %s [%s] to image service bootable=%s" %
                       (volume.display_name, volume.id, volume.bootable if hasattr(volume, 'bootable') else False))
-            resp, image = self.cinder_client.volumes.upload_to_image(volume=volume,
-                                                                     force=True,
-                                                                     image_name=volume.id,
-                                                                     container_format="bare",
-                                                                     disk_format=self.config['cinder']['disk_format'])
+            image = self.__upload_volume_to_glance(volume)
             image_upload = image['os-volume_upload_image']
             self.__wait_for_status(self.glance_client.images, image_upload['image_id'], 'active')
             if self.config["cinder"]["backend"] == "ceph":
@@ -291,6 +287,16 @@ class osBuilderExporter:
         self.data['volumes'] = images_from_volumes
         return self
 
+    @log_step(LOG)
+    def __upload_volume_to_glance(self, volume):
+        resp, image = self.cinder_client.volumes.upload_to_image(volume=volume,
+                                                                 force=True,
+                                                                 image_name=volume.id,
+                                                                 container_format="bare",
+                                                                 disk_format=self.config['cinder']['disk_format'])
+        return image
+
+
     @inspect_func
     @log_step(LOG)
     def get_volumes(self, instance=None, **kwargs):
@@ -299,9 +305,21 @@ class osBuilderExporter:
         for volume_info in self.nova_client.volumes.get_server_volumes(instance.id):
             volume = self.cinder_client.volumes.get(volume_info.volumeId)
             volume_path = None
-            if self.config['cinder']['backend'] == 'iscsi':
-                volume_path = self.__get_instance_diff_path(instance, False, False, volume.id)
-            self.data['volumes'].append(VolumeTransferDirectly(volume, instance, volume_path))
+            if ((volume.bootable if hasattr(volume, 'bootable') else False) == "true") or (not self.data["boot_from_volume"]):
+                image = self.__upload_volume_to_glance(volume)
+                image_upload = image['os-volume_upload_image']
+                self.__wait_for_status(self.glance_client.images, image_upload['image_id'], 'active')
+                if self.config["cinder"]["backend"] == "ceph":
+                    image_from_glance = self.glance_client.images.get(image_upload['image_id'])
+                    with settings(host_string=self.config['host']):
+                        out = json.loads(run("rbd -p images info %s --format json" % image_upload['image_id']))
+                        image_from_glance.update(size=out["size"])
+                self.data['image'] = ImageTransfer(image_upload['image_id'], self.glance_client)
+                self.data['boot_volume_size'] = volume.size
+            else:
+                if self.config['cinder']['backend'] == 'iscsi':
+                    volume_path = self.__get_instance_diff_path(instance, False, False, volume.id)
+                self.data['volumes'].append(VolumeTransferDirectly(volume, instance, volume_path))
         return self
 
 
