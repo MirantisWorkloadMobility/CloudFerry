@@ -55,9 +55,10 @@ class Scheduler:
         if listener:
             return self.trigger(name_event, listener, args)
         else:
-            for index in range(len(self.transactions_listener)-1, -1, -1):
-                if not self.trigger(name_event, self.transactions_listener[index], args):
-                    break
+            if self.transactions_listener:
+                for index in range(len(self.transactions_listener)-1, -1, -1):
+                    if not self.trigger(name_event, self.transactions_listener[index], args):
+                        break
 
     def trigger(self, name_event, listener, args):
         return {

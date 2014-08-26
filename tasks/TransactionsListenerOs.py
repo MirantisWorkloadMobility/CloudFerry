@@ -15,12 +15,12 @@ class TransactionsListenerOs(TransactionsListener):
         self.transaction = {
             'type': TransactionsListenerOs.__name__,
         }
+        self.prefix += "instances/"
         if not path:
-            self.prefix += "instances/"
             self.prefix_path = self.prefix+(self.instance.id if self.instance else "")+"/"
             self.transaction['instance'] = self.instance.id
         else:
-            self.prefix += path + ("/" if path[-1] != "/" else "")
+            self.prefix_path += path + ("/" if path[-1] != "/" else "")
         self.rewrite = rewrite
 
     def event_begin(self, namespace=None):
@@ -32,7 +32,6 @@ class TransactionsListenerOs(TransactionsListener):
         return False
 
     def event_can_run_next_task(self, namespace=None, task=None, skip=None):
-        
         return True
 
     def event_task(self, namespace=None, task=None, skip=None):
@@ -77,7 +76,7 @@ class TransactionsListenerOs(TransactionsListener):
         json.dump(obj_dict, file)
         file.write("\n")
 
-    def __prepare_dict(self, dict_namespace, exclude_fields=['config', 'snapshots']):
+    def __prepare_dict(self, dict_namespace, exclude_fields=['config']):
         result = dict_namespace
         for exclude in exclude_fields:
             if exclude in dict_namespace:
@@ -85,10 +84,8 @@ class TransactionsListenerOs(TransactionsListener):
         return result
 
     def __save_snapshots(self, snapshots):
-        timestamp_source = snapshots['source'][-1].timestamp
-        timestamp_dest = snapshots['dest'][-1].timestamp
-        with open((self.prefix_path+"source/%s.snapshot") % timestamp_source, "w+") as f:
-            self.__add_obj_to_file(convert_to_dict(snapshots['source'][-1]), f)
-        with open((self.prefix_path+"dest/%s.snapshot") % timestamp_dest, "w+") as f:
-            self.__add_obj_to_file(convert_to_dict(snapshots['dest'][-1]), f)
+        source = snapshots['source'][-1]
+        dest = snapshots['dest'][-1]
+        shutil.copy(source['path'], (self.prefix_path+"source/%s.snapshot") % source['timestamp'])
+        shutil.copy(dest['path'], (self.prefix_path+"dest/%s.snapshot") % dest['timestamp'])
 

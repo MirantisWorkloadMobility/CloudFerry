@@ -7,7 +7,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from functools import wraps
-
+import json
 from fabric.api import local, run
 import os
 import yaml
@@ -27,6 +27,10 @@ QCOW2 = "qcow2"
 YES = "yes"
 NAME_LOG_FILE = 'migrate.log'
 
+
+def load_json_from_file(file_path):
+    f = open(file_path, 'r')
+    return json.load(f)
 
 primitive = [int, long, bool, float, type(None), str, unicode]
 

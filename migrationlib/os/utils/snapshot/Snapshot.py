@@ -33,14 +33,14 @@ class DiffObject:
 
 
 class Snapshot:
-    def __init__(self):
-        self.instances = {}
-        self.images = {}
-        self.volumes = {}
-        self.tenants = {}
-        self.users = {}
-        self.security_groups = {}
-        self.timestamp = time.time()
+    def __init__(self, snapshot_dict={}):
+        self.instances = {} if not snapshot_dict else snapshot_dict['instances']
+        self.images = {} if not snapshot_dict else snapshot_dict['images']
+        self.volumes = {} if not snapshot_dict else snapshot_dict['volumes']
+        self.tenants = {} if not snapshot_dict else snapshot_dict['tenants']
+        self.users = {} if not snapshot_dict else snapshot_dict['users']
+        self.security_groups = {} if not snapshot_dict else snapshot_dict['security_groups']
+        self.timestamp = time.time() if not snapshot_dict else snapshot_dict['timestamp']
 
     def add(self, id, category, diff_obj):
         self.__dict__[category][id] = diff_obj

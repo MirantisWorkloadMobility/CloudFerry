@@ -30,10 +30,12 @@ class TaskCreateSnapshotOs(Task):
     def run(self, inst_exporter=None, inst_importer=None, snapshots={'source': [], 'dest': []}, **kwargs):
         snapshot_source = SnapshotStateOpenStack(inst_exporter).create_snapshot()
         snapshot_dest = SnapshotStateOpenStack(inst_importer).create_snapshot()
-        snapshots['source'].append(snapshot_source)
-        snapshots['dest'].append(snapshot_dest)
-        self.__dump_to_file("%s/source" % self.prefix, snapshot_source)
-        self.__dump_to_file("%s/dest" % self.prefix, snapshot_dest)
+        path_source = "%s/source/%s.snapshot" % (self.prefix, snapshot_source.timestamp)
+        path_dest = "%s/dest/%s.snapshot" % (self.prefix, snapshot_dest.timestamp)
+        snapshots['source'].append({'path': path_source, 'timestamp': snapshot_source.timestamp})
+        snapshots['dest'].append({'path': path_dest, 'timestamp': snapshot_dest.timestamp})
+        self.__dump_to_file(path_source, snapshot_source)
+        self.__dump_to_file(path_dest, snapshot_dest)
         return {
             'snapshots': snapshots
         }
@@ -44,7 +46,7 @@ class TaskCreateSnapshotOs(Task):
         if not os.path.exists("%s/dest" % prefix):
             os.makedirs("%s/dest" % prefix)
 
-    def __dump_to_file(self, prefix, snapshot):
-        with open("%s/%s.snapshot" % (prefix, snapshot.timestamp), "w+") as f:
+    def __dump_to_file(self, path, snapshot):
+        with open(path, "w+") as f:
             json.dump(convert_to_dict(snapshot), f)
 
