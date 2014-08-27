@@ -201,3 +201,8 @@ class Importer(osCommon.osCommon):
         res = {}
         res['_type_class'] = Importer.__name__
         return res
+
+    def set_state(self, obj_dict):
+        for item in obj_dict:
+            if item in self.__dict__:
+                self.__dict__[item] = obj_dict[item]

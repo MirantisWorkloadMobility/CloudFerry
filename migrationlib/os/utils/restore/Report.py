@@ -30,14 +30,14 @@ class ReportObjConflict:
     
 
 class Report:
-    def __init__(self):
-        self.instances = {}
-        self.images = {}
-        self.volumes = {}
-        self.tenants = {}
-        self.users = {}
-        self.security_groups = {}
-        self.timestamp = time.time()
+    def __init__(self, report_dict={}):
+        self.instances = {} if not report_dict else report_dict['instances']
+        self.images = {} if not report_dict else report_dict['images']
+        self.volumes = {} if not report_dict else report_dict['volumes']
+        self.tenants = {} if not report_dict else report_dict['tenants']
+        self.users = {} if not report_dict else report_dict['users']
+        self.security_groups = {} if not report_dict else report_dict['security_groups']
+        self.timestamp = time.time() if not report_dict else report_dict['timestamp']
 
     def add(self, id, category, report_obj):
         self.__dict__[category][id] = report_obj

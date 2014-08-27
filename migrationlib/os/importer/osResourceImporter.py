@@ -48,6 +48,11 @@ class ResourceImporter(osCommon.osCommon):
     def get_tasks(self):
         return self.funcs
 
+    def set_state(self, obj_dict):
+        for item in obj_dict:
+            if item in self.__dict__:
+                self.__dict__[item] = obj_dict[item]
+
     def get_state(self):
         return {
             'users_notifications': self.users_notifications,

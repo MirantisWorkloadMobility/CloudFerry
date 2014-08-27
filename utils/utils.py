@@ -70,6 +70,21 @@ def convert_to_dict(obj, ident=0, limit_ident=8):
         return res if type(obj) is list else tuple(res)
 
 
+def convert_to_obj(obj, restore_object):
+    if type(obj) in primitive:
+        return obj
+    if type(obj) is dict:
+        for item in obj:
+            obj[item] = convert_to_obj(obj[item], restore_object)
+        obj = restore_object.resotre(obj)
+    if type(obj) in (list, tuple):
+        res = []
+        for item in obj:
+            res.append(convert_to_obj(item, restore_object))
+        obj = res if type(obj) is list else tuple(res)
+    return obj
+
+
 class GeneratorPassword:
     def __init__(self, length=7):
         self.length = length

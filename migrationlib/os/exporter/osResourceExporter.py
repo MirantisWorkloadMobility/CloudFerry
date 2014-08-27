@@ -20,6 +20,11 @@ class ResourceExporter(osCommon.osCommon):
         self.funcs = []
         super(ResourceExporter, self).__init__(self.config)
 
+    def set_state(self, obj_dict):
+        for item in obj_dict:
+            if item in self.__dict__:
+                self.__dict__[item] = obj_dict[item]
+
     def convert_to_dict(self):
         res = {'data': self.data}
         res['_type_class'] = ResourceExporter.__name__
