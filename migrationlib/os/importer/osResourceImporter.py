@@ -91,9 +91,9 @@ class ResourceImporter(osCommon.osCommon):
     def upload_roles(self, data=None, **kwargs):
         roles = data['roles'] if data else self.data['roles']
         # do not import a role if one with the same name already exists
-        existing = {r.name for r in self.keystone_client.roles.list()}
+        existing_roles = {r.name.lower() for r in self.keystone_client.roles.list()}
         for role in roles:
-            if role.name not in existing:
+            if role.name.lower() not in existing_roles:
                 self.keystone_client.roles.create(role.name)
         return self
 
@@ -103,20 +103,25 @@ class ResourceImporter(osCommon.osCommon):
         tenants = data['tenants'] if data else self.data['tenants']
         # do not import tenants or users if ones with the same name already exist
         existing_tenants = {t.name: t for t in self.keystone_client.tenants.list()}
+        existing_tenants_lower = {t.name.lower(): t for t in self.keystone_client.tenants.list()}
         existing_users = {u.name: u for u in self.keystone_client.users.list()}
+        existing_users_lower = {u.name.lower(): u for u in self.keystone_client.users.list()}
         # by this time roles on source and destination should be synchronized
         roles = {r.name: r for r in self.keystone_client.roles.list()}
         self.users_notifications = {}
         for tenant in tenants:
-            if tenant.name not in existing_tenants:
+            if not tenant.name.lower() in existing_tenants_lower:
                 dest_tenant = self.keystone_client.tenants.create(tenant_name=tenant.name,
                                                                   description=tenant.description,
                                                                   enabled=tenant.enabled)
+            elif not tenant.name in existing_tenants:
+                ex_tenant = existing_tenants_lower[tenant.name.lower()]
+                dest_tenant = self.keystone_client.tenants.update(ex_tenant.id, tenant_name=tenant.name)
             else:
                 dest_tenant = existing_tenants[tenant.name]
             # import users of this tenant that don't exist yet
             for user in tenant.list_users():
-                if user.name not in existing_users:
+                if user.name.lower() not in existing_users_lower:
                     new_password = self.__generate_password()
                     dest_user = self.keystone_client.users.create(name=user.name,
                                                                   password=new_password,
@@ -127,13 +132,19 @@ class ResourceImporter(osCommon.osCommon):
                         'email': user.email,
                         'password': new_password
                     }
+                elif user.name not in existing_users:
+                    ex_user = existing_users_lower[user.name.lower()]
+                    dest_user = self.keystone_client.users.update(ex_user,
+                                                                  name=user.name)
                 else:
                     dest_user = existing_users[user.name]
                 # import roles of this user within the tenant that are not already assigned
-                dest_user_roles = {r.name for r in dest_user.list_roles(dest_tenant)}
+                dest_user_roles_lower = {r.name.lower() for r in dest_user.list_roles(dest_tenant)}
                 for role in user.list_roles(tenant):
-                    if role.name not in dest_user_roles:
-                        dest_tenant.add_user(dest_user, roles[role.name])
+                    if role.name.lower() not in dest_user_roles_lower:
+                        for dest_role in roles:
+                            if role.name.lower() == dest_role.lower():
+                                dest_tenant.add_user(dest_user, roles[dest_role])
         return self
 
     @inspect_func

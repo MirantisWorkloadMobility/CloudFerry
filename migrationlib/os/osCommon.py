@@ -145,3 +145,8 @@ class osCommon(object):
 
         return '{}://{}:{}@{}/keystone'.format(params['identity']['connection'], params['user'], params['password'],
                                                params['host'])
+
+    def get_tenant_id_by_name(self, name):
+        for i in self.keystone_client.tenants.list():
+            if i.name == name:
+                return i.id
