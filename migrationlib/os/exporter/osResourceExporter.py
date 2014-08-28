@@ -38,8 +38,9 @@ class ResourceExporter(osCommon.osCommon):
     @log_step(LOG)
     def get_flavors(self):
         def process_flavor(flavor):
-            if flavor.is_public:
-                return flavor, []
+            if hasattr(flavor, "is_public"):
+                if flavor.is_public:
+                    return flavor, []
             else:
                 tenants = self.nova_client.flavor_access.list(flavor=flavor)
                 tenants = [self.keystone_client.tenants.get(t.tenant_id).name for t in tenants]
