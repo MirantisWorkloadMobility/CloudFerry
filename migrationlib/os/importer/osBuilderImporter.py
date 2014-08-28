@@ -20,7 +20,9 @@ from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid, \
     CEPH, REMOTE_FILE, QCOW2, log_step, get_log
 from scheduler.builder_wrapper import inspect_func, supertask
 from fabric.api import run, settings, env
+from migrationlib.os.osCommon import osCommon
 import ipaddr
+
 
 
 __author__ = 'mirrorcoder'
@@ -792,7 +794,7 @@ class osBuilderImporter:
 
     @log_step(LOG)
     def __get_network(self, network_info, keep_ip=False):
-        tenant_id = self.__get_tenant_id_by_name(self.config['tenant'])
+        tenant_id = osCommon.get_tenant_id_by_name(self.keystone_client, self.config['tenant'])
         if keep_ip:
             instance_addr = ipaddr.IPAddress(network_info['ip'])
             for i in self.network_client.list_subnets()['subnets']:
@@ -806,17 +808,13 @@ class osBuilderImporter:
 
     @log_step(LOG)
     def __get_network_by_cidr(self, network_info):
-        tenant_id = self.__get_tenant_id_by_name(self.config['tenant'])
+        tenant_id = osCommon.get_tenant_id_by_name(self.keystone_client, self.config['tenant'])
         instance_addr = ipaddr.IPAddress(network_info['ip'])
         for i in self.network_client.list_subnets()['subnets']:
             if i['tenant_id'] == tenant_id:
                 if ipaddr.IPNetwork(i['cidr']).Contains(instance_addr):
                     return self.network_client.list_networks(id=i['network_id'])['networks'][0]
 
-    def __get_tenant_id_by_name(self, name):
-        for i in self.keystone_client.tenants.list():
-            if i.name == name:
-                return i.id
 
     def __wait_for_status(self, getter, id, status):
         while getter.get(id).status != status:
