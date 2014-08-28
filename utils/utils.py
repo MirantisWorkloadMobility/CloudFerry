@@ -23,8 +23,10 @@ from email.mime.text import MIMEText
 from functools import wraps
 
 from fabric.api import local, run
+from jinja2 import Environment, FileSystemLoader
 import os
 import yaml
+
 
 
 __author__ = 'mirrorcoder'
@@ -177,4 +179,20 @@ class ChecksumImageInvalid(Exception):
     def __str__(self):
         return repr("Checksum of image source = %s Checksum of image dest = %s" %
                     (self.checksum_source, self.checksum_dest))
+
+class InfoTemplate():
+    def __init__(self,template_path = "templates", template_file = "info.html", info_file = "info.html"):
+        self.template_path = template_path
+        self.template_file = template_file
+        self.info_file = info_file
+        self.output_from_parsed_template = None
+        
+    def get_info_values(self, values):
+        env = Environment(loader=FileSystemLoader(self.template_path))
+        template = env.get_template(self.template_file)
+        self.output_from_parsed_template = template.render(values)
+
+    def write_info(self):
+        with open(self.info_file, "wb") as ifile:
+            ifile.write(self.output_from_parsed_template)
 

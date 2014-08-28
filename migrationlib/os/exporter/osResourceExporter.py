@@ -105,3 +105,8 @@ class ResourceExporter(osCommon.osCommon):
     def build(self):
         return self.data
 
+    @log_step(LOG)
+    def info_services_list(self):
+        print self.keystone_client.services.list()
+        print self.keystone_client.tenants.list()
+        return self

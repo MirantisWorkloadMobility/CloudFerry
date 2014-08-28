@@ -20,8 +20,9 @@ from tasks.SuperTaskImportResource import SuperTaskImportResource
 from tasks.TaskInitMigrate import TaskInitMigrate
 from tasks.SuperTaskExportResource import SuperTaskExportResource
 from tasks.SuperTaskMigrateInstances import SuperTaskMigrateInstances
-
+from tasks.SuperTaskInfoSource import SuperTaskInfoSource
 from utils import log_step, get_log
+
 
 env.forward_agent = True
 env.user = 'root'
@@ -48,3 +49,14 @@ def clean_dest_cloud(name_config, delete_image=False):
     LOG.info("Init config migrate")
     # _, (_, _), (_, importer) = init_migrate(name_config)
     # importer.clean_cloud(delete_image)
+
+def get_info(name_config):
+    LOG.info("Init getting information")
+    namespace = Namespace({'name_config': name_config})
+    scheduler = Scheduler(namespace)
+    scheduler.addTask(TaskInitMigrate())
+    scheduler.addTask(SuperTaskInfoSource())
+    scheduler.run()
+
+if __name__ == '__main__':
+    get_info('configs/config_iscsi_to_iscsi.yaml')
