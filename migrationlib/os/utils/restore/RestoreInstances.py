@@ -13,6 +13,7 @@
 # limitations under the License.
 from RestoreState import RestoreState
 from Report import *
+import time
 __author__ = 'mirrorcoder'
 
 
@@ -35,7 +36,11 @@ class RestoreInstances(RestoreState):
         return super(RestoreInstances, self).fix(id_obj, instance)
 
     def fix_add(self, id_obj, obj):
-        self.nova_client.servers.get(id_obj).delete()
+        try:
+            self.nova_client.servers.get(id_obj).delete()
+            time.sleep(30)
+        except Exception as e:
+            return ReportObjConflict(id_obj, obj, "Instance was not detected", FIX)
         return ReportObjConflict(id_obj, obj, "Fix via delete", FIX)
 
     def fix_delete(self, id_obj, obj):

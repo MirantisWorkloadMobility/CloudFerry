@@ -28,6 +28,7 @@ class TransactionsListenerOs(TransactionsListener):
         self.rewrite = rewrite
         self.error_status = NO_ERROR
         self.rollback = rollback
+        self.f = None
 
     def event_begin(self, namespace=None, *args, **kwargs):
         handler = self.handler_begin
@@ -109,17 +110,20 @@ class TransactionsListenerOs(TransactionsListener):
         return False
 
     def handler_end(self, namespace=None, **kwargs):
-        if 'snapshots' in namespace.vars:
-            self.__save_snapshots(namespace.vars['snapshots'])
-        task_end = dict()
-        task_end['event'] = 'event end'
-        self.__add_obj_to_file(task_end, self.f)
-        self.f.close()
-        print "event end ", self.id_transaction, self.error_status
-        self.__commit_status(self.id_transaction, self.error_status)
-        if self.error_status == NO_ERROR:
+        if self.f:
+            if 'snapshots' in namespace.vars:
+                self.__save_snapshots(namespace.vars['snapshots'])
+            task_end = dict()
+            task_end['event'] = 'event end'
+            self.__add_obj_to_file(task_end, self.f)
+            self.f.close()
+            print "event end ", self.id_transaction, self.error_status
+            self.__commit_status(self.id_transaction, self.error_status)
+            if self.error_status == NO_ERROR:
+                return True
+            return False
+        else:
             return True
-        return False
 
     def __commit_status(self, id_transaction, status):
         commit = {'id_transaction': id_transaction, 'status': status}

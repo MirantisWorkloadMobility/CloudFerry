@@ -53,7 +53,10 @@ class RestoreVolumes(RestoreState):
         return super(RestoreVolumes, self).fix(id_obj, instance)
 
     def fix_add(self, id_obj, obj):
-        self.cinder_client.volumes.delete(id_obj)
+        try:
+            self.cinder_client.volumes.delete(id_obj)
+        except Exception as e:
+            return ReportObjConflict(id_obj, obj, "Volume was not deleted", FIX)
         return ReportObjConflict(id_obj, obj, "Fix via delete", FIX)
 
     def fix_delete(self, id_obj, obj):

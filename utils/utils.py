@@ -28,6 +28,11 @@ YES = "yes"
 NAME_LOG_FILE = 'migrate.log'
 
 
+def dump_to_file(path, snapshot):
+    with open(path, "w+") as f:
+        json.dump(convert_to_dict(snapshot), f)
+
+
 def load_json_from_file(file_path):
     f = open(file_path, 'r')
     return json.load(f)

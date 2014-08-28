@@ -14,9 +14,8 @@
 
 from scheduler.Task import Task
 from migrationlib.os.utils.snapshot.SnapshotStateOpenStack import SnapshotStateOpenStack
-from utils import convert_to_dict
+from utils import dump_to_file
 import os
-import json
 __author__ = 'mirrorcoder'
 
 
@@ -34,8 +33,8 @@ class TaskCreateSnapshotOs(Task):
         path_dest = "%s/dest/%s.snapshot" % (self.prefix, snapshot_dest.timestamp)
         snapshots['source'].append({'path': path_source, 'timestamp': snapshot_source.timestamp})
         snapshots['dest'].append({'path': path_dest, 'timestamp': snapshot_dest.timestamp})
-        self.__dump_to_file(path_source, snapshot_source)
-        self.__dump_to_file(path_dest, snapshot_dest)
+        dump_to_file(path_source, snapshot_source)
+        dump_to_file(path_dest, snapshot_dest)
         return {
             'snapshots': snapshots
         }
@@ -45,8 +44,3 @@ class TaskCreateSnapshotOs(Task):
             os.makedirs("%s/source" % prefix)
         if not os.path.exists("%s/dest" % prefix):
             os.makedirs("%s/dest" % prefix)
-
-    def __dump_to_file(self, path, snapshot):
-        with open(path, "w+") as f:
-            json.dump(convert_to_dict(snapshot), f)
-

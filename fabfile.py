@@ -18,27 +18,33 @@ LOG = get_log(__name__)
 
 
 @task
-def migrate(name_config, name_instance=None):
+def migrate(name_config, name_instance=None, mode=RETRY):
     """
         :name_config - name of config yaml-file, example 'config.yaml'
     """
-    # if os.path.exists("transaction"):
-    #     shutil.rmtree("transaction")
-    # if os.path.exists("snapshots"):
-    #     shutil.rmtree("snapshots")
-    rollback_status = CONTINUE
+    if mode == RESTART:
+        if os.path.exists("transaction"):
+            shutil.rmtree("transaction")
+        if os.path.exists("snapshots"):
+            shutil.rmtree("snapshots")
+    if mode == ABORT:
+        if os.path.exists("transaction"):
+            shutil.rmtree("transaction")
+        if os.path.exists("snapshots"):
+            shutil.rmtree("snapshots")
+    rollback_status = mode
     namespace = Namespace({'__name_config__': name_config,
                            'name_instance': name_instance,
                            '__rollback_status__': rollback_status})
     scheduler = Scheduler(namespace)
+
     scheduler.addTaskExclusion(TaskCreateSnapshotOs)
     scheduler.addTask(TaskInitMigrate())
-    # scheduler.addTask(SuperTaskExportResource())
-    # scheduler.addTask(SuperTaskImportResource())
+    scheduler.addTask(SuperTaskExportResource())
+    scheduler.addTask(SuperTaskImportResource())
     scheduler.addTask(SuperTaskMigrateInstances())
     print "RUN!!"
     scheduler.run()
-    print scheduler.tasks_runned
 
 
 @task

@@ -18,6 +18,7 @@ CONTINUE = "continue"
 ABORT = "abort"
 SKIP = "skip"
 RESTART = "restart"
+RETRY = "retry"
 
 
 class Rollback(object):
@@ -26,10 +27,14 @@ class Rollback(object):
             CONTINUE: self.continue_status,
             ABORT: self.abort_status,
             SKIP: self.skip_status,
+            RETRY: self.retry_status,
             RESTART: self.restart_status
         }[__rollback_status__](*args, **kwargs)
 
     def continue_status(self, *args, **kwargs):
+        return True
+
+    def retry_status(self, *args, **kwargs):
         return True
 
     def abort_status(self, *args, **kwargs):

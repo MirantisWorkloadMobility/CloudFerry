@@ -126,8 +126,8 @@ class Scheduler:
         if res:
             self.status_error = NO_ERROR
         else:
-            self.status_error = ERROR
-            self.trigger_listener('event_error', args={'namespace': self.namespace,
-                                                       'task': task,
-                                                       'exception': self.exception})
+            if self.status_error == ERROR:
+                self.trigger_listener('event_error', args={'namespace': self.namespace,
+                                                           'task': task,
+                                                           'exception': self.exception})
 

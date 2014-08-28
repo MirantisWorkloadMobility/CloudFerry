@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 from Rollback import *
+from migrationlib.os.utils.snapshot.Snapshot import Snapshot
 from scheduler.transaction.TaskTransaction import NO_ERROR
 import os
 import json
 import shutil
-from utils import convert_to_obj
-from migrationlib.os.utils.restore_object.RestoreObject import RestoreObject
-from scheduler.SuperTask import SuperTask
+from migrationlib.os.utils.restore.RestoreStateOpenStack import RestoreStateOpenStack
+from migrationlib.os.utils.snapshot.SnapshotStateOpenStack import SnapshotStateOpenStack
+from scheduler.transaction.TaskTransaction import TaskTransactionEnd
+from utils import load_json_from_file, dump_to_file
 __author__ = 'mirrorcoder'
 
 PATH_TO_ROLLBACK = 'transaction/rollback'
@@ -34,11 +36,10 @@ class RollbackOpenStack(Rollback):
         self.is_error_instance = False
         self.obj = None
         self.path_to_instance = "%s/%s" % (PATH_TO_ROLLBACK, instance_id)
-        self.task_exclusion = [SuperTask()]
 
-    def continue_status(self, __event_name__=None, __transaction__=None, namespace=None, task=None, **kwargs):
+    def retry_status(self, __event_name__=None, __transaction__=None, namespace=None, task=None, **kwargs):
         if self.skip_all_tasks:
-            return False
+            return self.is_exclude(task)
         if not self.is_trace:
             return True
         if not self.obj:
@@ -52,30 +53,16 @@ class RollbackOpenStack(Rollback):
         self.is_error_instance = True
         if __event_name__ == 'event_begin':
             self.cp_info_transaction(__transaction__, self.path_to_instance)
-            return True
-        if __event_name__ == 'event_can_run_next_task':
-            state = self.get_state_task(task)
-            if state['event'] == 'event error':
-                self.restore_namespace(namespace, state)
-                namespace.vars['__rollback_status__'] = RESTART
-                self.delete_record_from_status_file(__transaction__, self.instance_id)
-            if state['event'] == 'event task':
-                self.make_record_in_file(__transaction__, state)
-                if task in self.task_exclusion:
-                    self.restore_namespace(namespace, state)
-                    return True
-                return False
-            return True
-        if __event_name__ == 'event_task':
-            return False
-        if __event_name__ == 'event_error':
-            return True
-        if __event_name__ == 'event_end':
-            return True
+            self.restore_state_openstack(namespace.vars['inst_exporter'],
+                                         namespace.vars['inst_importer'],
+                                         __transaction__)
+            self.add_snapshots_to_namespace(namespace)
+            self.delete_record_from_status_file(__transaction__, self.instance_id)
+        return True
 
-    def abort_status(self, __event_name__=None, __transaction__=None, namespace=None, **kwargs):
+    def skip_status(self, __event_name__=None, __transaction__=None, namespace=None, task=None, **kwargs):
         if self.skip_all_tasks:
-            return False
+            return self.is_exclude(task)
         if not self.is_trace:
             return True
         if not self.obj:
@@ -89,23 +76,61 @@ class RollbackOpenStack(Rollback):
         self.is_error_instance = True
         if __event_name__ == 'event_begin':
             self.cp_info_transaction(__transaction__, self.path_to_instance)
-            return False
-        if __event_name__ == 'event_end':
-            return True
+            self.restore_state_openstack(namespace.vars['inst_exporter'],
+                                         namespace.vars['inst_importer'],
+                                         __transaction__)
+            self.add_snapshots_to_namespace(namespace)
+            self.delete_record_from_status_file(__transaction__, self.instance_id)
+            self.skip_all_tasks = False
         return False
 
-    def skip_status(self, __event_name__=None, __transaction__=None, namespace=None, **kwargs):
-        if self.skip_all_tasks:
-            return False
-        if not self.is_trace:
-            return True
-        if not self.obj:
-            self.obj = self.check_instance(namespace, __transaction__, self.instance_id)
-        if not self.obj:
-            self.is_trace = False
-            return True
-        self.skip_all_tasks = True
+    def add_snapshots_to_namespace(self, namespace):
+        prefix = 'snapshots'
+        importer = namespace.vars['inst_importer']
+        exporter = namespace.vars['inst_exporter']
+        snapshot_source = SnapshotStateOpenStack(exporter).create_snapshot()
+        snapshot_dest = SnapshotStateOpenStack(importer).create_snapshot()
+        path_source = "%s/source/%s.snapshot" % (prefix, snapshot_source.timestamp)
+        path_dest = "%s/dest/%s.snapshot" % (prefix, snapshot_dest.timestamp)
+        namespace.vars['snapshots']['source'].append({'path': path_source, 'timestamp': snapshot_source.timestamp})
+        namespace.vars['snapshots']['dest'].append({'path': path_dest, 'timestamp': snapshot_dest.timestamp})
+        dump_to_file(path_source, snapshot_source)
+        dump_to_file(path_dest, snapshot_dest)
+
+    def is_exclude(self, task=None):
+        if task:
+            if isinstance(task, TaskTransactionEnd):
+                return True
         return False
+
+    def get_snapshots(self, __transaction__, cloud, path, is_do_snapshot_two=False):
+        path_to_snap = __transaction__.prefix_path+path
+        list_snapshots = os.listdir(path_to_snap)
+        list_snapshots.sort()
+        snapshot_one_s = Snapshot(load_json_from_file(path_to_snap+list_snapshots[0]))
+        if is_do_snapshot_two:
+            snapshot_two_s = SnapshotStateOpenStack(cloud).create_snapshot()\
+                if len(list_snapshots) < 2 else \
+                Snapshot(load_json_from_file(path_to_snap+list_snapshots[-1]))
+        else:
+            snapshot_two_s = SnapshotStateOpenStack(cloud).create_snapshot()
+        return snapshot_one_s, snapshot_two_s
+
+    def restore_state_openstack(self, exporter, importer, __transaction__):
+        snapshot_one_s, snapshot_two_s = self.get_snapshots(__transaction__,
+                                                            exporter,
+                                                            path="source/")
+        snapshot_one_d, snapshot_two_d = self.get_snapshots(__transaction__,
+                                                            importer,
+                                                            path="dest/",
+                                                            is_do_snapshot_two=True)
+        report_s = self.restore_from_snapshot(snapshot_one_s, snapshot_two_s, exporter)
+        report_d = self.restore_from_snapshot(snapshot_one_d, snapshot_two_d, importer)
+        return report_s, report_d
+
+    def restore_from_snapshot(self, snapshot_one, snapshot_two, inst_exporter):
+        return RestoreStateOpenStack(inst_exporter).restore(SnapshotStateOpenStack.diff_snapshot(snapshot_one,
+                                                                                                 snapshot_two))
 
     def cp_info_transaction(self, __transaction__, path_to_instance):
         if os.path.exists(path_to_instance):
@@ -113,33 +138,16 @@ class RollbackOpenStack(Rollback):
         path_to_file_trans = __transaction__.prefix_path
         shutil.copytree(path_to_file_trans, path_to_instance)
 
-    def get_state_task(self, task):
-        obj = self.find_obj_to_file("%s/%s" % (self.path_to_instance, "tasks.trans"), str(task))
-        return obj
-
-    def restore_namespace(self, namespace, state, exclude=('config', '__rollback_status__')):
-        namespace_dict = state['namespace']['vars']
-        for item in namespace_dict:
-            if item in exclude:
-                continue
-            obj = convert_to_obj(namespace_dict[item], RestoreObject(), namespace)
-            if item in namespace.vars:
-                if hasattr(namespace.vars[item], 'set_state'):
-                    namespace.vars[item].set_state(obj)
-                    continue
-            namespace.vars[item] = obj
-
-    def make_record_in_file(self, __transaction__, state):
-        f = __transaction__.f
-        json.dump(state, f)
-        f.write("\n")
-        f.flush()
-
-    def delete_record_from_status_file(self, __transaction__, obj):
+    def delete_record_from_status_file(self, __transaction__, instance_id):
         path_to_status = __transaction__.prefix+'status.inf'
-        s = json.dumps(obj)+"\n"
-        with open(path_to_status, 'w+') as f:
-            f.write(f.read().replace(s, ""))
+        path_to_status_temp = PATH_TO_ROLLBACK+'/status.inf.temp'
+        with open(path_to_status_temp, 'w+') as t:
+            with open(path_to_status, 'r+') as f:
+                for item in f.readlines():
+                    if item.find(instance_id) == -1:
+                        t.write(item)
+        os.remove(path_to_status)
+        os.renames(path_to_status_temp, path_to_status)
 
     def check_instance(self, namespace, __transaction__, instance_id):
         obj = {}
@@ -163,5 +171,9 @@ class RollbackOpenStack(Rollback):
         return obj
 
     def restart_status(self, *args, **kwargs):
+        if self.skip_all_tasks:
+            return False
+        if not self.is_trace:
+            return True
         return True
 
