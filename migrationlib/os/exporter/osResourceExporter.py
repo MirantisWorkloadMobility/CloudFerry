@@ -21,9 +21,7 @@ class ResourceExporter(osCommon.osCommon):
         super(ResourceExporter, self).__init__(self.config)
 
     def set_state(self, obj_dict):
-        for item in obj_dict:
-            if item in self.__dict__:
-                self.__dict__[item] = obj_dict[item]
+        self.data = obj_dict['data']
 
     def convert_to_dict(self):
         res = {'data': self.data}

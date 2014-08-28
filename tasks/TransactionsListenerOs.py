@@ -78,7 +78,7 @@ class TransactionsListenerOs(TransactionsListener):
         return handler(**kwargs) if self.rollback(__rollback_status__,
                                                   **kwargs) else False
 
-    def handler_begin(self, namespace=None):
+    def handler_begin(self, namespace=None, **kwargs):
         self.__init_directory(self.prefix, self.prefix_path, self.rewrite)
         self.f = open(self.prefix_path+"tasks.trans", "a+")
         if 'snapshots' in namespace.vars:
@@ -86,10 +86,10 @@ class TransactionsListenerOs(TransactionsListener):
         self.__add_obj_to_file(self.transaction, self.f)
         return False
 
-    def handler_can_run_next_task(self, namespace=None, task=None, skip=None):
+    def handler_can_run_next_task(self, namespace=None, task=None, skip=None, **kwargs):
         return True
 
-    def handler_task(self, namespace=None, task=None, skip=None):
+    def handler_task(self, namespace=None, task=None, skip=None, **kwargs):
         task_obj = dict()
         task_obj['event'] = 'event task'
         task_obj['namespace'] = self.__prepare_dict(convert_to_dict(namespace))
@@ -98,17 +98,17 @@ class TransactionsListenerOs(TransactionsListener):
         self.__add_obj_to_file(task_obj, self.f)
         return True
 
-    def handler_error(self, namespace=None, task=None, exception=None):
+    def handler_error(self, namespace=None, task=None, exception=None, **kwargs):
         task_error_obj = dict()
         task_error_obj['event'] = 'event error'
         task_error_obj['namespace'] = self.__prepare_dict(convert_to_dict(namespace))
         task_error_obj['task'] = str(task)
-        task_error_obj['exception'] = exception
+        task_error_obj['exception'] = str(exception)
         self.__add_obj_to_file(task_error_obj, self.f)
         self.error_status = ERROR
         return False
 
-    def handler_end(self, namespace=None):
+    def handler_end(self, namespace=None, **kwargs):
         if 'snapshots' in namespace.vars:
             self.__save_snapshots(namespace.vars['snapshots'])
         task_end = dict()

@@ -49,7 +49,7 @@ def convert_to_dict(obj, ident=0, limit_ident=8):
                     t['_type_class'] = str(obj.__class__)
                     obj = t
                 except AttributeError as e:
-                    return str(obj.__class__)
+                    return str(obj.__class__ if hasattr(obj, '__class__') else type(obj))
         else:
             return str(obj.__class__)
     if type(obj) is dict:
@@ -70,17 +70,17 @@ def convert_to_dict(obj, ident=0, limit_ident=8):
         return res if type(obj) is list else tuple(res)
 
 
-def convert_to_obj(obj, restore_object):
+def convert_to_obj(obj, restore_object, namespace):
     if type(obj) in primitive:
         return obj
     if type(obj) is dict:
         for item in obj:
-            obj[item] = convert_to_obj(obj[item], restore_object)
-        obj = restore_object.resotre(obj)
+            obj[item] = convert_to_obj(obj[item], restore_object, namespace)
+        obj = restore_object.restore(obj, namespace)
     if type(obj) in (list, tuple):
         res = []
         for item in obj:
-            res.append(convert_to_obj(item, restore_object))
+            res.append(convert_to_obj(item, restore_object, namespace))
         obj = res if type(obj) is list else tuple(res)
     return obj
 

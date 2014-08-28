@@ -12,7 +12,9 @@ class SuperTask(object):
 
     def split_task(self, namespace=None):
         namespace = self.namespace if not namespace else namespace
-        return self.run(**namespace.vars)
+        self.namespace = namespace
+        tasks = self.run(**namespace.vars)
+        return tasks
 
     def __hash__(self):
         return hash(SuperTask.__name__)

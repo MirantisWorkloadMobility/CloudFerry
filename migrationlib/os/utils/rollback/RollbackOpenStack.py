@@ -18,6 +18,7 @@ import json
 import shutil
 from utils import convert_to_obj
 from migrationlib.os.utils.restore_object.RestoreObject import RestoreObject
+from scheduler.SuperTask import SuperTask
 __author__ = 'mirrorcoder'
 
 PATH_TO_ROLLBACK = 'transaction/rollback'
@@ -33,8 +34,9 @@ class RollbackOpenStack(Rollback):
         self.is_error_instance = False
         self.obj = None
         self.path_to_instance = "%s/%s" % (PATH_TO_ROLLBACK, instance_id)
+        self.task_exclusion = [SuperTask()]
 
-    def continue_status(self, __event_name__=None, __transaction__=None, namespace=None, **kwargs):
+    def continue_status(self, __event_name__=None, __transaction__=None, namespace=None, task=None, **kwargs):
         if self.skip_all_tasks:
             return False
         if not self.is_trace:
@@ -52,13 +54,16 @@ class RollbackOpenStack(Rollback):
             self.cp_info_transaction(__transaction__, self.path_to_instance)
             return True
         if __event_name__ == 'event_can_run_next_task':
-            state = self.get_state_task(__transaction__)
-            if state['event'] == 'event_error':
-                self.restore_namespace(namespace, self.instance_id)
+            state = self.get_state_task(task)
+            if state['event'] == 'event error':
+                self.restore_namespace(namespace, state)
                 namespace.vars['__rollback_status__'] = RESTART
                 self.delete_record_from_status_file(__transaction__, self.instance_id)
-            if state['event'] == 'event_task':
-                self.make_record_in_file(__transaction__, self.obj)
+            if state['event'] == 'event task':
+                self.make_record_in_file(__transaction__, state)
+                if task in self.task_exclusion:
+                    self.restore_namespace(namespace, state)
+                    return True
                 return False
             return True
         if __event_name__ == 'event_task':
@@ -106,18 +111,18 @@ class RollbackOpenStack(Rollback):
         if os.path.exists(path_to_instance):
             shutil.rmtree(path_to_instance)
         path_to_file_trans = __transaction__.prefix_path
-        shutil.copy(path_to_file_trans, path_to_instance)
+        shutil.copytree(path_to_file_trans, path_to_instance)
 
     def get_state_task(self, task):
         obj = self.find_obj_to_file("%s/%s" % (self.path_to_instance, "tasks.trans"), str(task))
         return obj
 
-    def restore_namespace(self, namespace, state, exclude=('config',)):
+    def restore_namespace(self, namespace, state, exclude=('config', '__rollback_status__')):
         namespace_dict = state['namespace']['vars']
         for item in namespace_dict:
             if item in exclude:
                 continue
-            obj = convert_to_obj(namespace_dict[item], RestoreObject())
+            obj = convert_to_obj(namespace_dict[item], RestoreObject(), namespace)
             if item in namespace.vars:
                 if hasattr(namespace.vars[item], 'set_state'):
                     namespace.vars[item].set_state(obj)
@@ -139,7 +144,7 @@ class RollbackOpenStack(Rollback):
     def check_instance(self, namespace, __transaction__, instance_id):
         obj = {}
         if self.check_status_file(__transaction__, namespace):
-            obj = self.find_obj_to_file(__transaction__.prefix+'/status.inf', instance_id)
+            obj = self.find_obj_to_file(__transaction__.prefix+'status.inf', instance_id)
         return obj
 
     def check_status_file(self, __transaction__, namespace):

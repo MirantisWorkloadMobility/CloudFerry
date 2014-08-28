@@ -18,20 +18,45 @@ __author__ = 'mirrorcoder'
 DEFAULT = 0
 
 
+def ImageTransferRestore(obj, inst_exporter=None, **kwargs):
+    glance_client = inst_exporter.glance_client
+    return ImageTransfer(obj['image_id'], glance_client)
+
+
+def VolumeTransferRestore(obj, inst_exporter=None, **kwargs):
+    glance_client = inst_exporter.glance_client
+    return VolumeTransfer(None, None, None, glance_client, obj)
+
+
+def ImageGlanceClientV1Restore(obj, inst_importer=None, **kwargs):
+    return inst_importer.glance_client.images.get(obj['id'])
+
+
+def InstanceNovaClientV1Restore(obj, inst_importer=None, **kwargs):
+    return inst_importer.nova_client.servers.get(obj['id'])
+
+
+def FlavorNovaClientV1Restore(obj, inst_importer=None, **kwargs):
+    return inst_importer.nova_client.flavors.find(name=obj['name'])
+
+
 class RestoreObject:
     def __init__(self):
         self.classes = {
-            'ImageTransfer': ImageTransfer,
-            'VolumeTransfer': VolumeTransfer
+            'ImageTransfer': ImageTransferRestore,
+            'VolumeTransfer': VolumeTransferRestore,
+            "<class 'glanceclient.v1.images.Image'>": ImageGlanceClientV1Restore,
+            "<class 'novaclient.v1_1.servers.Instance'>": InstanceNovaClientV1Restore,
+            "<class 'novaclient.v1_1.flavors.Flavor'>": FlavorNovaClientV1Restore
         }
 
-    def restore(self, obj):
+    def restore(self, obj, namespace):
         if not '_type_class' in obj:
             return obj
         type_class = self.own_type_class(obj['_type_class'])
         if type_class == DEFAULT:
             return obj
-        return type_class(obj)
+        return type_class(obj, **namespace.vars)
 
     def own_type_class(self, type_class):
         if type_class in self.classes:

@@ -60,6 +60,5 @@ class Exporter(osCommon.osCommon):
         return res
 
     def set_state(self, obj_dict):
-        for item in obj_dict:
-            if item in self.__dict__:
-                self.__dict__[item] = obj_dict[item]
+        pass
+

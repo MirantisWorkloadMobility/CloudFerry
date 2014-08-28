@@ -60,9 +60,10 @@ class osBuilderImporter:
         return self.funcs
 
     def set_state(self, obj_dict):
-        for item in obj_dict:
-            if item in self.__dict__:
-                self.__dict__[item] = obj_dict[item]
+        self.data = obj_dict['data'] if not self.data else self.data
+        self.data_for_instance = obj_dict['data_for_instance']
+        self.instance = obj_dict['instance']
+        self.volumes = obj_dict['volumes']
 
     def get_state(self):
         return {

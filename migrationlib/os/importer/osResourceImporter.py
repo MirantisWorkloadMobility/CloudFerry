@@ -49,9 +49,7 @@ class ResourceImporter(osCommon.osCommon):
         return self.funcs
 
     def set_state(self, obj_dict):
-        for item in obj_dict:
-            if item in self.__dict__:
-                self.__dict__[item] = obj_dict[item]
+        self.users_notifications = obj_dict['users_notifications']
 
     def get_state(self):
         return {

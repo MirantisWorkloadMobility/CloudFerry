@@ -3,17 +3,18 @@ __author__ = 'mirrorcoder'
 
 class VolumeTransfer:
     """ The main class for gathering information for volumes migrationlib"""
-    def __init__(self, volume, instance, image_id, glance_client):
-        self.id = volume.id
-        self.size = volume.size
-        self.name = volume.display_name
-        self.description = volume.display_description
-        self.volume_type = None if volume.volume_type == u'None' else volume.volume_type
-        self.availability_zone = volume.availability_zone
-        self.device = volume.attachments[0]['device']
-        self.host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
-        self.image_id = image_id
-        self.bootable = True if volume.bootable == 'true' else False
+    def __init__(self, volume, instance, image_id, glance_client, obj=None):
+        self.id = volume.id if not obj else obj['id']
+        self.size = volume.size if not obj else obj['size']
+        self.name = volume.display_name if not obj else obj['name']
+        self.description = volume.display_description if not obj else obj['description']
+        self.volume_type = (None if volume.volume_type == u'None' else volume.volume_type) \
+            if not obj else obj['volume_type']
+        self.availability_zone = volume.availability_zone if not obj else obj['availability_zone']
+        self.device = volume.attachments[0]['device'] if not obj else obj['device']
+        self.host = getattr(instance, 'OS-EXT-SRV-ATTR:host') if not obj else obj['host']
+        self.image_id = image_id if not obj else obj['image_id']
+        self.bootable = (True if volume.bootable == 'true' else False) if not obj else obj['bootable']
         self.glance_client = glance_client
         self.__info = self.glance_client.images.get(self.image_id)
         self.checksum = self.__info.checksum

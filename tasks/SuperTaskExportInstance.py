@@ -17,25 +17,10 @@ class SuperTaskExportInstance(SuperTask):
         tasks_export = []
         exporter_builder = inst_exporter.export(self.instance)
         tasks = exporter_builder.get_tasks()
-        tasks_export.append(TaskSetExportBuilder(exporter_builder))
+        self.namespace.vars['exporter_builder'] = exporter_builder
         tasks_export.extend(tasks)
         tasks_export.append(TaskGetState())
         return tasks_export
-
-
-class TaskSetExportBuilder(Task):
-
-    def __init__(self, exporter_builder, namespace=None):
-        self.exporter_builder = exporter_builder
-        if not namespace:
-            super(TaskSetExportBuilder, self).__init__()
-        else:
-            super(TaskSetExportBuilder, self).__init__(namespace=namespace)
-
-    def run(self, **kwargs):
-        return {
-            'exporter_builder': self.exporter_builder
-        }
 
 
 class TaskGetState(Task):
