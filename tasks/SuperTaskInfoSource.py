@@ -20,11 +20,19 @@ LOG = get_log(__name__)
 
 class SuperTaskInfoSource(SuperTask):
     def run(self, res_exporter=None, **kwargs):
-        return [TaskInfoServicesSource()]
+        return [TaskInfoServicesSource(),
+                TaskInfoBuild()]
 
 class TaskInfoServicesSource(Task):
     def run(self, res_exporter=None, **kwargs):
         source_info = res_exporter.info_services_list()
         return {
             'source_info': source_info
+        }
+
+class TaskInfoBuild(Task):
+    def run(self, res_exporter=None, **kwargs):
+        rendered_source_info = res_exporter.build_info()
+        return {
+            'rendered_source_info': rendered_source_info
         }

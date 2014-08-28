@@ -180,19 +180,12 @@ class ChecksumImageInvalid(Exception):
         return repr("Checksum of image source = %s Checksum of image dest = %s" %
                     (self.checksum_source, self.checksum_dest))
 
-class InfoTemplate():
-    def __init__(self,template_path = "templates", template_file = "info.html", info_file = "info.html"):
-        self.template_path = template_path
-        self.template_file = template_file
-        self.info_file = info_file
-        self.output_from_parsed_template = None
-        
-    def get_info_values(self, values):
-        env = Environment(loader=FileSystemLoader(self.template_path))
-        template = env.get_template(self.template_file)
-        self.output_from_parsed_template = template.render(values)
+def render_info(info_values, template_path = "templates", template_file = "info.html"):
+    info_env = Environment(loader=FileSystemLoader(template_path))
+    template = info_env.get_template(template_file)
+    return template.render(info_values)
 
-    def write_info(self):
-        with open(self.info_file, "wb") as ifile:
-            ifile.write(self.output_from_parsed_template)
+def write_info(rendered_info, info_file = "info.html"):
+    with open(info_file, "wb") as ifile:
+        ifile.write(rendered_info)
 

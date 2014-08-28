@@ -17,7 +17,7 @@
 Package with OpenStack resources export/import utilities.
 """
 from migrationlib.os import osCommon
-from utils import log_step, get_log
+from utils import log_step, get_log, render_info, write_info
 import sqlalchemy
 
 LOG = get_log(__name__)
@@ -34,6 +34,7 @@ class ResourceExporter(osCommon.osCommon):
         self.config = conf['clouds']['source']
         self.funcs = []
         super(ResourceExporter, self).__init__(self.config)
+        self.info_values = {}
 
     @log_step(LOG)
     def get_flavors(self):
@@ -107,6 +108,13 @@ class ResourceExporter(osCommon.osCommon):
 
     @log_step(LOG)
     def info_services_list(self):
-        print self.keystone_client.services.list()
-        print self.keystone_client.tenants.list()
+        self.info_values['services']= self.keystone_client.services.list()
         return self
+
+    @log_step(LOG)
+    def build_info(self, info_values=None ):
+        info_values = info_values if info_values else self.info_values
+        write_info(render_info(info_values))
+        return render_info(info_values)
+
+
