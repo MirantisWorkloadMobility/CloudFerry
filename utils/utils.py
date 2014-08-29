@@ -185,7 +185,7 @@ def render_info(info_values, template_path = "templates", template_file = "info.
     template = info_env.get_template(template_file)
     return template.render(info_values)
 
-def write_info(rendered_info, info_file = "info.html"):
+def write_info(rendered_info, info_file = "source_info.html"):
     with open(info_file, "wb") as ifile:
         ifile.write(rendered_info)
 

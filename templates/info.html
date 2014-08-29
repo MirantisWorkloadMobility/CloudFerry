@@ -9,9 +9,19 @@
 <h1>Source cloud Information</h1>
 
 <h3>Administrative information</h3>
-<p>
-services: {{services}} <br />
-tenants: {{tenants}} <br />
+
+<p>Openstack services:</p>
+<ul>
+    {% for service in services %}
+    <li>{{service.name}}, {{service.description}}</li>
+    {% endfor %}
+</ul>
+<p>Tenants:</p>
+<ul>
+    {% for tenant in tenants %}
+    <li>{{tenant.name}}</li>
+    {% endfor %}
+</ul>
 users: {{users}} <br />
 roles: {{roles}}
 </p>

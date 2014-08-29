@@ -22,6 +22,7 @@ from tasks.SuperTaskExportResource import SuperTaskExportResource
 from tasks.SuperTaskMigrateInstances import SuperTaskMigrateInstances
 from tasks.SuperTaskInfoSource import SuperTaskInfoSource
 from utils import log_step, get_log
+from tasks.TaskSourceInfo import TaskSourceInfo
 
 
 env.forward_agent = True
@@ -54,7 +55,7 @@ def get_info(name_config):
     LOG.info("Init getting information")
     namespace = Namespace({'name_config': name_config})
     scheduler = Scheduler(namespace)
-    scheduler.addTask(TaskInitMigrate())
+    scheduler.addTask(TaskSourceInfo())
     scheduler.addTask(SuperTaskInfoSource())
     scheduler.run()
 

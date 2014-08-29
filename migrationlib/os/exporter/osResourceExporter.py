@@ -106,15 +106,5 @@ class ResourceExporter(osCommon.osCommon):
     def build(self):
         return self.data
 
-    @log_step(LOG)
-    def info_services_list(self):
-        self.info_values['services']= self.keystone_client.services.list()
-        return self
-
-    @log_step(LOG)
-    def build_info(self, info_values=None ):
-        info_values = info_values if info_values else self.info_values
-        write_info(render_info(info_values))
-        return render_info(info_values)
 
 

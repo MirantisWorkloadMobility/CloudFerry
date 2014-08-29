@@ -19,20 +19,37 @@ from utils import get_log
 LOG = get_log(__name__)
 
 class SuperTaskInfoSource(SuperTask):
-    def run(self, res_exporter=None, **kwargs):
-        return [TaskInfoServicesSource(),
+    def run(self, main_tenant=None, **kwargs):
+        return [TaskInfoTenantsSource(),
+                TaskInfoServicesSource(),
+                TaskInfoUsersSource(),
                 TaskInfoBuild()]
 
 class TaskInfoServicesSource(Task):
-    def run(self, res_exporter=None, **kwargs):
-        source_info = res_exporter.info_services_list()
+    def run(self, main_tenant=None, **kwargs):
+        source_info = main_tenant.info_services_list()
         return {
             'source_info': source_info
         }
 
-class TaskInfoBuild(Task):
-    def run(self, res_exporter=None, **kwargs):
-        rendered_source_info = res_exporter.build_info()
+class TaskInfoTenantsSource(Task):
+    def run(self, main_tenant=None, **kwargs):
+        tenants_list = main_tenant.info_tenants_list()
         return {
-            'rendered_source_info': rendered_source_info
+            'tenants_list': tenants_list
+        }
+
+class TaskInfoUsersSource(Task):
+    def run(self, main_tenant=None, **kwargs):
+        users_list = main_tenant.info_users_list()
+        return {
+            'users_list': users_list
+        }
+
+
+class TaskInfoBuild(Task):
+    def run(self, main_tenant=None, **kwargs):
+        rendered_info = main_tenant.build_info()
+        return {
+            'rendered_info': rendered_info
         }
