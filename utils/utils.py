@@ -26,6 +26,24 @@ REMOTE_FILE = "remote file"
 QCOW2 = "qcow2"
 YES = "yes"
 NAME_LOG_FILE = 'migrate.log'
+PATH_TO_SNAPSHOTS = 'snapshots'
+
+
+def get_snapshots_list_repository(path=PATH_TO_SNAPSHOTS):
+    path_source = path+'/source'
+    path_dest = path+'/dest'
+    s = os.listdir(path_source)
+    s.sort()
+    source = [{'path': '%s/%s' % (path_source, f),
+               'timestamp': f.replace(".snapshot", "")} for f in s]
+    d = os.listdir(path_dest)
+    d.sort()
+    dest = [{'path': '%s/%s' % (path_dest, f),
+             'timestamp': f.replace(".snapshot", "")} for f in d]
+    return {
+        'source': source,
+        'dest': dest
+    }
 
 
 def dump_to_file(path, snapshot):
