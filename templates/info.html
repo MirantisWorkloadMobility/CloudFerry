@@ -19,11 +19,27 @@
 <p>Tenants:</p>
 <ul>
     {% for tenant in tenants %}
-    <li>{{tenant.name}}</li>
+        <li>{{tenant}}
+            users:
+                    <ul>
+                        {% for user in tenant.users %}
+                            <li>{{user.name}}</li>
+                        {% endfor %}
+                    </ul></li>
     {% endfor %}
 </ul>
 users: {{users}} <br />
+<p>Users:</p>
+<ul>
+    {% for user in admin.users %}
+        <li>{{user.name}}</li>
+    {% endfor %}
+</ul>
 roles: {{roles}}
+Test users:
+{% for info in tenants_info %}
+    {{info}}
+{% endfor %}
 </p>
 
 </body>

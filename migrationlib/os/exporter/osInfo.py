@@ -19,41 +19,38 @@ Package with OpenStack info class.
 
 from migrationlib.os import osCommon
 from utils import log_step, get_log, render_info, write_info
+import yaml
 
 
 class MainInfoResource(osCommon.osCommon):
 
-    def __init__(self, conf):
-        self.source_info = dict()
+    source_info = dict()
+
+    def __init__(self, conf, tenant_name = None):
         self.config = conf
+        if tenant_name:
+            self.tenant_name = tenant_name
+        else:
+            self.tenant_name = 'admin'
+        MainInfoResource.source_info[self.tenant_name] = dict()
         super(MainInfoResource, self).__init__(self.config)
 
     def info_services_list(self):
-        self.source_info['services']= self.keystone_client.services.list()
-        return self.source_info['services']
+        MainInfoResource.source_info['services'] = self.keystone_client.services.list()
+        return self.keystone_client.services.list()
 
     def info_tenants_list(self):
-        self.source_info['tenants']= self.keystone_client.tenants.list()
-        print self.source_info['tenants']
-        return self.source_info['tenants']
+        MainInfoResource.source_info['tenants'] = [tenant.name for tenant in self.keystone_client.tenants.list()]
+        return self.keystone_client.tenants.list()
 
     def info_users_list(self):
-        self.source_info['users']= self.keystone_client.users.list()
-        return self.source_info['users']
+        MainInfoResource.source_info[self.tenant_name]['users'] = self.keystone_client.users.list()
+        return self.keystone_client.users.list()
 
-    def build_info(self):
-        write_info(render_info(self.source_info))
-        print render_info(self.source_info)
-        return render_info(self.source_info)
 
-class InfoResource(MainInfoResource):
-
-    def __init__(self, tenant, conf):
-        self.config=conf
-        conf['tenant'] = tenant.name
-        super(InfoResource, self).__init__(self.config)
-        self.source_info['tenant_info'] = dict()
-        self.source_info['tenant_info'][tenant.name] = dict()
-        self.source_info = self.source_info['tenant_info'][tenant.name]
+    @staticmethod
+    def build_info(info):
+        write_info(render_info(info)
+        return render_info(info)
 
 

@@ -51,6 +51,7 @@ def clean_dest_cloud(name_config, delete_image=False):
     # _, (_, _), (_, importer) = init_migrate(name_config)
     # importer.clean_cloud(delete_image)
 
+@task
 def get_info(name_config):
     LOG.info("Init getting information")
     namespace = Namespace({'name_config': name_config})
@@ -59,5 +60,5 @@ def get_info(name_config):
     scheduler.addTask(SuperTaskInfoSource())
     scheduler.run()
 
-if __name__ == '__main__':
-    get_info('configs/config_iscsi_to_iscsi.yaml')
+# if __name__ == '__main__':
+#     get_info('configs/config_iscsi_to_iscsi.yaml')

@@ -14,7 +14,8 @@
 
 from scheduler.SuperTask import SuperTask
 from scheduler.Task import Task
-from utils import get_log
+from migrationlib.os.exporter import osInfo
+from utils import log_step, get_log, render_info, write_info
 
 LOG = get_log(__name__)
 
@@ -48,8 +49,8 @@ class TaskInfoUsersSource(Task):
 
 
 class TaskInfoBuild(Task):
-    def run(self, main_tenant=None, **kwargs):
-        rendered_info = main_tenant.build_info()
+    def run(self, **kwargs):
+        rendered_info = osInfo.MainInfoResource.build_info(osInfo.MainInfoResource.source_info)
         return {
             'rendered_info': rendered_info
         }
