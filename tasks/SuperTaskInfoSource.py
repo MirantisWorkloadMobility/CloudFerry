@@ -15,23 +15,36 @@
 from scheduler.SuperTask import SuperTask
 from scheduler.Task import Task
 from migrationlib.os.exporter import osInfo
-from utils import log_step, get_log, render_info, write_info
+from utils import get_log
 
 LOG = get_log(__name__)
+SERVICE_TENANTS = ['service', 'services','invisible_to_admin']
+
 
 class SuperTaskInfoSource(SuperTask):
     def run(self, main_tenant=None, **kwargs):
         return [TaskInfoTenantsSource(),
                 TaskInfoServicesSource(),
-                # TaskInfoUsersSource(),
-                TaskInfoUsers(),
+                TaskInfoHypervisorsSource(),
+                TaskInfoUsersSource(),
+                TaskInfoImagesSource(),
+                TaskInfoVolumesSource(),
+                TaskInfoRolesSource(),
+                TaskInfoServersSource(),
                 TaskInfoBuild()]
 
 class TaskInfoServicesSource(Task):
     def run(self, main_tenant=None, **kwargs):
-        source_info = main_tenant.info_services_list()
+        services_info = main_tenant.info_services_list()
         return {
-            'source_info': source_info
+            'services_info': services_info
+        }
+
+class TaskInfoHypervisorsSource(Task):
+    def run(self, main_tenant=None, **kwargs):
+        hypervisors_info = main_tenant.info_hypervisors_list()
+        return {
+            'hypervisors_info': hypervisors_info
         }
 
 class TaskInfoTenantsSource(Task):
@@ -42,23 +55,59 @@ class TaskInfoTenantsSource(Task):
         }
 
 class TaskInfoUsersSource(Task):
-    def run(self, main_tenant=None, **kwargs):
-        users_list = main_tenant.info_users_list()
-        return {
-            'users_list': users_list
-        }
-
-class TaskInfoUsers(Task):
     def run(self, tenants_info= None, tenants_list = None, **kwargs):
         info_users = list()
         for tenant in tenants_list:
-            if not tenant.name in ['service', 'services','invisible_to_admin']:
+            if not tenant.name in SERVICE_TENANTS:
                 users_list = tenants_info[tenant.name].info_users_list()
                 info_users.append(users_list)
         return {
             'info_users': info_users
         }
 
+class TaskInfoImagesSource(Task):
+    def run(self, tenants_info= None, tenants_list = None, **kwargs):
+        info_images = list()
+        for tenant in tenants_list:
+            if not tenant.name in SERVICE_TENANTS:
+                images_list = tenants_info[tenant.name].info_images_list()
+                info_images.append(images_list)
+        return {
+            'info_images': info_images
+        }
+
+class TaskInfoVolumesSource(Task):
+    def run(self, tenants_info= None, tenants_list = None, **kwargs):
+        info_volumes = list()
+        for tenant in tenants_list:
+            if not tenant.name in SERVICE_TENANTS:
+                volumes_list = tenants_info[tenant.name].info_volumes_list()
+                info_volumes.append(volumes_list)
+        return {
+            'info_volumes': info_volumes
+        }
+
+class TaskInfoRolesSource(Task):
+    def run(self, tenants_info= None, tenants_list = None, **kwargs):
+        info_roles= list()
+        for tenant in tenants_list:
+            if not tenant.name in SERVICE_TENANTS:
+                roles_list = tenants_info[tenant.name].info_roles_list()
+                info_roles.append(roles_list)
+        return {
+            'info_roles': info_roles
+        }
+
+class TaskInfoServersSource(Task):
+    def run(self, tenants_info= None, tenants_list = None, **kwargs):
+        info_servers= list()
+        for tenant in tenants_list:
+            if not tenant.name in SERVICE_TENANTS:
+                servers_list = tenants_info[tenant.name].info_servers_list()
+                info_servers.append(servers_list)
+        return {
+            'info_roles': info_servers
+        }
 
 class TaskInfoBuild(Task):
     def run(self, **kwargs):

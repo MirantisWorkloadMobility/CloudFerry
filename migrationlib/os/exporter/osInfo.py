@@ -19,8 +19,9 @@ Package with OpenStack info class.
 
 from migrationlib.os import osCommon
 from utils import log_step, get_log, render_info, write_info
-import yaml
 
+
+LOG = get_log(__name__)
 
 class MainInfoResource(osCommon.osCommon):
 
@@ -30,33 +31,52 @@ class MainInfoResource(osCommon.osCommon):
     def __init__(self, config):
         self.config = config
         self.tenant_name = self.config['tenant']
-        print "Passed to args class tenant_name", self.tenant_name
         MainInfoResource.source_info['tenants_info'][self.tenant_name] = dict()
-        print "Create new tenant_info Unit = ", self.tenant_name
         super(MainInfoResource, self).__init__(self.config)
 
+    @log_step(LOG)
     def info_services_list(self):
         MainInfoResource.source_info['services'] = self.keystone_client.services.list()
         return self.keystone_client.services.list()
 
+    @log_step(LOG)
+    def info_hypervisors_list(self):
+        MainInfoResource.source_info['hypervisors'] = self.nova_client.hypervisors.list()
+        return self.nova_client.hypervisors.list()
+
+    @log_step(LOG)
     def info_tenants_list(self):
         MainInfoResource.source_info['tenants'] = self.keystone_client.tenants.list()
         return self.keystone_client.tenants.list()
 
+    @log_step(LOG)
     def info_users_list(self):
         MainInfoResource.source_info['tenants_info'][self.tenant_name]['users'] = self.keystone_client.users.list()
         return self.keystone_client.users.list()
 
+    @log_step(LOG)
     def info_roles_list(self):
-        MainInfoResource.source_info['roles'] = self.keystone_client.roles.list()
+        MainInfoResource.source_info['tenants_info'][self.tenant_name]['roles'] = self.keystone_client.roles.list()
         return self.keystone_client.roles.list()
 
+    @log_step(LOG)
     def info_images_list(self):
         MainInfoResource.source_info['tenants_info'][self.tenant_name]['images'] = self.glance_client.images.list()
         return self.glance_client.images.list()
 
+    @log_step(LOG)
+    def info_volumes_list(self):
+        MainInfoResource.source_info['tenants_info'][self.tenant_name]['volumes'] = self.cinder_client.volumes.list()
+        return self.cinder_client.volumes.list()
+
+    @log_step(LOG)
+    def info_servers_list(self):
+        MainInfoResource.source_info['tenants_info'][self.tenant_name]['servers'] = self.nova_client.servers.list()
+        return self.nova_client.servers.list()
+
     @staticmethod
     def build_info(info):
-        print info['tenants_info']
+        for item in info['hypervisors']:
+            print item.__dict__
         write_info(render_info(info))
         return render_info(info)
