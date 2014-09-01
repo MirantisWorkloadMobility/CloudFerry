@@ -59,4 +59,4 @@ mail:
 key_filename:
     name: id_rsa
 instances:
- - key_name: source-key
+ - key_name: qwerty

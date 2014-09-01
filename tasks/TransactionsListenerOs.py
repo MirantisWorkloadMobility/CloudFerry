@@ -1,12 +1,14 @@
 from scheduler.transaction.TaskTransaction import TransactionsListener
 from scheduler.transaction.TaskTransaction import ERROR, NO_ERROR
 from migrationlib.os.utils.rollback.Rollback import Rollback
+from scheduler.Namespace import Namespace
 import os
 import json
 from utils import convert_to_dict
 import shutil
 import time
 import uuid
+import copy
 __author__ = 'mirrorcoder'
 
 
@@ -81,6 +83,7 @@ class TransactionsListenerOs(TransactionsListener):
 
     def handler_begin(self, namespace=None, **kwargs):
         self.__init_directory(self.prefix, self.prefix_path, self.rewrite)
+        self.__commit_status(self.id_transaction, self.error_status, 'event_begin')
         self.f = open(self.prefix_path+"tasks.trans", "a+")
         if 'snapshots' in namespace.vars:
             self.__save_snapshots(namespace.vars['snapshots'])
@@ -93,7 +96,7 @@ class TransactionsListenerOs(TransactionsListener):
     def handler_task(self, namespace=None, task=None, skip=None, **kwargs):
         task_obj = dict()
         task_obj['event'] = 'event task'
-        task_obj['namespace'] = self.__prepare_dict(convert_to_dict(namespace))
+        task_obj['namespace'] = convert_to_dict(self.__prepare_dict(namespace.vars))
         task_obj['task'] = str(task)
         task_obj['skip'] = skip
         self.__add_obj_to_file(task_obj, self.f)
@@ -102,7 +105,7 @@ class TransactionsListenerOs(TransactionsListener):
     def handler_error(self, namespace=None, task=None, exception=None, **kwargs):
         task_error_obj = dict()
         task_error_obj['event'] = 'event error'
-        task_error_obj['namespace'] = self.__prepare_dict(convert_to_dict(namespace))
+        task_error_obj['namespace'] = convert_to_dict(Namespace(self.__prepare_dict(namespace.vars)))
         task_error_obj['task'] = str(task)
         task_error_obj['exception'] = str(exception)
         self.__add_obj_to_file(task_error_obj, self.f)
@@ -117,16 +120,15 @@ class TransactionsListenerOs(TransactionsListener):
             task_end['event'] = 'event end'
             self.__add_obj_to_file(task_end, self.f)
             self.f.close()
-            print "event end ", self.id_transaction, self.error_status
-            self.__commit_status(self.id_transaction, self.error_status)
+            self.__commit_status(self.id_transaction, self.error_status, 'event_end')
             if self.error_status == NO_ERROR:
                 return True
             return False
         else:
             return True
 
-    def __commit_status(self, id_transaction, status):
-        commit = {'id_transaction': id_transaction, 'status': status}
+    def __commit_status(self, id_transaction, status, event):
+        commit = {'id_transaction': id_transaction, 'status': status, 'event': event}
         with open(self.prefix+"/status.inf", "a+") as f:
             self.__add_obj_to_file(commit, f)
 
@@ -140,15 +142,15 @@ class TransactionsListenerOs(TransactionsListener):
         if not os.path.exists(prefix_path+"dest/"):
             os.makedirs(prefix_path+"dest/")
 
-    def __add_obj_to_file(self, obj_dict, file):
+    def __add_obj_to_file(self, obj_dict, f):
         obj_dict['timestamp'] = time.time()
-        json.dump(obj_dict, file)
-        file.write("\n")
-        file.flush()
-        os.fsync(file)
+        json.dump(obj_dict, f)
+        f.write("\n")
+        f.flush()
+        os.fsync(f)
 
-    def __prepare_dict(self, dict_namespace, exclude_fields=['config']):
-        result = dict_namespace
+    def __prepare_dict(self, dict_namespace, exclude_fields=['config', 'res_importer', 'res_exporter', 'resources']):
+        result = copy.copy(dict_namespace)
         for exclude in exclude_fields:
             if exclude in dict_namespace:
                 del result[exclude]

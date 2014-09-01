@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import yaml
 from fabric.api import task, env
 from scheduler.Namespace import Namespace
 from scheduler.Scheduler import Scheduler
@@ -36,7 +35,7 @@ LOG = get_log(__name__)
 
 
 @task
-def migrate(name_config, name_instance=None, mode=RETRY):
+def migrate(name_config, name_instance=None, mode=RESTART):
     """
         :name_config - name of config yaml-file, example 'config.yaml'
     """
@@ -45,10 +44,10 @@ def migrate(name_config, name_instance=None, mode=RETRY):
                            'name_instance': name_instance,
                            '__rollback_status__': rollback_status})
     scheduler = Scheduler(namespace)
+    if rollback_status == RETRY:
+        scheduler.addTask(TaskInitMigrate())
 
-    if rollback_status == RESTART:
-        scheduler.addTask(TaskInitDirectory())
-    if rollback_status == ABORT:
+    if (rollback_status == RESTART) or (rollback_status == ABORT):
         if os.path.exists(PATH_TO_SNAPSHOTS):
             scheduler.addTask(TaskInitMigrate())
             scheduler.addTask(TaskLoadSnapshotsForAbort())
@@ -56,8 +55,11 @@ def migrate(name_config, name_instance=None, mode=RETRY):
             scheduler.addTask(TaskRestoreSourceCloud())
             scheduler.addTask(TaskRestoreDestCloud())
         scheduler.addTask(TaskInitDirectory())
+
+    if rollback_status == ABORT:
         scheduler.run()
         return
+
     scheduler.addTaskExclusion(TaskCreateSnapshotOs)
     scheduler.addTask(SuperTaskExportResource())
     scheduler.addTask(SuperTaskImportResource())
@@ -72,4 +74,4 @@ def clean_dest_cloud(name_config, delete_image=False):
     # importer.clean_cloud(delete_image)
 
 if __name__ == '__main__':
-    migrate('configs/config_iscsi_to_iscsi.yaml', mode=ABORT)
+    migrate('configs/config_iscsi_to_iscsi.yaml', mode=RETRY)

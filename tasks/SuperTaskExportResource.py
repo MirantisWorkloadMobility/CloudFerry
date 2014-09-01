@@ -69,7 +69,6 @@ class TaskUserInfoTenantsResource(Task):
         }
 
 
-
 class TaskNetworkServiceInfoResource(Task):
 
     def run(self, res_exporter=None, **kwargs):
@@ -86,6 +85,7 @@ class TaskSecurityGroupsResource(Task):
         return {
             'resources': resources
         }
+
 
 class TaskBuildResource(Task):
 

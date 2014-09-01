@@ -13,7 +13,7 @@
 # limitations under the License.
 from Rollback import *
 from migrationlib.os.utils.snapshot.Snapshot import Snapshot
-from scheduler.transaction.TaskTransaction import NO_ERROR
+from scheduler.transaction.TaskTransaction import NO_ERROR, ERROR
 import os
 import json
 import shutil
@@ -151,8 +151,20 @@ class RollbackOpenStack(Rollback):
 
     def check_instance(self, namespace, __transaction__, instance_id):
         obj = {}
+        obj_b = {}
         if self.check_status_file(__transaction__, namespace):
-            obj = self.find_obj_to_file(__transaction__.prefix+'status.inf', instance_id)
+            obj_1 = self.find_obj_to_file(__transaction__.prefix+'status.inf', instance_id)
+            obj_2 = self.find_obj_to_file(__transaction__.prefix+'status.inf', instance_id, 1)
+            for o in [obj_2, obj_1]:
+                if o:
+                    if o['event'] == 'event_end':
+                        obj = o
+                    if o['event'] == 'event_begin':
+                        obj_b = o
+            if not obj:
+                if obj_b:
+                    obj = obj_b
+                    obj['status'] = ERROR
         return obj
 
     def check_status_file(self, __transaction__, namespace):
@@ -161,11 +173,15 @@ class RollbackOpenStack(Rollback):
             return False
         return True
 
-    def find_obj_to_file(self, path, instance_id):
+    def find_obj_to_file(self, path, instance_id, skip=0):
         obj = {}
+        skip_curr = 0
         with open(path, 'r') as f:
             for item in f.readlines():
                 if item.find(instance_id) != -1:
+                    if skip_curr < skip:
+                        skip_curr += 1
+                        continue
                     obj = json.loads(item)
                     break
         return obj

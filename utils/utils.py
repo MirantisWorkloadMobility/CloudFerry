@@ -72,7 +72,7 @@ def load_json_from_file(file_path):
 primitive = [int, long, bool, float, type(None), str, unicode]
 
 
-def convert_to_dict(obj, ident=0, limit_ident=8):
+def convert_to_dict(obj, ident=0, limit_ident=6):
     ident += 1
     if type(obj) in primitive:
         return obj
@@ -88,7 +88,7 @@ def convert_to_dict(obj, ident=0, limit_ident=8):
                 except AttributeError as e:
                     return str(obj.__class__ if hasattr(obj, '__class__') else type(obj))
         else:
-            return str(obj.__class__)
+            return str(obj.__class__ if hasattr(obj, '__class__') else type(obj))
     if type(obj) is dict:
         res = {}
         for item in obj:
