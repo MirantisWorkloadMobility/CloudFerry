@@ -1,5 +1,5 @@
 clouds:
-    from:
+    source:
         type: os
         host: 172.18.172.73
         user: admin
@@ -11,14 +11,14 @@ clouds:
           convert_ephemeral_drive: qcow2
         cinder:
           backend: iscsi
+          transfer_via_glance: no
           disk_format: qcow2
         temp: /root/temp
         identity:
           connection: mysql+mysqlconnector
         keep_user_passwords: no
         ssh_transfer_port: 9999
-        network_service: nova
-    to:
+    destination:
         type: os
         host: 172.18.172.77
         user: admin
@@ -35,11 +35,11 @@ clouds:
         ephemeral_drives:
           ceph: no
         transfer_ephemeral:
-          compress: gzip
-          level_compress: 9
+          compression: gzip
+          level_compression: 9
         transfer_file:
-          compress: dd
-          level_compress: 9
+          compression: dd
+          level_compression: 9
         import_rules:
             default: {}
             overwrite:
@@ -50,7 +50,6 @@ clouds:
         speed_limit: 10MB
         identity:
           connection: mysql+mysqlconnector
-        network_service: neutron
 
 mail:
     mail_server: smtp.yandex.ru:25
@@ -60,4 +59,4 @@ mail:
 key_filename:
     name: id_rsa
 instances:
- - key_name: qwerty
+ - key_name: source-key

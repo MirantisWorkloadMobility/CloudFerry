@@ -1,3 +1,17 @@
+# Copyright (c) 2014 Mirantis Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the License);
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and#
+# limitations under the License.
+
 from migrationlib.os.exporter import osExporter, osResourceExporter
 from migrationlib.os.importer import osImporter, osResourceImporter
 from scheduler.Task import Task
@@ -16,13 +30,13 @@ class TaskInitMigrate(Task):
     def get_exporter(config):
         return {
             'os': lambda info: (osResourceExporter.ResourceExporter(info), osExporter.Exporter(info))
-        }[config['clouds']['from']['type']](config)
+        }[config['clouds']['source']['type']](config)
 
     @staticmethod
     def get_importer(config):
         return {
             'os': lambda info: (osResourceImporter.ResourceImporter(info), osImporter.Importer(info))
-        }[config['clouds']['to']['type']](config)
+        }[config['clouds']['destination']['type']](config)
 
     @staticmethod
     def init_migrate(name_config):

@@ -1,3 +1,18 @@
+# Copyright (c) 2014 Mirantis Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the License);
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and#
+# limitations under the License.
+
+
 """
 Package with OpenStack resources export/import utilities.
 """
@@ -16,7 +31,7 @@ class ResourceExporter(osCommon.osCommon):
 
     def __init__(self, conf):
         self.data = dict()
-        self.config = conf['clouds']['from']
+        self.config = conf['clouds']['source']
         self.funcs = []
         super(ResourceExporter, self).__init__(self.config)
 
@@ -31,14 +46,16 @@ class ResourceExporter(osCommon.osCommon):
     @log_step(LOG)
     def get_flavors(self):
         def process_flavor(flavor):
-            if flavor.is_public:
-                return flavor, []
+            if hasattr(flavor, "is_public"):
+                if flavor.is_public:
+                    return flavor, []
             else:
                 tenants = self.nova_client.flavor_access.list(flavor=flavor)
                 tenants = [self.keystone_client.tenants.get(t.tenant_id).name for t in tenants]
                 return flavor, tenants
 
-        self.data['flavors'] = map(process_flavor, self.nova_client.flavors.list(is_public=False))
+        flavor_list = self.nova_client.flavors.list()
+        self.data['flavors'] = map(process_flavor, flavor_list)
         return self
 
     @log_step(LOG)
@@ -57,13 +74,23 @@ class ResourceExporter(osCommon.osCommon):
         return self
 
     @log_step(LOG)
+    def detect_neutron(self):
+        self.__data_network_service_dict_init()
+        # self.data['network_service_info']['service']  = self.__get_is_neutron()
+        self.data['network_service_info']['service'] = osCommon.osCommon.network_service(self)
+
+    @log_step(LOG)
     def get_security_groups(self):
-        network_service = self.config['network_service']
+        self.__data_network_service_dict_init()
         security_groups = self.__get_neutron_security_groups() \
-            if network_service == "neutron" else \
+            if osCommon.osCommon.network_service(self) == 'neutron'  else \
             self.__get_nova_security_groups()
-        self.data['security_groups_info'] = {'service': network_service, 'security_groups': security_groups}
+        self.data['network_service_info']['security_groups'] = security_groups
         return self
+
+    def __data_network_service_dict_init(self):
+        if not 'network_service_info' in self.data:
+            self.data['network_service_info']= {}
 
     def __get_nova_security_groups(self):
         return self.nova_client.security_groups.list()

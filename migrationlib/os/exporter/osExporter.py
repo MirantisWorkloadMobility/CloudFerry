@@ -1,3 +1,17 @@
+# Copyright (c) 2014 Mirantis Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the License);
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and#
+# limitations under the License.
+
 from migrationlib.os import osCommon
 from osBuilderExporter import osBuilderExporter
 
@@ -5,6 +19,8 @@ from utils import log_step, get_log
 
 LOG = get_log(__name__)
 
+VOLUMES_VIA_GLANCE = 'volumes_via_glance'
+VOLUMES = 'volumes'
 
 class Exporter(osCommon.osCommon):
 
@@ -12,8 +28,8 @@ class Exporter(osCommon.osCommon):
 
         """ config initialization"""
 
-        self.config = config['clouds']['from']
-        self.config_to = config['clouds']['to']
+        self.config = config['clouds']['source']
+        self.config_to = config['clouds']['destination']
         super(Exporter, self).__init__(self.config)
 
     @log_step(LOG)
@@ -35,9 +51,15 @@ class Exporter(osCommon.osCommon):
         return self.get_algorithm_export()(builder)
 
     def get_algorithm_export(self):
-        return self.__algorithm_export
+        return {
+          VOLUMES_VIA_GLANCE: lambda builder: self.__general_algorithm_export(builder).get_volumes_via_glance(),
+          VOLUMES: lambda builder: self.__general_algorithm_export(builder).get_volumes()
+        }[self.__config_transfer_volumes()]
 
-    def __algorithm_export(self, builder):
+    def __config_transfer_volumes(self):
+        return VOLUMES if not self.config['cinder']['transfer_via_glance'] else VOLUMES_VIA_GLANCE
+
+    def __general_algorithm_export(self, builder):
         return builder\
             .stop_instance()\
             .get_name()\
@@ -51,14 +73,4 @@ class Exporter(osCommon.osCommon):
             .get_disk_config()\
             .get_networks()\
             .get_disk()\
-            .get_instance_name()\
-            .get_volumes()
-
-    def convert_to_dict(self):
-        res = {}
-        res['_type_class'] = Exporter.__name__
-        return res
-
-    def set_state(self, obj_dict):
-        pass
-
+            .get_instance_name()

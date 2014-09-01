@@ -1,3 +1,18 @@
+# Copyright (c) 2014 Mirantis Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the License);
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and#
+# limitations under the License.
+
+
 import time
 
 from migrationlib.os.utils.FileLikeProxy import FileLikeProxy
@@ -5,7 +20,9 @@ from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid, \
     CEPH, REMOTE_FILE, QCOW2, log_step, get_log
 from scheduler.builder_wrapper import inspect_func, supertask
 from fabric.api import run, settings, env
+from migrationlib.os.osCommon import osCommon
 import ipaddr
+
 
 
 __author__ = 'mirrorcoder'
@@ -231,7 +248,7 @@ class osBuilderImporter:
         disk_host = data["disk"]["host"]
         disk_diff_path = data["disk"]["diff_path"]
         instance = instance if instance else self.instance
-        dest_disk = self.__detect_delta_file(instance, False)
+        dest_disk = self.__detect_file_path(instance, False)
         self.__transfer_remote_file(instance,
                                     disk_host,
                                     disk_diff_path,
@@ -247,7 +264,7 @@ class osBuilderImporter:
         disk_type = data['disk']['type']
         instance = instance if instance else self.instance
         if not self.config['ephemeral_drives']['ceph']:
-            dest_disk_ephemeral = self.__detect_delta_file(instance, True)
+            dest_disk_ephemeral = self.__detect_file_path(instance, True)
             if self.data['disk']['type'] == CEPH:
                 backing_disk_ephemeral = self.__detect_backing_file(dest_disk_ephemeral, instance)
                 self.__delete_remote_file_on_compute(dest_disk_ephemeral, instance)
@@ -390,7 +407,6 @@ class osBuilderImporter:
                           (host, dest_disk_ephemeral)).split('\n')
                 backing_file = ""
                 for i in out:
-                    print i
                     line_out = i.split(":")
                     if line_out[0] == "backing file":
                         backing_file = line_out[1].replace(" ", "")
@@ -414,7 +430,6 @@ class osBuilderImporter:
                            image_format,
                            path_to_image))
                 new_image_id = out.split()[3]
-                print new_image_id
         return new_image_id
 
     @log_step(LOG)
@@ -429,7 +444,7 @@ class osBuilderImporter:
                     run(cmd)
 
     @log_step(LOG)
-    def __detect_delta_file(self, instance, is_ephemeral):
+    def __detect_file_path(self, instance, is_ephemeral, volume_id=None):
         LOG.debug("| | sync with remote file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         dest_instance_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
@@ -439,6 +454,11 @@ class osBuilderImporter:
                 out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" % (host, dest_instance_name))
                 dest_output = out.split()
                 path_disk = (DISK + LOCAL) if is_ephemeral else DISK
+                if volume_id:
+                    path_disk = "volume-" + volume_id
+                    for device in dest_output:
+                        if path_disk in device:
+                            return device
                 for i in dest_output:
                     if instance.id + path_disk == i[-(LEN_UUID_INSTANCE+len(path_disk)):]:
                         dest_disk = i
@@ -448,20 +468,22 @@ class osBuilderImporter:
         return dest_disk
 
     @log_step(LOG)
-    def __transfer_remote_file(self, instance, disk_host, source_disk, dest_disk):
+    def __transfer_remote_file(self, instance, disk_host, source_disk, dest_disk, ssh_port=None):
         LOG.debug("| | copy file")
         host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        ssh_port = ssh_port if ssh_port else self.config_from['ssh_transfer_port']
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
-                with up_ssh_tunnel(host, self.config['host'], self.config_from['ssh_transfer_port']):
-                    if self.config['transfer_file']['compress'] == "dd":
+                with up_ssh_tunnel(host, self.config['host'], ssh_port):
+                    if self.config['transfer_file']['compression'] == "dd":
                         run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
-                             "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'dd bs=1M of=%s'") %
-                            (disk_host, source_disk, dest_disk))
-                    elif self.config['transfer_file']['compress'] == "gzip":
+                             "| ssh -oStrictHostKeyChecking=no -p %s localhost 'dd bs=1M of=%s'") %
+                            (disk_host, source_disk, ssh_port, dest_disk))
+                    elif self.config['transfer_file']['compression'] == "gzip":
                         run(("ssh -oStrictHostKeyChecking=no %s 'gzip -%s -c %s' " +
-                             "| ssh -oStrictHostKeyChecking=no -p 9999 localhost 'gunzip | dd bs=1M of=%s'") %
-                            (self.config['transfer_file']['level_compress'], disk_host, source_disk, dest_disk))
+                             "| ssh -oStrictHostKeyChecking=no -p %s localhost 'gunzip | dd bs=1M of=%s'") %
+                            (disk_host, self.config['transfer_file']['level_compression'],
+                             source_disk, ssh_port, dest_disk))
 
     @log_step(LOG)
     def __transfer_remote_file_to_ceph(self, instance, disk_host, source_disk, dest_host, is_source_ceph):
@@ -472,7 +494,7 @@ class osBuilderImporter:
                 run("rbd rm -p compute %s_disk.local" % instance.id)
         with settings(host_string=self.config_from['host']):
             with forward_agent(env.key_filename):
-                if self.config["transfer_ephemeral"]["compress"] == "gzip":
+                if self.config["transfer_ephemeral"]["compression"] == "gzip":
                     if not is_source_ceph:
                         run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && " +
                             "qemu-img convert -O raw %s disk.local.temp && gzip -%s -c disk.local.temp' | " +
@@ -481,18 +503,18 @@ class osBuilderImporter:
                             % (disk_host,
                                temp_dir,
                                source_disk,
-                               self.config["transfer_ephemeral"]["level_compress"],
+                               self.config["transfer_ephemeral"]["level_compression"],
                                dest_host,
                                instance.id))
                     else:
                         run(("gzip -%s -c %s | " +
                             "ssh -oStrictHostKeyChecking=no %s 'gunzip | " +
                             "rbd import --image-format=2 - compute/%s_disk.local'")
-                            % (self.config["transfer_ephemeral"]["level_compress"],
+                            % (self.config["transfer_ephemeral"]["level_compression"],
                                source_disk,
                                dest_host,
                                instance.id))
-                elif self.config["transfer_ephemeral"]["compress"] == "dd":
+                elif self.config["transfer_ephemeral"]["compression"] == "dd":
                     if not source_disk:
                         run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && " +
                             "qemu-img convert -O raw %s disk.local.temp && dd bs=1M if=disk.local.temp' | " +
@@ -508,35 +530,131 @@ class osBuilderImporter:
                                instance.id))
                 run("rm -f %s" % source_disk)
 
+    @log_step(LOG)
+    def __transfer_volume_from_iscsi_to_ceph(self, source_volume_host, source_volume_path,
+                                             dest_volume, dest_host = None, ceph_pool="volumes"):
+        dest_host= dest_host if dest_host else self.config['host']
+        with settings(host_string=dest_host):
+            with forward_agent(env.key_filename):
+                run(("rbd rm -p %s volume-%s") % (ceph_pool, dest_volume.id))
+        with settings(host_string=self.config_from['host']):
+            with forward_agent(env.key_filename):
+                run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' | " +
+                    "ssh -oStrictHostKeyChecking=no %s 'rbd import --image-format=2 - %s/volume-%s'") %
+                    (source_volume_host, source_volume_path, dest_host, ceph_pool, dest_volume.id))
+
+    @log_step(LOG)
+    def __transfer_volume_from_ceph_to_ceph(self, source_volume, dest_volume, dest_host=None,
+                                            source_ceph_pool='volumes', dest_ceph_pool='volumes'):
+        dest_host= dest_host if dest_host else self.config['host']
+        with settings(host_string=dest_host):
+            with forward_agent(env.key_filename):
+                run(("rbd rm -p %s volume-%s") % (dest_ceph_pool, dest_volume.id))
+        with settings(host_string=self.config_from['host']):
+            with forward_agent(env.key_filename):
+                run(("rbd export -p %s volume-%s - | " +
+                     "ssh -oStrictHostKeyChecking=no %s 'rbd import --image-format=2 - %s/volume-%s'") %
+                    (source_ceph_pool, source_volume.id, dest_host, dest_ceph_pool, dest_volume.id))
+
+    @log_step(LOG)
+    def __transfer_volume_from_ceph_to_iscsi(self, source_volume, dest_volume_path, instance=None,
+                                             source_ceph_pool='volumes', ssh_port=None):
+        instance = instance if instance else self.instance
+        ssh_port = ssh_port if ssh_port else self.config_from['ssh_transfer_port']
+        host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        with settings(host_string=self.config_from['host']):
+            with forward_agent(env.key_filename):
+                with up_ssh_tunnel(host, self.config['host'], ssh_port):
+                    run(("rbd export -p %s volume-%s - | ssh -oStrictHostKeyChecking=no -p %s localhost " +
+                         "'dd bs=1M of=%s'") % (source_ceph_pool, source_volume.id, ssh_port, dest_volume_path))
+
+
+
     @inspect_func
     @supertask
     def import_volumes(self, data=None, instance=None, **kwargs):
 
         """
-            Volumes migrationlib through image-service.
+            Volumes migration through image-service.
             Firstly: transferring image from source glance to destination glance
-            Secandary: create volume with referencing on to image, in which we already uploaded cinder
+            Secondary: create volume with referencing on to image, in which we already uploaded cinder
             volume on source cloud.
         """
-        self\
-            .transfer_volumes(data=data)\
-            .attaching_volume(data=data, instance=instance)
+        if self.config_from['cinder']['transfer_via_glance']:
+            self\
+                .transfer_volumes_via_glance(data=data)\
+                .attaching_volume(data=data, instance=instance)
+        elif self.config['cinder']['backend'] == 'iscsi':
+            self\
+                .create_new_volume(data=data)\
+                .attaching_volume(data=data, instance=instance) \
+                .transfer_volume_directly(self.config_from['cinder']['backend'], self.config['cinder']['backend'],
+                                          data=data, instance=instance)
+        else:
+            self\
+                .create_new_volume(data=data)\
+                .transfer_volume_directly(self.config_from['cinder']['backend'], self.config['cinder']['backend'],
+                                          data=data, instance=instance)\
+                .attaching_volume(data=data, instance=instance)
         return self
 
     @inspect_func
     @log_step(LOG)
-    def transfer_volumes(self, data=None, **kwargs):
+    def create_new_volume(self, data=None, **kwargs):
+        data = data if data else self.data
+        volumes = data['volumes']
+        for source_volume in volumes:
+            LOG.debug("      volume %s" % source_volume.__dict__)
+            volume = self.cinder_client.volumes.create(size=source_volume.size,
+                                                        display_name=source_volume.name,
+                                                        display_description=source_volume.description,
+                                                        volume_type=source_volume.volume_type,
+                                                        availability_zone=source_volume.availability_zone,
+                                                        metadata = {'source_id': source_volume.id})
+            LOG.debug("        wait for available")
+            self.__wait_for_status(self.cinder_client.volumes, volume.id, 'available')
+            self.volumes.append(volume)
+        return self
+
+    @inspect_func
+    @log_step(LOG)
+    def transfer_volume_directly(self, source_backend, dest_backend, data=None, **kwargs):
+        data = data if data else self.data
+        volume_host = data["disk"]["host"]
+        source_volumes = data['volumes']
+        for source_volume in source_volumes:
+            for dest_volume in self.volumes:
+                if source_volume.id == dest_volume.metadata['source_id']:
+                    if source_backend == 'iscsi' and dest_backend == 'iscsi':
+                        dest_volume_path = self.__detect_file_path(self.instance, False, volume_id=dest_volume.id)
+                        self.__transfer_remote_file(self.instance, volume_host,
+                                                    source_volume.volume_path, dest_volume_path)
+                    elif source_backend == 'iscsi' and dest_backend == 'ceph':
+                        self.__transfer_volume_from_iscsi_to_ceph(volume_host, source_volume.volume_path,
+                                                                  dest_volume)
+                    elif source_backend == 'ceph' and dest_backend == 'ceph':
+                        self.__transfer_volume_from_ceph_to_ceph(source_volume, dest_volume)
+                    elif source_backend == 'ceph' and dest_backend == 'iscsi':
+                        dest_volume_path = self.__detect_file_path(self.instance, False, volume_id=dest_volume.id)
+                        self.__transfer_volume_from_ceph_to_iscsi(source_volume, dest_volume_path, self.instance)
+                    else:
+                        raise NameError("Can't determine cinder storage backend from config file!")
+        return self
+
+    @inspect_func
+    @log_step(LOG)
+    def transfer_volumes_via_glance(self, data=None, **kwargs):
         data = data if data else self.data
         volumes = data['volumes']
         for source_volume in volumes:
             LOG.debug("      volume %s" % source_volume.__dict__)
             image = self.__copy_from_glance_to_glance(source_volume)
             volume = self.cinder_client.volumes.create(size=source_volume.size,
-                                                       display_name=source_volume.name,
-                                                       display_description=source_volume.description,
-                                                       volume_type=source_volume.volume_type,
-                                                       availability_zone=source_volume.availability_zone,
-                                                       imageRef=image.id)
+                                                        display_name=source_volume.name,
+                                                        display_description=source_volume.description,
+                                                        volume_type=source_volume.volume_type,
+                                                        availability_zone=source_volume.availability_zone,
+                                                        imageRef=image.id)
             LOG.debug("        wait for available")
             self.__wait_for_status(self.cinder_client.volumes, volume.id, 'available')
             LOG.debug("        update volume")
@@ -618,7 +736,8 @@ class osBuilderImporter:
                                                 size=info_image_source.size)
 
     def __callback_print_progress(self, size, length, id, name):
-        print "Download {0} bytes of {1} ({2}%) - id = {3} name = {4}".format(size, length, size*100/length, id, name)
+        LOG.info("Download {0} bytes of {1} ({2}%) - id = {3} name = {4}"
+                 .format(size, length, size*100/length, id, name))
 
     @log_step(LOG)
     def __get_flavor(self, flavor_name):
@@ -686,7 +805,7 @@ class osBuilderImporter:
 
     @log_step(LOG)
     def __get_network(self, network_info, keep_ip=False):
-        tenant_id = self.__get_tenant_id_by_name(self.config['tenant'])
+        tenant_id = osCommon.get_tenant_id_by_name(self.keystone_client, self.config['tenant'])
         if keep_ip:
             instance_addr = ipaddr.IPAddress(network_info['ip'])
             for i in self.network_client.list_subnets()['subnets']:
@@ -700,17 +819,13 @@ class osBuilderImporter:
 
     @log_step(LOG)
     def __get_network_by_cidr(self, network_info):
-        tenant_id = self.__get_tenant_id_by_name(self.config['tenant'])
+        tenant_id = osCommon.get_tenant_id_by_name(self.keystone_client, self.config['tenant'])
         instance_addr = ipaddr.IPAddress(network_info['ip'])
         for i in self.network_client.list_subnets()['subnets']:
             if i['tenant_id'] == tenant_id:
                 if ipaddr.IPNetwork(i['cidr']).Contains(instance_addr):
                     return self.network_client.list_networks(id=i['network_id'])['networks'][0]
 
-    def __get_tenant_id_by_name(self, name):
-        for i in self.keystone_client.tenants.list():
-            if i.name == name:
-                return i.id
 
     def __wait_for_status(self, getter, id, status):
         while getter.get(id).status != status:

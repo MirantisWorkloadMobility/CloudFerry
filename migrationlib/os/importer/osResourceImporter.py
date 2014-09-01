@@ -1,3 +1,17 @@
+# Copyright (c) 2014 Mirantis Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the License);
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and#
+# limitations under the License.
+
 """
 Package with OpenStack resources export/import utilities.
 """
@@ -16,7 +30,7 @@ class ResourceImporter(osCommon.osCommon):
     """
 
     def __init__(self, conf, data={}, users_notifications={}):
-        self.config = conf['clouds']['to']
+        self.config = conf['clouds']['destination']
         if 'mail' in conf:
             self.postman = Postman(**conf['mail'])
         else:
@@ -85,9 +99,9 @@ class ResourceImporter(osCommon.osCommon):
     def upload_roles(self, data=None, **kwargs):
         roles = data['roles'] if data else self.data['roles']
         # do not import a role if one with the same name already exists
-        existing = {r.name for r in self.keystone_client.roles.list()}
+        existing_roles = {r.name.lower() for r in self.keystone_client.roles.list()}
         for role in roles:
-            if role.name not in existing:
+            if role.name.lower() not in existing_roles:
                 self.keystone_client.roles.create(role.name)
         return self
 
@@ -97,20 +111,25 @@ class ResourceImporter(osCommon.osCommon):
         tenants = data['tenants'] if data else self.data['tenants']
         # do not import tenants or users if ones with the same name already exist
         existing_tenants = {t.name: t for t in self.keystone_client.tenants.list()}
+        existing_tenants_lower = {t.name.lower(): t for t in self.keystone_client.tenants.list()}
         existing_users = {u.name: u for u in self.keystone_client.users.list()}
+        existing_users_lower = {u.name.lower(): u for u in self.keystone_client.users.list()}
         # by this time roles on source and destination should be synchronized
         roles = {r.name: r for r in self.keystone_client.roles.list()}
         self.users_notifications = {}
         for tenant in tenants:
-            if tenant.name not in existing_tenants:
+            if not tenant.name.lower() in existing_tenants_lower:
                 dest_tenant = self.keystone_client.tenants.create(tenant_name=tenant.name,
                                                                   description=tenant.description,
                                                                   enabled=tenant.enabled)
+            elif not tenant.name in existing_tenants:
+                ex_tenant = existing_tenants_lower[tenant.name.lower()]
+                dest_tenant = self.keystone_client.tenants.update(ex_tenant.id, tenant_name=tenant.name)
             else:
                 dest_tenant = existing_tenants[tenant.name]
             # import users of this tenant that don't exist yet
             for user in tenant.list_users():
-                if user.name not in existing_users:
+                if user.name.lower() not in existing_users_lower:
                     new_password = self.__generate_password()
                     dest_user = self.keystone_client.users.create(name=user.name,
                                                                   password=new_password,
@@ -121,13 +140,19 @@ class ResourceImporter(osCommon.osCommon):
                         'email': user.email,
                         'password': new_password
                     }
+                elif user.name not in existing_users:
+                    ex_user = existing_users_lower[user.name.lower()]
+                    dest_user = self.keystone_client.users.update(ex_user,
+                                                                  name=user.name)
                 else:
                     dest_user = existing_users[user.name]
                 # import roles of this user within the tenant that are not already assigned
-                dest_user_roles = {r.name for r in dest_user.list_roles(dest_tenant)}
+                dest_user_roles_lower = {r.name.lower() for r in dest_user.list_roles(dest_tenant)}
                 for role in user.list_roles(tenant):
-                    if role.name not in dest_user_roles:
-                        dest_tenant.add_user(dest_user, roles[role.name])
+                    if role.name.lower() not in dest_user_roles_lower:
+                        for dest_role in roles:
+                            if role.name.lower() == dest_role.lower():
+                                dest_tenant.add_user(dest_user, roles[dest_role])
         return self
 
     @inspect_func
@@ -135,9 +160,11 @@ class ResourceImporter(osCommon.osCommon):
     def upload_flavors(self, data=None, **kwargs):
         flavors = data['flavors'] if data else self.data['flavors']
         # do not import a flavor if one with the same name already exists
-        existing = {f.name for f in self.nova_client.flavors.list(is_public=False)}
+        existing = {f.name for f in self.nova_client.flavors.list()}
         for (flavor, tenants) in flavors:
             if flavor.name not in existing:
+                if flavor.swap == "":
+                    flavor.swap = 0
                 dest_flavor = self.nova_client.flavors.create(name=flavor.name,
                                                               ram=flavor.ram,
                                                               vcpus=flavor.vcpus,
@@ -212,14 +239,13 @@ class ResourceImporter(osCommon.osCommon):
     @inspect_func
     @log_step(LOG)
     def upload_security_groups(self, data=None, **kwargs):
-        network_config = self.config['network_service']
         data = data if data else self.data
-        security_groups_info = data['security_groups_info']
-        if security_groups_info['service'] == "nova" and network_config == "nova":
+        security_groups_info = data['network_service_info']
+        if security_groups_info['service'] == "nova" and osCommon.osCommon.network_service(self) == "nova":
             self.__upload_nova_security_groups(security_groups_info['security_groups'])
-        if security_groups_info['service'] == "neutron" and network_config == "neutron":
+        if security_groups_info['service'] == "neutron" and osCommon.osCommon.network_service(self) == "neutron":
             self.__upload_neutron_security_groups(security_groups_info['security_groups'])
-        if security_groups_info['service'] == "nova" and network_config == "neutron":
+        if security_groups_info['service'] == "nova" and osCommon.osCommon.network_service(self) == "neutron":
             converted_groups = self.__convert_sg_nova_to_neutron(security_groups_info['security_groups'])
             self.__upload_neutron_security_groups(converted_groups)
         return self

@@ -1,3 +1,16 @@
+# Copyright (c) 2014 Mirantis Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the License);
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and#
+# limitations under the License.
 
 from migrationlib.os import osCommon
 from osBuilderImporter import osBuilderImporter
@@ -30,8 +43,8 @@ class MultiCaseAlgorithm:
 
 class Importer(osCommon.osCommon):
     def __init__(self, config):
-        self.config = config['clouds']['to']
-        self.config_from = config['clouds']['from']
+        self.config = config['clouds']['destination']
+        self.config_from = config['clouds']['source']
         super(Importer, self).__init__(self.config)
 
     def clean_cloud(self, delete_images=False):
@@ -124,8 +137,8 @@ class Importer(osCommon.osCommon):
             .create_instance()\
             .stop_instance()\
             .import_delta_file()\
-            .start_instance()\
-            .import_volumes()
+            .import_volumes()\
+            .start_instance()
 
     @log_step(LOG)
     def __upload_ceph_backend_ephemeral(self, builderImporter):
@@ -142,6 +155,7 @@ class Importer(osCommon.osCommon):
             .start_instance()\
             .import_volumes()
 
+
     @log_step(LOG)
     def __upload_iscsi_backend_ephemeral(self, builderImporter):
         """
@@ -153,8 +167,8 @@ class Importer(osCommon.osCommon):
             .stop_instance()\
             .import_delta_file()\
             .import_ephemeral_drive()\
-            .start_instance()\
-            .import_volumes()
+            .import_volumes()\
+            .start_instance()
 
     @log_step(LOG)
     def __upload_boot_volume(self, builderImporter):
@@ -162,7 +176,9 @@ class Importer(osCommon.osCommon):
             .prepare_for_creating_new_instance()\
             .prepare_for_boot_volume()\
             .create_instance()\
+            .stop_instance()\
             .import_volumes()\
+            .start_instance()\
             .delete_image_from_source_and_dest_cloud()
 
     @log_step(LOG)
