@@ -24,15 +24,14 @@ class TaskSourceInfo(Task):
         LOG.info("Init migrationlib config")
         config = TaskSourceInfo.init_source_config(name_config)
         admin_tenant = TaskSourceInfo.get_tenant_obj(config)
-        tenant_info = dict()
-        for tenant in admin_tenant.info_tenants_list():
-            if tenant.name in ['service', 'services','invisible_to_admin']:
-               continue
-            tenant_info[tenant.name] = dict()
-            tenant_info[tenant.name]['tenant'] = TaskSourceInfo.get_tenant_obj(config, tenant)
-
+        tenants_list = admin_tenant.info_tenants_list()
+        tenants_info = dict()
+        for tenant in tenants_list:
+            if not tenant.name in ['service', 'services','invisible_to_admin']:
+                tenants_info[tenant.name] = TaskSourceInfo.get_tenant_obj(config, tenant)
         return {
             'config': config,
             'main_tenant': admin_tenant,
-            'users_tenants_list': tenant_info
+            'tenants_list': tenants_list,
+            'tenants_info': tenants_info
         }

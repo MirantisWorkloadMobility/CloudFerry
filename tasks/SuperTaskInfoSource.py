@@ -23,7 +23,8 @@ class SuperTaskInfoSource(SuperTask):
     def run(self, main_tenant=None, **kwargs):
         return [TaskInfoTenantsSource(),
                 TaskInfoServicesSource(),
-                TaskInfoUsersSource(),
+                # TaskInfoUsersSource(),
+                TaskInfoUsers(),
                 TaskInfoBuild()]
 
 class TaskInfoServicesSource(Task):
@@ -45,6 +46,17 @@ class TaskInfoUsersSource(Task):
         users_list = main_tenant.info_users_list()
         return {
             'users_list': users_list
+        }
+
+class TaskInfoUsers(Task):
+    def run(self, tenants_info= None, tenants_list = None, **kwargs):
+        info_users = list()
+        for tenant in tenants_list:
+            if not tenant.name in ['service', 'services','invisible_to_admin']:
+                users_list = tenants_info[tenant.name].info_users_list()
+                info_users.append(users_list)
+        return {
+            'info_users': info_users
         }
 
 

@@ -25,14 +25,14 @@ import yaml
 class MainInfoResource(osCommon.osCommon):
 
     source_info = dict()
+    source_info['tenants_info'] = dict()
 
-    def __init__(self, conf, tenant_name = None):
-        self.config = conf
-        if tenant_name:
-            self.tenant_name = tenant_name
-        else:
-            self.tenant_name = 'admin'
-        MainInfoResource.source_info[self.tenant_name] = dict()
+    def __init__(self, config):
+        self.config = config
+        self.tenant_name = self.config['tenant']
+        print "Passed to args class tenant_name", self.tenant_name
+        MainInfoResource.source_info['tenants_info'][self.tenant_name] = dict()
+        print "Create new tenant_info Unit = ", self.tenant_name
         super(MainInfoResource, self).__init__(self.config)
 
     def info_services_list(self):
@@ -40,17 +40,23 @@ class MainInfoResource(osCommon.osCommon):
         return self.keystone_client.services.list()
 
     def info_tenants_list(self):
-        MainInfoResource.source_info['tenants'] = [tenant.name for tenant in self.keystone_client.tenants.list()]
+        MainInfoResource.source_info['tenants'] = self.keystone_client.tenants.list()
         return self.keystone_client.tenants.list()
 
     def info_users_list(self):
-        MainInfoResource.source_info[self.tenant_name]['users'] = self.keystone_client.users.list()
+        MainInfoResource.source_info['tenants_info'][self.tenant_name]['users'] = self.keystone_client.users.list()
         return self.keystone_client.users.list()
 
+    def info_roles_list(self):
+        MainInfoResource.source_info['roles'] = self.keystone_client.roles.list()
+        return self.keystone_client.roles.list()
+
+    def info_images_list(self):
+        MainInfoResource.source_info['tenants_info'][self.tenant_name]['images'] = self.glance_client.images.list()
+        return self.glance_client.images.list()
 
     @staticmethod
     def build_info(info):
-        write_info(render_info(info)
+        print info['tenants_info']
+        write_info(render_info(info))
         return render_info(info)
-
-

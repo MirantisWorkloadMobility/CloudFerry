@@ -19,19 +19,21 @@
 <p>Tenants:</p>
 <ul>
     {% for tenant in tenants %}
-        <li>{{tenant}}
+        <li>{{tenant.name}}
             users:
                     <ul>
-                        {% for user in tenant.users %}
-                            <li>{{user.name}}</li>
-                        {% endfor %}
+                        {% if tenant.name not in ['service', 'services','invisible_to_admin'] %}
+                            {% for user in tenants_info[tenant.name]['users'] %}
+                                <li>{{user.name}}</li>
+                            {% endfor %}
+                        {% endif %}
                     </ul></li>
     {% endfor %}
 </ul>
 users: {{users}} <br />
 <p>Users:</p>
 <ul>
-    {% for user in admin.users %}
+    {% for user in tenants_info.admin.users %}
         <li>{{user.name}}</li>
     {% endfor %}
 </ul>
