@@ -58,6 +58,8 @@ def migrate(name_config, name_instance=None, mode=RESTART):
             scheduler.addTask(TaskCreateSnapshotOs())
             scheduler.addTask(TaskRestoreSourceCloud())
             scheduler.addTask(TaskRestoreDestCloud())
+        elif rollback_status == RESTART:
+            scheduler.addTask(TaskInitMigrate())
         scheduler.addTask(TaskInitDirectory())
 
     if rollback_status == ABORT:
