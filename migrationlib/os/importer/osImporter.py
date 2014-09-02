@@ -189,8 +189,8 @@ class Importer(osCommon.osCommon):
             .create_instance()\
             .stop_instance()\
             .import_ephemeral_drive()\
-            .start_instance()\
             .import_volumes()\
+            .start_instance()\
             .delete_image_from_source_and_dest_cloud()
 
     @log_step(LOG)

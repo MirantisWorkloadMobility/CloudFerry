@@ -20,6 +20,8 @@ from tasks.TaskInitMigrate import TaskInitMigrate
 from tasks.SuperTaskExportResource import SuperTaskExportResource
 from tasks.TaskCreateSnapshotOs import TaskCreateSnapshotOs
 from tasks.SuperTaskMigrateInstances import SuperTaskMigrateInstances
+from tasks.TaskSourceInfo import TaskSourceInfo
+from tasks.SuperTaskInfoSource import SuperTaskInfoSource
 from tasks.TaskRestoreSourceCloud import TaskRestoreSourceCloud
 from tasks.TaskRestoreDestCloud import TaskRestoreDestCloud
 from tasks.TaskInitDirectory import TaskInitDirectory
@@ -28,6 +30,8 @@ from utils import log_step, get_log, load_json_from_file, get_snapshots_list_rep
 import os
 import shutil
 from migrationlib.os.utils.rollback.Rollback import *
+
+
 env.forward_agent = True
 env.user = 'root'
 
@@ -73,5 +77,13 @@ def clean_dest_cloud(name_config, delete_image=False):
     # _, (_, _), (_, importer) = init_migrate(name_config)
     # importer.clean_cloud(delete_image)
 
+@task
+def get_info(name_config):
+    LOG.info("Init getting information")
+    namespace = Namespace({'name_config': name_config})
+    scheduler = Scheduler(namespace)
+    scheduler.addTask(TaskSourceInfo())
+    scheduler.addTask(SuperTaskInfoSource())
+    scheduler.run()
 if __name__ == '__main__':
     migrate('configs/config_iscsi_to_iscsi.yaml', mode=RETRY)

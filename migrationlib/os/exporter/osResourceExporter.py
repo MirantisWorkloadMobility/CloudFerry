@@ -17,7 +17,7 @@
 Package with OpenStack resources export/import utilities.
 """
 from migrationlib.os import osCommon
-from utils import log_step, get_log
+from utils import log_step, get_log, render_info, write_info
 import sqlalchemy
 
 LOG = get_log(__name__)
@@ -34,6 +34,7 @@ class ResourceExporter(osCommon.osCommon):
         self.config = conf['clouds']['source']
         self.funcs = []
         super(ResourceExporter, self).__init__(self.config)
+        self.info_values = {}
 
     def set_state(self, obj_dict):
         self.data = obj_dict['data']
@@ -112,4 +113,6 @@ class ResourceExporter(osCommon.osCommon):
     @log_step(LOG)
     def build(self):
         return self.data
+
+
 

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>Source cloud information.</title>
+</head>
+
+<body>
+
+<h1>Source cloud Information</h1>
+
+<h3>Administrative information</h3>
+
+<p>Openstack services:</p>
+<ul>
+    {% for service in services %}
+    <li>{{service.name}}, {{service.description}}</li>
+    {% endfor %}
+</ul>
+
+<p>Hypervisors:</p>
+<ul>
+    {% for hypervisor in hypervisors %}
+    <li>name: {{hypervisor.hypervisor_hostname}}, type: {{hypervisor.hypervisor_type}},
+        cpu: {{hypervisor.vcpus}}, running vms: {{hypervisor.running_vms}},
+        memory: {{hypervisor.memory_mb}}, memory_used: {{hypervisor.memory_mb_used}}</li>
+    {% endfor %}
+</ul>
+
+<p>Tenants:</p>
+<ul>
+    {% for tenant in tenants %}
+        {% if tenant.name not in ['service', 'services','invisible_to_admin'] %}
+            <li><b>{{tenant.name}}</b>,
+                users:
+                        <ul>
+                                {% for user in tenants_info[tenant.name]['users'] %}
+                                    <li><i>{{user.name}}</i></li>
+                                {% endfor %}
+                        </ul></li>
+                images:
+                        <ul>
+                                {% for image in tenants_info[tenant.name]['images'] %}
+                                    <li><i>{{image.name}}</i></li>
+                                {% endfor %}
+                        </ul></li>
+                volumes:
+                        <ul>
+                                {% for volume in tenants_info[tenant.name]['volumes'] %}
+                                    <li><i>{{volume.display_name}}</i></li>
+                                {% endfor %}
+                        </ul></li>
+                roles:
+                        <ul>
+                                {% for role in tenants_info[tenant.name]['roles'] %}
+                                    <li><i>{{role.name}}</i></li>
+                                {% endfor %}
+                        </ul></li>
+                servers:
+                        <ul>
+                                {% for server in tenants_info[tenant.name]['servers'] %}
+                                    <li><i>{{server.name}}</i></li>
+                                {% endfor %}
+                        </ul></li>
+        {% endif %}
+    {% endfor %}
+</ul>
+
+</body>
+</html>
