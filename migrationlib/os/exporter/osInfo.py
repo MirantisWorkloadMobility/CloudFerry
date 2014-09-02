@@ -76,7 +76,5 @@ class MainInfoResource(osCommon.osCommon):
 
     @staticmethod
     def build_info(info):
-        for item in info['hypervisors']:
-            print item.__dict__
         write_info(render_info(info))
         return render_info(info)
