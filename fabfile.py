@@ -39,16 +39,20 @@ LOG = get_log(__name__)
 
 
 @task
-def migrate(name_config, name_instance=None, mode=RESTART):
+def migrate(name_config, name_instance=None, mode=DEFAULT):
     """
         :name_config - name of config yaml-file, example 'config.yaml'
     """
     rollback_status = mode
     namespace = Namespace({'__name_config__': name_config,
                            'name_instance': name_instance,
-                           '__rollback_status__': rollback_status})
+                           '__rollback_status__': rollback_status if not (rollback_status == DEFAULT) else RESTART})
     scheduler = Scheduler(namespace)
-    if rollback_status == RETRY:
+    if rollback_status == DEFAULT:
+        scheduler.addTask(TaskInitMigrate())
+        scheduler.addTask(TaskInitDirectory())
+
+    if (rollback_status == RETRY) or (rollback_status == SKIP):
         scheduler.addTask(TaskInitMigrate())
 
     if (rollback_status == RESTART) or (rollback_status == ABORT):
@@ -87,5 +91,6 @@ def get_info(name_config):
     scheduler.addTask(TaskSourceInfo())
     scheduler.addTask(SuperTaskInfoSource())
     scheduler.run()
+
 if __name__ == '__main__':
-    migrate('configs/config_iscsi_to_iscsi.yaml', mode=RETRY)
+    migrate('configs/config_iscsi_to_iscsi.yaml', mode=DEFAULT)

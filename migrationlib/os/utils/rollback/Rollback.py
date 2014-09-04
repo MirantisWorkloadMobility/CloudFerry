@@ -19,6 +19,7 @@ ABORT = "abort"
 SKIP = "skip"
 RESTART = "restart"
 RETRY = "retry"
+DEFAULT = "default"
 
 
 class Rollback(object):
