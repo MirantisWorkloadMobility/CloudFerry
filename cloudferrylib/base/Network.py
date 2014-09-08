@@ -12,21 +12,12 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+from cloudferrylib.base import Resource
+
 __author__ = 'mirrorcoder'
 
 
-class Resource(object):
+class Network(Resource):
+
     def __init__(self, cloud):
-        self.cloud = cloud
-
-    def read_info(self):
-        pass
-
-    def deploy(self):
-        pass
-
-    def save(self):
-        pass
-
-    def restore(self):
-        pass
+        super(Network, self).__init__(cloud)

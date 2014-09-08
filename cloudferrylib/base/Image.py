@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from Resource import Resource
+from cloudferrylib.base import Resource
+
 __author__ = 'mirrorcoder'
 
 
-class Identity(Resource):
+class Image(Resource):
 
     def __init__(self, cloud):
-        super(Identity, self).__init__(cloud)
+        super(Image, self).__init__(cloud)

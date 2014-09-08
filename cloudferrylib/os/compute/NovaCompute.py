@@ -12,11 +12,17 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from Resource import Resource
-__author__ = 'mirrorcoder'
+
+from cloudferrylib.base.Compute import Compute
+__author__ = 'toha'
 
 
-class Network(Resource):
+class NovaCompute(Compute):
 
-    def __init__(self, cloud):
-        super(Network, self).__init__(cloud)
+    """
+    The main class for working with Openstack Nova Compute Service.
+
+    """
+
+    def __init__(self):
+        super(NovaCompute, self).__init__()
