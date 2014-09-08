@@ -33,3 +33,6 @@ class Resource(object):
 
     def wait_for_status(self):
         pass
+
+    def get_status(self):
+        pass

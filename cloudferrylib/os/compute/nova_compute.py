@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-
+import time
 from cloudferrylib.base.Compute import Compute
 __author__ = 'toha'
 
@@ -24,5 +24,38 @@ class NovaCompute(Compute):
 
     """
 
-    def __init__(self):
+    def __init__(self, nova_client, data_for_instance=None, instance=None):
+        self.nova_client = nova_client
+        self.data_for_instance = data_for_instance if data_for_instance \
+            else dict()
+        self.instance = instance if instance else object()
         super(NovaCompute, self).__init__()
+
+    def create_instance(self, data_for_instance=None, **kwargs):
+        data_for_instance = data_for_instance if data_for_instance \
+            else self.data_for_instance
+        self.instance = self.nova_client.servers.create(**data_for_instance)
+        return self.instance.id
+
+    def change_status(self, status, instance=None, **kwargs):
+        instance = instance if instance else self.instance
+        status_map = {
+            'start': lambda instance: instance.start(),
+            'stop': lambda instance: instance.stop(),
+            'resume': lambda instance: instance.resume(),
+            'paused': lambda instance: instance.pause(),
+            'unpaused': lambda instance: instance.unpause(),
+            'suspend': lambda instance: instance.suspend()}
+        if self.get_status(self.nova_client.servers, instance.id).lower() \
+                != status:
+            status_map[status](instance)
+
+    def get_instance_info_by_id(self, id):
+        pass
+
+    def wait_for_status(self, getter, id, status):
+        while getter.get(id).status != status:
+            time.sleep(1)
+
+    def get_status(self, getter, id):
+        return getter.get(id).status
