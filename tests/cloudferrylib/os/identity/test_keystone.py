@@ -232,4 +232,5 @@ class KeystoneIdentityTestCase(test.TestCase):
         fake_auth_token = 'fake_auth_token'
         self.mock_client().auth_token_from_user = fake_auth_token
 
-        self.assertEquals(fake_auth_token, self.keystone_client.get_auth_token_from_user())
+        self.assertEquals(fake_auth_token,
+                          self.keystone_client.get_auth_token_from_user())

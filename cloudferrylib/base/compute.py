@@ -14,10 +14,8 @@
 
 from cloudferrylib.base import resource
 
-__author__ = 'mirrorcoder'
 
-
-class Compute(resource):
+class Compute(resource.Resource):
 
     def __init__(self):
         super(Compute, self).__init__()

@@ -22,11 +22,11 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from functools import wraps
 import json
-from fabric.api import local, run
+from fabric.api import local, run, settings, env
 from jinja2 import Environment, FileSystemLoader
 import os
-import yaml
 import inspect
+
 
 
 __author__ = 'mirrorcoder'
@@ -305,3 +305,10 @@ def write_info(rendered_info, info_file = "source_info.html"):
     with open(info_file, "wb") as ifile:
         ifile.write(rendered_info)
 
+def get_libvirt_block_info(libvirt_name, init_host, compute_host):
+    with settings(host_string=init_host):
+        with forward_agent(env.key_filename):
+            out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" %
+                      (compute_host, libvirt_name))
+            libvirt_output = out.split()
+    return libvirt_output
