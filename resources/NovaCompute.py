@@ -12,16 +12,10 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+from Compute import Compute
 __author__ = 'mirrorcoder'
 
 
-class CloudFerry(object):
-    def __init__(self, config):
-        self.config = config
-
-    def auth(self):
-        self.src_cloud.auth(self.config)
-        self.dst_cloud.auth(self.config)
-
-    def migrate(self):
+class NovaCompute(Compute):
+    def auth(self, config, identity):
         pass

@@ -16,9 +16,6 @@ __author__ = 'mirrorcoder'
 
 
 class Resource(object):
-    def __init__(self, cloud):
-        self.cloud = cloud
-
     def read_info(self):
         pass
 

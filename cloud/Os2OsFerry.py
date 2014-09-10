@@ -12,30 +12,17 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-
-from Namespace import Namespace
-
+from Cloud import Cloud
+from resources.NovaCompute import NovaCompute
+from CloudFerry import CloudFerry
 __author__ = 'mirrorcoder'
 
 
-class SuperTask(object):
-    def __init__(self, namespace=Namespace()):
-        self.namespace = namespace
+class OS2OSFerry(CloudFerry):
 
-    def run(self):
-        pass
-
-    def split_task(self, namespace=None):
-        namespace = self.namespace if not namespace else namespace
-        self.namespace = namespace
-        tasks = self.run(**namespace.vars)
-        return tasks
-
-    def __hash__(self):
-        return hash(SuperTask.__name__)
-
-    def __eq__(self, other):
-        return hash(self) == hash(other)
-
-    def __repr__(self):
-        return "SuperTask|%s" % self.__class__.__name__
+    def __init__(self, config):
+        super(OS2OSFerry, self). __init__(config)
+        self.src_cloud = Cloud(NovaCompute(), )
+        self.dst_cloud = Cloud(NovaCompute(), )
+        self.src_cloud.auth(config['source'])
+        self.dst_cloud.auth(config['destination'])

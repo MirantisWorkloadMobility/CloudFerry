@@ -20,3 +20,12 @@ class Cloud(object):
     def __init__(self, resources):
         self.resources = resources
 
+    def auth(self, config):
+        identity = self.resources['identity']
+        identity.auth(config)
+        for item in self.resources:
+            if not (item == 'identity'):
+                self.resources[item].auth(config, identity)
+
+
+

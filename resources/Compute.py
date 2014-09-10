@@ -17,6 +17,5 @@ __author__ = 'mirrorcoder'
 
 
 class Compute(Resource):
+    pass
 
-    def __init__(self, cloud):
-        super(Compute, self).__init__(cloud)
