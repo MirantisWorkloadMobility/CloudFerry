@@ -12,17 +12,20 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from Cloud import Cloud
+
+import cloud
+import cloud_ferry
+
 from resources.NovaCompute import NovaCompute
-from CloudFerry import CloudFerry
-__author__ = 'mirrorcoder'
 
 
-class OS2OSFerry(CloudFerry):
+class OS2OSFerry(cloud_ferry.CloudFerry):
 
     def __init__(self, config):
         super(OS2OSFerry, self). __init__(config)
-        self.src_cloud = Cloud(NovaCompute(), )
-        self.dst_cloud = Cloud(NovaCompute(), )
-        self.src_cloud.auth(config['source'])
-        self.dst_cloud.auth(config['destination'])
+        resources = {'compute': NovaCompute(config),
+                     }
+        self.src_cloud = cloud.Cloud(resources)
+        self.dst_cloud = cloud.Cloud(resources)
+
+        self.auth()

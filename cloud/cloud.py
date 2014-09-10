@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-__author__ = 'mirrorcoder'
 
+class Cloud(object):
 
-class CloudFerry(object):
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, resources):
+        self.resources = resources
 
-    def auth(self):
-        self.src_cloud.auth(self.config)
-        self.dst_cloud.auth(self.config)
-
-    def migrate(self):
-        pass
+    def auth(self, config):
+        identity = self.resources['identity']
+        # Do we need here identity.auth()? We do authorization, when
+        # instantiate this resource in the implementation (f.e. in os2os)
+        for resource in self.resources:
+            if resource != 'identity':
+                self.resources[resource].auth(config, identity)

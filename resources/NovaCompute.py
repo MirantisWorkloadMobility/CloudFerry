@@ -13,9 +13,11 @@
 # limitations under the License.
 
 from Compute import Compute
-__author__ = 'mirrorcoder'
 
 
 class NovaCompute(Compute):
+    def __init__(self, config):
+        pass
+
     def auth(self, config, identity):
         pass
