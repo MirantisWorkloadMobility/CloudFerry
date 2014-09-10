@@ -11,7 +11,7 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
-
+import copy
 
 __author__ = 'mirrorcoder'
 
@@ -19,10 +19,9 @@ __author__ = 'mirrorcoder'
 class Namespace:
 
     def __init__(self, vars={}):
+        if not '__forks__' in vars:
+            vars['__forks__'] = dict()
         self.vars = vars
 
-    def convert_to_dict(self):
-        return {
-            '_type_class': Namespace.__name__,
-            'vars': self.vars
-        }
+    def fork(self, is_deep_copy=False):
+        return Namespace(copy.copy(self.vars)) if not is_deep_copy else Namespace(copy.deepcopy(self.vars))

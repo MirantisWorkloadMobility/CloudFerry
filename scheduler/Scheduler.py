@@ -13,69 +13,39 @@
 # limitations under the License.
 
 from Task import Task
-from SuperTask import SuperTask
 from Namespace import Namespace
-from transaction.TaskTransaction import *
-from builder_wrapper import Function
+from Task import ThreadTask
 import traceback
 __author__ = 'mirrorcoder'
 
+NO_ERROR = 0
+ERROR = 255
+
 
 class Scheduler:
-    def __init__(self, namespace=None, task_exclusion=[TaskTransactionEnd]):
+    def __init__(self, namespace=None, new_thread=False, netgraph=None, scheduler=None):
         self.namespace = namespace if namespace else Namespace()
         self.tasks = []
-        self.tasks_runned = []
-        self.transactions = []
-        self.transactions_listener = []
         self.status_error = NO_ERROR
+        self.netgraph = netgraph
+        self.fork_scheduler = []
         self.map_func_task = {
-            SuperTask(): self.__add_tasks_from_supertask,
-            Task(): self.__task_run,
-            Function(): self.__task_run,
-            TaskTransactionBegin(): self.__task_begin_trans,
-            TaskTransactionEnd(): self.__task_end_trans
+            Task: self.__task_run,
+            ThreadTask: self.__thread_task,
         }
-        self.task_exclusion = task_exclusion
+        self.new_thread = new_thread
+        self.scheduler = scheduler
 
-    def addTask(self, task):
-        self.tasks.insert(0, task)
+    def addProcess(self, netgraph):
+        self.netgraph = netgraph
 
-    def addTaskExclusion(self, task_class):
-        self.task_exclusion.append(task_class)
+    def start(self):
+        if self.scheduler:
+            self.scheduler.start_scheduler(self)
 
-    def push(self, task):
-        self.tasks.append(task)
-
-    def push_transaction(self, task):
-        self.transactions.append(task)
-
-    def has_transactions(self):
-        return bool(self.transactions)
-
-    def pop_transaction(self):
-        return self.transactions.pop()
-
-    def push_listener_trans(self, listener):
-        self.transactions_listener.append(listener)
-
-    def pop_listener_trans(self):
-        return self.transactions_listener.pop()
-
-    def get_last_listener(self):
-        if len(self.transactions_listener):
-            return self.transactions_listener[-1]
-        else:
-            return None
-
-    def trigger_listener(self, name_event, listener=None, args={}):
-        if listener:
-            return self.trigger(name_event, listener, args)
-        else:
-            if self.transactions_listener:
-                for index in range(len(self.transactions_listener)-1, -1, -1):
-                    if not self.trigger(name_event, self.transactions_listener[index], args):
-                        break
+    def stop(self):
+        if self.scheduler:
+            self.scheduler.stop_scheduler(self)
 
     def trigger(self, name_event, listener, args):
         return {
@@ -88,60 +58,31 @@ class Scheduler:
 
     def __can_run_next_task(self, task):
         if self.status_error == NO_ERROR:
-            if self.has_transactions():
-                return self.trigger_listener('event_can_run_next_task',
-                                             self.get_last_listener(),
-                                             args={'namespace': self.namespace, 'task': task})
-            else:
-                return True
+            return True
         elif self.status_error == ERROR:
-            return self.__is_task_exclusion(task)
+            return False
 
-    def __is_task_exclusion(self, task):
-        return reduce(lambda result, obj: result or isinstance(task, obj), self.task_exclusion, False)
+    def fork(self, thread_task, is_deep_copy=False):
+        namespace = self.namespace.fork(is_deep_copy)
+        scheduler = Scheduler(namespace=namespace, new_thread=True, netgraph=thread_task.getNet())
+        self.namespace['__forks__'][thread_task] = {
+            'namespace': namespace,
+            'scheduler': scheduler
+        }
+        return scheduler
 
     def run(self):
-        while self.tasks:
-            task = self.tasks.pop()
+        for task in self.netgraph:
             try:
-                skip = True
                 if self.__can_run_next_task(task):
-                    self.map_func_task[task](task)
-                    skip = False
-                self.trigger_listener('event_task', args={'namespace': self.namespace, 'task': task, 'skip': skip})
+                    self.map_func_task[task.__class__](task)
             except Exception as e:
                 self.status_error = ERROR
                 self.exception = e
                 print "Exp msg = ", traceback.print_exc()
-                self.trigger_listener('event_error', self.get_last_listener(), args={'namespace': self.namespace,
-                                                                                     'task': task,
-                                                                                     'exception': e})
-            finally:
-                self.tasks_runned.append(str(task))
-
-    def __add_tasks_from_supertask(self, task):
-        list_subtasks = [subtask for subtask in task.split_task(namespace=self.namespace)]
-        list_subtasks.reverse()
-        [self.push(subtask) for subtask in list_subtasks]
 
     def __task_run(self, task):
         task(namespace=self.namespace)
 
-    def __task_begin_trans(self, task):
-        self.push_transaction(task)
-        self.push_listener_trans(task())
-        self.trigger_listener('event_begin', task(), args={'namespace': self.namespace})
-
-    def __task_end_trans(self, task):
-        if not self.has_transactions():
-            return False
-        self.pop_transaction()
-        res = self.trigger_listener('event_end', self.pop_listener_trans(), args={'namespace': self.namespace})
-        if res:
-            self.status_error = NO_ERROR
-        else:
-            if self.status_error == ERROR:
-                self.trigger_listener('event_error', args={'namespace': self.namespace,
-                                                           'task': task,
-                                                           'exception': self.exception})
-
+    def __thread_task(self, task):
+        pass
