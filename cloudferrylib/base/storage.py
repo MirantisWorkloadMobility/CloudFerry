@@ -14,10 +14,8 @@
 
 from cloudferrylib.base import resource
 
-__author__ = 'mirrorcoder'
 
+class Storage(resource.Resource):
 
-class Storage(resource):
-
-    def __init__(self, cloud):
-        super(Storage, self).__init__(cloud)
+    def __init__(self):
+        super(Storage, self).__init__()
