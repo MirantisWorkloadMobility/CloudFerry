@@ -38,3 +38,37 @@ class CinderStorage(Storage.Storage):
                                    params["password"],
                                    params["tenant"],
                                    "http://" + params["host"] + ":35357/v2.0/")
+
+    def get_volumes_list(self, detailed=True, search_opts=None):
+        return self.cinder_client.volumes.list(detailed, search_opts)
+
+    def create_volume(self, size, **kwargs):
+        return self.cinder_client.volumes.create(size, kwargs)
+
+    def delete_volume(self, volume_id):
+        volume = self.__get_volume_by_id(volume_id)
+        self.cinder_client.volumes.delete(volume)
+
+    def __get_volume_by_id(self, volume_id):
+        return self.cinder_client.volumes.get(volume_id)
+    
+    def update_volume(self, volume_id, **kwargs):
+        volume = self.__get_volume_by_id(volume_id)
+        return self.cinder_client.volumes.update(volume, kwargs)
+
+    def attach_volume(self, volume_id, instance_id, mountpoint, mode='rw'):
+        volume = self.__get_volume_by_id(volume_id)
+        return self.cinder_client.volumes.attach(volume, instance_id=instance_id,
+                                                 mountpoint=mountpoint, mode=mode)
+
+    def detach_volume(self, volume_id):
+        return self.cinder_client.volumes.detach(volume_id)
+
+    def upload_volume_to_image(self, volume_id, force, image_name, container_format,
+                               disk_format):
+        volume = self.__get_volume_by_id(volume_id)
+        return self.cinder_client.volumes.upload_to_image(volume=volume, force=force,
+                                                          image_name=image_name,
+                                                          container_format=container_format,
+                                                          disk_format=disk_format)
+
