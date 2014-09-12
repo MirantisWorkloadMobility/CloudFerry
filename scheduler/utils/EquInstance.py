@@ -11,17 +11,16 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
-import copy
-from Scheduler import CHILDREN
+
 __author__ = 'mirrorcoder'
 
 
-class Namespace:
+class EquInstance(object):
+    def __hash__(self):
+        if hasattr(self, 'class_name'):
+            return hash(self.class_name)
+        else:
+            return hash(self.__class__.__name__)
 
-    def __init__(self, vars={}):
-        if not CHILDREN in vars:
-            vars[CHILDREN] = dict()
-        self.vars = vars
-
-    def fork(self, is_deep_copy=False):
-        return Namespace(copy.copy(self.vars)) if not is_deep_copy else Namespace(copy.deepcopy(self.vars))
+    def __eq__(self, other):
+        return hash(self) == hash(other)

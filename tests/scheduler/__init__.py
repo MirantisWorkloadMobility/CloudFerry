@@ -11,17 +11,5 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
-import copy
-from Scheduler import CHILDREN
+
 __author__ = 'mirrorcoder'
-
-
-class Namespace:
-
-    def __init__(self, vars={}):
-        if not CHILDREN in vars:
-            vars[CHILDREN] = dict()
-        self.vars = vars
-
-    def fork(self, is_deep_copy=False):
-        return Namespace(copy.copy(self.vars)) if not is_deep_copy else Namespace(copy.deepcopy(self.vars))

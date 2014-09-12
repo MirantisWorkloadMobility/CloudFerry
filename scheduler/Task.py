@@ -13,122 +13,76 @@
 # limitations under the License.
 
 __author__ = 'mirrorcoder'
-
-HIGH = 3
-NORMAL = 2
-LOW = 1
-
-DEFAULT = 0
-NO_ELEMENT = 0
+from Cursor import Cursor
+from Cursor import DEFAULT
+from utils.EquInstance import EquInstance
 
 
-class EquInstance(object):
-    def __hash__(self):
-        return hash(self.__class__.__name__)
-
-    def __eq__(self, other):
-        return hash(self) == hash(other)
-
-
-class ThreadTask(object):
-    def __init__(self, net=None, priority=None):
-        self.net = net
-        self.priority = priority
-
-    def getNet(self):
-        return self.net
-
-
-class Element:
+class Element(object):
     def __init__(self):
         self.prev_element = None
         self.next_element = []
+        self.parall_elem = []
         self.num_element = DEFAULT
 
-    def next(self):
-        element = self.next_element[self.num_element] if self.next_element else NO_ELEMENT
-        if element == NO_ELEMENT:
-            raise StopIteration
-        return element
-
-    def __iter__(self):
-        return self
-
-    def toStart(self):
-        obj = self
-        while obj.prev_element:
-            obj = obj.prev_element
-        return obj
-
-
-class AltSyntax(Element):
-    def __sub__(self, other):
-        self.next_element.append(other)
-        return self
-
-    def __or__(self, other):
-        other = other.toStart()
-        self.next_element.append(other)
-        other.prev_element = self
-        return self
-
-    def __and__(self, other):
-        self.next_element.append(other)
-        return self
-
-    def __rshift__(self, other):
-        self.next_element.insert(0, other)
-        other.prev_element = self if not other.prev_element else other.prev_element
-        return other
+    def set_next_path(self, num):
+        self.num_element = num
 
 
 class ClassicSyntax(Element):
-    def oneWayLink(self, other):
+    def add_closure_link_with(self, other):
         self.next_element.append(other)
         return self
 
-    def anotherWay(self, other):
-        other = other.toStart()
+    def add_another_link_with(self, other):
+        other = Cursor.forward_back(other)
         self.next_element.append(other)
         other.prev_element = self
         return self
 
-    def addThread(self, other):
+    def add_thread(self, other):
         self.next_element.append(other)
         return self
 
-    def dualWayLink(self, other):
+    def dual_link_with(self, other):
         self.next_element.insert(0, other)
         other.prev_element = self if not other.prev_element else other.prev_element
         return other
 
 
-class Task(EquInstance, AltSyntax):
+class AltSyntax(ClassicSyntax):
+    def __sub__(self, other):
+        return self.add_closure_link_with(other)
+
+    def __or__(self, other):
+        return self.add_another_link_with(other)
+
+    def __and__(self, other):
+        return self.add_thread(other)
+
+    def __rshift__(self, other):
+        return self.dual_link_with(other)
+
+
+class BaseTask(AltSyntax, EquInstance):
+
+    def __init__(self):
+        self.class_name = BaseTask.__name__
+        super(BaseTask, self).__init__()
+
     def run(self):
         pass
 
     def __call__(self, namespace=None):
-        result, num_task = self.run(**namespace.vars)
-        namespace.vars.update(result)
-        self.num_element = num_task if num_task else DEFAULT
+        result = self.run(**namespace.vars)
+        if type(result) == dict:
+            namespace.vars.update(result)
 
     def __repr__(self):
-        return "Task|%s" % self.__class__.__name__
+        return "BaseTask|%s" % self.__class__.__name__
 
 
-class WaitThreadTask(Task):
-    def __init__(self, tt):
-        self.tt = tt
-        super(WaitThreadTask, self).__init__()
-
-    def run(self):
-        pass
-
-
-class WaitThreadAllTask(Task):
-    def run(self):
-        pass
-
-
-class Action(Task):
+class Task(BaseTask):
     pass
+
+

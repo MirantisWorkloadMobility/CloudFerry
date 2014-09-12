@@ -12,77 +12,118 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from Task import Task
+from Task import BaseTask
 from Namespace import Namespace
-from Task import ThreadTask
+from Task import WrapThreadTask, Cursor
 import traceback
+from multiprocessing import Process
 __author__ = 'mirrorcoder'
 
 NO_ERROR = 0
 ERROR = 255
+CHILDREN = '__children__'
 
 
-class Scheduler:
-    def __init__(self, namespace=None, new_thread=False, netgraph=None, scheduler=None):
+class BaseScheduler(object):
+    def __init__(self, namespace=None, cursor=None):
         self.namespace = namespace if namespace else Namespace()
-        self.tasks = []
         self.status_error = NO_ERROR
-        self.netgraph = netgraph
-        self.fork_scheduler = []
-        self.map_func_task = {
-            Task: self.__task_run,
-            ThreadTask: self.__thread_task,
-        }
-        self.new_thread = new_thread
-        self.scheduler = scheduler
+        self.cursor = cursor
+        self.map_func_task = dict() if not hasattr(self, 'map_func_task') else self.map_func_task
+        self.map_func_task[BaseTask()] = self.task_run
 
-    def addProcess(self, netgraph):
-        self.netgraph = netgraph
+    def event_start_task(self, task):
+        return True
+
+    def event_end_task(self, task):
+        return True
+
+    def event_error_task(self, task, e):
+        return True
+
+    def error_task(self, task, e):
+        return self.event_error_task(task, e)
+
+    def run_task(self, task):
+        if self.event_start_task(task):
+            self.map_func_task[task](task)
+        self.event_end_task(task)
 
     def start(self):
-        if self.scheduler:
-            self.scheduler.start_scheduler(self)
-
-    def stop(self):
-        if self.scheduler:
-            self.scheduler.stop_scheduler(self)
-
-    def trigger(self, name_event, listener, args):
-        return {
-            'event_begin': listener.event_begin,
-            'event_can_run_next_task': listener.event_can_run_next_task,
-            'event_end': listener.event_end,
-            'event_task': listener.event_task,
-            'event_error': listener.event_error
-        }[name_event](**args)
-
-    def __can_run_next_task(self, task):
-        if self.status_error == NO_ERROR:
-            return True
-        elif self.status_error == ERROR:
-            return False
-
-    def fork(self, thread_task, is_deep_copy=False):
-        namespace = self.namespace.fork(is_deep_copy)
-        scheduler = Scheduler(namespace=namespace, new_thread=True, netgraph=thread_task.getNet())
-        self.namespace['__forks__'][thread_task] = {
-            'namespace': namespace,
-            'scheduler': scheduler
-        }
-        return scheduler
-
-    def run(self):
-        for task in self.netgraph:
+        for task in self.cursor:
             try:
-                if self.__can_run_next_task(task):
-                    self.map_func_task[task.__class__](task)
+                self.run_task(task)
             except Exception as e:
                 self.status_error = ERROR
                 self.exception = e
-                print "Exp msg = ", traceback.print_exc()
+                self.error_task(task, e)
+                traceback.print_exc()
 
-    def __task_run(self, task):
+    def task_run(self, task):
         task(namespace=self.namespace)
 
-    def __thread_task(self, task):
-        pass
+    def addCursor(self, cursor):
+        self.cursor = cursor
+
+
+class SchedulerThread(BaseScheduler):
+    def __init__(self, namespace=None, thread_task=None, cursor=None, scheduler_parent=None):
+        super(SchedulerThread, self).__init__(namespace, cursor)
+        self.map_func_task[WrapThreadTask()] = self.task_run_thread
+        self.child_threads = dict()
+        self.thread_task = thread_task
+        self.scheduler_parent = scheduler_parent
+
+    def event_start_children(self, thread_task):
+        self.child_threads[thread_task] = True
+        return True
+
+    def event_stop_children(self, thread_task):
+        del self.child_threads[thread_task]
+        return True
+
+    def trigger_start_scheduler(self):
+        if self.scheduler_parent:
+            self.scheduler_parent.event_start_children(self.thread_task)
+
+    def trigger_stop_scheduler(self):
+        if self.scheduler_parent:
+            self.scheduler_parent.event_stop_children(self.thread_task)
+
+    def start(self):
+        if not self.thread_task:
+            self.start_current_thread()
+        else:
+            self.start_separate_thread()
+
+    def start_separate_thread(self):
+        p = Process(target=self.start_current_thread)
+        self.namespace.vars[CHILDREN][self.thread_task]['process'] = p
+        p.start()
+
+    def start_current_thread(self):
+        self.trigger_start_scheduler()
+        super(SchedulerThread, self).start()
+        self.trigger_stop_scheduler()
+
+    def fork(self, thread_task, is_deep_copy=False):
+        namespace = self.namespace.fork(is_deep_copy)
+        scheduler = self.__class__(namespace=namespace,
+                                   thread_task=thread_task,
+                                   cursor=Cursor(thread_task.getNet()),
+                                   scheduler_parent=self)
+        self.namespace.vars[CHILDREN][thread_task] = {
+            'namespace': namespace,
+            'scheduler': scheduler,
+            'process': None
+        }
+        return scheduler
+
+    def task_run_thread(self, task):
+        scheduler_fork = self.fork(task)
+        scheduler_fork.start()
+
+
+class Scheduler(SchedulerThread):
+    def __init__(self, namespace=None, thread_task=False, cursor=None, scheduler_parent=None):
+        super(Scheduler, self).__init__(namespace, thread_task, cursor, scheduler_parent)
