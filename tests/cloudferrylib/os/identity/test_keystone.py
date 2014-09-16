@@ -1,4 +1,4 @@
-# Copyright 2013: Mirantis Inc.
+# Copyright 2014: Mirantis Inc.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -59,7 +59,7 @@ class KeystoneIdentityTestCase(test.TestCase):
     def test_get_client(self):
         self.mock_client().auth_ref = {'token': {'id': 'fake_id'}}
 
-        self.keystone_client.get_client()
+        client = self.keystone_client.get_client()
 
         mock_calls = [
             mock.call(username='fake_user', tenant_name='fake_tenant',
@@ -67,6 +67,7 @@ class KeystoneIdentityTestCase(test.TestCase):
                       auth_url='http://1.1.1.1:35357/v2.0/'),
             mock.call(token='fake_id', endpoint='http://1.1.1.1:35357/v2.0/')]
         self.mock_client.assert_has_calls(mock_calls)
+        self.assertEqual(self.mock_client(), client)
 
     def test_get_tenants_list(self):
         fake_tenants_list = [self.fake_tenant_0, self.fake_tenant_1]
