@@ -23,8 +23,8 @@ class KeystoneIdentity(Identity.Identity):
 
     def __init__(self, config):
         super(KeystoneIdentity, self).__init__()
-        self.keystone_client = self.get_client()
         self.config = config
+        self.keystone_client = self.get_client()
 
     def get_client(self):
         """ Getting keystone client """
@@ -53,7 +53,6 @@ class KeystoneIdentity(Identity.Identity):
         for endpoint in self.keystone_client.endpoints.list():
             if endpoint.service_id == service_id:
                 return endpoint.publicurl
-        return None
 
     def get_service_id(self, service_name):
         """Getting service_id from keystone. """
@@ -61,7 +60,6 @@ class KeystoneIdentity(Identity.Identity):
         for service in self.get_services_list():
             if service.name == service_name:
                 return service.id
-        return None
 
     def get_endpoint_by_service_name(self, service_name):
         """ Getting endpoint public URL by service name from keystone. """

@@ -14,10 +14,8 @@
 
 from cloudferrylib.base import Resource
 
-__author__ = 'mirrorcoder'
 
-
-class Identity(Resource):
+class Identity(Resource.Resource):
 
     def __init__(self):
         super(Identity, self).__init__()
