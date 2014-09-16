@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-__author__ = 'mirrorcoder'
+from Compute import Compute
 
 
-class Cloud(object):
+class NovaCompute(Compute):
+    def __init__(self, config):
+        pass
 
-    def __init__(self, resources):
-        self.resources = resources
-
+    def auth(self, config, identity):
+        pass
