@@ -41,7 +41,7 @@ class ClassicSyntax(Element):
         return self
 
     def add_thread(self, other):
-        self.next_element.append(other)
+        self.parall_elem.append(other)
         return self
 
     def dual_link_with(self, other):
