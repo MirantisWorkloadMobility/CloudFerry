@@ -13,15 +13,15 @@
 # limitations under the License.
 
 from Task import BaseTask
-from Namespace import Namespace
-from Task import WrapThreadTask, Cursor
+from Namespace import Namespace, CHILDREN
+from ThreadTasks import WrapThreadTask
+from Cursor import Cursor
 import traceback
 from multiprocessing import Process
 __author__ = 'mirrorcoder'
 
 NO_ERROR = 0
 ERROR = 255
-CHILDREN = '__children__'
 
 
 class BaseScheduler(object):

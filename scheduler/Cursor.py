@@ -28,22 +28,24 @@ class Cursor(object):
     def next(self):
         if not self.next_iter:
             self.next_iter = self.net
-            self.threads = self.next_iter.parall_elem
+            self.threads = [i for i in self.next_iter.parall_elem]
         else:
             if self.threads:
                 return self.threads.pop()
             if self.next_iter.next_element:
                 if self.next_iter.num_element < len(self.next_iter.next_element):
-                    self.next_iter = self.next_iter.next_element[self.next_iter.num_element]
-                    self.threads = self.next_iter.parall_elem
+                    self.__change_state_cursor(self.next_iter.num_element)
                 else:
-                    self.next_iter = self.next_iter.next_element[DEFAULT]
-                    self.threads = self.next_iter.parall_elem
+                    self.__change_state_cursor(DEFAULT)
             else:
                 self.next_iter = NO_ELEMENT
         if self.next_iter == NO_ELEMENT:
             raise StopIteration
         return self.next_iter
+
+    def __change_state_cursor(self, num_element):
+        self.next_iter = self.next_iter.next_element[num_element]
+        self.threads = [i for i in self.next_iter.parall_elem]
 
     def __iter__(self):
         return self

@@ -14,17 +14,25 @@
 
 from scheduler.Task import Task
 from tests import test
-from oslotest import mockpatch
+import mock
+
+
+class TestTask(Task):
+    def run(self, v1=None, **kwargs):
+        return {'v2': 10, 'v3': v1}
 
 
 class TaskTestCase(test.TestCase):
     def setUp(self):
         super(TaskTestCase, self).setUp()
+        self.fake_namespace = mock.Mock()
+        self.fake_namespace.vars = {'v1': 1, 'v2': 2}
 
     def test_dual_link(self):
         a1 = Task()
         a2 = Task()
         res = a1 >> a2
+        self.assertEqual(res, a2)
         self.assertEqual(len(a1.next_element), 1, 'No correct elements in \' a1.next_element\'')
         self.assertIn(a2, a1.next_element)
         self.assertEqual(a2.prev_element, a1)
@@ -37,6 +45,7 @@ class TaskTestCase(test.TestCase):
         a3 = Task()
         a4 = Task()
         res = (a1 | (a2 - a4) | (a3 - a4)) >> a4
+        self.assertEqual(res, a4)
         self.assertEqual(len(a1.next_element), 3, 'No correct elements in \' a1.next_element\'')
         self.assertEqual(a1.next_element[0], a4)
         self.assertEqual(a1.next_element[1], a2)
@@ -49,6 +58,7 @@ class TaskTestCase(test.TestCase):
         a1 = Task()
         a2 = Task()
         res = a1 - a2
+        self.assertEqual(res, a1)
         self.assertEqual(len(a1.next_element), 1, 'No correct elements in \' a1.next_element\'')
         self.assertEqual(a1.next_element[0], a2)
         self.assertFalse(a2.prev_element)
@@ -59,9 +69,16 @@ class TaskTestCase(test.TestCase):
         a3 = Task()
         a4 = Task()
         res = (a1 & a2 & a3) >> a4
+        self.assertEqual(res, a4)
         self.assertEqual(len(a1.next_element), 1, 'No correct elements in \' a1.next_element\'')
         self.assertEqual(a1.next_element[0], a4)
         self.assertEqual(a4.prev_element, a1)
         self.assertEqual(a1.parall_elem[0], a2)
         self.assertEqual(a1.parall_elem[1], a3)
 
+    def test_call_task(self):
+        a1 = TestTask()
+        a1(self.fake_namespace)
+        self.assertEqual(self.fake_namespace.vars['v1'], 1)
+        self.assertEqual(self.fake_namespace.vars['v2'], 10)
+        self.assertEqual(self.fake_namespace.vars['v3'], self.fake_namespace.vars['v1'])
