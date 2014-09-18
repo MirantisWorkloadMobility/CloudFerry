@@ -137,3 +137,6 @@ class KeystoneIdentity(Identity.Identity):
         """
 
         return self.keystone_client.users.update(user, **kwargs)
+
+    def get_auth_token_from_user(self):
+        return self.keystone_client.auth_token_from_user

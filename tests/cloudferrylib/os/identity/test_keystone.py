@@ -227,3 +227,9 @@ class KeystoneIdentityTestCase(test.TestCase):
 
         self.mock_client().users.update.assert_called_once_with(self.fake_user,
                                                                 **test_args)
+
+    def test_auth_token_from_user(self):
+        fake_auth_token = 'fake_auth_token'
+        self.mock_client().auth_token_from_user = fake_auth_token
+
+        self.assertEquals(fake_auth_token, self.keystone_client.get_auth_token_from_user())
