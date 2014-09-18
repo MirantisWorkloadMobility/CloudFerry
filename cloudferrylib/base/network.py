@@ -17,7 +17,7 @@ from cloudferrylib.base import Resource
 __author__ = 'mirrorcoder'
 
 
-class Network(Resource):
+class Network(Resource.Resource):
 
     def __init__(self, cloud):
-        super(Network, self).__init__(cloud)
+        super(Network, self).__init__()

@@ -12,10 +12,5 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from cloudferrylib.base import resource
 
-
-class Image(resource.Resource):
-
-    def __init__(self):
-        super(Image, self).__init__()
+__author__ = 'asvechnikov'

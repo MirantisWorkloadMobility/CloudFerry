@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from cloudferrylib.base import Resource
+from cloudferrylib.base import resource
 
 
-class Identity(Resource.Resource):
+class Identity(resource.Resource):
 
     def __init__(self):
         super(Identity, self).__init__()
