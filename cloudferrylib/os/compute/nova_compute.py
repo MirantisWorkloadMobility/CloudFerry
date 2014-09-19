@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import time
-from novaclient.v1_1 import client as novaClient
-from utils.utils import get_libvirt_block_info
-from cloudferrylib.base import Compute
 
-__author__ = 'toha'
+import time
+
+from novaclient.v1_1 import client as nova_client
+
+from cloudferrylib.base import Compute
+from utils.utils import get_libvirt_block_info
+
 
 DISK = "disk"
 LOCAL = ".local"
@@ -25,36 +27,33 @@ LEN_UUID_INSTANCE = 36
 
 
 class NovaCompute(Compute.Compute):
-
-
-    """
-    The main class for working with Openstack Nova Compute Service.
-
-    """
+    """The main class for working with Openstack Nova Compute Service. """
 
     def __init__(self, config):
         self.config = config
         self.nova_client = self.get_nova_client(self.config)
+        self.instance = None
         super(NovaCompute, self).__init__()
 
     def get_nova_client(self, params):
+        """Getting nova client. """
 
-        """ Getting nova client """
-
-        return novaClient.Client(params["user"],
-                                 params["password"],
-                                 params["tenant"],
-                                 "http://" + params["host"] + ":35357/v2.0/")
+        return nova_client.Client(params["user"],
+                                  params["password"],
+                                  params["tenant"],
+                                  "http://%s:35357/v2.0/" % params["host"])
 
     def create_instance(self, **kwargs):
-        self.instance = self.nova_client.servers.create(kwargs)
+        self.instance = self.nova_client.servers.create(**kwargs)
         return self.instance.id
 
-    def get_instances_list(self, detailed=True, search_opts=None, marker=None, limit=None):
-        return self.nova_client.servers.list(detailed=detailed, search_opts=search_opts,
+    def get_instances_list(self, detailed=True, search_opts=None, marker=None,
+                           limit=None):
+        return self.nova_client.servers.list(detailed=detailed,
+                                             search_opts=search_opts,
                                              marker=marker, limit=limit)
 
-    def change_status(self, status, instance=None, **kwargs):
+    def change_status(self, status, instance=None):
         instance = instance if instance else self.instance
         status_map = {
             'start': lambda instance: instance.start(),
@@ -62,12 +61,14 @@ class NovaCompute(Compute.Compute):
             'resume': lambda instance: instance.resume(),
             'paused': lambda instance: instance.pause(),
             'unpaused': lambda instance: instance.unpause(),
-            'suspend': lambda instance: instance.suspend()}
-        if self.get_status(self.nova_client.servers, instance.id).lower() \
-                != status:
+            'suspend': lambda instance: instance.suspend()
+        }
+        if self.get_status(self.nova_client.servers,
+                           instance.id).lower() != status:
             status_map[status](instance)
 
     def get_instance_info_by_id(self, instance_id):
+        # FIXME(toha) This code should be cleaned up and covered by unit tests
         instance = self.nova_client.servers.get(instance_id)
         instance_info = dict()
         attributes = ['id', 'name', 'metadata', 'OS-EXT-AZ:availability_zone', 'config_drive', 'OS-DCF:diskConfig',
@@ -86,6 +87,7 @@ class NovaCompute(Compute.Compute):
         return instance_info
 
     def __get_disk_path(self, disk, blk_list, instance_info, is_ceph_ephemeral=False):
+        # FIXME(toha) This code should be cleaned up and covered by unit tests
         disk_path = None
         if not is_ceph_ephemeral:
             disk = "/" + disk
@@ -102,19 +104,20 @@ class NovaCompute(Compute.Compute):
                     disk_path = i
         return disk_path
 
-    def get_flavor_info_from_id(self, flavor_id):
+    def get_flavor_from_id(self, flavor_id):
         return self.nova_client.flavors.get(flavor_id)
 
     def get_flavor_list(self, **kwargs):
-        return self.nova_client.flavors.list(kwargs)
+        return self.nova_client.flavors.list(**kwargs)
 
     def create_flavor(self, **kwargs):
-        return self.nova_client.flavors.create(kwargs)
+        return self.nova_client.flavors.create(**kwargs)
 
     def delete_flavor(self, flavor_id):
         self.nova_client.flavors.delete(flavor_id)
 
     def wait_for_status(self, getter, id, status):
+        # FIXME(toha) What if it is infinite loop here?
         while getter.get(id).status != status:
             time.sleep(1)
 
