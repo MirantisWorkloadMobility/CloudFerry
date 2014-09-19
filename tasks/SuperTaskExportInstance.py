@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from scheduler.SuperTask import SuperTask
-from scheduler.Task import Task
+from cloudferrylib.scheduler.task import Task
 
 __author__ = 'mirrorcoder'
 

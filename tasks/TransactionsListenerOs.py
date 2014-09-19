@@ -1,14 +1,16 @@
-from scheduler.transaction.TaskTransaction import TransactionsListener
-from scheduler.transaction.TaskTransaction import ERROR, NO_ERROR
-from migrationlib.os.utils.rollback.Rollback import Rollback
-from scheduler.Namespace import Namespace
 import os
 import json
-from utils import convert_to_dict
 import shutil
 import time
 import uuid
 import copy
+
+from scheduler.transaction.TaskTransaction import TransactionsListener
+from scheduler.transaction.TaskTransaction import ERROR, NO_ERROR
+from migrationlib.os.utils.rollback.Rollback import Rollback
+from cloudferrylib.scheduler.namespace import Namespace
+from utils import convert_to_dict
+
 __author__ = 'mirrorcoder'
 
 

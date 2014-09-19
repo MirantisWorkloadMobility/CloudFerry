@@ -2,7 +2,7 @@ import yaml
 
 from migrationlib.os.exporter import osInfo
 from utils import get_log
-from scheduler.Task import Task
+from cloudferrylib.scheduler.task import Task
 
 
 LOG = get_log(__name__)

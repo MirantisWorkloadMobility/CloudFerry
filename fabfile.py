@@ -13,8 +13,10 @@
 # limitations under the License.
 
 from fabric.api import task, env
-from scheduler.Namespace import Namespace
-from scheduler.Scheduler import Scheduler
+import os
+
+from scheduler.namespace import Namespace
+from cloudferrylib.scheduler.scheduler import Scheduler
 from tasks.SuperTaskImportResource import SuperTaskImportResource
 from tasks.TaskInitMigrate import TaskInitMigrate
 from tasks.SuperTaskExportResource import SuperTaskExportResource
@@ -26,9 +28,7 @@ from tasks.TaskRestoreSourceCloud import TaskRestoreSourceCloud
 from tasks.TaskRestoreDestCloud import TaskRestoreDestCloud
 from tasks.TaskInitDirectory import TaskInitDirectory
 from tasks.TaskLoadSnapshotsForAbort import TaskLoadSnapshotsForAbort
-from utils import log_step, get_log, load_json_from_file, get_snapshots_list_repository, PATH_TO_SNAPSHOTS
-import os
-import shutil
+from utils import get_log, PATH_TO_SNAPSHOTS
 from migrationlib.os.utils.rollback.Rollback import *
 
 

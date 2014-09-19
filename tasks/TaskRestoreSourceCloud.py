@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from scheduler.Task import Task
+from cloudferrylib.scheduler.task import Task
 from migrationlib.os.utils.restore.RestoreStateOpenStack import RestoreStateOpenStack
 from migrationlib.os.utils.snapshot.SnapshotStateOpenStack import SnapshotStateOpenStack
 from migrationlib.os.utils.restore.NoReport import NoReport

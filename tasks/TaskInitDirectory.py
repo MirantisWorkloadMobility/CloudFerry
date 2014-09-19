@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from scheduler.Task import Task
-from utils import get_log, PATH_TO_SNAPSHOTS
 import shutil
-import yaml
 import os
+
+from cloudferrylib.scheduler.task import Task
+from utils import get_log, PATH_TO_SNAPSHOTS
+
 
 __author__ = 'mirrorcoder'
 

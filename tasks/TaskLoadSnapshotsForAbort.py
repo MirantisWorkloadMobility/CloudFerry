@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from scheduler.Task import Task
+from cloudferrylib.scheduler.task import Task
 from utils import get_snapshots_list_repository
 __author__ = 'mirrorcoder'
 

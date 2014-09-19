@@ -13,9 +13,9 @@
 # limitations under the License.
 
 __author__ = 'mirrorcoder'
-from Cursor import Cursor
-from Cursor import DEFAULT
-from utils.EquInstance import EquInstance
+from cloudferrylib.scheduler.cursor import Cursor
+from cloudferrylib.scheduler.cursor import DEFAULT
+from cloudferrylib.scheduler.utils.equ_instance import EquInstance
 
 
 class Element(object):
