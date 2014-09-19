@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from scheduler.Task import Task
+import os
+
+from cloudferrylib.scheduler.task import Task
 from migrationlib.os.utils.snapshot.SnapshotStateOpenStack import SnapshotStateOpenStack
 from utils import dump_to_file
-import os
+
 __author__ = 'mirrorcoder'
 
 

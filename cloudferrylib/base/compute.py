@@ -12,7 +12,12 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+from cloudferrylib.base import resource
 
 __author__ = 'mirrorcoder'
 
-from scheduler import *
+
+class Compute(resource):
+
+    def __init__(self):
+        super(Compute, self).__init__()

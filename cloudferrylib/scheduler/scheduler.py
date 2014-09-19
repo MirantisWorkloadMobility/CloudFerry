@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from Task import BaseTask
-from Namespace import Namespace, CHILDREN
-from ThreadTasks import WrapThreadTask
-from Cursor import Cursor
 import traceback
 from multiprocessing import Process
+
+from task import BaseTask
+from cloudferrylib.scheduler.namespace import Namespace, CHILDREN
+from thread_tasks import WrapThreadTask
+from cursor import Cursor
+
 __author__ = 'mirrorcoder'
 
 NO_ERROR = 0

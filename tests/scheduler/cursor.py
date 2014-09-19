@@ -14,15 +14,16 @@
 
 __author__ = 'mirrorcoder'
 
-from scheduler.Task import Cursor, DEFAULT
-from tests import test
 import mock
+
+from cloudferrylib.scheduler import cursor
+from tests import test
 
 
 class CursorTestCase(test.TestCase):
     def setUp(self):
         super(CursorTestCase, self).setUp()
-        self.elements = [mock.Mock(next_element=[], prev_element=None, parall_elem=[], num_element=DEFAULT)
+        self.elements = [mock.Mock(next_element=[], prev_element=None, parall_elem=[], num_element=cursor.DEFAULT)
                          for i in xrange(7)]
         self.elements[0].next_element = [self.elements[1]]
         self.elements[1].prev_element = self.elements[0]
@@ -38,39 +39,39 @@ class CursorTestCase(test.TestCase):
         # 0 <-> 1 | (2 -> 4,3 -> 4) <-> 4 & (6) <-> 5
 
     def test_cursor(self):
-        cursor = Cursor(self.elements[5])
-        self.assertEqual(cursor.current(), self.elements[0])
+        cur = cursor.Cursor(self.elements[5])
+        self.assertEqual(cur.current(), self.elements[0])
 
     def test_iterating_first_case_cursor(self):
-        cursor = Cursor(self.elements[0])
+        cur = cursor.Cursor(self.elements[0])
         expected_result = [self.elements[0], self.elements[1], self.elements[4], self.elements[6], self.elements[5]]
         expected_result.reverse()
-        for c in cursor:
+        for c in cur:
             self.assertEqual(expected_result.pop(), c)
 
     def test_iterating_second_case_cursor(self):
         self.elements[1].num_element = 1
-        cursor = Cursor(self.elements[0])
+        cur = cursor.Cursor(self.elements[0])
         expected_result = [self.elements[0], self.elements[1], self.elements[2], self.elements[4], self.elements[6],
                            self.elements[5]]
         expected_result.reverse()
-        for c in cursor:
+        for c in cur:
             self.assertEqual(expected_result.pop(), c)
 
     def test_iterating_third_case_cursor(self):
         self.elements[1].num_element = 2
-        cursor = Cursor(self.elements[0])
+        cur = cursor.Cursor(self.elements[0])
         expected_result = [self.elements[0], self.elements[1], self.elements[3], self.elements[4], self.elements[6],
                            self.elements[5]]
         expected_result.reverse()
-        for c in cursor:
+        for c in cur:
             self.assertEqual(expected_result.pop(), c)
 
     def test_iterating_fourth_case_cursor(self):
         self.elements[1].num_element = 3
-        cursor = Cursor(self.elements[0])
+        cur = cursor.Cursor(self.elements[0])
         expected_result = [self.elements[0], self.elements[1], self.elements[4], self.elements[6], self.elements[5]]
         expected_result.reverse()
-        for c in cursor:
+        for c in cur:
             self.assertEqual(expected_result.pop(), c)
 

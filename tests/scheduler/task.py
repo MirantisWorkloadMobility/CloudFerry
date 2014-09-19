@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from scheduler.Task import Task
-from tests import test
 import mock
 
+from cloudferrylib.scheduler import task
+from tests import test
 
-class TestTask(Task):
+
+class TestTask(task.Task):
     def run(self, v1=None, **kwargs):
         return {'v2': 10, 'v3': v1}
 
@@ -29,8 +30,8 @@ class TaskTestCase(test.TestCase):
         self.fake_namespace.vars = {'v1': 1, 'v2': 2}
 
     def test_dual_link(self):
-        a1 = Task()
-        a2 = Task()
+        a1 = task.Task()
+        a2 = task.Task()
         res = a1 >> a2
         self.assertEqual(res, a2)
         self.assertEqual(len(a1.next_element), 1, 'No correct elements in \' a1.next_element\'')
@@ -40,10 +41,10 @@ class TaskTestCase(test.TestCase):
         self.assertFalse(a2.next_element)
 
     def test_another_link(self):
-        a1 = Task()
-        a2 = Task()
-        a3 = Task()
-        a4 = Task()
+        a1 = task.Task()
+        a2 = task.Task()
+        a3 = task.Task()
+        a4 = task.Task()
         res = (a1 | (a2 - a4) | (a3 - a4)) >> a4
         self.assertEqual(res, a4)
         self.assertEqual(len(a1.next_element), 3, 'No correct elements in \' a1.next_element\'')
@@ -55,8 +56,8 @@ class TaskTestCase(test.TestCase):
         self.assertEqual(a4.prev_element, a1)
 
     def test_closure_link(self):
-        a1 = Task()
-        a2 = Task()
+        a1 = task.Task()
+        a2 = task.Task()
         res = a1 - a2
         self.assertEqual(res, a1)
         self.assertEqual(len(a1.next_element), 1, 'No correct elements in \' a1.next_element\'')
@@ -64,10 +65,10 @@ class TaskTestCase(test.TestCase):
         self.assertFalse(a2.prev_element)
 
     def test_thread_link(self):
-        a1 = Task()
-        a2 = Task()
-        a3 = Task()
-        a4 = Task()
+        a1 = task.Task()
+        a2 = task.Task()
+        a3 = task.Task()
+        a4 = task.Task()
         res = (a1 & a2 & a3) >> a4
         self.assertEqual(res, a4)
         self.assertEqual(len(a1.next_element), 1, 'No correct elements in \' a1.next_element\'')

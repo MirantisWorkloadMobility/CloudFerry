@@ -14,9 +14,9 @@
 
 __author__ = 'mirrorcoder'
 
-from scheduler.Scheduler import *
-from scheduler.ThreadTasks import *
-from scheduler.ExampleTasks import *
+from cloudferrylib.scheduler.scheduler import *
+from cloudferrylib.scheduler.thread_tasks import *
+from ExampleTasks import *
 
 def get_id_action(prefix='a%s', count={'c': 1}):
     j = count

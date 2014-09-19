@@ -12,12 +12,14 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+from fabric.api import env
+import yaml
+
 from migrationlib.os.exporter import osExporter, osResourceExporter
 from migrationlib.os.importer import osImporter, osResourceImporter
-from scheduler.Task import Task
-from fabric.api import env
+from cloudferrylib.scheduler.task import Task
 from utils import get_log
-import yaml
+
 
 __author__ = 'mirrorcoder'
 

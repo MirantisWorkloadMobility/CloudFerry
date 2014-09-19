@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from Task import Task
-from utils.EquInstance import EquInstance
+from task import Task
+from utils.equ_instance import EquInstance
 __author__ = 'mirrorcoder'
 
 HIGH = 3
