@@ -18,7 +18,7 @@ import mock
 
 from oslotest import mockpatch
 
-from cloudferrylib.os.compute import NovaCompute
+from cloudferrylib.os.compute import nova_compute
 from novaclient.v1_1 import client as nova_client
 from tests import test
 
@@ -37,7 +37,7 @@ class NovaComputeTestCase(test.TestCase):
         self.nc_patch = mockpatch.PatchObject(nova_client, 'Client',
                                               new=self.mock_client)
         self.useFixture(self.nc_patch)
-        self.nova_client = NovaCompute.NovaCompute(FAKE_CONFIG)
+        self.nova_client = nova_compute.NovaCompute(FAKE_CONFIG)
 
         self.fake_instance_0 = mock.Mock()
         self.fake_instance_1 = mock.Mock()

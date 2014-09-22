@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 import mock
-from cloudferrylib.os.image.GlanceImage import GlanceImage
+from cloudferrylib.os.image.glance_image import GlanceImage
 from oslotest import mockpatch
 from glanceclient.v1 import client as glance_client
 from tests import test
@@ -79,22 +79,26 @@ class GlanceImageTestCase(test.TestCase):
         fake_images = [self.fake_image_1, self.fake_image_2]
         self.glance_mock_client().images.list.return_value = fake_images
 
-        self.assertEquals(self.fake_image_1, self.glance_image.get_image('fake_image_id_1'))
+        self.assertEquals(self.fake_image_1,
+                          self.glance_image.get_image('fake_image_id_1'))
 
     def test_get_image_status(self):
         fake_images = [self.fake_image_1, self.fake_image_2]
         self.glance_mock_client().images.list.return_value = fake_images
 
-        self.assertEquals(self.fake_image_1.status, self.glance_image.get_image_status('fake_image_id_1'))
+        self.assertEquals(self.fake_image_1.status,
+                          self.glance_image.get_image_status('fake_image_id_1'))
 
     def test_get_ref_image(self):
         fake_images = [self.fake_image_1, self.fake_image_2]
         self.glance_mock_client().images.list.return_value = fake_images
 
-        self.assertEquals(self.fake_image_1._resp, self.glance_image.get_ref_image('fake_image_id_1'))
+        self.assertEquals(self.fake_image_1._resp,
+                          self.glance_image.get_ref_image('fake_image_id_1'))
 
     def test_get_image_checksum(self):
         fake_images = [self.fake_image_1, self.fake_image_2]
         self.glance_mock_client().images.list.return_value = fake_images
 
-        self.assertEquals(self.fake_image_1.checksum, self.glance_image.get_image_checksum('fake_image_id_1'))
+        self.assertEquals(self.fake_image_1.checksum,
+                          self.glance_image.get_image_checksum('fake_image_id_1'))
