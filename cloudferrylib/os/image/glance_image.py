@@ -12,13 +12,11 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from cloudferrylib.base import Image
+from cloudferrylib.base import image
 from glanceclient.v1 import client as glance_client
 
-__author__ = 'asvechnikov'
 
-
-class GlanceImage(Image.Image):
+class GlanceImage(image.Image):
 
     """
     The main class for working with Openstack Glance Image Service.
@@ -28,7 +26,7 @@ class GlanceImage(Image.Image):
         self.config = config
         self.identity_client = identity_client
         self.glance_client = self.get_glance_client()
-        super(GlanceImage, self).__init__(config)
+        super(GlanceImage, self).__init__()
 
     def get_glance_client(self):
 

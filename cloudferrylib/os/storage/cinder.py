@@ -13,11 +13,11 @@
 # limitations under the License.
 
 
-from cloudferrylib.base import Storage
+from cloudferrylib.base import storage
 from cinderclient.v1 import client as cinder_client
 
 
-class CinderStorage(Storage.Storage):
+class CinderStorage(storage.Storage):
 
     """
     The main class for working with Openstack cinder client

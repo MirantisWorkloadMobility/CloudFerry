@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from cloudferrylib.base import Identity
+from cloudferrylib.base import identity
 from keystoneclient.v2_0 import client as keystone_client
 
 NOVA_SERVICE = 'nova'
 
 
-class KeystoneIdentity(Identity.Identity):
+class KeystoneIdentity(identity.Identity):
     """The main class for working with Openstack Keystone Identity Service."""
 
     def __init__(self, config):

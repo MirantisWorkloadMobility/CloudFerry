@@ -17,7 +17,7 @@ import time
 
 from novaclient.v1_1 import client as nova_client
 
-from cloudferrylib.base import Compute
+from cloudferrylib.base import compute
 from utils.utils import get_libvirt_block_info
 
 
@@ -26,7 +26,7 @@ LOCAL = ".local"
 LEN_UUID_INSTANCE = 36
 
 
-class NovaCompute(Compute.Compute):
+class NovaCompute(compute.Compute):
     """The main class for working with Openstack Nova Compute Service. """
 
     def __init__(self, config):
