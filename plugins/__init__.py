@@ -13,3 +13,5 @@
 # limitations under the License.
 
 __author__ = 'mirrorcoder'
+
+import aws_plugin
