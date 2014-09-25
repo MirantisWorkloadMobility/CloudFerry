@@ -11,13 +11,13 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
-from cloudferrylib.base import Network
+from cloudferrylib.base import network
 from novaclient.v1_1 import client as nova_client
 from utils import forward_agent
 from fabric.api import run, settings, env
 
 
-class NovaNetwork(Network.Network):
+class NovaNetwork(network.Network):
     def __init__(self, config):
         super(NovaNetwork, self).__init__(config)
         self.config = config
