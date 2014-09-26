@@ -330,9 +330,8 @@ class osBuilderExporter:
                 self.data['volumes'].append(VolumeTransferDirectly(volume, instance, volume_path))
         return self
 
-
     @log_step(LOG)
-    def     __get_flavor_from_instance(self, instance):
+    def __get_flavor_from_instance(self, instance):
         return self.nova_client.flavors.get(instance.flavor['id'])
 
     @log_step(LOG)

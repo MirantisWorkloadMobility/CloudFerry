@@ -18,7 +18,7 @@ from cloudferrylib import config
 from cloudferrylib.scheduler.namespace import Namespace
 from cloudferrylib.scheduler.scheduler import Scheduler
 from utils import get_log
-
+from cloud import cloud_ferry
 env.forward_agent = True
 env.user = 'root'
 
@@ -32,10 +32,12 @@ def migrate(name_config, name_instance=None):
     """
     config.collector_configs_plugins()
     config.init_config(name_config)
-    namespace = Namespace({
-        'config': config.CONF,
-        'name_instance': name_instance})
-    scheduler = Scheduler(namespace)
+    cloud = cloud_ferry.CloudFerry(config.CONF)
+    cloud.migrate()
+    # namespace = Namespace({
+    #     'config': config.CONF,
+    #     'name_instance': name_instance})
+    # scheduler = Scheduler(namespace)
 
 
 @task
