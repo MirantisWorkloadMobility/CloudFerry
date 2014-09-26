@@ -11,6 +11,7 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
+import copy
 from cloudferrylib.base import network
 from novaclient.v1_1 import client as nova_client
 from utils import forward_agent
@@ -22,15 +23,28 @@ class NovaNetwork(network.Network):
         super(NovaNetwork, self).__init__(config)
         self.config = config
         self.nova_client = self.get_client()
+        self.info = None
 
     def get_client(self):
         return nova_client.Client(self.config["user"],
-                             self.config["password"],
-                             self.config["tenant"],
-                             "http://" + self.config["host"] + ":35357/v2.0/")
+                                  self.config["password"],
+                                  self.config["tenant"],
+                                  "http://" + self.config["host"] + ":35357/v2.0/")
 
-    def get_security_groups(self):
-        return self.nova_client.security_groups.list()
+    def get_resource_network(self, instance):
+        clone = self.__copy__()
+        clone.info = {'security_groups': clone.get_security_groups(instance),
+                      'nics': clone.get_networks(instance)}
+        # info about instance
+        return clone
+
+    def deploy(self):
+        self.upload_security_groups(self.info['security_groups'])
+
+    def get_security_groups(self, instance=None):
+        if instance is None:
+            return self.nova_client.security_groups.list()
+        return self.nova_client.servers.list_security_group(instance)
 
     def get_networks(self, instance, **kwargs):
         networks = []
@@ -74,3 +88,5 @@ class NovaNetwork(network.Network):
                                                                  to_port=rule['to_port'],
                                                                  cidr=rule['ip_range']['cidr'])
 
+    def __copy__(self):
+        return copy.copy(self)
