@@ -17,7 +17,7 @@ class Resource(object):
     def __init__(self):
         pass
 
-    def read_info(self):
+    def read_info(self, opts={}):
         pass
 
     def deploy(self, *args):
@@ -29,7 +29,7 @@ class Resource(object):
     def restore(self):
         pass
 
-    def wait_for_status(self):
+    def wait_for_status(self, id_res, status):
         pass
 
     def get_status(self):

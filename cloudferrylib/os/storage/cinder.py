@@ -37,6 +37,14 @@ class CinderStorage(storage.Storage):
                                     params["tenant"],
                                     "http://%s:35357/v2.0/" % params["host"])
 
+    def read_info(self, opts={}):
+        info = dict(resource=self, volumes=[])
+        info['volumes'] = [{'volume': vol, 'meta': None} for vol in self.get_volumes_list(search_opts=opts)]
+        return info
+
+    def deploy(self, info):
+        pass
+
     def get_volumes_list(self, detailed=True, search_opts=None):
         return self.cinder_client.volumes.list(detailed, search_opts)
 
