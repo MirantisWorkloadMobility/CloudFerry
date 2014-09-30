@@ -16,14 +16,14 @@
 import cloud
 import cloud_ferry
 
-from resources.NovaCompute import NovaCompute
+from cloudferrylib.os.compute import nova_compute
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
 
     def __init__(self, config):
         super(OS2OSFerry, self). __init__(config)
-        resources = {'compute': NovaCompute(config),
+        resources = {'compute': nova_compute.NovaCompute(),
                      }
         self.src_cloud = cloud.Cloud(resources)
         self.dst_cloud = cloud.Cloud(resources)
