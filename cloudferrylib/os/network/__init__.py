@@ -12,12 +12,3 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from cloudferrylib.base import resource
-
-__author__ = 'mirrorcoder'
-
-
-class Network(resource.Resource):
-
-    def __init__(self, cloud):
-        super(Network, self).__init__()
