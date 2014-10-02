@@ -13,23 +13,19 @@
 # limitations under the License.
 
 
-import os2os
-
-
 class CloudFerry(object):
     def __new__(cls, config):
         if cls != CloudFerry:
             # Call is already for a subclass, so pass it through
             return super(CloudFerry, cls).__new__(cls)
 
-        if (config['source']['type'] == 'os' and
-                                        config['destination']['type'] == 'os'):
+        if (config.src.type == 'os') and (config.dst.type == 'os'):
             # Maybe it is better to provide new param in config such as
             # 'migration_type'? Or as Alex mentioned, make smth like paste.ini?
             # And specify it there for first time? It can be directly names of
             # classes or any human readable mapping. And later some day
             # implement smth like auto discovering, if it will be needed
-            return os2os.OS2OSFerry(config)
+            return __import__('cloud').os2os.OS2OSFerry(config)
 
         return super(CloudFerry, cls).__new__(cls)
 
@@ -37,8 +33,8 @@ class CloudFerry(object):
         self.config = config
 
     def auth(self):
-        self.src_cloud.auth(self.config['source'])
-        self.dst_cloud.auth(self.config['destination'])
+        self.src_cloud.auth(self.config)
+        self.dst_cloud.auth(self.config)
 
     def migrate(self):
         pass

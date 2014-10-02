@@ -1,9 +1,9 @@
 __author__ = 'mirrorcoder'
 
-from scheduler import Task
-import mock
+from cloudferrylib.scheduler import task
 
-class Action(Task.Task):
+
+class Action(task.Task):
     def __init__(self):
         pass
 
