@@ -18,7 +18,6 @@ import time
 from migrationlib.os.utils.FileLikeProxy import FileLikeProxy
 from utils import forward_agent, up_ssh_tunnel, ChecksumImageInvalid, \
     CEPH, REMOTE_FILE, QCOW2, log_step, get_log
-from scheduler.builder_wrapper import inspect_func, supertask
 from fabric.api import run, settings, env
 from migrationlib.os.osCommon import osCommon
 import ipaddr
@@ -485,8 +484,148 @@ class osBuilderImporter:
                             (disk_host, self.config['transfer_file']['level_compression'],
                              source_disk, ssh_port, dest_disk))
 
+# For moved in new architecture
+    def transfer_file_to_file(self, cloud_src, cloud_dst, host_src, host_dst, path_src, path_dst, cfg_migrate):
+        LOG.debug("| | copy file")
+        ssh_ip_src = cloud_src.getIpSsh()
+        ssh_ip_dst = cloud_dst.getIpSsh()
+        with settings(host_string=ssh_ip_src):
+            with forward_agent(env.key_filename):
+                with up_ssh_tunnel(host_dst, ssh_ip_dst) as port:
+                    if cfg_migrate.file_compression == "dd":
+                        run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
+                             "| ssh -oStrictHostKeyChecking=no -p %s localhost 'dd bs=1M of=%s'") %
+                            (host_src, path_src, port, path_dst))
+                    elif cfg_migrate.file_compression == "gzip":
+                        run(("ssh -oStrictHostKeyChecking=no %s 'gzip -%s -c %s' " +
+                             "| ssh -oStrictHostKeyChecking=no -p %s localhost 'gunzip | dd bs=1M of=%s'") %
+                            (cloud_src, cfg_migrate.level_compression,
+                             path_src, port, path_dst))
+
+    def get_info_ephemeral_drive(self, cloud, host_instance, instance):
+        compute_resource = cloud.resources['compute']
+        diff_path = compute_resource.__get_disk_path(instance, False, True)
+        ephemeral = compute_resource.__get_disk_path(instance, True, True) if is_ephemeral else None
+
+
+    def get_disk(self, instance=None, data=None, **kwargs):
+        """Getting information about diff file of source instance"""
+        if not boot_from_volume:
+            if self.config["ephemeral_drives"]['ceph']:
+                diff_path = self.__get_instance_diff_path(instance, False, True)
+                ephemeral = self.__get_instance_diff_path(instance, True, True) if is_ephemeral else None
+                self.__create_temp_directory(self.config['temp'])
+                self.data['disk'] = {
+                    'type': CEPH,
+                    'host': self.config['host'],
+                    'diff_path': self.__transfer_rbd_to_glance(diff_path,
+                                                               self.config['temp'],
+                                                               self.config['ephemeral_drives']['convert_diff_file'],
+                                                               "diff_path"),
+                    'ephemeral': self.__transfer_rbd_to_file(ephemeral,
+                                                             self.config['temp'],
+                                                             self.config['ephemeral_drives']['convert_ephemeral_drive'],
+                                                             "disk.local")
+                }
+            else:
+                diff_path = self.__get_instance_diff_path(instance, False, False)
+                ephemeral = self.__get_instance_diff_path(instance, True, False) if is_ephemeral else None
+                self.data['disk'] = {
+                    'type': REMOTE_FILE,
+                    'host': getattr(instance, 'OS-EXT-SRV-ATTR:host'),
+                    'diff_path': diff_path,
+                    'ephemeral': ephemeral
+                }
+        else:
+            ephemeral = self.__get_instance_diff_path(instance, True, self.config["ephemeral_drives"]['ceph']) \
+                if is_ephemeral else None
+            self.__create_temp_directory(self.config['temp'])
+            self.data['disk'] = {
+                'type': CEPH if self.config["ephemeral_drives"]['ceph'] else REMOTE_FILE,
+                'host': self.config['host'] if self.config["ephemeral_drives"]['ceph']
+                else getattr(instance, 'OS-EXT-SRV-ATTR:host'),
+                'ephemeral': self.__transfer_rbd_to_file(ephemeral,
+                                                         self.config['temp'],
+                                                         self.config['ephemeral_drives']['convert_ephemeral_drive'],
+                                                         "disk.local")
+                if self.config["ephemeral_drives"]['ceph'] else ephemeral
+            }
+            self.data["boot_volume_size"] = {}
+        return self
+
+    @log_step(LOG)
+    def __create_temp_directory(self, temp_path):
+        with settings(host_string=self.config['host']):
+            run("rm -rf %s" % temp_path)
+            run("mkdir -p %s" % temp_path)
+
+    def __transfer_rbd_to_glance(self, diff_path, temp_path, image_format, name):
+        name_file_diff_path = "disk"
+        self.__transfer_rbd_to_file(diff_path, temp_path, image_format, name_file_diff_path)
+        image_resource.create_image_from_file()
+
+    @log_step(LOG)
+    def __transfer_rbd_to_file(self, diff_path, temp_path, image_format, name_file_diff_path):
+        if not diff_path:
+            return None
+        with settings(host_string=self.config['host']):
+            with cd(temp_path):
+                run("qemu-img convert -O %s rbd:%s %s" % (image_format, diff_path, name_file_diff_path))
+        if temp_path[-1] == "/":
+            return temp_path+name_file_diff_path
+        else:
+            return temp_path+"/"+name_file_diff_path
+
     @log_step(LOG)
     def __transfer_remote_file_to_ceph(self, instance, disk_host, source_disk, dest_host, is_source_ceph):
+        temp_dir = source_disk[:-10]
+        ssh_ip_src = cloud_src.getIpSsh()
+        ssh_ip_dst = cloud_dst.getIpSsh()
+        temp_dir_src =
+        LOG.debug("    copy ephemeral file to destination ceph")
+        with settings(host_string=dest_host):
+            with forward_agent(env.key_filename):
+                run("rbd rm -p compute %s_disk.local" % instance.id)
+        with settings(host_string=self.config_from['host']):
+            with forward_agent(env.key_filename):
+                if self.config["transfer_ephemeral"]["compression"] == "gzip":
+                    if not is_source_ceph:
+                        run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && " +
+                            "qemu-img convert -O raw %s disk.local.temp && gzip -%s -c disk.local.temp' | " +
+                            "ssh -oStrictHostKeyChecking=no %s 'gunzip | " +
+                            "rbd import --image-format=2 - compute/%s_disk.local'")
+                            % (disk_host,
+                               temp_dir,
+                               source_disk,
+                               self.config["transfer_ephemeral"]["level_compression"],
+                               dest_host,
+                               instance.id))
+                    else:
+                        run(("gzip -%s -c %s | " +
+                            "ssh -oStrictHostKeyChecking=no %s 'gunzip | " +
+                            "rbd import --image-format=2 - compute/%s_disk.local'")
+                            % (self.config["transfer_ephemeral"]["level_compression"],
+                               source_disk,
+                               dest_host,
+                               instance.id))
+                elif self.config["transfer_ephemeral"]["compression"] == "dd":
+                    if not source_disk:
+                        run(("ssh -oStrictHostKeyChecking=no %s 'cd %s && " +
+                            "qemu-img convert -O raw %s disk.local.temp && dd bs=1M if=disk.local.temp' | " +
+                            "ssh -oStrictHostKeyChecking=no %s '" +
+                            "rbd import --image-format=2 - compute/%s_disk.local'")
+                            % (disk_host, temp_dir, source_disk, dest_host, instance.id))
+                    else:
+                        run(("dd bs=1M if=%s | " +
+                            "ssh -oStrictHostKeyChecking=no %s '" +
+                            "rbd import --image-format=2 - compute/%s_disk.local'")
+                            % (source_disk,
+                               dest_host,
+                               instance.id))
+                run("rm -f %s" % source_disk)
+
+
+    def transfer_remote_file_to_ceph(self, cloud_src, cloud_dst, disk_host, source_disk, dest_host, is_source_ceph):
         temp_dir = source_disk[:-10]
         LOG.debug("    copy ephemeral file to destination ceph")
         with settings(host_string=dest_host):
@@ -606,9 +745,9 @@ class osBuilderImporter:
         for source_volume in volumes:
             LOG.debug("      volume %s" % source_volume.__dict__)
             volume = self.cinder_client.volumes.create(size=source_volume.size,
-                                                        display_name=source_volume.name,
-                                                        display_description=source_volume.description,
-                                                        volume_type=source_volume.volume_type,
+                                                       display_name=source_volume.name,
+                                                       display_description=source_volume.description,
+                                                       volume_type=source_volume.volume_type,
                                                         availability_zone=source_volume.availability_zone,
                                                         metadata = {'source_id': source_volume.id})
             LOG.debug("        wait for available")

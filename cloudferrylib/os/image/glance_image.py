@@ -14,9 +14,9 @@
 
 from cloudferrylib.base import image
 from glanceclient.v1 import client as glance_client
+from fabric.api import settings, run, cd
 
 from migrationlib.os.utils import FileLikeProxy
-
 
 class GlanceImage(image.Image):
 

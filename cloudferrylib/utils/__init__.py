@@ -12,14 +12,6 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from cloudferrylib.base import resource
+__author__ = 'mirrorcoder'
 
-
-class Storage(resource.Resource):
-
-    def __init__(self, config):
-        self.config = config
-        super(Storage, self).__init__()
-
-    def get_backend(self):
-        return self.config.src_storage.backend
+from utils import *

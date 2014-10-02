@@ -32,38 +32,41 @@ def require_methods(methods, obj):
     return True
 
 
-class ConvertVolumeToImage(convertor.Convertor):
+class ConvertorVolumeToImage(convertor.Convertor):
 
-    def __init__(self, disk_format, container_format=BARE):
+    def __init__(self, disk_format, cloud, container_format=BARE):
+        self.cloud = cloud
         self.disk_format = disk_format
         self.container_format = container_format
-        super(ConvertVolumeToImage, self).__init__()
+        super(ConvertorVolumeToImage, self).__init__()
 
-    def run(self, volumes_info={}, cloud_current=None, **kwargs):
-        resource_storage = cloud_current.resources['storage']
-        resource_image = cloud_current.resources['image']
-        images_info = dict(resource=resource_image, images=[])
+    def run(self, volumes_info={}, **kwargs):
+        resource_storage = self.cloud.resources['storage']
+        resource_image = self.cloud.resources['image']
+        images_info = []
         if not require_methods(['uploud_to_image'], resource_storage):
             raise RuntimeError("No require methods")
         images_from_volumes = []
         for volume in volumes_info['volumes']:
+            volume = volume['volume']
             LOG.debug("| | uploading volume %s [%s] to image service bootable=%s" %
                       (volume.display_name, volume.id, volume.bootable if hasattr(volume, 'bootable') else False))
-            resp, image = resource_storage.upload_to_image(volume=volume,
-                                                           force=True,
-                                                           image_name=volume.id,
-                                                           container_format=self.container_format,
-                                                           disk_format=self.disk_format)
+            resp, image = resource_storage.upload_volume_to_image(volume.id, force=True, image_name=volume.id,
+                                                                  container_format=self.container_format,
+                                                                  disk_format=self.disk_format)
             image_upload = image['os-volume_upload_image']
             resource_image.wait_for_status(image_upload['image_id'], ACTIVE)
             if resource_storage.get_backend() == CEPH:
-                image_from_glance = resource_image.get(image_upload['image_id'])
-                with settings(host_string=cloud_current.getIpSsh()):
+                image_from_glance = resource_image.read_info({'id': image_upload['image_id']})
+                with settings(host_string=self.cloud.getIpSsh()):
                     out = json.loads(run("rbd -p images info %s --format json" % image_upload['image_id']))
                     image_from_glance.update(size=out["size"])
+            image_vol = resource_image.read_info({'id': image_upload['image_id']})
             images_from_volumes.append({
-                'image': image,
-                'meta': volume
+                'image': image_vol,
+                'meta': {
+                    'volume': volume
+                }
             })
         images_info['images'] = images_from_volumes
         return {

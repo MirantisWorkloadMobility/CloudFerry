@@ -295,16 +295,6 @@ class osBuilderExporter:
         self.data['volumes'] = images_from_volumes
         return self
 
-    @log_step(LOG)
-    def __upload_volume_to_glance(self, volume):
-        resp, image = self.cinder_client.volumes.upload_to_image(volume=volume,
-                                                                 force=True,
-                                                                 image_name=volume.id,
-                                                                 container_format="bare",
-                                                                 disk_format=self.config['cinder']['disk_format'])
-        return image
-
-
     @inspect_func
     @log_step(LOG)
     def get_volumes(self, instance=None, **kwargs):
