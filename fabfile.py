@@ -13,31 +13,25 @@
 # limitations under the License.
 
 from fabric.api import task, env
-
-from cloudferrylib import config
 from cloudferrylib.scheduler.namespace import Namespace
 from cloudferrylib.scheduler.scheduler import Scheduler
+import cfglib
 from utils import get_log
 from cloud import cloud_ferry
 env.forward_agent = True
 env.user = 'root'
-
 LOG = get_log(__name__)
 
 
 @task
-def migrate(name_config, name_instance=None):
+def migrate(name_config=None, name_instance=None):
     """
         :name_config - name of config yaml-file, example 'config.yaml'
     """
-    config.collector_configs_plugins()
-    config.init_config(name_config)
-    cloud = cloud_ferry.CloudFerry(config.CONF)
+    cfglib.collector_configs_plugins()
+    cfglib.init_config(name_config)
+    cloud = cloud_ferry.CloudFerry(cfglib.CONF)
     cloud.migrate()
-    # namespace = Namespace({
-    #     'config': config.CONF,
-    #     'name_instance': name_instance})
-    # scheduler = Scheduler(namespace)
 
 
 @task

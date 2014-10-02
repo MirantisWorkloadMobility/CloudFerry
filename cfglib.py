@@ -1,5 +1,5 @@
 from oslo.config import cfg
-
+import addons
 src = cfg.OptGroup(name='src',
                    title='Credetionals and general config for source cloud')
 
@@ -254,11 +254,11 @@ def init_config(name_config=None):
         CONF.register_opts(i[1], i[0])
     if name_config:
         name_configs[0] = name_config
-    CONF(default_config_files=name_configs)
+    CONF(default_config_files=name_configs, args="")
 
 
 def get_plugins():
-    plugins = __import__('plugins')
+    plugins = addons
     dir_plugins = dir(plugins)
     exclude_field = ['__author__', '__builtins__', '__doc__', '__file__',
                      '__name__', '__package__', '__path__']
@@ -303,7 +303,7 @@ def collector_configs_plugins():
     plugins = get_plugins()
     for plugin in plugins:
         merge_cfg(plugin[1].cfg_for_reg)
-        name_configs.append('plugins/%s/configs/config.ini' % plugin[0])
+        name_configs.append('addons/%s/configs/config.ini' % plugin[0])
 
 if __name__ == '__main__':
     collector_configs_plugins()

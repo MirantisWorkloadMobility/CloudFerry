@@ -29,11 +29,11 @@ LEN_UUID_INSTANCE = 36
 class NovaCompute(compute.Compute):
     """The main class for working with Openstack Nova Compute Service. """
 
-    def __init__(self, config):
-        self.config = config
-        self.nova_client = self.get_nova_client(self.config)
-        self.instance = None
+    def __init__(self):
         super(NovaCompute, self).__init__()
+
+    def auth(self, config, identity):
+        pass
 
     def get_nova_client(self, params):
         """Getting nova client. """

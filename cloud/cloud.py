@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+SRC = "src"
+DST = "dst"
+
 
 class Cloud(object):
 
-    def __init__(self, resources):
+    def __init__(self, resources, position):
         self.resources = resources
 
     def auth(self, config):

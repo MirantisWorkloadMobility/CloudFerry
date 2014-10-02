@@ -24,8 +24,9 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
     def __init__(self, config):
         super(OS2OSFerry, self). __init__(config)
         resources = {'compute': nova_compute.NovaCompute(),
+                     'identity': object()
                      }
-        self.src_cloud = cloud.Cloud(resources)
-        self.dst_cloud = cloud.Cloud(resources)
+        self.src_cloud = cloud.Cloud(resources, cloud.SRC)
+        self.dst_cloud = cloud.Cloud(resources, cloud.DST)
 
         self.auth()
