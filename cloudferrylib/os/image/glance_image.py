@@ -15,6 +15,8 @@
 from cloudferrylib.base import image
 from glanceclient.v1 import client as glance_client
 
+from migrationlib.os.utils import FileLikeProxy
+
 
 class GlanceImage(image.Image):
 
@@ -48,15 +50,44 @@ class GlanceImage(image.Image):
         self.glance_client.images.delete(image_id)
 
     def get_image(self, image_id):
-        for image in self.get_image_list():
-            if image.id == image_id:
-                return image
+        for glance_image in self.get_image_list():
+            if glance_image.id == image_id:
+                return glance_image
 
     def get_image_status(self, image_id):
         return self.get_image(image_id).status
 
     def get_ref_image(self, image_id):
-        return self.get_image(image_id)._resp
+        return self.glance_client.images.data(image_id)._resp
 
     def get_image_checksum(self, image_id):
         return self.get_image(image_id).checksum
+
+    def read_info(self):
+        info = {'images': self.get_image_list(),
+                'resource': self}
+
+        return info
+
+    def deploy(self, info):
+        migrate_images_list = []
+        for gl_image in info['images']:
+            if gl_image.name + 'Migrate' in [x.name for x in
+                                             self.get_image_list()]:
+                continue
+            gl_image.resource_src = info['resource']
+            migrate_image = self.create_image(
+                name=gl_image.name + 'Migrate',
+                container_format=gl_image.container_format,
+                disk_format=gl_image.disk_format,
+                is_public=gl_image.is_public,
+                protected=gl_image.protected,
+                size=gl_image.size,
+                data=FileLikeProxy.FileLikeProxy(
+                    gl_image,
+                    FileLikeProxy.callback_print_progress,
+                    self.config['speed_limit']))
+
+            migrate_images_list.append(migrate_image)
+
+        return migrate_images_list
