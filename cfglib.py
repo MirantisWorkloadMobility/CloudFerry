@@ -43,9 +43,9 @@ migrate = cfg.OptGroup(name='migrate',
                        title='General config for migration process')
 
 migrate_opts = [
-    cfg.StrOpt('keep_user_passwords', default='yes',
-               help='yes - keep user passwords, '
-                    'no - not keep user passwords'),
+    cfg.BoolOpt('keep_user_passwords', default=True,
+               help='True - keep user passwords, '
+                    'False - not keep user passwords'),
     cfg.StrOpt('key_filename', default='id_rsa',
                help='name pub key'),
     cfg.StrOpt('keep_ip', default='no',
@@ -81,6 +81,8 @@ src_mysql_opts = [
                help='user for mysql'),
     cfg.StrOpt('password', default='-',
                help='password for mysql'),
+    cfg.StrOpt('host', default='-',
+               help='host of mysql'),
     cfg.StrOpt('connection', default='mysql+mysqlconnector',
                help='driver for connection'),
 ]
@@ -150,6 +152,8 @@ dst_mysql_opts = [
                help='user for mysql'),
     cfg.StrOpt('password', default='-',
                help='password for mysql'),
+    cfg.StrOpt('host', default='-',
+               help='host of mysql'),
     cfg.StrOpt('connection', default='mysql+mysqlconnector',
                help='driver for connection'),
 ]

@@ -23,12 +23,6 @@ from oslotest import mockpatch
 from keystoneclient.v2_0 import client as keystone_client
 
 
-FAKE_CONFIG = {'user': 'fake_user',
-               'password': 'fake_password',
-               'tenant': 'fake_tenant',
-               'host': '1.1.1.1'}
-
-
 class KeystoneIdentityTestCase(test.TestCase):
     def setUp(self):
         super(KeystoneIdentityTestCase, self).setUp()
@@ -36,7 +30,14 @@ class KeystoneIdentityTestCase(test.TestCase):
         self.kc_patch = mockpatch.PatchObject(keystone_client, 'Client',
                                               new=self.mock_client)
         self.useFixture(self.kc_patch)
-        self.keystone_client = keystone.KeystoneIdentity(FAKE_CONFIG)
+        
+        self.fake_config = mock.Mock()
+        self.fake_config.fake_src.user = 'fake_user'
+        self.fake_config.fake_src.password = 'fake_password'
+        self.fake_config.fake_src.tenant = 'fake_tenant'
+        self.fake_config.fake_src.host = '1.1.1.1'
+        print self.fake_config.__dict__
+        self.keystone_client = keystone.KeystoneIdentity(self.fake_config, 'fake_src')
 
         self.fake_user = mock.Mock()
         self.fake_user_0 = mock.Mock()
