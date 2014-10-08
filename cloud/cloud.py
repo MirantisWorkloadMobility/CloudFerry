@@ -12,19 +12,62 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+
+import copy
+
+
 SRC = "src"
 DST = "dst"
 
 
 class Cloud(object):
 
-    def __init__(self, resources, position):
+    def __init__(self, resources, position, config):
         self.resources = resources
+        self.position = position
+        self.config = config
 
-    def auth(self, config):
-        identity = self.resources['identity']
-        # Do we need here identity.auth()? We do authorization, when
-        # instantiate this resource in the implementation (f.e. in os2os)
+        cloud_config = self.make_cloud_config(self.config, self.position)
+        self.init_resources(cloud_config)
+
+    @staticmethod
+    def make_cloud_config(config, position):
+        cloud_config = {}
+        for k, v in config.migrate.iteritems():
+            cloud_config[k] = v
+
+        for k, v in getattr(config, position).iteritems():
+            cloud_config[k] = v
+
+        for k, v in config.import_rules.iteritems():
+            cloud_config[k] = v
+
+        return cloud_config
+
+    @staticmethod
+    def make_resource_config(config, position, cloud_config, resource_name):
+        resource_config = copy.deepcopy(cloud_config)
+        for k, v in getattr(config,
+                            '%s_%s' % (position, resource_name)).iteritems():
+            resource_config[k] = v
+
+        return resource_config
+
+    def init_resources(self, cloud_config):
+        init_resources = {}
+
+        identity_conf = self.make_resource_config(self.config, self.position,
+                                                  cloud_config, 'identity')
+        identity = self.resources['identity'](identity_conf)
+        init_resources['identity'] = identity
+
         for resource in self.resources:
             if resource != 'identity':
-                self.resources[resource].auth(config, identity)
+                resource_config = self.make_resource_config(self.config,
+                                                            self.position,
+                                                            cloud_config,
+                                                            resource)
+                init_resources[resource] = self.resources[resource](
+                    resource_config, identity)
+
+        self.resources = init_resources
