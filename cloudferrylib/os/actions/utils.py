@@ -26,7 +26,7 @@ def transfer_file_to_file(cloud_src, cloud_dst, host_src, host_dst, path_src, pa
     ssh_ip_src = cloud_src.getIpSsh()
     ssh_ip_dst = cloud_dst.getIpSsh()
     with settings(host_string=ssh_ip_src):
-        with utils.forward_agent(env.key_filename):
+        with utils.forward_agent(cfg_migrate.key_filename):
             with utils.up_ssh_tunnel(host_dst, ssh_ip_dst) as port:
                 if cfg_migrate.file_compression == "dd":
                     run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
@@ -35,7 +35,7 @@ def transfer_file_to_file(cloud_src, cloud_dst, host_src, host_dst, path_src, pa
                 elif cfg_migrate.file_compression == "gzip":
                     run(("ssh -oStrictHostKeyChecking=no %s 'gzip -%s -c %s' " +
                          "| ssh -oStrictHostKeyChecking=no -p %s localhost 'gunzip | dd bs=1M of=%s'") %
-                        (cloud_src, cfg_migrate.level_compression,
+                        (host_src, cfg_migrate.level_compression,
                          path_src, port, path_dst))
 
 
@@ -56,6 +56,7 @@ def transfer_from_ceph_to_iscsi(cloud_src,
 
 def transfer_from_iscsi_to_ceph(cloud_src,
                                 cloud_dst,
+                                host_src,
                                 source_volume_path,
                                 ceph_pool_dst="volumes",
                                 name_file_dst="volume-"):
@@ -66,7 +67,7 @@ def transfer_from_iscsi_to_ceph(cloud_src,
         with utils.forward_agent(env.key_filename):
             run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' | " +
                 "ssh -oStrictHostKeyChecking=no %s 'rbd import --image-format=2 - %s/%s'") %
-                (ssh_ip_src, source_volume_path, ssh_ip_dst, ceph_pool_dst, name_file_dst))
+                (host_src, source_volume_path, ssh_ip_dst, ceph_pool_dst, name_file_dst))
 
 
 def transfer_from_ceph_to_ceph(cloud_src,

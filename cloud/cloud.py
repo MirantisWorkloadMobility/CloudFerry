@@ -14,7 +14,7 @@
 
 
 import copy
-
+from cloudferrylib.utils import utils
 
 SRC = "src"
 DST = "dst"
@@ -27,29 +27,35 @@ class Cloud(object):
         self.position = position
         self.config = config
 
-        cloud_config = self.make_cloud_config(self.config, self.position)
-        self.init_resources(cloud_config)
+        self.cloud_config = self.make_cloud_config(self.config, self.position)
+        self.init_resources(self.cloud_config)
+
+    def getIpSsh(self):
+        return self.cloud_config.cloud.host
 
     @staticmethod
     def make_cloud_config(config, position):
-        cloud_config = {}
+        cloud_config = utils.ext_dict(migrate=utils.ext_dict(),
+                                      cloud=utils.ext_dict(),
+                                      import_rules=utils.ext_dict())
         for k, v in config.migrate.iteritems():
-            cloud_config[k] = v
+            cloud_config['migrate'][k] = v
 
         for k, v in getattr(config, position).iteritems():
-            cloud_config[k] = v
+            cloud_config['cloud'][k] = v
 
         for k, v in config.import_rules.iteritems():
-            cloud_config[k] = v
+            cloud_config['import_rules'][k] = v
 
         return cloud_config
 
     @staticmethod
     def make_resource_config(config, position, cloud_config, resource_name):
         resource_config = copy.deepcopy(cloud_config)
+        resource_config[resource_name] = utils.ext_dict()
         for k, v in getattr(config,
                             '%s_%s' % (position, resource_name)).iteritems():
-            resource_config[k] = v
+            resource_config[resource_name][k] = v
 
         return resource_config
 

@@ -21,13 +21,17 @@ from fabric.api import run
 AVAILABLE = 'available'
 IN_USE = "in-use"
 
+
 class CinderStorage(storage.Storage):
 
     """
     The main class for working with Openstack cinder client
     """
 
-    def __init__(self, config):
+    def __init__(self, config, identity_client):
+        self.config = config
+        self.host = config.cloud.host
+        self.identity_client = identity_client
         self.cinder_client = self.get_cinder_client(self.config)
         super(CinderStorage, self).__init__(config)
 
@@ -35,23 +39,23 @@ class CinderStorage(storage.Storage):
 
         """ Getting cinder client """
 
-        return cinder_client.Client(params["user"],
-                                    params["password"],
-                                    params["tenant"],
-                                    "http://%s:35357/v2.0/" % params["host"])
+        return cinder_client.Client(params.cloud.user,
+                                    params.cloud.password,
+                                    params.cloud.tenant,
+                                    "http://%s:35357/v2.0/" % params.cloud.host)
 
     def read_info(self, opts={}):
         info = dict(resource=self, storage={})
-        info['volumes'] = []
+        info['storage'] = {'volumes': []}
         for vol in self.get_volumes_list(search_opts=opts):
             volume = {
                 'id': vol.id,
                 'size': vol.size,
-                'name': vol.name,
-                'description': vol.description,
+                'display_name': vol.display_name,
+                'display_description': vol.display_description,
                 'volume_type': vol.volume_type,
                 'availability_zone': vol.availability_zone,
-                'device': vol.attachments[0]['device'],
+                'device': vol.attachments[0]['device'] if vol.attachments else None,
                 'bootable': vol.bootable,
             }
             info['storage']['volumes'].append({'volume': volume,
@@ -63,8 +67,8 @@ class CinderStorage(storage.Storage):
     def convert(self, vol):
         info = {
             'size': vol['volume']['size'],
-            'display_name': vol['volume']['name'],
-            'display_description': vol['volume']['description'],
+            'display_name': vol['volume']['display_name'],
+            'display_description': vol['volume']['display_description'],
             'volume_type': vol['volume']['volume_type'],
             'availability_zone': vol['volume']['availability_zone'],
         }

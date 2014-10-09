@@ -26,6 +26,7 @@ class GlanceImage(image.Image):
     """
     def __init__(self, config, identity_client):
         self.config = config
+        self.host = config.cloud.host
         self.identity_client = identity_client
         self.glance_client = self.get_glance_client()
         super(GlanceImage, self).__init__()

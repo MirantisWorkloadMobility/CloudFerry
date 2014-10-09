@@ -26,7 +26,7 @@ from fabric.api import local, run, settings, env
 from jinja2 import Environment, FileSystemLoader
 import os
 import inspect
-
+from multiprocessing import Lock
 
 
 __author__ = 'mirrorcoder'
@@ -43,6 +43,15 @@ QCOW2 = "qcow2"
 YES = "yes"
 NAME_LOG_FILE = 'migrate.log'
 PATH_TO_SNAPSHOTS = 'snapshots'
+
+up_ssh_tunnel = None
+
+
+class ext_dict(dict):
+    def __getattr__(self, name):
+        if name in self:
+            return self[name]
+        raise AttributeError("Exporter has no attribute %s" % name)
 
 
 def get_snapshots_list_repository(path=PATH_TO_SNAPSHOTS):
@@ -265,27 +274,60 @@ class forward_agent:
         del os.environ["SSH_AUTH_SOCK"]
 
 
-class up_ssh_tunnel:
+class wrapper_singletone_ssh_tunnel:
+
+    def __init__(self, interval_ssh="9000-9999", locker=Lock()):
+        self.interval_ssh = [int(interval_ssh.split('-')[0]), int(interval_ssh.split('-')[1])]
+        self.busy_port = []
+        self.locker = locker
+
+    def get_free_port(self):
+        with self.locker:
+            beg = self.interval_ssh[0]
+            end = self.interval_ssh[1]
+            while beg <= end:
+                if beg not in self.busy_port:
+                    self.busy_port.append(beg)
+                    return beg
+                beg += 1
+        raise RuntimeError("No free ssh port")
+
+    def free_port(self, port):
+        with self.locker:
+            if port in self.busy_port:
+                self.busy_port.remove(port)
+
+    def __call__(self, address_dest_compute, address_dest_controller, **kwargs):
+        return up_ssh_tunnel_class(address_dest_compute,
+                                   address_dest_controller,
+                                   self.get_free_port,
+                                   self.free_port)
+
+
+class up_ssh_tunnel_class:
 
     """
         Up ssh tunnel on dest controller node for transferring data
     """
 
-    def __init__(self, address_dest_compute, address_dest_controller, interval_ssh="9000-9999"):
+    def __init__(self, address_dest_compute, address_dest_controller, callback_get, callback_free):
         self.address_dest_compute = address_dest_compute
         self.address_dest_controller = address_dest_controller
-        self.interval_ssh = interval_ssh
-        self.busy_port = []
+        self.get_free_port = callback_get
+        self.remove_port = callback_free
         self.cmd = "ssh -oStrictHostKeyChecking=no -L %s:%s:22 -R %s:localhost:%s %s -Nf"
 
     def __enter__(self):
-        run(self.cmd % (self.ssh_port, self.address_dest_compute, self.ssh_port, self.ssh_port,
+        self.port = self.get_free_port()
+        run(self.cmd % (self.port, self.address_dest_compute, self.port, self.port,
                         self.address_dest_controller) + " && sleep 2")
+        return self.port
 
     def __exit__(self, type, value, traceback):
-        run(("pkill -f '"+self.cmd+"'") % (self.ssh_port, self.address_dest_compute, self.ssh_port, self.ssh_port,
+        run(("pkill -f '"+self.cmd+"'") % (self.port, self.address_dest_compute, self.port, self.port,
                                            self.address_dest_controller))
         time.sleep(2)
+        self.remove_port(self.port)
 
 
 class ChecksumImageInvalid(Exception):
@@ -316,3 +358,8 @@ def get_libvirt_block_info(libvirt_name, init_host, compute_host):
                       (compute_host, libvirt_name))
             libvirt_output = out.split()
     return libvirt_output
+
+
+def init_singletones(cfg):
+    globals()['up_ssh_tunnel'] = wrapper_singletone_ssh_tunnel(cfg.migrate.ssh_transfer_port)
+
