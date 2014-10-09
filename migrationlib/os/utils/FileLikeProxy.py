@@ -39,12 +39,12 @@ def callback_print_progress(size, length, obj_id, name):
 class FileLikeProxy:
     def __init__(self, transfer_object, callback, speed_limit='1mb'):
         self.__callback = callback
-        self.resp = transfer_object.resource_src.get_ref_image(
-            transfer_object.id)
+        self.resp = transfer_object['resource_src'].get_ref_image(
+            transfer_object['id'])
         self.length = (
-            self.resp.length if self.resp.length else transfer_object.size)
-        self.id = transfer_object.id
-        self.name = transfer_object.name
+            self.resp.length if self.resp.length else transfer_object['size'])
+        self.id = transfer_object['id']
+        self.name = transfer_object['name']
         self.percent = self.length / 100
         self.res = 0
         self.delta = 0
