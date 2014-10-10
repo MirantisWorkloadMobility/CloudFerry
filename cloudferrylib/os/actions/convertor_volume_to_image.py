@@ -48,28 +48,32 @@ class ConvertorVolumeToImage(convertor.Convertor):
             raise RuntimeError("No require methods")
         images_from_volumes = []
         for volume in volumes_info['volumes']:
-            volume = volume['volume']
+            vol = volume['volume']
             LOG.debug("| | uploading volume %s [%s] to image service bootable=%s" %
-                      (volume.display_name, volume.id, volume.bootable if hasattr(volume, 'bootable') else False))
-            resp, image = resource_storage.upload_volume_to_image(volume.id, force=True, image_name=volume.id,
-                                                                  container_format=self.container_format,
-                                                                  disk_format=self.disk_format)
-            image_upload = image['os-volume_upload_image']
-            resource_image.wait_for_status(image_upload['image_id'], ACTIVE)
-            if resource_storage.get_backend() == CEPH:
-                image_from_glance = resource_image.read_info({'id': image_upload['image_id']})
-                with settings(host_string=self.cloud.getIpSsh()):
-                    out = json.loads(run("rbd -p images info %s --format json" % image_upload['image_id']))
-                    image_from_glance.update(size=out["size"])
-            image_vol = resource_image.read_info({'id': image_upload['image_id']})
-            images_from_volumes.append({
+                      (vol['display_name'], vol['id'], vol['bootable'] if hasattr(vol, 'bootable') else False))
+            resp, image_id = resource_storage.upload_volume_to_image(vol['id'], force=True, image_name=vol['id'],
+                                                                     container_format=self.container_format,
+                                                                     disk_format=self.disk_format)
+            resource_image.wait_for_status(image_id, ACTIVE)
+            self.__patch_image(resource_storage.get_backend(), self.cloud, image_id)
+            image_vol = resource_image.read_info({'id': image_id})
+            img_new = {
                 'image': image_vol,
-                'meta': {
-                    'volume': volume
-                }
-            })
+                'meta': volume['meta']
+            }
+            img_new['meta']['volume'] = vol
+            images_from_volumes.append(img_new)
         images_info['images'] = images_from_volumes
         return {
             'images_info': images_info
         }
+
+    @staticmethod
+    def __patch_image(backend_storage, cloud, image_id):
+        resource_image = cloud.resources['image']
+        if backend_storage == CEPH:
+            image_from_glance = resource_image.read_info({'id': image_id})
+            with settings(host_string=cloud.getIpSsh()):
+                out = json.loads(run("rbd -p images info %s --format json" % image_id))
+                image_from_glance.update(size=out["size"])
 

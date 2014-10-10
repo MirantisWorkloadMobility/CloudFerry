@@ -83,6 +83,7 @@ class CinderStorage(storage.Storage):
             vol_for_deploy = self.convert(vol['volume'])
             volume = self.create_volume(**vol_for_deploy)
             self.wait_for_status(volume.id, AVAILABLE)
+            self.finish(volume.id, vol['volume']['bootable'])
             self.attach_volume_to_instance(volume, vol)
             volumes.append(volume)
         return volumes
@@ -138,9 +139,10 @@ class CinderStorage(storage.Storage):
     def upload_volume_to_image(self, volume_id, force, image_name,
                                container_format, disk_format):
         volume = self.__get_volume_by_id(volume_id)
-        return self.cinder_client.volumes.upload_to_image(
+        resp, image = self.cinder_client.volumes.upload_to_image(
             volume=volume,
             force=force,
             image_name=image_name,
             container_format=container_format,
             disk_format=disk_format)
+        return resp, image['os-volume_upload_image']['image_id']

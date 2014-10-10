@@ -14,7 +14,7 @@
 
 from cloudferrylib.utils import utils
 from fabric.api import run, settings, env
-
+import copy
 
 LOG = utils.get_log(__name__)
 
@@ -90,3 +90,17 @@ def delete_file_from_rbd(ssh_ip, ceph_pool, name_file):
     with settings(host_string=ssh_ip):
         with utils.forward_agent(env.key_filename):
             run("rbd rm -p %s %s" % (ceph_pool, name_file))
+
+
+def convert_to_dest(data, source, dest):
+    d = copy.copy(data)
+    d[dest] = d['meta'][dest]
+    d['meta'][source] = d[source]
+    return d
+
+
+def require_methods(methods, obj):
+    for method in dir(obj):
+        if method not in methods:
+            return False
+    return True
