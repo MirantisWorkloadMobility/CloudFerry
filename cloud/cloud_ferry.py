@@ -32,9 +32,5 @@ class CloudFerry(object):
     def __init__(self, config):
         self.config = config
 
-    def auth(self):
-        self.src_cloud.auth(self.config)
-        self.dst_cloud.auth(self.config)
-
     def migrate(self):
         pass

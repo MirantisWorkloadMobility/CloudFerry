@@ -16,17 +16,16 @@
 import cloud
 import cloud_ferry
 
-from cloudferrylib.os.compute import nova_compute
+from cloudferrylib.os.image import glance_image
+from cloudferrylib.os.identity import keystone
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
 
     def __init__(self, config):
         super(OS2OSFerry, self). __init__(config)
-        resources = {'compute': nova_compute.NovaCompute(),
-                     'identity': object()
+        resources = {'identity': keystone.KeystoneIdentity,
+                     'image': glance_image.GlanceImage,
                      }
-        self.src_cloud = cloud.Cloud(resources, cloud.SRC)
-        self.dst_cloud = cloud.Cloud(resources, cloud.DST)
-
-        self.auth()
+        self.src_cloud = cloud.Cloud(resources, cloud.SRC, config)
+        self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)

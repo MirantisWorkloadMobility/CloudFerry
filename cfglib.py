@@ -118,10 +118,10 @@ src_storage_opts = [
 
 ]
 
-src_images = cfg.OptGroup(name='src_images',
-                          title='Config service for images')
+src_image = cfg.OptGroup(name='src_image',
+                         title='Config service for images')
 
-src_images_opts = [
+src_image_opts = [
     cfg.StrOpt('service', default='glance',
                help='name service for images')
 ]
@@ -189,10 +189,10 @@ dst_storage_opts = [
 
 ]
 
-dst_images = cfg.OptGroup(name='dst_images',
-                          title='Config service for images')
+dst_image = cfg.OptGroup(name='dst_image',
+                         title='Config service for images')
 
-dst_images_opts = [
+dst_image_opts = [
     cfg.StrOpt('service', default='glance',
                help='name service for images'),
     cfg.BoolOpt('convert_to_raw', default='True',
@@ -236,13 +236,13 @@ cfg_for_reg = [
     (src_compute, src_compute_opts),
     (src_storage, src_storage_opts),
     (src_identity, src_identity_opts),
-    (src_images, src_images_opts),
+    (src_image, src_image_opts),
     (src_network, src_network_opts),
     (dst_mysql, dst_mysql_opts),
     (dst_compute, dst_compute_opts),
     (dst_storage, dst_storage_opts),
     (dst_identity, dst_identity_opts),
-    (dst_images, dst_images_opts),
+    (dst_image, dst_image_opts),
     (dst_network, dst_network_opts),
     (import_rules, import_rules_opts)
 ]

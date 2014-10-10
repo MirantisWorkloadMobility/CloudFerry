@@ -32,9 +32,11 @@ class GlanceImage(image.Image):
 
         """ Getting glance client """
 
-        endpoint_glance = self.identity_client.get_endpoint_by_name_service('glance')
-        return glance_client.Client(endpoint=endpoint_glance,
-                                    token=self.identity_client.get_auth_token_from_user())
+        endpoint_glance = self.identity_client.get_endpoint_by_service_name(
+            'glance')
+        return glance_client.Client(
+            endpoint=endpoint_glance,
+            token=self.identity_client.get_auth_token_from_user())
 
     def get_image_list(self):
         return self.glance_client.images.list()
