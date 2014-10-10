@@ -14,7 +14,9 @@
 
 from cloudferrylib.base import image
 from glanceclient.v1 import client as glance_client
+from fabric.api import settings, run, cd
 
+from migrationlib.os.utils import FileLikeProxy
 
 class GlanceImage(image.Image):
 
@@ -24,6 +26,7 @@ class GlanceImage(image.Image):
     """
     def __init__(self, config, identity_client):
         self.config = config
+        self.host = config.cloud.host
         self.identity_client = identity_client
         self.glance_client = self.get_glance_client()
         super(GlanceImage, self).__init__()
@@ -48,15 +51,89 @@ class GlanceImage(image.Image):
         self.glance_client.images.delete(image_id)
 
     def get_image(self, image_id):
-        for image in self.get_image_list():
-            if image.id == image_id:
-                return image
+        for glance_image in self.get_image_list():
+            if glance_image.id == image_id:
+                return glance_image
+
+    def get_image_by_name(self, image_name):
+        for glance_image in self.get_image_list():
+            if glance_image.name == image_name:
+                return glance_image
 
     def get_image_status(self, image_id):
         return self.get_image(image_id).status
 
     def get_ref_image(self, image_id):
-        return self.get_image(image_id)._resp
+        return self.glance_client.images.data(image_id)._resp
 
     def get_image_checksum(self, image_id):
         return self.get_image(image_id).checksum
+
+    def read_info(self, **kwargs):
+        """Get info about images or specified image.
+
+        :param image_id: Id of specified image
+        :param image_name: Name of specified image
+        :rtype: Dictionary with all necessary images info
+        """
+
+        info = {'image': {'resource': self,
+                          'images': []}
+                }
+
+        if kwargs.get('image_id'):
+            glance_image = self.get_image(kwargs['image_id'])
+            info = self.make_image_info(glance_image, info)
+
+        elif kwargs.get('image_name'):
+            glance_image = self.get_image_by_name(kwargs['image_name'])
+            info = self.make_image_info(glance_image, info)
+
+        else:
+            for glance_image in self.get_image_list():
+                info = self.make_image_info(glance_image, info)
+
+        return info
+
+    @staticmethod
+    def make_image_info(glance_image, info):
+        if glance_image:
+            gl_image = {
+                'id': glance_image.id,
+                'size': glance_image.size,
+                'name': glance_image.name,
+                'container_format': glance_image.container_format,
+                'disk_format': glance_image.disk_format,
+                'is_public': glance_image.is_public,
+                'protected': glance_image.protected,
+            }
+            info['image']['images'].append({'image': gl_image,
+                                            'meta': {},
+                                            })
+        else:
+            print 'Image has not been found'
+
+        return info
+
+    def deploy(self, info):
+        migrate_images_list = []
+        for gl_image in info['image']['images']:
+            if gl_image['image']['name'] + 'Migrate' in [x.name for x in
+                                                         self.get_image_list()]:
+                continue
+            gl_image['image']['resource_src'] = info['image']['resource']
+            migrate_image = self.create_image(
+                name=gl_image['image']['name'] + 'Migrate',
+                container_format=gl_image['image']['container_format'],
+                disk_format=gl_image['image']['disk_format'],
+                is_public=gl_image['image']['is_public'],
+                protected=gl_image['image']['protected'],
+                size=gl_image['image']['size'],
+                data=FileLikeProxy.FileLikeProxy(
+                    gl_image['image'],
+                    FileLikeProxy.callback_print_progress,
+                    self.config['speed_limit']))
+
+            migrate_images_list.append(migrate_image)
+
+        return migrate_images_list

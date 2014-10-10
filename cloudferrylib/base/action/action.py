@@ -13,24 +13,19 @@
 # limitations under the License.
 
 
-class Resource(object):
+from cloudferrylib.scheduler import task
+
+
+class Action(task.Task):
+
     def __init__(self):
-        pass
+        super(Action, self).__init__()
 
-    def read_info(self, opts={}):
-        pass
-
-    def deploy(self, *args):
+    def run(self, **kwargs):
         pass
 
     def save(self):
         pass
 
     def restore(self):
-        pass
-
-    def wait_for_status(self, id_res, status):
-        pass
-
-    def get_status(self):
         pass

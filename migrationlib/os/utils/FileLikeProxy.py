@@ -13,21 +13,38 @@
 # limitations under the License.
 
 
-import time
 import re
-__author__ = 'mirrorcoder'
+import time
+
+from utils import get_log
+
 
 # Maximum Bytes Per Packet
-CHUNK_SIZE = 512 * 1024 #B
+CHUNK_SIZE = 512 * 1024  # B
+
+
+LOG = get_log(__name__)
+
+
+def callback_print_progress(size, length, obj_id, name):
+    LOG.info(
+        "Download {0} bytes of {1} ({2}%) - id = {3} name = {4}".format(
+            size,
+            length,
+            size * 100 / length,
+            obj_id,
+            name))
 
 
 class FileLikeProxy:
-    def __init__(self, transfer_object, callback, speed_limit = '1mb'):
+    def __init__(self, transfer_object, callback, speed_limit='1mb'):
         self.__callback = callback
-        self.resp = transfer_object.get_ref_image()
-        self.length = self.resp.length if self.resp.length else transfer_object.get_info_image().size
-        self.id = transfer_object.get_info_image().id
-        self.name = transfer_object.get_info_image().name
+        self.resp = transfer_object['resource_src'].get_ref_image(
+            transfer_object['id'])
+        self.length = (
+            self.resp.length if self.resp.length else transfer_object['size'])
+        self.id = transfer_object['id']
+        self.name = transfer_object['name']
         self.percent = self.length / 100
         self.res = 0
         self.delta = 0
@@ -42,9 +59,9 @@ class FileLikeProxy:
             return 0
         array = filter(None, re.split(r'(\d+)', speed_limit))
         mult = {
-           'b' : 1,
-           'kb' : 1024,
-           'mb' : 1024 * 1024,
+            'b': 1,
+            'kb': 1024,
+            'mb': 1024 * 1024,
         }[array[1].lower()]
         return int(array[0]) * mult
 
@@ -64,7 +81,7 @@ class FileLikeProxy:
         cur_send_time = time.time()
         sleep_time = float(len(res)) / self.speed_limit
         sleep_time -= cur_send_time - self.prev_send_time
-        time.sleep(max( (0, sleep_time) ))
+        time.sleep(max((0, sleep_time)))
         self.prev_send_time = cur_send_time
         return res
 
@@ -87,4 +104,3 @@ class FileLikeProxy:
     def getheader(self, *args, **kwargs):
         res = self.resp.getheader(*args, **kwargs)
         return res
-

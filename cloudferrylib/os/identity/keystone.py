@@ -11,7 +11,6 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import sqlalchemy
 
 from cloudferrylib.base import identity
 from keystoneclient.v2_0 import client as keystone_client
@@ -87,14 +86,14 @@ class KeystoneIdentity(identity.Identity):
         """ Getting keystone client """
 
         ks_client_for_token = keystone_client.Client(
-            username=self.config['user'],
-            password=self.config['password'],
-            tenant_name=self.config['tenant'],
-            auth_url="http://" + self.config['host'] + ":35357/v2.0/")
+            username=self.config["user"],
+            password=self.config["password"],
+            tenant_name=self.config["tenant"],
+            auth_url="http://" + self.config["host"] + ":35357/v2.0/")
 
         return keystone_client.Client(
             token=ks_client_for_token.auth_ref["token"]["id"],
-            endpoint="http://" + self.config['host'] + ":35357/v2.0/")
+            endpoint="http://" + self.config["host"] + ":35357/v2.0/")
 
     def get_service_name_by_type(self, service_type):
         """Getting service_name from keystone. """

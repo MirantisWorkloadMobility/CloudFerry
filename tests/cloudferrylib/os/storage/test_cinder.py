@@ -15,7 +15,7 @@
 
 import mock
 
-from cloudferrylib.os.storage import cinder
+from cloudferrylib.os.storage import cinder_storage
 from tests import test
 from oslotest import mockpatch
 
@@ -35,7 +35,7 @@ class CinderStorageTestCase(test.TestCase):
         self.cs_patch = mockpatch.PatchObject(cinder_client, 'Client',
                                               new=self.mock_client)
         self.useFixture(self.cs_patch)
-        self.cinder_client = cinder.CinderStorage(FAKE_CONFIG)
+        self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG)
 
         self.fake_volume_0 = mock.Mock()
         self.fake_volume_1 = mock.Mock()
