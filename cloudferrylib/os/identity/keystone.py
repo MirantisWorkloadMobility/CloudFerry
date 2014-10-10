@@ -30,14 +30,14 @@ class KeystoneIdentity(identity.Identity):
         """ Getting keystone client """
 
         ks_client_for_token = keystone_client.Client(
-            username=self.config["user"],
-            password=self.config["password"],
-            tenant_name=self.config["tenant"],
-            auth_url="http://" + self.config["host"] + ":35357/v2.0/")
+            username=self.config.cloud["user"],
+            password=self.config.cloud["password"],
+            tenant_name=self.config.cloud["tenant"],
+            auth_url="http://" + self.config.cloud["host"] + ":35357/v2.0/")
 
         return keystone_client.Client(
             token=ks_client_for_token.auth_ref["token"]["id"],
-            endpoint="http://" + self.config["host"] + ":35357/v2.0/")
+            endpoint="http://" + self.config.cloud["host"] + ":35357/v2.0/")
 
     def get_service_name_by_type(self, service_type):
         """Getting service_name from keystone. """

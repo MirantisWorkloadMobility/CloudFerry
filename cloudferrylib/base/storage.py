@@ -17,5 +17,9 @@ from cloudferrylib.base import resource
 
 class Storage(resource.Resource):
 
-    def __init__(self):
+    def __init__(self, config):
+        self.config = config
         super(Storage, self).__init__()
+
+    def get_backend(self):
+        return self.config.src_storage.backend

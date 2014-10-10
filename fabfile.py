@@ -17,6 +17,7 @@ from cloudferrylib.scheduler.namespace import Namespace
 from cloudferrylib.scheduler.scheduler import Scheduler
 import cfglib
 from utils import get_log
+from cloudferrylib.utils import utils
 from cloud import cloud_ferry
 env.forward_agent = True
 env.user = 'root'
@@ -30,6 +31,8 @@ def migrate(name_config=None, name_instance=None):
     """
     cfglib.collector_configs_plugins()
     cfglib.init_config(name_config)
+    utils.init_singletones(cfglib.CONF)
+    env.key_filename = cfglib.CONF.migrate.key_filename
     cloud = cloud_ferry.CloudFerry(cfglib.CONF)
     cloud.migrate()
 

@@ -17,6 +17,7 @@ from cloudferrylib.scheduler import task
 
 
 class Action(task.Task):
+
     def __init__(self):
         super(Action, self).__init__()
 
