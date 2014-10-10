@@ -21,86 +21,80 @@ NOVA_SERVICE = 'nova'
 
 
 class KeystoneIdentity(identity.Identity):
-    """The main class for working with Openstack Keystone Identity Service."""
+    """The main class for working with OpenStack Keystone Identity Service."""
 
-    def __init__(self, config, position):
+    def __init__(self, config, mysql_connector):
         super(KeystoneIdentity, self).__init__()
         self.config = config
-        self.position = position
         self.keystone_client = self.get_client()
-        self.keystone_db_conn_url = self.compose_keystone_db_conn_url()
-        self.postman = Postman(self.config.migrate.mail_username,
-                               self.config.migrate.mail_password,
-                               self.config.migrate.mail_from_addr,
-                               self.config.migrate.mail_server)
+        self.mysql_connector = mysql_connector
+        self.postman = None
+        if self.config['mail']:
+            self.postman = Postman(self.config['mail'].username,
+                                   self.config['mail'].password,
+                                   self.config['mail'].from_addr,
+                                   self.config['mail'].server)
         self.templater = Templater()
         self.generator = GeneratorPassword()
 
     def read_info(self, opts=None):
         opts = {} if not opts else opts
-        resource = {'tenants': self.get_tenants_list(),
-                    'users': self.get_users_list(),
-                    'roles': self.get_roles_list(),
-                    'user_tenants_roles': self.__get_user_tenants_roles()}
-        if self.config.migrate.keep_user_passwords:
-            resource['user_passwords'] = self.__get_user_passwords()
-        return resource
+
+        info = {'identity': {'tenants': [],
+                             'users': [],
+                             'roles': []}}
+
+        for tenant in self.get_tenants_list():
+            info['identity']['tenants'].append(
+                {'tenant': {'name': tenant.name,
+                            'id': tenant.id,
+                            'description': tenant.description},
+                 'meta': {}})
+
+        for user in self.get_users_list():
+            info['identity']['users'].append(
+                {'user': {'name': user.name,
+                          'id': user.id,
+                          'email': user.email,
+                          'tenantId': user.tenantId},
+                 'meta': {}})
+
+        for role in self.get_roles_list():
+            info['identity']['roles'].append(
+                {'role': {'name': role.name,
+                          'id': role},
+                 'meta': {}})
+
+        info['identity']['user_tenants_roles'] = self._get_user_tenants_roles()
+        if self.config['keep_user_passwords']:
+            info['identity']['user_passwords'] = self._get_user_passwords()
+        return info
 
     def deploy(self, info):
-        self.__deploy_tenants(info['tenants'])
-        self.__deploy_roles(info['roles'])
-        created = self.__deploy_users(info['users'], info['tenants'])
-        if self.config.migrate.keep_user_passwords:
-            self.__upload_user_passwords(created, info['user_passwords'])
-        self.__upload_user_tenant_roles(info['user_tenants_roles'])
+        tenants = info['identity']['tenants']
+        users = info['identity']['users']
+        roles = info['identity']['user_tenants_roles']
 
-    def __deploy_users(self, users, tenants):
-        exists = [user.name for user in self.get_users_list()]
-        dst_tenant_ids = {tenant.name: tenant.id for tenant in self.get_tenants_list()}
-        src_tenant_names = {tenant.id: tenant.name for tenant in tenants}
-        template = 'templates/email.html'
-        created = []
-        for user in users:
-            if user.name in exists:
-                continue
-            tenant_name = src_tenant_names[user.tenantId]
-            tenant_id = dst_tenant_ids[tenant_name]
-            password = 'password' if self.config.migrate.keep_user_passwords else self.__generate_password()
-            self.create_user(user.name, password, user.email, tenant_id)
-            created.append(user.name)
-            if not self.config.migrate.keep_user_passwords:
-                self.__send_msg(user.email,
-                                'New password notification',
-                                self.__render_template(template,
-                                                       {'name': user.name,
-                                                        'password': password}))
-        return created
-
-    def __deploy_roles(self, roles):
-        exists = [role.name for role in self.get_roles_list()]
-        for role in roles:
-            if role.name not in exists:
-                self.create_role(role.name)
-
-    def __deploy_tenants(self, tenants):
-        exists = [tenant.name for tenant in self.get_tenants_list()]
-        for tenant in tenants:
-            if tenant.name not in exists:
-                self.create_tenant(tenant.name, tenant.description)
+        self._deploy_tenants(tenants)
+        self._deploy_roles(info['identity']['roles'])
+        self._deploy_users(users, tenants)
+        if self.config['keep_user_passwords']:
+            passwords = info['identity']['user_passwords']
+            self._upload_user_passwords(users, passwords)
+        self._upload_user_tenant_roles(roles, users, tenants)
 
     def get_client(self):
         """ Getting keystone client """
-        credentials = getattr(self.config, self.position)
-        print credentials.host
+
         ks_client_for_token = keystone_client.Client(
-            username=credentials.user,
-            password=credentials.password,
-            tenant_name=credentials.tenant,
-            auth_url="http://" + credentials.host + ":35357/v2.0/")
+            username=self.config['user'],
+            password=self.config['password'],
+            tenant_name=self.config['tenant'],
+            auth_url="http://" + self.config['host'] + ":35357/v2.0/")
 
         return keystone_client.Client(
             token=ks_client_for_token.auth_ref["token"]["id"],
-            endpoint="http://" + credentials.host + ":35357/v2.0/")
+            endpoint="http://" + self.config['host'] + ":35357/v2.0/")
 
     def get_service_name_by_type(self, service_type):
         """Getting service_name from keystone. """
@@ -129,6 +123,20 @@ class KeystoneIdentity(identity.Identity):
 
         service_id = self.get_service_id(service_name)
         return self.get_public_endpoint_service_by_id(service_id)
+
+    def get_tenants_func(self):
+        tenants = {tenant.id: tenant.name for tenant in self.get_tenants_list()}
+
+        def func(tenant_id):
+            return getattr(tenants, tenant_id, 'admin')
+
+        return func
+
+    def get_tenant_id_by_name(self, name):
+        for tenant in self.get_tenants_list():
+            if tenant.name == name:
+                return tenant.id
+        return None
 
     def get_tenant_by_name(self, tenant_name):
         """ Getting tenant by name from keystone. """
@@ -162,17 +170,22 @@ class KeystoneIdentity(identity.Identity):
 
         return self.keystone_client.roles.list()
 
+    def roles_for_user(self, user_id, tenant_id):
+        """ Getting list of user roles for tenant """
+
+        return self.keystone_client.roles.roles_for_user(user_id, tenant_id)
+
     def create_role(self, role_name):
         """ Create new role in keystone. """
 
-        self.keystone_client.roles.create(role_name)
+        return self.keystone_client.roles.create(role_name)
 
     def create_tenant(self, tenant_name, description=None, enabled=True):
         """ Create new tenant in keystone. """
 
-        self.keystone_client.tenants.create(tenant_name=tenant_name,
-                                            description=description,
-                                            enabled=enabled)
+        return self.keystone_client.tenants.create(tenant_name=tenant_name,
+                                                   description=description,
+                                                   enabled=enabled)
 
     def create_user(self, name, password=None, email=None, tenant_id=None,
                     enabled=True):
@@ -204,68 +217,120 @@ class KeystoneIdentity(identity.Identity):
     def get_auth_token_from_user(self):
         return self.keystone_client.auth_token_from_user
 
-    def compose_keystone_db_conn_url(self):
+    def _deploy_tenants(self, tenants):
+        dst_tenants = {tenant.name: tenant.id for tenant in
+                       self.get_tenants_list()}
+        for _tenant in tenants:
+            tenant = _tenant['tenant']
+            if tenant['name'] not in dst_tenants:
+                _tenant['meta']['new_id'] = self.create_tenant(tenant['name'],
+                                                               tenant[
+                                                                   'description']).id
+            else:
+                _tenant['meta']['new_id'] = dst_tenants[tenant['name']]
 
-        """ Compose keystone database connection url for SQLAlchemy """
-        credentials = getattr(self.config, "%s_mysql" % self.position)
-        return '{}://{}:{}@{}/keystone'.format(credentials.connection,
-                                               credentials.user,
-                                               credentials.password,
-                                               credentials.host)
+    def _deploy_users(self, users, tenants):
+        dst_users = {user.name: user.id for user in self.get_users_list()}
+        tenant_mapped_ids = {tenant['tenant']['id']: tenant['meta']['new_id']
+                             for tenant in tenants}
+        template = 'templates/email.html'
+        created = []
+        for _user in users:
+            user = _user['user']
+            if user['name'] in dst_users:
+                _user['meta']['new_id'] = dst_users[user['name']]
+                continue
+            tenant_id = tenant_mapped_ids[user['tenantId']]
+            password = 'password'
+            if not self.config['keep_user_passwords']:
+                password = self._generate_password()
+            _user['meta']['new_id'] = self.create_user(user['name'], password,
+                                                       user['email'],
+                                                       tenant_id).id
+            if self.config['keep_user_passwords']:
+                _user['meta']['overwrite_password'] = True
+            elif self.postman:
+                self._send_msg(user.email, 'New password notification',
+                               self._render_template(template,
+                                                     {'name': user.name,
+                                                      'password': password}))
 
-    def __get_user_passwords(self):
+    def _deploy_roles(self, roles):
+        dst_roles = {role.name: role.id for role in self.get_roles_list()}
+        for _role in roles:
+            role = _role['role']
+            if role['name'] not in dst_roles:
+                _role['meta']['new_id'] = self.create_role(role['name']).id
+            else:
+                _role['meta']['new_id'] = dst_roles[role['name']]
+
+    def _get_user_passwords(self):
         info = {}
-        with sqlalchemy.create_engine(self.keystone_db_conn_url).begin() as connection:
+        with sqlalchemy.create_engine(
+                self.keystone_db_conn_url).begin() as connection:
             for user in self.get_users_list():
-                for password in connection.execute(sqlalchemy.text("SELECT password FROM user WHERE id = :user_id"),
-                                                   user_id=user.id):
+                for password in self.mysql_connector.execute(
+                        "SELECT password FROM user WHERE id = :user_id",
+                        user_id=user.id):
                     info[user.name] = password[0]
+
         return info
 
-    def __get_user_tenants_roles(self):
-        roles = {}
+    def _get_user_tenants_roles(self):
+        user_tenants_roles = {}
         tenants = self.get_tenants_list()
         for user in self.get_users_list():
-            roles[user.name] = {}
+            user_tenants_roles[user.name] = {}
             for tenant in tenants:
-                roles[user.name][tenant.name] = self.keystone_client.roles.roles_for_user(user.id, tenant.id)
-        return roles
+                roles = []
+                for role in self.roles_for_user(user.id, tenant.id):
+                    roles.append({'role': {'name': role.name, 'id': role.id}})
+                user_tenants_roles[user.name][tenant.name] = roles
+        return user_tenants_roles
 
-    def __upload_user_passwords(self, users, user_passwords):
-        with sqlalchemy.create_engine(self.keystone_db_conn_url).begin() as connection:
-            for user in self.keystone_client.users.list():
-                if user.name in users:
-                    connection.execute(sqlalchemy.text("UPDATE user SET password = :password WHERE id = :user_id"),
-                                       user_id=user.id,
-                                       password=user_passwords[user.name])
+    def _upload_user_passwords(self, users, user_passwords):
+        with sqlalchemy.create_engine(
+                self.keystone_db_conn_url).begin() as connection:
+            for _user in users:
+                user = _user['user']
+                if not _user['meta']['overwrite_password']:
+                    continue
+                self.mysql_connector.execute(
+                    "UPDATE user SET password = :password WHERE id = :user_id",
+                    user_id=_user['meta']['new_id'],
+                    password=user_passwords[user['name']])
 
-    def __upload_user_tenant_roles(self, user_tenants_roles):
-        users_id_by_name = {user.name: user.id for user in self.get_users_list()}
-        tenants_id_by_name = {tenant.name: tenant.id for tenant in self.get_tenants_list()}
-        roles_id_by_name = {role.name: role.id for role in self.get_roles_list()}
-        for user_name in user_tenants_roles:
-            # FIXME should be deleted after determining how to change self role without logout
-            if user_name == self.keystone_client.username:
+    def _upload_user_tenant_roles(self, user_tenants_roles, users, tenants):
+        roles_id = {role.name: role.id for role in self.get_roles_list()}
+
+        for _user in users:
+            user = _user['user']
+            # FIXME should be deleted after determining how
+            # to change self role without logout
+            if user['name'] == self.keystone_client.username:
                 continue
-            for tenant_name in user_tenants_roles[user_name]:
-                exists = [role.name for role in self.keystone_client.roles.roles_for_user(
-                    users_id_by_name[user_name],
-                    tenants_id_by_name[tenant_name])]
-                for role in user_tenants_roles[user_name][tenant_name]:
-                    if role.name not in exists:
-                        self.keystone_client.roles.add_user_role(users_id_by_name[user_name],
-                                                                 roles_id_by_name[role.name],
-                                                                 tenants_id_by_name[tenant_name])
+            for _tenant in tenants:
+                tenant = _tenant['tenant']
+                exists_roles = [role.name for role in
+                                self.roles_for_user(_user['meta']['new_id'],
+                                                    _tenant['meta']['new_id'])]
+                for _role in user_tenants_roles[user['name']][tenant['name']]:
+                    role = _role['role']
+                    if role['name'] in exists_roles:
+                        continue
+                    self.keystone_client.roles.add_user_role(
+                        _user['meta']['new_id'], roles_id[role['name']],
+                        _tenant['meta']['new_id'])
 
-    def __generate_password(self):
+    def _generate_password(self):
         return self.generator.get_random_password()
 
-    def __send_msg(self, to, subject, msg):
+    def _send_msg(self, to, subject, msg):
         if self.postman:
             with self.postman as p:
                 p.send(to, subject, msg)
 
-    def __render_template(self, name_file, args):
+    def _render_template(self, name_file, args):
         if self.templater:
             return self.templater.render(name_file, args)
         else:

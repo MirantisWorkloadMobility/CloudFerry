@@ -54,14 +54,6 @@ migrate_opts = [
                help='speed limit for glance to glance'),
     cfg.StrOpt('instances', default='key_name-qwerty',
                help='filter instance by parametrs'),
-    cfg.StrOpt('mail_server', default='-',
-               help='name mail server'),
-    cfg.StrOpt('mail_username', default='-',
-               help='name username for mail'),
-    cfg.StrOpt('mail_password', default='-',
-               help='password for mail'),
-    cfg.StrOpt('mail_from_addr', default='-',
-               help='field FROM in letter'),
     cfg.StrOpt('file_compression', default='dd',
                help='gzip - use GZIP when file tranfering via ssh, '
                     ' - no compression, directly via dd'),
@@ -71,6 +63,20 @@ migrate_opts = [
                help='interval ports for ssh tunnel'),
     cfg.StrOpt('port', default='9990',
                help='interval ports for ssh tunnel')
+]
+
+mail = cfg.OptGroup(name='mail',
+                    title='Mail credentials for notifications')
+
+mail_opts = [
+    cfg.StrOpt('mail_server', default='-',
+               help='name mail server'),
+    cfg.StrOpt('mail_username', default='-',
+               help='name username for mail'),
+    cfg.StrOpt('mail_password', default='-',
+               help='password for mail'),
+    cfg.StrOpt('mail_from_addr', default='-',
+               help='field FROM in letter')
 ]
 
 src_mysql = cfg.OptGroup(name='src_mysql',
@@ -232,6 +238,7 @@ cfg_for_reg = [
     (src, src_opts),
     (dst, dst_opts),
     (migrate, migrate_opts),
+    (mail, mail_opts),
     (src_mysql, src_mysql_opts),
     (src_compute, src_compute_opts),
     (src_storage, src_storage_opts),
