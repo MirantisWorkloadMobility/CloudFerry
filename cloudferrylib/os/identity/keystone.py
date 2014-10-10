@@ -265,13 +265,11 @@ class KeystoneIdentity(identity.Identity):
 
     def _get_user_passwords(self):
         info = {}
-        with sqlalchemy.create_engine(
-                self.keystone_db_conn_url).begin() as connection:
-            for user in self.get_users_list():
-                for password in self.mysql_connector.execute(
-                        "SELECT password FROM user WHERE id = :user_id",
-                        user_id=user.id):
-                    info[user.name] = password[0]
+        for user in self.get_users_list():
+            for password in self.mysql_connector.execute(
+                    "SELECT password FROM user WHERE id = :user_id",
+                    user_id=user.id):
+                info[user.name] = password[0]
 
         return info
 
@@ -288,16 +286,14 @@ class KeystoneIdentity(identity.Identity):
         return user_tenants_roles
 
     def _upload_user_passwords(self, users, user_passwords):
-        with sqlalchemy.create_engine(
-                self.keystone_db_conn_url).begin() as connection:
-            for _user in users:
-                user = _user['user']
-                if not _user['meta']['overwrite_password']:
-                    continue
-                self.mysql_connector.execute(
-                    "UPDATE user SET password = :password WHERE id = :user_id",
-                    user_id=_user['meta']['new_id'],
-                    password=user_passwords[user['name']])
+        for _user in users:
+            user = _user['user']
+            if not _user['meta']['overwrite_password']:
+                continue
+            self.mysql_connector.execute(
+                "UPDATE user SET password = :password WHERE id = :user_id",
+                user_id=_user['meta']['new_id'],
+                password=user_passwords[user['name']])
 
     def _upload_user_tenant_roles(self, user_tenants_roles, users, tenants):
         roles_id = {role.name: role.id for role in self.get_roles_list()}
