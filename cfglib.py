@@ -62,20 +62,22 @@ migrate_opts = [
     cfg.StrOpt('ssh_transfer_port', default='9990',
                help='interval ports for ssh tunnel'),
     cfg.StrOpt('port', default='9990',
-               help='interval ports for ssh tunnel')
+               help='interval ports for ssh tunnel'),
+    cfg.BoolOpt('overwrite_user_passwords', default=False,
+                help='Overwrite password for exists users on destination')
 ]
 
 mail = cfg.OptGroup(name='mail',
                     title='Mail credentials for notifications')
 
 mail_opts = [
-    cfg.StrOpt('mail_server', default='-',
+    cfg.StrOpt('server', default='-',
                help='name mail server'),
-    cfg.StrOpt('mail_username', default='-',
+    cfg.StrOpt('username', default='-',
                help='name username for mail'),
-    cfg.StrOpt('mail_password', default='-',
+    cfg.StrOpt('password', default='-',
                help='password for mail'),
-    cfg.StrOpt('mail_from_addr', default='-',
+    cfg.StrOpt('from_addr', default='-',
                help='field FROM in letter')
 ]
 

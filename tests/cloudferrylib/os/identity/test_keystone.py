@@ -22,11 +22,12 @@ from oslotest import mockpatch
 
 from keystoneclient.v2_0 import client as keystone_client
 
-FAKE_CONFIG = {'user': 'fake_user',
-               'password': 'fake_password',
-               'tenant': 'fake_tenant',
-               'host': '1.1.1.1',
-               'keep_user_passwords': False,
+FAKE_CONFIG = {'cloud': {'user': 'fake_user',
+                         'password': 'fake_password',
+                         'tenant': 'fake_tenant',
+                         'host': '1.1.1.1'},
+               'migrate': {'keep_user_passwords': False,
+                           'overwrite_user_passwords': False},
                'mail': None}
 
 
@@ -266,7 +267,8 @@ class KeystoneIdentityTestCase(test.TestCase):
         self.mock_client().tenants.list.return_value = fake_tenants_list
         self.mock_client().users.list.return_value = fake_users_list
         self.mock_client().roles.list.return_value = fake_roles_list
-        self.mock_client().roles.roles_for_user.return_value = [self.fake_role_0]
+        self.mock_client().roles.roles_for_user.return_value = [
+            self.fake_role_0]
 
         info = self.keystone_client.read_info()
 
@@ -329,7 +331,7 @@ class KeystoneIdentityTestCase(test.TestCase):
                                   'users': [],
                                   'roles': [],
                                   'user_tenants_roles': fake_user_tenants_roles}}
-        fake_opts = {}
+
         for tenant in fake_tenants_list:
             fake_info['identity']['tenants'].append(
                 {'tenant': {'name': tenant.name,
@@ -343,7 +345,7 @@ class KeystoneIdentityTestCase(test.TestCase):
                           'id': user.id,
                           'email': user.email,
                           'tenantId': user.tenantId},
-                 'meta': {}})
+                 'meta': {'overwrite_password': False}})
 
         for role in fake_roles_list:
             fake_info['identity']['roles'].append(

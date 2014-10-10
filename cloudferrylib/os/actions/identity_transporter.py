@@ -1,7 +1,7 @@
-from cloudferrylib.base.action import Transporter
+from cloudferrylib.base.action import transporter
 
 
-class IdentityTransporter(Transporter.Transporter):
+class IdentityTransporter(transporter.Transporter):
 
     def __init__(self):
         super(IdentityTransporter, self).__init__()

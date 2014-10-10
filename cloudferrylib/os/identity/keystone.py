@@ -29,16 +29,14 @@ class KeystoneIdentity(identity.Identity):
         self.mysql_connector = mysql_connector
         self.postman = None
         if self.config['mail']:
-            self.postman = Postman(self.config['mail'].username,
-                                   self.config['mail'].password,
-                                   self.config['mail'].from_addr,
-                                   self.config['mail'].server)
+            self.postman = Postman(self.config['mail']['username'],
+                                   self.config['mail']['password'],
+                                   self.config['mail']['from_addr'],
+                                   self.config['mail']['server'])
         self.templater = Templater()
         self.generator = GeneratorPassword()
 
-    def read_info(self, opts=None):
-        opts = {} if not opts else opts
-
+    def read_info(self, **kwargs):
         info = {'identity': {'tenants': [],
                              'users': [],
                              'roles': []}}
@@ -49,14 +47,16 @@ class KeystoneIdentity(identity.Identity):
                             'id': tenant.id,
                             'description': tenant.description},
                  'meta': {}})
-
+        overwirte_user_passwords = self.config['migrate'][
+            'overwrite_user_passwords']
         for user in self.get_users_list():
             info['identity']['users'].append(
                 {'user': {'name': user.name,
                           'id': user.id,
                           'email': user.email,
                           'tenantId': user.tenantId},
-                 'meta': {}})
+                 'meta': {
+                     'overwrite_password': overwirte_user_passwords}})
 
         for role in self.get_roles_list():
             info['identity']['roles'].append(
@@ -65,11 +65,12 @@ class KeystoneIdentity(identity.Identity):
                  'meta': {}})
 
         info['identity']['user_tenants_roles'] = self._get_user_tenants_roles()
-        if self.config['keep_user_passwords']:
+        if self.config['migrate']['keep_user_passwords']:
             info['identity']['user_passwords'] = self._get_user_passwords()
         return info
 
     def deploy(self, info):
+        print 'Deploy started'
         tenants = info['identity']['tenants']
         users = info['identity']['users']
         roles = info['identity']['user_tenants_roles']
@@ -77,23 +78,24 @@ class KeystoneIdentity(identity.Identity):
         self._deploy_tenants(tenants)
         self._deploy_roles(info['identity']['roles'])
         self._deploy_users(users, tenants)
-        if self.config['keep_user_passwords']:
+        if self.config['migrate']['keep_user_passwords']:
             passwords = info['identity']['user_passwords']
             self._upload_user_passwords(users, passwords)
         self._upload_user_tenant_roles(roles, users, tenants)
+        print 'Finished'
 
     def get_client(self):
         """ Getting keystone client """
 
         ks_client_for_token = keystone_client.Client(
-            username=self.config["user"],
-            password=self.config["password"],
-            tenant_name=self.config["tenant"],
-            auth_url="http://" + self.config["host"] + ":35357/v2.0/")
+            username=self.config['cloud']['user'],
+            password=self.config['cloud']['password'],
+            tenant_name=self.config['cloud']['tenant'],
+            auth_url="http://" + self.config['cloud']['host'] + ":35357/v2.0/")
 
         return keystone_client.Client(
-            token=ks_client_for_token.auth_ref["token"]["id"],
-            endpoint="http://" + self.config["host"] + ":35357/v2.0/")
+            token=ks_client_for_token.auth_ref['token']['id'],
+            endpoint="http://" + self.config['cloud']['host'] + ":35357/v2.0/")
 
     def get_service_name_by_type(self, service_type):
         """Getting service_name from keystone. """
@@ -232,27 +234,38 @@ class KeystoneIdentity(identity.Identity):
         dst_users = {user.name: user.id for user in self.get_users_list()}
         tenant_mapped_ids = {tenant['tenant']['id']: tenant['meta']['new_id']
                              for tenant in tenants}
-        template = 'templates/email.html'
-        created = []
+
+        keep_passwd = self.config['migrate']['keep_user_passwords']
+        overwrite_passwd = self.config['migrate']['overwrite_user_passwords']
         for _user in users:
             user = _user['user']
+            password = self._generate_password()
+
             if user['name'] in dst_users:
                 _user['meta']['new_id'] = dst_users[user['name']]
+                if overwrite_passwd and not keep_passwd:
+                    self.update_user(_user['meta']['new_id'], password=password)
+                    self._passwd_notification(user['email'], user['name'],
+                                              password)
                 continue
+
             tenant_id = tenant_mapped_ids[user['tenantId']]
-            password = 'password'
-            if not self.config['keep_user_passwords']:
-                password = self._generate_password()
             _user['meta']['new_id'] = self.create_user(user['name'], password,
                                                        user['email'],
                                                        tenant_id).id
-            if self.config['keep_user_passwords']:
+            if self.config['migrate']['keep_user_passwords']:
                 _user['meta']['overwrite_password'] = True
-            elif self.postman:
-                self._send_msg(user.email, 'New password notification',
-                               self._render_template(template,
-                                                     {'name': user.name,
-                                                      'password': password}))
+            else:
+                self._passwd_notification(user['email'], user['name'], password)
+
+    def _passwd_notification(self, email, name, password):
+        if not self.postman:
+            return
+        template = 'templates/email.html'
+        self._send_msg(email, 'New password notification',
+                       self._render_template(template,
+                                             {'name': name,
+                                              'password': password}))
 
     def _deploy_roles(self, roles):
         dst_roles = {role.name: role.id for role in self.get_roles_list()}

@@ -15,6 +15,7 @@
 
 import cloud
 import cloud_ferry
+from cloudferrylib.os.actions import identity_transporter
 
 from cloudferrylib.os.image import glance_image
 from cloudferrylib.os.storage import cinder_storage
@@ -35,5 +36,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)
         
     def migrate(self):
+        transporter = identity_transporter.IdentityTransporter()
+        transporter.run(self.src_cloud, self.dst_cloud)
+
         action = copy_g2g.CopyFromGlanceToGlance()
         action.run(self.src_cloud, self.dst_cloud)
