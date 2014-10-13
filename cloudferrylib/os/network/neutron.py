@@ -19,6 +19,7 @@ from utils import get_log
 
 LOG = get_log(__name__)
 ADMIN_TENANT = 'admin'
+DEFAULT_SECGR = 'default'
 
 class NeutronNetwork(network.Network):
 
@@ -158,7 +159,72 @@ class NeutronNetwork(network.Network):
         return floatingips_info
 
     def get_security_groups(self):
-        return self.neutron_client.list_security_groups()['security_groups']
+        sec_groups = self.neutron_client.list_security_groups()['security_groups']
+        get_tenant_name = self.__get_tenants_func()
+        sec_groups_info = []
+        for sec_gr in sec_groups:
+            sec_gr_info = dict()
+            sec_gr_info['name'] = sec_gr['name']
+            sec_gr_info['tenant_name'] = get_tenant_name(sec_gr['tenant_id'])
+            sec_gr_info['description'] = sec_gr['description']
+            sec_gr_info['security_group_rules'] = list()
+            rule_hashsum = 0
+            for rule in sec_gr['security_group_rules']:
+                rule_info = {'remote_group_id': rule['remote_group_id'],
+                             'direction': rule['direction'],
+                             'remote_ip_prefix': rule['remote_ip_prefix'],
+                             'protocol': rule['protocol'],
+                             'port_range_min': rule['port_range_min'],
+                             'port_range_max': rule['port_range_max'],
+                             'ethertype': rule['ethertype'],
+                             'security_group_id': rule['security_group_id'],
+                             'rule_hash': self.__get_resource_hash(rule,
+                                                                  'direction',
+                                                                  'remote_ip_prefix',
+                                                                  'protocol',
+                                                                  'port_range_min',
+                                                                  'port_range_max',
+                                                                  'ethertype')}
+                rule_hashsum += rule_info['rule_hash']
+                sec_gr_info['security_group_rules'].append(rule_info)
+            sec_gr_info['res_hash'] = rule_hashsum + self.__get_resource_hash(sec_gr_info,
+                                                                              'name',
+                                                                              'tenant_name')
+            sec_groups_info.append(sec_gr_info)
+        return sec_groups_info
+
+    def upload_neutron_security_groups(self, sec_groups):
+        existing_secgrs = self.get_security_groups()
+        existing_secgrs_hashlist = [ex_sg['res_hash'] for ex_sg in existing_secgrs]
+        for sec_group in sec_groups:
+            if sec_group['name'] != DEFAULT_SECGR:
+                if sec_group['res_hash'] not in existing_secgrs_hashlist:
+                    tenant_id = self.__get_tenant_id_by_name(self.keystone_client,
+                                                             sec_group['tenant_name'])
+                    sec_group_info = {'security_group':{'name': sec_group['name'],
+                                                        'tenant_id': tenant_id,
+                                                        'description':sec_group['description']}}
+                    self.neutron_client.create_security_group(sec_group_info)
+
+    def upload_sec_group_rules(self, sec_groups):
+        existing_secgrs = self.get_security_groups()
+        for sec_gr in sec_groups:
+            ex_sec_gr = self.__get_resource_by_hash(existing_secgrs, sec_gr['res_hash'])
+            ex_rules_hashlist = [rule['rule_hash'] for rule in ex_sec_gr['security_group_rules']]
+            for rule in sec_gr['security_group_rules']:
+                if rule['protocol'] and (rule['rule_hash'] not in ex_rules_hashlist):
+                    rule_info = {'security_group_rule': {'direction': rule['direction'],
+                                                         'port_range_min': rule['port_range_min'],
+                                                         'port_range_max': rule['port_range_min'],
+                                                         'ethertype': rule['ethertype'],
+                                                         'remote_ip_prefix': rule['remote_ip_prefix'],
+                                                         'security_group_id': ex_sec_gr['id'],
+                                                         'tenant_id': ex_sec_gr['tenant_id']}}
+                    if rule['remote_group_id']:
+                        remote_sg_hash = self.__get_resource_hash_by_id(sec_groups, rule['remote_group_id'])
+                        remote_ex_sec_gr = self.__get_resource_by_hash(existing_secgrs, remote_sg_hash)
+                        rule_info['security_group_rule']['remote_group_id'] = remote_ex_sec_gr['id']
+                    self.neutron_client.create_security_group_rule(rule_info)
 
     def upload_networks(self, networks):
         existing_nets_hashlist = [ex_net['res_hash'] for ex_net in self.get_networks()]
@@ -186,7 +252,7 @@ class NeutronNetwork(network.Network):
         for subnet in subnets:
             tenant_id = self.__get_tenant_id_by_name(self.keystone_client, subnet['tenant_name'])
             net_hash = self.__get_resource_hash_by_id(networks, subnet['network_id'])
-            network_id = self.__get_existing_resource_by_hash(existing_nets, net_hash)['id']
+            network_id = self.__get_resource_by_hash(existing_nets, net_hash)['id']
             subnet_info = {'subnet': {'name': subnet['name'],
                                       'enable_dhcp': subnet['enable_dhcp'],
                                       'network_id': network_id,
@@ -212,13 +278,13 @@ class NeutronNetwork(network.Network):
             tenant_id = self.__get_tenant_id_by_name(self.keystone_client, router['tenant_name'])
             if router['external_gateway_info']:
                 ex_net_hash = self.__get_resource_hash(networks, router['ext_net_id'])
-                ex_net_id = self.__get_existing_resource_by_hash(existing_nets,ex_net_hash)['id']
+                ex_net_id = self.__get_resource_by_hash(existing_nets,ex_net_hash)['id']
                 router_info['external_gateway_info'] = dict(network_id=ex_net_id)
             if router['res_hash'] not in existing_routers_hashlist:
                 new_router = self.neutron_client.create_router(router_info)['router']
                 self.add_router_interfaces(router, new_router, subnets, existing_subnets)
             else:
-                existing_router = self.__get_existing_resource_by_hash(existing_routers, router['res_hash'])
+                existing_router = self.__get_resource_by_hash(existing_routers, router['res_hash'])
                 if not set(router['ips']).intersection(existing_router['ips']):
                     new_router = self.neutron_client.create_router(router_info)['router']
                     self.add_router_interfaces(router, new_router, subnets, existing_subnets)
@@ -229,7 +295,7 @@ class NeutronNetwork(network.Network):
     def add_router_interfaces(self, src_router, dst_router, src_subnets, dst_subnets):
         for subnet_id in src_router['subnet_ids']:
             subnet_hash = self.__get_resource_hash_by_id(src_subnets, subnet_id)
-            existing_subnet_id = self.__get_existing_resource_by_hash(dst_subnets, subnet_hash)
+            existing_subnet_id = self.__get_resource_by_hash(dst_subnets, subnet_hash)
             self.neutron_client.add_interface_router(dst_router['id'],
                                                      {"subnet_id": existing_subnet_id})
 
@@ -240,8 +306,7 @@ class NeutronNetwork(network.Network):
         for src_float in src_floats:
             ext_net_hash = self.__get_resource_hash_by_id(networks,
                                                           src_float['floating_network_id'])
-            ext_net_id = self.__get_existing_resource_by_hash(existing_nets,
-                                                              ext_net_hash)['id']
+            ext_net_id = self.__get_resource_by_hash(existing_nets, ext_net_hash)['id']
             if ext_net_id not in ext_nets_ids:
                 ext_nets_ids.append(ext_net_id)
                 self.__allocate_floatingips(ext_net_id)
@@ -249,7 +314,6 @@ class NeutronNetwork(network.Network):
         self.__recreate_floatingips(src_floats, networks,
                                     existing_nets, existing_floatingips)
         self.__delete_redundant_floatingips(src_floats, existing_floatingips)
-
 
     def __allocate_floatingips(self, ext_net_id):
         try:
@@ -268,8 +332,7 @@ class NeutronNetwork(network.Network):
                                                    src_float['tenant_name'])
             ext_net_hash = self.__get_resource_hash_by_id(src_nets,
                                                           src_float['floating_network_id'])
-            ext_net = self.__get_existing_resource_by_hash(existing_nets,
-                                                           ext_net_hash)
+            ext_net = self.__get_resource_by_hash(existing_nets, ext_net_hash)
             for floating in existing_floatingips:
                 if floating['floating_ip_address'] == src_float['floating_ip_address']:
                     if floating['floating_network_id'] == ext_net['id']:
@@ -285,7 +348,7 @@ class NeutronNetwork(network.Network):
             if floatingip['floating_ip_address'] not in src_floatingips:
                 self.neutron_client.delete_floatingip(floatingip['id'])
 
-    def __get_existing_resource_by_hash(self, existing_resources, resource_hash):
+    def __get_resource_by_hash(self, existing_resources, resource_hash):
         for resource in existing_resources:
             if resource['res_hash'] == resource_hash:
                 return resource
