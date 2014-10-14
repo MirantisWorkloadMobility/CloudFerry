@@ -136,3 +136,7 @@ class GlanceImage(image.Image):
             migrate_images_list.append(migrate_image)
 
         return migrate_images_list
+
+    def wait_for_status(self, id_res, status):
+        while self.glance_client.images.get(id_res).status != status:
+            time.sleep(1)

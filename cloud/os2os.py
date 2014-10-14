@@ -22,6 +22,9 @@ from cloudferrylib.os.storage import cinder_storage
 from cloudferrylib.os.identity import keystone
 
 from cloudferrylib.base.action.actions import copy_g2g
+from cloudferrylib.os.actions import get_info_volumes
+from cloudferrylib.os.actions import convertor_image_to_volume
+from cloudferrylib.os.actions import convertor_volume_to_image
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
@@ -36,6 +39,12 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)
         
     def migrate(self):
+        action1 = get_info_volumes.GetInfoVolumes(self.src_cloud)
+        action2 = convertor_volume_to_image.ConvertorVolumeToImage("qcow2", self.src_cloud)
+        action3 = copy_g2g.CopyFromGlanceToGlance()
+        data = action1.run()
+        images = action2.run(data['storage_data'])
+        action3.run(self.src_cloud, self.dst_cloud)
         transporter = identity_transporter.IdentityTransporter()
         transporter.run(self.src_cloud, self.dst_cloud)
 

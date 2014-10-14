@@ -32,14 +32,16 @@ class ConvertorImageToVolume(convertor.Convertor):
     def run(self, images_info={}, cloud_current=None, **kwargs):
         resource_storage = cloud_current.resources['storage']
         resource_image = cloud_current.resources['image']
-        volumes_info = dict(resource=resource_image, volumes=[])
-        if not utils.require_methods(['uploud_to_image'], resource_storage):
-            raise RuntimeError("No require methods")
-        for vol in images_info['images']:
-            volume = resource_storage.deploy(utils.convert_to_dest(vol, 'image', 'volume'))[0]
+        volumes_info = dict(resource=resource_image, storage=dict(volumes=list()))
+        for img in images_info['image']['images']:
+            img['meta']['image'] = img['image']
+            vol = dict(storage=dict(volumes=[dict(volume=img['meta']['volume'], meta=img['meta'])]))
+            volume = resource_storage.deploy(vol)[0]
             volume = resource_storage.read_info({'id': volume.id})[0]
-            vol['meta']['volume'] = volume
-            volumes_info['volumes'].append(utils.convert_to_dest(vol, 'image', 'volume'))
+            volumes_info['storage']['volumes'].append({
+                'volume': volume,
+                'meta': img['meta']
+            })
         return {
             'volumes_info': volumes_info
         }

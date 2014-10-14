@@ -22,4 +22,4 @@ class Storage(resource.Resource):
         super(Storage, self).__init__()
 
     def get_backend(self):
-        return self.config.src_storage.backend
+        return self.config.storage.backend

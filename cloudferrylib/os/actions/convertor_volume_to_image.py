@@ -26,8 +26,8 @@ BARE = "bare"
 
 
 def require_methods(methods, obj):
-    for method in dir(obj):
-        if method not in methods:
+    for method in methods:
+        if method not in dir(obj):
             return False
     return True
 
@@ -43,11 +43,11 @@ class ConvertorVolumeToImage(convertor.Convertor):
     def run(self, volumes_info={}, **kwargs):
         resource_storage = self.cloud.resources['storage']
         resource_image = self.cloud.resources['image']
-        images_info = []
-        if not require_methods(['uploud_to_image'], resource_storage):
+        images_info = {'image': {}}
+        if not require_methods(['upload_volume_to_image'], resource_storage):
             raise RuntimeError("No require methods")
         images_from_volumes = []
-        for volume in volumes_info['volumes']:
+        for volume in volumes_info['storage']['volumes']:
             vol = volume['volume']
             LOG.debug("| | uploading volume %s [%s] to image service bootable=%s" %
                       (vol['display_name'], vol['id'], vol['bootable'] if hasattr(vol, 'bootable') else False))
@@ -56,14 +56,14 @@ class ConvertorVolumeToImage(convertor.Convertor):
                                                                      disk_format=self.disk_format)
             resource_image.wait_for_status(image_id, ACTIVE)
             self.__patch_image(resource_storage.get_backend(), self.cloud, image_id)
-            image_vol = resource_image.read_info({'id': image_id})
+            image_vol = resource_image.read_info(image_id=image_id)
             img_new = {
-                'image': image_vol,
+                'image': image_vol['image']['images'][0]['image'],
                 'meta': volume['meta']
             }
             img_new['meta']['volume'] = vol
             images_from_volumes.append(img_new)
-        images_info['images'] = images_from_volumes
+        images_info['image']['images'] = images_from_volumes
         return {
             'images_info': images_info
         }

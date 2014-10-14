@@ -17,7 +17,7 @@ from cloudferrylib.base import storage
 from cinderclient.v1 import client as cinder_client
 from fabric.api import settings
 from fabric.api import run
-
+import time
 AVAILABLE = 'available'
 IN_USE = "in-use"
 
@@ -82,17 +82,18 @@ class CinderStorage(storage.Storage):
         for vol in info['storage']['volumes']:
             vol_for_deploy = self.convert(vol['volume'])
             volume = self.create_volume(**vol_for_deploy)
+            vol['volume']['id'] = volume.id
             self.wait_for_status(volume.id, AVAILABLE)
-            self.finish(volume.id, vol['volume']['bootable'])
-            self.attach_volume_to_instance(volume, vol)
+            self.finish(vol)
+            self.attach_volume_to_instance(vol)
             volumes.append(volume)
         return volumes
 
-    def attach_volume_to_instance(self, volume, volume_info):
+    def attach_volume_to_instance(self, volume_info):
         if 'instance' in volume_info['meta']:
             if volume_info['meta']['instance']:
-                self.attach_volume(volume.id, volume_info['meta']['instance']['id'], volume_info['volume']['device'])
-                self.wait_for_status(volume.id, IN_USE)
+                self.attach_volume(volume_info['volume']['id'], volume_info['meta']['instance']['id'], volume_info['volume']['device'])
+                self.wait_for_status(volume_info['volume']['id'], IN_USE)
 
     def get_volumes_list(self, detailed=True, search_opts=None):
         return self.cinder_client.volumes.list(detailed, search_opts)
@@ -121,8 +122,8 @@ class CinderStorage(storage.Storage):
     def detach_volume(self, volume_id):
         return self.cinder_client.volumes.detach(volume_id)
 
-    def finish(self, vol_id, meta):
-        self.__patch_option_bootable_of_volume(vol_id, meta['volume'].bootable)
+    def finish(self, vol):
+        self.__patch_option_bootable_of_volume(vol['volume']['id'], vol['volume'].bootable)
 
     def __patch_option_bootable_of_volume(self, volume_id, bootable):
         cmd = 'use cinder;update volumes set volumes.bootable=%s where volumes.id="%s"' % (int(bootable), volume_id)
@@ -146,3 +147,7 @@ class CinderStorage(storage.Storage):
             container_format=container_format,
             disk_format=disk_format)
         return resp, image['os-volume_upload_image']['image_id']
+
+    def wait_for_status(self, id_res, status):
+        while self.cinder_client.volumes.get(id).status != status:
+            time.sleep(1)

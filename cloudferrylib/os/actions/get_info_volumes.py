@@ -12,16 +12,20 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from cloudferrylib.base.action import Transporter
+from cloudferrylib.base.action import action
+__author__ = 'mirrorcoder'
 
 
-class CopyFromGlanceToGlance(Transporter.Transporter):
-    def __init__(self):
-        super(CopyFromGlanceToGlance, self).__init__()
+class GetInfoVolumes(action.Action):
 
-    def run(self, src_cloud, dst_cloud, **kwargs):
-        src_image = src_cloud.resources['image']
-        dst_image = dst_cloud.resources['image']
+    def __init__(self, cloud, criteria_search_volumes=dict()):
+        self.cloud = cloud
+        self.criteria_search_volumes = criteria_search_volumes
+        super(GetInfoVolumes, self).__init__()
 
-        image_info = src_image.read_info()
-        dst_image.deploy(image_info)
+    def run(self, criteria_search_volumes=None, **kwargs):
+        storage = self.cloud.resources['storage']
+        volumes = storage.read_info(criteria_search_volumes)
+        return {
+            'storage_data': volumes
+        }
