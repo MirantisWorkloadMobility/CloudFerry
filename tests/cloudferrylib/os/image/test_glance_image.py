@@ -47,7 +47,7 @@ class GlanceImageTestCase(test.TestCase):
     def test_get_client(self):
         fake_endpoint = 'fake_endpoint'
         fake_auth_token = 'fake_auth_token'
-        self.identity_mock.get_endpoint_by_name_service.return_value = fake_endpoint
+        self.identity_mock.get_endpoint_by_service_name.return_value = fake_endpoint
         self.identity_mock.get_auth_token_from_user.return_value = fake_auth_token
 
         glance_client = self.glance_image.get_glance_client()

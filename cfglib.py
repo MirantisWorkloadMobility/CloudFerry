@@ -43,9 +43,9 @@ migrate = cfg.OptGroup(name='migrate',
                        title='General config for migration process')
 
 migrate_opts = [
-    cfg.StrOpt('keep_user_passwords', default='yes',
-               help='yes - keep user passwords, '
-                    'no - not keep user passwords'),
+    cfg.BoolOpt('keep_user_passwords', default=True,
+               help='True - keep user passwords, '
+                    'False - not keep user passwords'),
     cfg.StrOpt('key_filename', default='id_rsa',
                help='name pub key'),
     cfg.StrOpt('keep_ip', default='no',
@@ -54,14 +54,6 @@ migrate_opts = [
                help='speed limit for glance to glance'),
     cfg.StrOpt('instances', default='key_name-qwerty',
                help='filter instance by parametrs'),
-    cfg.StrOpt('mail_server', default='-',
-               help='name mail server'),
-    cfg.StrOpt('mail_username', default='-',
-               help='name username for mail'),
-    cfg.StrOpt('mail_password', default='-',
-               help='password for mail'),
-    cfg.StrOpt('mail_from_addr', default='-',
-               help='field FROM in letter'),
     cfg.StrOpt('file_compression', default='dd',
                help='gzip - use GZIP when file tranfering via ssh, '
                     ' - no compression, directly via dd'),
@@ -70,7 +62,23 @@ migrate_opts = [
     cfg.StrOpt('ssh_transfer_port', default='9990',
                help='interval ports for ssh tunnel'),
     cfg.StrOpt('port', default='9990',
-               help='interval ports for ssh tunnel')
+               help='interval ports for ssh tunnel'),
+    cfg.BoolOpt('overwrite_user_passwords', default=False,
+                help='Overwrite password for exists users on destination')
+]
+
+mail = cfg.OptGroup(name='mail',
+                    title='Mail credentials for notifications')
+
+mail_opts = [
+    cfg.StrOpt('server', default='-',
+               help='name mail server'),
+    cfg.StrOpt('username', default='-',
+               help='name username for mail'),
+    cfg.StrOpt('password', default='-',
+               help='password for mail'),
+    cfg.StrOpt('from_addr', default='-',
+               help='field FROM in letter')
 ]
 
 src_mysql = cfg.OptGroup(name='src_mysql',
@@ -81,6 +89,8 @@ src_mysql_opts = [
                help='user for mysql'),
     cfg.StrOpt('password', default='-',
                help='password for mysql'),
+    cfg.StrOpt('host', default='-',
+               help='host of mysql'),
     cfg.StrOpt('connection', default='mysql+mysqlconnector',
                help='driver for connection'),
 ]
@@ -150,6 +160,8 @@ dst_mysql_opts = [
                help='user for mysql'),
     cfg.StrOpt('password', default='-',
                help='password for mysql'),
+    cfg.StrOpt('host', default='-',
+               help='host of mysql'),
     cfg.StrOpt('connection', default='mysql+mysqlconnector',
                help='driver for connection'),
 ]
@@ -228,6 +240,7 @@ cfg_for_reg = [
     (src, src_opts),
     (dst, dst_opts),
     (migrate, migrate_opts),
+    (mail, mail_opts),
     (src_mysql, src_mysql_opts),
     (src_compute, src_compute_opts),
     (src_storage, src_storage_opts),

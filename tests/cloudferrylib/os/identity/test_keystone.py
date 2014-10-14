@@ -22,11 +22,13 @@ from oslotest import mockpatch
 
 from keystoneclient.v2_0 import client as keystone_client
 
-
-FAKE_CONFIG = {'user': 'fake_user',
-               'password': 'fake_password',
-               'tenant': 'fake_tenant',
-               'host': '1.1.1.1'}
+FAKE_CONFIG = {'cloud': {'user': 'fake_user',
+                         'password': 'fake_password',
+                         'tenant': 'fake_tenant',
+                         'host': '1.1.1.1'},
+               'migrate': {'keep_user_passwords': False,
+                           'overwrite_user_passwords': False},
+               'mail': None}
 
 
 class KeystoneIdentityTestCase(test.TestCase):
@@ -36,14 +38,33 @@ class KeystoneIdentityTestCase(test.TestCase):
         self.kc_patch = mockpatch.PatchObject(keystone_client, 'Client',
                                               new=self.mock_client)
         self.useFixture(self.kc_patch)
-        self.keystone_client = keystone.KeystoneIdentity(FAKE_CONFIG)
 
-        self.fake_user = mock.Mock()
-        self.fake_user_0 = mock.Mock()
+        self.keystone_client = keystone.KeystoneIdentity(FAKE_CONFIG, None)
 
         self.fake_tenant_0 = mock.Mock()
-        self.fake_tenant_0.name = 'fake_name'
+        self.fake_tenant_0.name = 'tenant_name_0'
+        self.fake_tenant_0.description = 'tenant_description_0'
+        self.fake_tenant_0.id = 'tenant_id_0'
         self.fake_tenant_1 = mock.Mock()
+        self.fake_tenant_1.name = 'tenant_name_1'
+        self.fake_tenant_1.description = 'tenant_description_1'
+        self.fake_tenant_1.id = 'tenant_id_1'
+
+        self.fake_user_0 = mock.Mock()
+        self.fake_user_0.name = 'user_name_0'
+        self.fake_user_0.id = 'user_id_0'
+        self.fake_user_0.tenantId = self.fake_tenant_0.id
+        self.fake_user_1 = mock.Mock()
+        self.fake_user_1.name = 'user_name_1'
+        self.fake_user_1.id = 'user_id_1'
+        self.fake_user_1.tenantId = self.fake_tenant_1.id
+
+        self.fake_role_0 = mock.Mock()
+        self.fake_role_0.name = 'role_name_0'
+        self.fake_role_0.id = 'role_id_0'
+        self.fake_role_1 = mock.Mock()
+        self.fake_role_1.name = 'role_name_1'
+        self.fake_role_1.id = 'role_id_1'
 
         self.fake_service_0 = mock.Mock()
         self.fake_service_1 = mock.Mock()
@@ -150,26 +171,26 @@ class KeystoneIdentityTestCase(test.TestCase):
         fake_tenants_list = [self.fake_tenant_0, self.fake_tenant_1]
         self.mock_client().tenants.list.return_value = fake_tenants_list
 
-        tenant = self.keystone_client.get_tenant_by_name('fake_name')
+        tenant = self.keystone_client.get_tenant_by_name('tenant_name_0')
 
         self.assertEqual(self.fake_tenant_0, tenant)
 
     def test_get_tenant_by_name_default(self):
         self.mock_client().tenants.list.return_value = []
 
-        tenant = self.keystone_client.get_tenant_by_name('fake_name')
+        tenant = self.keystone_client.get_tenant_by_name('tenant_name_0')
 
         self.assertIsNone(tenant)
 
     def test_get_tenant_by_id(self):
         self.mock_client().tenants.get.return_value = self.fake_tenant_0
 
-        tenant = self.keystone_client.get_tenant_by_id('fake_id')
+        tenant = self.keystone_client.get_tenant_by_id('tenant_id_0')
 
         self.assertEqual(self.fake_tenant_0, tenant)
 
     def test_get_users_list(self):
-        fake_users_list = [self.fake_user, self.fake_user_0]
+        fake_users_list = [self.fake_user_0, self.fake_user_1]
         self.mock_client().users.list.return_value = fake_users_list
 
         users_list = self.keystone_client.get_users_list()
@@ -218,15 +239,16 @@ class KeystoneIdentityTestCase(test.TestCase):
                                                                   **test_args)
 
     def test_update_user(self):
-        self.keystone_client.update_user(self.fake_user, name='fake_new_user',
+        self.keystone_client.update_user(self.fake_user_0, name='fake_new_user',
                                          email='fake@gmail.com', enabled=False)
 
         test_args = {'name': 'fake_new_user',
                      'email': 'fake@gmail.com',
                      'enabled': False}
 
-        self.mock_client().users.update.assert_called_once_with(self.fake_user,
-                                                                **test_args)
+        self.mock_client().users.update.assert_called_once_with(
+            self.fake_user_0,
+            **test_args)
 
     def test_auth_token_from_user(self):
         fake_auth_token = 'fake_auth_token'
@@ -234,3 +256,100 @@ class KeystoneIdentityTestCase(test.TestCase):
 
         self.assertEquals(fake_auth_token,
                           self.keystone_client.get_auth_token_from_user())
+
+    def test_read_info(self):
+        fake_tenants_list = [self.fake_tenant_0, self.fake_tenant_1]
+        fake_users_list = [self.fake_user_0, self.fake_user_1]
+        fake_roles_list = [self.fake_role_0, self.fake_role_1]
+        fake_info = self._get_fake_info(fake_tenants_list, fake_users_list,
+                                        fake_roles_list)
+
+        self.mock_client().tenants.list.return_value = fake_tenants_list
+        self.mock_client().users.list.return_value = fake_users_list
+        self.mock_client().roles.list.return_value = fake_roles_list
+        self.mock_client().roles.roles_for_user.return_value = [
+            self.fake_role_0]
+
+        info = self.keystone_client.read_info()
+
+        self.assertEquals(fake_info, info)
+
+    def test_deploy(self):
+        fake_tenants_list = [self.fake_tenant_0, self.fake_tenant_1]
+        fake_users_list = [self.fake_user_0, self.fake_user_1]
+        fake_roles_list = [self.fake_role_0, self.fake_role_1]
+        fake_info = self._get_fake_info(fake_tenants_list, fake_users_list,
+                                        fake_roles_list)
+
+        self.mock_client().tenants.list.return_value = [fake_tenants_list[0]]
+        self.mock_client().users.list.return_value = [fake_users_list[0]]
+        self.mock_client().roles.list.return_value = [fake_roles_list[0]]
+        self.mock_client().roles.roles_for_user.return_value = [
+            self.fake_role_1]
+
+        def tenant_create(**kwargs):
+            self.mock_client().tenants.list.return_value.append(
+                fake_tenants_list[1])
+            return fake_tenants_list[1]
+
+        def user_create(**kwars):
+            self.mock_client().users.list.return_value.append(
+                fake_users_list[1])
+            return fake_users_list[1]
+
+        def roles_create(role_name):
+            self.mock_client().roles.list.return_value.append(
+                fake_roles_list[1])
+            return fake_roles_list[1]
+
+        self.mock_client().tenants.create = tenant_create
+        self.mock_client().users.create = user_create
+        self.mock_client().roles.create = roles_create
+
+        self.keystone_client.deploy(fake_info)
+
+        mock_calls = []
+        for user in fake_users_list:
+            for tenant in fake_tenants_list:
+                mock_calls.append(
+                    mock.call(user.id, fake_roles_list[0].id, tenant.id))
+
+        self.assertEquals(mock_calls,
+                          self.mock_client().roles.add_user_role.mock_calls)
+
+    @staticmethod
+    def _get_fake_info(fake_tenants_list, fake_users_list, fake_roles_list):
+        fake_user_tenants_roles = {}
+        for user in fake_users_list:
+            fake_user_tenants_roles[user.name] = {}
+            for tenant in fake_tenants_list:
+                fake_user_tenants_roles[user.name][
+                    tenant.name] = [{'role': {'name': fake_roles_list[0].name,
+                                              'id': fake_roles_list[0].id}}]
+
+        fake_info = {'identity': {'tenants': [],
+                                  'users': [],
+                                  'roles': [],
+                                  'user_tenants_roles': fake_user_tenants_roles}}
+
+        for tenant in fake_tenants_list:
+            fake_info['identity']['tenants'].append(
+                {'tenant': {'name': tenant.name,
+                            'id': tenant.id,
+                            'description': tenant.description},
+                 'meta': {}})
+
+        for user in fake_users_list:
+            fake_info['identity']['users'].append(
+                {'user': {'name': user.name,
+                          'id': user.id,
+                          'email': user.email,
+                          'tenantId': user.tenantId},
+                 'meta': {'overwrite_password': False}})
+
+        for role in fake_roles_list:
+            fake_info['identity']['roles'].append(
+                {'role': {'name': role.name,
+                          'id': role},
+                 'meta': {}})
+        return fake_info

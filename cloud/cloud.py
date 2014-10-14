@@ -15,13 +15,13 @@
 
 import copy
 from cloudferrylib.utils import utils
+from cloudferrylib.utils import mysql_connector
 
 SRC = "src"
 DST = "dst"
 
 
 class Cloud(object):
-
     def __init__(self, resources, position, config):
         self.resources = resources
         self.position = position
@@ -37,7 +37,8 @@ class Cloud(object):
     def make_cloud_config(config, position):
         cloud_config = utils.ext_dict(migrate=utils.ext_dict(),
                                       cloud=utils.ext_dict(),
-                                      import_rules=utils.ext_dict())
+                                      import_rules=utils.ext_dict(),
+                                      mail=utils.ext_dict())
         for k, v in config.migrate.iteritems():
             cloud_config['migrate'][k] = v
 
@@ -46,6 +47,9 @@ class Cloud(object):
 
         for k, v in config.import_rules.iteritems():
             cloud_config['import_rules'][k] = v
+
+        for k, v in config.mail.iteritems():
+            cloud_config['mail'][k] = v
 
         return cloud_config
 
@@ -60,11 +64,13 @@ class Cloud(object):
         return resource_config
 
     def init_resources(self, cloud_config):
-        init_resources = {}
+        init_resources = {'mysql_connector': mysql_connector.MysqlConnector(
+            getattr(self.config, "%s_mysql" % self.position))}
 
         identity_conf = self.make_resource_config(self.config, self.position,
                                                   cloud_config, 'identity')
-        identity = self.resources['identity'](identity_conf)
+        identity = self.resources['identity'](identity_conf,
+                                              init_resources['mysql_connector'])
         init_resources['identity'] = identity
 
         for resource in self.resources:

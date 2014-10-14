@@ -14,9 +14,8 @@
 
 from cloudferrylib.base import image
 from glanceclient.v1 import client as glance_client
-from fabric.api import settings, run, cd
-
 from migrationlib.os.utils import FileLikeProxy
+
 
 class GlanceImage(image.Image):
 
@@ -132,7 +131,7 @@ class GlanceImage(image.Image):
                 data=FileLikeProxy.FileLikeProxy(
                     gl_image['image'],
                     FileLikeProxy.callback_print_progress,
-                    self.config['speed_limit']))
+                    self.config['migrate']['speed_limit']))
 
             migrate_images_list.append(migrate_image)
 
