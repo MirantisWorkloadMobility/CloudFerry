@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from cloudferrylib.base.action import convertor
+from cloudferrylib.base.action import converter
 from cloudferrylib.os.actions.utils import utils
 from cloudferrylib.utils import utils as utl
 __author__ = 'mirrorcoder'
@@ -24,10 +24,10 @@ BARE = "bare"
 AVAILABLE = 'available'
 
 
-class ConvertorImageToVolume(convertor.Convertor):
+class ConverterImageToVolume(converter.Converter):
 
     def __init__(self):
-        super(ConvertorImageToVolume, self).__init__()
+        super(ConverterImageToVolume, self).__init__()
 
     def run(self, images_info={}, cloud_current=None, **kwargs):
         resource_storage = cloud_current.resources['storage']
