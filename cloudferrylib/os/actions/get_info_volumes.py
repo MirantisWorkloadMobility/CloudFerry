@@ -25,7 +25,7 @@ class GetInfoVolumes(action.Action):
 
     def run(self, criteria_search_volumes=None, **kwargs):
         storage = self.cloud.resources['storage']
-        volumes = storage.read_info(criteria_search_volumes)
+        volumes = storage.read_info(**criteria_search_volumes)
         return {
             'storage_data': volumes
         }

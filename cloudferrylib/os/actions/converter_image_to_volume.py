@@ -37,7 +37,7 @@ class ConverterImageToVolume(converter.Converter):
             img['meta']['image'] = img['image']
             vol = dict(storage=dict(volumes=[dict(volume=img['meta']['volume'], meta=img['meta'])]))
             volume = resource_storage.deploy(vol)[0]
-            volume = resource_storage.read_info({'id': volume.id})[0]
+            volume = resource_storage.read_info(id=volume.id)['storage']['volumes'][0]['volume']
             volumes_info['storage']['volumes'].append({
                 'volume': volume,
                 'meta': img['meta']

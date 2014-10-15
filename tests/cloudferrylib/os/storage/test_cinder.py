@@ -18,14 +18,13 @@ import mock
 from cloudferrylib.os.storage import cinder_storage
 from tests import test
 from oslotest import mockpatch
-
 from cinderclient.v1 import client as cinder_client
+from cloudferrylib.utils import utils
 
-
-FAKE_CONFIG = {'user': 'fake_user',
-               'password': 'fake_password',
-               'tenant': 'fake_tenant',
-               'host': '1.1.1.1'}
+FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
+                                                   'password': 'fake_password',
+                                                   'tenant': 'fake_tenant',
+                                                   'host': '1.1.1.1'}))
 
 
 class CinderStorageTestCase(test.TestCase):
@@ -35,7 +34,8 @@ class CinderStorageTestCase(test.TestCase):
         self.cs_patch = mockpatch.PatchObject(cinder_client, 'Client',
                                               new=self.mock_client)
         self.useFixture(self.cs_patch)
-        self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG)
+        self.identity_client = mock.Mock()
+        self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG, self.identity_client)
 
         self.fake_volume_0 = mock.Mock()
         self.fake_volume_1 = mock.Mock()
@@ -118,8 +118,9 @@ class CinderStorageTestCase(test.TestCase):
         self.assertEqual(('fake_response', 'fake_body'), (response, body))
 
     def test_upload_volume_to_image(self):
+        image = {'os-volume_upload_image': {'image_id': "fake_body"}}
         self.mock_client().volumes.upload_to_image.return_value = (
-            'fake_response', 'fake_body')
+            'fake_response', image)
 
         response, body = self.cinder_client.upload_volume_to_image(
             'fake_vol_id', True, 'fake_image_name', 'fake_cont_format',
@@ -135,3 +136,85 @@ class CinderStorageTestCase(test.TestCase):
         self.mock_client().volumes.upload_to_image.assert_called_once_with(
             **test_args)
         self.assertEqual(('fake_response', 'fake_body'), (response, body))
+
+        # volumes = []
+        # for vol in info['storage']['volumes']:
+        #     vol_for_deploy = self.convert(vol['volume'])
+        #     volume = self.create_volume(**vol_for_deploy)
+        #     vol['volume']['id'] = volume.id
+        #     self.wait_for_status(volume.id, AVAILABLE)
+        #     self.finish(vol)
+        #     self.attach_volume_to_instance(vol)
+        #     volumes.append(volume)
+        # return volumes
+
+    # def convert(self, vol):
+    #     info = {
+    #         'size': vol['volume']['size'],
+    #         'display_name': vol['volume']['display_name'],
+    #         'display_description': vol['volume']['display_description'],
+    #         'volume_type': vol['volume']['volume_type'],
+    #         'availability_zone': vol['volume']['availability_zone'],
+    #     }
+    #     if 'image' in vol['meta']:
+    #         if vol['meta']['image']:
+    #             info['imageRef'] = vol['meta']['image']['id']
+    #     return info
+
+    def test_deploy(self):
+        vol = {'volume': {
+            'size': 'size1',
+            'display_name': 'display_name1',
+            'display_description': 'display_description1',
+            'volume_type': 'volume_type1',
+            'availability_zone': 'availability_zone1'
+        },
+               'meta': {
+                   'image': {
+                       'id': 'image_id1'
+                   }
+               }}
+        info = {'storage': {'volumes': [vol]}}
+        create_volume = mock.Mock()
+        vol_return = mock.Mock(id="id2")
+        create_volume.return_value = vol_return
+        wait_for_status = mock.Mock()
+        finish = mock.Mock()
+        attach_volume_to_instance = mock.Mock()
+        self.cinder_client.create_volume = create_volume
+        self.cinder_client.wait_for_status = wait_for_status
+        self.cinder_client.finish = finish
+        self.cinder_client.attach_volume_to_instance = attach_volume_to_instance
+        res = self.cinder_client.deploy(info)
+        self.assertIn(vol_return, res)
+
+    def test_read_info(self):
+        temp = self.cinder_client.get_volumes_list
+        self.cinder_client.get_volumes_list = mock.Mock()
+        vol1 = mock.Mock(id="id1",
+                         size='size',
+                         display_name='display_name',
+                         display_description='display_description',
+                         availability_zone='availability_zone',
+                         volume_type='volume_type',
+                         attachments=[{'device': 'device'}],
+                         bootable='bootable')
+        self.cinder_client.get_volumes_list.return_value = [vol1]
+        res = self.cinder_client.read_info(id="id1")
+        self.assertIn('storage', res)
+        self.assertIn('volumes', res['storage'])
+        self.assertEqual(1, len(res['storage']['volumes']))
+        self.assertEqual(vol1.id, res['storage']['volumes'][0]['volume']['id'])
+        self.assertIn('image', res['storage']['volumes'][0]['meta'])
+        self.cinder_client.get_volumes_list = temp
+
+            # volume = {
+            #     'id': vol.id,
+            #     'size': vol.size,
+            #     'display_name': vol.display_name,
+            #     'display_description': vol.display_description,
+            #     'volume_type': vol.volume_type,
+            #     'availability_zone': vol.availability_zone,
+            #     'device': vol.attachments[0]['device'] if vol.attachments else None,
+            #     'bootable': vol.bootable,
+            # }
