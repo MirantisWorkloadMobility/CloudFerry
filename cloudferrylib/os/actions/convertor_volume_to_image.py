@@ -12,12 +12,11 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+
 from cloudferrylib.base.action import convertor
+from cloudferrylib.os.image import glance_image
 from utils import utils
-from fabric.api import settings
-from fabric.api import run
-import json
-__author__ = 'mirrorcoder'
+
 
 LOG = utils.get_log(__name__)
 CEPH = 'ceph'
@@ -49,13 +48,17 @@ class ConvertorVolumeToImage(convertor.Convertor):
         images_from_volumes = []
         for volume in volumes_info['storage']['volumes']:
             vol = volume['volume']
-            LOG.debug("| | uploading volume %s [%s] to image service bootable=%s" %
-                      (vol['display_name'], vol['id'], vol['bootable'] if hasattr(vol, 'bootable') else False))
-            resp, image_id = resource_storage.upload_volume_to_image(vol['id'], force=True, image_name=vol['id'],
-                                                                     container_format=self.container_format,
-                                                                     disk_format=self.disk_format)
+            LOG.debug(
+                "| | uploading volume %s [%s] to image service bootable=%s" % (
+                vol['display_name'], vol['id'],
+                vol['bootable'] if hasattr(vol, 'bootable') else False))
+            resp, image_id = resource_storage.upload_volume_to_image(
+                vol['id'], force=True, image_name=vol['id'],
+                container_format=self.container_format,
+                disk_format=self.disk_format)
             resource_image.wait_for_status(image_id, ACTIVE)
-            self.__patch_image(resource_storage.get_backend(), self.cloud, image_id)
+            glance_image.GlanceImage.patch_image(
+                resource_storage.get_backend(), self.cloud, image_id)
             image_vol = resource_image.read_info(image_id=image_id)
             img_new = {
                 'image': image_vol['image']['images'][0]['image'],
@@ -67,13 +70,3 @@ class ConvertorVolumeToImage(convertor.Convertor):
         return {
             'images_info': images_info
         }
-
-    @staticmethod
-    def __patch_image(backend_storage, cloud, image_id):
-        resource_image = cloud.resources['image']
-        if backend_storage == CEPH:
-            image_from_glance = resource_image.read_info({'id': image_id})
-            with settings(host_string=cloud.getIpSsh()):
-                out = json.loads(run("rbd -p images info %s --format json" % image_id))
-                image_from_glance.update(size=out["size"])
-

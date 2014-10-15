@@ -12,6 +12,13 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+
+import json
+import time
+
+from fabric.api import run
+from fabric.api import settings
+
 from cloudferrylib.base import image
 from glanceclient.v1 import client as glance_client
 from migrationlib.os.utils import FileLikeProxy
@@ -49,7 +56,7 @@ class GlanceImage(image.Image):
     def delete_image(self, image_id):
         self.glance_client.images.delete(image_id)
 
-    def get_image(self, image_id):
+    def get_image_by_id(self, image_id):
         for glance_image in self.get_image_list():
             if glance_image.id == image_id:
                 return glance_image
@@ -59,20 +66,28 @@ class GlanceImage(image.Image):
             if glance_image.name == image_name:
                 return glance_image
 
+    def get_image(self, im):
+        """ Get image by id or name. """
+
+        for glance_image in self.get_image_list():
+            if im in (glance_image.name, glance_image.id):
+                return glance_image
+
     def get_image_status(self, image_id):
-        return self.get_image(image_id).status
+        return self.get_image_by_id(image_id).status
 
     def get_ref_image(self, image_id):
         return self.glance_client.images.data(image_id)._resp
 
     def get_image_checksum(self, image_id):
-        return self.get_image(image_id).checksum
+        return self.get_image_by_id(image_id).checksum
 
     def read_info(self, **kwargs):
         """Get info about images or specified image.
 
         :param image_id: Id of specified image
         :param image_name: Name of specified image
+        :param images_list:
         :rtype: Dictionary with all necessary images info
         """
 
@@ -81,12 +96,17 @@ class GlanceImage(image.Image):
                 }
 
         if kwargs.get('image_id'):
-            glance_image = self.get_image(kwargs['image_id'])
+            glance_image = self.get_image_by_id(kwargs['image_id'])
             info = self.make_image_info(glance_image, info)
 
         elif kwargs.get('image_name'):
             glance_image = self.get_image_by_name(kwargs['image_name'])
             info = self.make_image_info(glance_image, info)
+
+        elif kwargs.get('images_list'):
+            for im in kwargs['images_list']:
+                glance_image = self.get_image(im)
+                info = self.make_image_info(glance_image, info)
 
         else:
             for glance_image in self.get_image_list():
@@ -101,6 +121,7 @@ class GlanceImage(image.Image):
                 'id': glance_image.id,
                 'size': glance_image.size,
                 'name': glance_image.name,
+                'checksum': glance_image.checksum,
                 'container_format': glance_image.container_format,
                 'disk_format': glance_image.disk_format,
                 'is_public': glance_image.is_public,
@@ -117,8 +138,8 @@ class GlanceImage(image.Image):
     def deploy(self, info):
         migrate_images_list = []
         for gl_image in info['image']['images']:
-            if gl_image['image']['name'] + 'Migrate' in [x.name for x in
-                                                         self.get_image_list()]:
+            if gl_image['image']['checksum'] in [x.checksum for x in
+                                                 self.get_image_list()]:
                 continue
             gl_image['image']['resource_src'] = info['image']['resource']
             migrate_image = self.create_image(
@@ -140,3 +161,13 @@ class GlanceImage(image.Image):
     def wait_for_status(self, id_res, status):
         while self.glance_client.images.get(id_res).status != status:
             time.sleep(1)
+
+    @staticmethod
+    def patch_image(backend_storage, cloud, image_id):
+        resource_image = cloud.resources['image']
+        if backend_storage == 'ceph':
+            image_from_glance = resource_image.read_info({'id': image_id})
+            with settings(host_string=cloud.getIpSsh()):
+                out = json.loads(
+                    run("rbd -p images info %s --format json" % image_id))
+                image_from_glance.update(size=out["size"])
