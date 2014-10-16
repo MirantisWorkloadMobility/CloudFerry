@@ -20,9 +20,9 @@ from cloudferrylib.os.actions import convertor_image_to_volume
 from tests import test
 
 
-class ConvertorImageToVolume(test.TestCase):
+class ConvertorImageToVolumeTest(test.TestCase):
     def setUp(self):
-        super(ConvertorImageToVolume, self).setUp()
+        super(ConvertorImageToVolumeTest, self).setUp()
         self.fake_cloud = mock.Mock()
         self.fake_storage = mock.Mock()
         self.fake_storage.deploy = mock.Mock()

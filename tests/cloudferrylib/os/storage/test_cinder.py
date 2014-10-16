@@ -137,30 +137,6 @@ class CinderStorageTestCase(test.TestCase):
             **test_args)
         self.assertEqual(('fake_response', 'fake_body'), (response, body))
 
-        # volumes = []
-        # for vol in info['storage']['volumes']:
-        #     vol_for_deploy = self.convert(vol['volume'])
-        #     volume = self.create_volume(**vol_for_deploy)
-        #     vol['volume']['id'] = volume.id
-        #     self.wait_for_status(volume.id, AVAILABLE)
-        #     self.finish(vol)
-        #     self.attach_volume_to_instance(vol)
-        #     volumes.append(volume)
-        # return volumes
-
-    # def convert(self, vol):
-    #     info = {
-    #         'size': vol['volume']['size'],
-    #         'display_name': vol['volume']['display_name'],
-    #         'display_description': vol['volume']['display_description'],
-    #         'volume_type': vol['volume']['volume_type'],
-    #         'availability_zone': vol['volume']['availability_zone'],
-    #     }
-    #     if 'image' in vol['meta']:
-    #         if vol['meta']['image']:
-    #             info['imageRef'] = vol['meta']['image']['id']
-    #     return info
-
     def test_deploy(self):
         vol = {'volume': {
             'size': 'size1',
@@ -208,13 +184,3 @@ class CinderStorageTestCase(test.TestCase):
         self.assertIn('image', res['storage']['volumes'][0]['meta'])
         self.cinder_client.get_volumes_list = temp
 
-            # volume = {
-            #     'id': vol.id,
-            #     'size': vol.size,
-            #     'display_name': vol.display_name,
-            #     'display_description': vol.display_description,
-            #     'volume_type': vol.volume_type,
-            #     'availability_zone': vol.availability_zone,
-            #     'device': vol.attachments[0]['device'] if vol.attachments else None,
-            #     'bootable': vol.bootable,
-            # }
