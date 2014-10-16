@@ -44,10 +44,10 @@ class CinderStorage(storage.Storage):
                                     params.cloud.tenant,
                                     "http://%s:35357/v2.0/" % params.cloud.host)
 
-    def read_info(self, opts={}):
+    def read_info(self, **kwargs):
         info = dict(resource=self, storage={})
         info['storage'] = {'volumes': []}
-        for vol in self.get_volumes_list(search_opts=opts):
+        for vol in self.get_volumes_list(search_opts=kwargs):
             volume = {
                 'id': vol.id,
                 'size': vol.size,
@@ -80,7 +80,7 @@ class CinderStorage(storage.Storage):
     def deploy(self, info):
         volumes = []
         for vol in info['storage']['volumes']:
-            vol_for_deploy = self.convert(vol['volume'])
+            vol_for_deploy = self.convert(vol)
             volume = self.create_volume(**vol_for_deploy)
             vol['volume']['id'] = volume.id
             self.wait_for_status(volume.id, AVAILABLE)
