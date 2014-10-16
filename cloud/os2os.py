@@ -52,7 +52,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         transporter.run(self.src_cloud, self.dst_cloud)
 
         action_get_im = get_info_images.GetInfoImages(self.src_cloud)
-        images_info = action_get_im.run(images_list=['TestVM'])
+        images_info = action_get_im.run()
 
         action_copy_im = copy_g2g.CopyFromGlanceToGlance()
         action_copy_im.run(images_info, self.dst_cloud)

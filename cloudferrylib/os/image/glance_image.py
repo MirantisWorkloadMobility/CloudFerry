@@ -92,7 +92,7 @@ class GlanceImage(image.Image):
         """
 
         info = {'image': {'resource': self,
-                          'images': []}
+                          'images': {}}
                 }
 
         if kwargs.get('image_id'):
@@ -127,9 +127,9 @@ class GlanceImage(image.Image):
                 'is_public': glance_image.is_public,
                 'protected': glance_image.protected,
             }
-            info['image']['images'].append({'image': gl_image,
-                                            'meta': {},
-                                            })
+            info['image']['images'][glance_image.id] = {'image': gl_image,
+                                                        'meta': {},
+                                                        }
         else:
             print 'Image has not been found'
 
@@ -137,7 +137,7 @@ class GlanceImage(image.Image):
 
     def deploy(self, info):
         migrate_images_list = []
-        for gl_image in info['image']['images']:
+        for gl_image in info['image']['images'].itervalues():
             if gl_image['image']['checksum'] in [x.checksum for x in
                                                  self.get_image_list()]:
                 continue
