@@ -16,16 +16,20 @@
 from cloudferrylib.base.action import action
 
 
-class GetInfoVolumes(action.Action):
-
-    def __init__(self, cloud, criteria_search_volumes=dict()):
+class GetInfoImages(action.Action):
+    def __init__(self, cloud):
         self.cloud = cloud
-        self.criteria_search_volumes = criteria_search_volumes
-        super(GetInfoVolumes, self).__init__()
+        super(GetInfoImages, self).__init__()
 
-    def run(self, criteria_search_volumes=None, **kwargs):
-        storage = self.cloud.resources['storage']
-        volumes = storage.read_info(criteria_search_volumes)
-        return {
-            'storage_data': volumes
-        }
+    def run(self, **kwargs):
+        """Get info about images or specified image.
+
+        :param image_id: Id of specified image
+        :param image_name: Name of specified image
+        :param images_list: List of names/id's of images
+        :rtype: Dictionary with image data
+        """
+
+        image_resource = self.cloud.resources['image']
+        images_info = image_resource.read_info(**kwargs)
+        return {'image_data': images_info}
