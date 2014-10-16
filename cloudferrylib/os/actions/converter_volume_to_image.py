@@ -13,8 +13,8 @@
 # limitations under the License.
 
 
-from cloudferrylib.base.action import convertor
-from cloudferrylib.os.image import glance_image
+from cloudferrylib.base.action import converter
+
 from utils import utils
 
 
@@ -31,13 +31,13 @@ def require_methods(methods, obj):
     return True
 
 
-class ConvertorVolumeToImage(convertor.Convertor):
+class ConverterVolumeToImage(converter.Converter):
 
     def __init__(self, disk_format, cloud, container_format=BARE):
         self.cloud = cloud
         self.disk_format = disk_format
         self.container_format = container_format
-        super(ConvertorVolumeToImage, self).__init__()
+        super(ConverterVolumeToImage, self).__init__()
 
     def run(self, volumes_info={}, **kwargs):
         resource_storage = self.cloud.resources['storage']
@@ -57,8 +57,8 @@ class ConvertorVolumeToImage(convertor.Convertor):
                 container_format=self.container_format,
                 disk_format=self.disk_format)
             resource_image.wait_for_status(image_id, ACTIVE)
-            glance_image.GlanceImage.patch_image(
-                resource_storage.get_backend(), self.cloud, image_id)
+            resource_image.patch_image(resource_storage.get_backend(),
+                                       self.cloud, image_id)
             image_vol = resource_image.read_info(image_id=image_id)
             img_new = {
                 'image': image_vol['image']['images'][0]['image'],
