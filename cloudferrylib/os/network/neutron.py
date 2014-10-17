@@ -27,8 +27,9 @@ class NeutronNetwork(network.Network):
     The main class for working with Openstack neutron client
     """
 
-    def __init__(self, config):
+    def __init__(self, config, identity_client):
         self.config = config
+        self.identity_client = identity_client
         # TODO: implement switch to quantumclient if we have quantum-server
         self.neutron_client = self.get_client()
         super(NeutronNetwork, self).__init__()
@@ -62,7 +63,7 @@ class NeutronNetwork(network.Network):
 
     def get_networks(self):
         networks = self.neutron_client.list_networks()['networks']
-        get_tenant_name = self.get_tenants_func()
+        get_tenant_name = self.identity_client.get_tenants_func()
         networks_info = []
         for network in networks:
             net_info = dict()
@@ -92,7 +93,7 @@ class NeutronNetwork(network.Network):
 
     def get_subnets(self):
         subnets = self.neutron_client.list_subnets()['subnets']
-        get_tenant_name = self.get_tenants_func()
+        get_tenant_name = self.identity_client.get_tenants_func()
         subnets_info = []
         for subnet in subnets:
             subnet_info = dict()
@@ -118,7 +119,7 @@ class NeutronNetwork(network.Network):
 
     def get_routers(self):
         routers = self.neutron_client.list_routers()['routers']
-        get_tenant_name = self.get_tenants_func()
+        get_tenant_name = self.identity_client.get_tenants_func()
         routers_info = []
         for router in routers:
             router_info = dict()
@@ -153,7 +154,7 @@ class NeutronNetwork(network.Network):
 
     def get_floatingips(self):
         floatings = self.neutron_client.list_floatingips()['floatingips']
-        get_tenant_name = self.get_tenants_func()
+        get_tenant_name = self.identity_client.get_tenants_func()
         floatingips_info = []
         for floating in floatings:
             floatingip_info = dict()
@@ -170,7 +171,7 @@ class NeutronNetwork(network.Network):
 
     def get_security_groups(self):
         sec_groups = self.neutron_client.list_security_groups()['security_groups']
-        get_tenant_name = self.get_tenants_func()
+        get_tenant_name = self.identity_client.get_tenants_func()
         sec_groups_info = []
         for sec_gr in sec_groups:
             sec_gr_info = dict()
@@ -212,7 +213,7 @@ class NeutronNetwork(network.Network):
         for sec_group in sec_groups:
             if sec_group['name'] != DEFAULT_SECGR:
                 if sec_group['res_hash'] not in existing_secgrs_hashlist:
-                    tenant_id = self.get_tenant_id_by_name(sec_group['tenant_name'])
+                    tenant_id = self.identity_client.get_tenant_id_by_name(sec_group['tenant_name'])
                     sec_group_info = {'security_group':{'name': sec_group['name'],
                                                         'tenant_id': tenant_id,
                                                         'description':sec_group['description']}}
@@ -241,7 +242,7 @@ class NeutronNetwork(network.Network):
     def upload_networks(self, networks):
         existing_nets_hashlist = [ex_net['res_hash'] for ex_net in self.get_networks()]
         for network in networks:
-            tenant_id = self.get_tenant_id_by_name(network['tenant_name'])
+            tenant_id = self.identity_client.get_tenant_id_by_name(network['tenant_name'])
             network_info = {'network': {'name': network['name'],
                                         'admin_state_up': network['admin_state_up'],
                                         'tenant_id': tenant_id,
@@ -262,7 +263,7 @@ class NeutronNetwork(network.Network):
         existing_nets = self.get_networks()
         existing_subnets_hashlist = [ex_snet['res_hash'] for ex_snet in self.get_subnets()]
         for subnet in subnets:
-            tenant_id = self.get_tenant_id_by_name(subnet['tenant_name'])
+            tenant_id = self.identity_client.get_tenant_id_by_name(subnet['tenant_name'])
             net_hash = self.__get_resource_hash_by_id(networks, subnet['network_id'])
             network_id = self.__get_resource_by_hash(existing_nets, net_hash)['id']
             subnet_info = {'subnet': {'name': subnet['name'],
@@ -285,7 +286,7 @@ class NeutronNetwork(network.Network):
         existing_routers = self.get_routers()
         existing_routers_hashlist = [ex_router['res_hash'] for ex_router in existing_routers]
         for router in routers:
-            tenant_id = self.get_tenant_id_by_name(router['tenant_name'])
+            tenant_id = self.identity_client.get_tenant_id_by_name(router['tenant_name'])
             router_info = {'router': {'name': router['name'],
                                       'tenant_id': tenant_id}}
             if router['external_gateway_info']:
@@ -340,7 +341,7 @@ class NeutronNetwork(network.Network):
         because we can't determine floating ip address during allocation process. """
 
         for src_float in src_floats:
-            tenant_id = self.get_tenant_id_by_name(src_float['tenant_name'])
+            tenant_id = self.identity_client.get_tenant_id_by_name(src_float['tenant_name'])
             ext_net_hash = self.__get_resource_hash_by_id(src_nets,
                                                           src_float['floating_network_id'])
             ext_net = self.__get_resource_by_hash(existing_nets, ext_net_hash)
@@ -372,22 +373,13 @@ class NeutronNetwork(network.Network):
     def get_resource_hash(self, neutron_resource, *args):
         list_info = list()
         for arg in args:
-            if type(arg) is not list:
-                list_info.append(arg)
+            if type(neutron_resource[arg]) is not list:
+                list_info.append(neutron_resource[arg])
             else:
                 for argitem in arg:
-                    list_info.append(argitem)
+                    if type(argitem) is str:
+                        argitem = argitem.lower()
+                    list_info.append(neutron_resource[arg][argitem])
         hash_list = [info.lower() if type(info) is str else info for info in list_info]
         hash_list.sort()
         return hash(tuple(hash_list))
-
-    def get_tenants_func(self):
-        tenants = {tenant.id: tenant.name for tenant in self.keystone_client.tenants.list()}
-        def f(tenant_id):
-            return tenants[tenant_id] if tenant_id in tenants.keys() else ADMIN_TENANT
-        return f
-
-    def get_tenant_id_by_name(self, name):
-        for i in keystone_client.tenants.list():
-            if i.name == name:
-                return i.id

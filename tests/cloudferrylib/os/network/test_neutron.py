@@ -40,10 +40,11 @@ class NeutronTestCase(test.TestCase):
                                                           'Client',
                                                           new=self.neutron_mock_client)
         self.useFixture(self.neutron_client_patch)
-        self.neutron_network_client = neutron.NeutronNetwork(FAKE_CONFIG)
+        self.identity_mock = mock.Mock()
+        self.neutron_network_client = neutron.NeutronNetwork(FAKE_CONFIG, self.identity_mock)
 
-        self.neutron_network_client.get_tenant_id_by_name = self.f_tenant_id_by_name
-        self.neutron_network_client.get_tenants_func = mock.Mock(return_value=self.f_mock)
+        self.identity_mock.get_tenant_id_by_name = self.f_tenant_id_by_name
+        self.identity_mock.get_tenants_func = mock.Mock(return_value=self.f_mock)
 
         self.net_1_info = {'name': 'fake_network_name_1',
                            'id': 'fake_network_id_1',
