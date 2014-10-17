@@ -39,14 +39,18 @@ class NeutronNetwork(network.Network):
                                      tenant_name=self.config["tenant"],
                                      auth_url="http://" + self.config["host"] + ":35357/v2.0/")
 
-    def read_info(self, opts=None):
-        opts = {} if not opts else opts
-        resource = {'networks': self.get_networks(),
-                    'subnets': self.get_subnets(),
-                    'routers': self.get_routers(),
-                    'floating_ips': self.get_floatingips(),
-                    'security_groups': self.get_security_groups()}
-        return resource
+    def read_info(self, **kwargs):
+
+        """Get info about neutron resources:
+        :rtype: Dictionary with all necessary neutron info
+        """
+        info = {'network': {'resource': self,
+                            'networks': self.get_networks(),
+                            'subnets': self.get_subnets(),
+                            'routers': self.get_routers(),
+                            'floating_ips': self.get_floatingips(),
+                            'security_groups': self.get_security_groups()}}
+        return info
 
     def deploy(self, info):
         self.upload_networks(info['networks'])
