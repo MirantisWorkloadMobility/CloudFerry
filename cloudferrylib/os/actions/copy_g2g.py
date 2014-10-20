@@ -12,14 +12,23 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+
 from cloudferrylib.base.action import transporter
+from cloudferrylib.os.actions import get_info_images
 
 
 class CopyFromGlanceToGlance(transporter.Transporter):
-    def __init__(self):
+    def __init__(self, src_cloud, dst_cloud):
+        self.src_cloud = src_cloud
+        self.dst_cloud = dst_cloud
         super(CopyFromGlanceToGlance, self).__init__()
 
-    def run(self, image_info, dst_cloud, **kwargs):
-        dst_image = dst_cloud.resources['image']
+    def run(self, image_info=None, **kwargs):
+        dst_image = self.dst_cloud.resources['image']
 
-        dst_image.deploy(image_info['image_data'])
+        if not image_info:
+            action_get_im = get_info_images.GetInfoImages(self.src_cloud)
+            image_info = action_get_im.run()
+
+        new_info = dst_image.deploy(image_info['image_data'])
+        return new_info
