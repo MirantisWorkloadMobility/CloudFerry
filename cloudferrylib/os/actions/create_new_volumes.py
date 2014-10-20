@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from cloudferrylib.base.action import action
+from cloudferrylib.utils import utils as utl
 __author__ = 'mirrorcoder'
 
 
@@ -23,7 +24,7 @@ class CreateNewVolumes(action.Action):
         super(CreateNewVolumes, self).__init__()
 
     def run(self, volumes=None, **kwargs):
-        storage = self.cloud.resources['storage']
+        storage = self.cloud.resources[utl.STORAGE_RESOURCE]
         volumes_new = storage.deploy(volumes)
         return {
             'volumes_new': volumes_new

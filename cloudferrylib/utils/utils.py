@@ -44,6 +44,23 @@ YES = "yes"
 NAME_LOG_FILE = 'migrate.log'
 PATH_TO_SNAPSHOTS = 'snapshots'
 
+STORAGE_RESOURCE = 'storage'
+VOLUMES_TYPE = 'volumes'
+VOLUME_BODY = 'volume'
+
+COMPUTE_RESOURCE = 'compute'
+VOLUMES_TYPE = 'instances'
+VOLUME_BODY = 'instance'
+
+IMAGE_RESOURCE = 'image'
+IMAGES_TYPE = 'images'
+IMAGE_BODY = 'image'
+
+IDENTITY_RESOURCE = 'identity'
+
+
+META_INFO = 'meta'
+
 up_ssh_tunnel = None
 
 

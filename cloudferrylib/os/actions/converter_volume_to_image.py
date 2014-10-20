@@ -16,7 +16,7 @@
 from cloudferrylib.base.action import converter
 
 from utils import utils
-
+from cloudferrylib.utils import utils as utl
 
 LOG = utils.get_log(__name__)
 CEPH = 'ceph'
@@ -40,13 +40,13 @@ class ConverterVolumeToImage(converter.Converter):
         super(ConverterVolumeToImage, self).__init__()
 
     def run(self, volumes_info={}, **kwargs):
-        resource_storage = self.cloud.resources['storage']
-        resource_image = self.cloud.resources['image']
-        images_info = {'image': {}}
+        resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
+        resource_image = self.cloud.resources[utl.IMAGE_RESOURCE]
+        images_info = {utl.IMAGE_RESOURCE: {}}
         if not require_methods(['upload_volume_to_image'], resource_storage):
             raise RuntimeError("No require methods")
         images_from_volumes = []
-        for volume in volumes_info['storage']['volumes']:
+        for volume in volumes_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE]:
             vol = volume['volume']
             LOG.debug(
                 "| | uploading volume %s [%s] to image service bootable=%s" % (
@@ -61,12 +61,12 @@ class ConverterVolumeToImage(converter.Converter):
                                        self.cloud, image_id)
             image_vol = resource_image.read_info(image_id=image_id)
             img_new = {
-                'image': image_vol['image']['images'][0]['image'],
-                'meta': volume['meta']
+                utl.IMAGE_BODY: image_vol[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE][0][utl.IMAGE_BODY],
+                utl.META_INFO: volume[utl.META_INFO]
             }
-            img_new['meta']['volume'] = vol
+            img_new[utl.META_INFO][utl.VOLUME_BODY] = vol
             images_from_volumes.append(img_new)
-        images_info['image']['images'] = images_from_volumes
+        images_info[utl.IMAGE_RESOURCE][utl.IMAGES_TYP] = images_from_volumes
         return {
             'images_info': images_info
         }

@@ -14,7 +14,7 @@
 
 
 from cloudferrylib.base.action import action
-
+from cloudferrylib.utils import utils as utl
 
 class GetInfoImages(action.Action):
     def __init__(self, cloud):
@@ -30,6 +30,6 @@ class GetInfoImages(action.Action):
         :rtype: Dictionary with image data
         """
 
-        image_resource = self.cloud.resources['image']
+        image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
         images_info = image_resource.read_info(**kwargs)
         return {'image_data': images_info}

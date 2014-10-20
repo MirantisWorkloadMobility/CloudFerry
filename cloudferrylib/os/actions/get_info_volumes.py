@@ -14,6 +14,7 @@
 
 
 from cloudferrylib.base.action import action
+from cloudferrylib.utils import utils as utl
 
 
 class GetInfoVolumes(action.Action):
@@ -24,7 +25,7 @@ class GetInfoVolumes(action.Action):
         super(GetInfoVolumes, self).__init__()
 
     def run(self, criteria_search_volumes=None, **kwargs):
-        storage = self.cloud.resources['storage']
+        storage = self.cloud.resources[utl.STORAGE_RESOURCE]
         volumes = storage.read_info(**criteria_search_volumes)
         return {
             'storage_data': volumes
