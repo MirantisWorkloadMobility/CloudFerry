@@ -156,7 +156,12 @@ class GlanceImage(image.Image):
 
             migrate_images_list.append(migrate_image)
 
-        return migrate_images_list
+        if migrate_images_list:
+            im_name_list = [im.name for im in migrate_images_list]
+            new_info = self.read_info(images_list=im_name_list)
+            return new_info
+
+        return {}
 
     def wait_for_status(self, id_res, status):
         while self.glance_client.images.get(id_res).status != status:
