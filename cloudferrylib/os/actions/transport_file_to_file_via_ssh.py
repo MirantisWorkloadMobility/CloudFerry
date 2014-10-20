@@ -14,13 +14,22 @@
 
 from cloudferrylib.base.action import transporter
 from cloudferrylib.os.actions import utils
+from cloudferrylib.utils import utils as utl
 __author__ = 'mirrorcoder'
 
 
 class TransportFileToFileViaSsh(transporter.Transporter):
 
-    def run(self, cfg=None, cloud_src=None, cloud_dst=None, data_for_trans=[], **kwargs):
-        for i in data_for_trans:
+    def run(self, cfg=None,
+            cloud_src=None,
+            cloud_dst=None,
+            info={},
+            resource_type=utl.STORAGE_RESOURCE,
+            resource_name=utl.VOLUMES_TYPE,
+            resource_root_name=utl.VOLUME_BODY, **kwargs):
+        data_for_trans = info[resource_type][resource_name]
+        for item in data_for_trans:
+            i = item[resource_root_name]
             host_src = i['host_src']
             host_dst = i['host_dst']
             path_src = i['path_src']

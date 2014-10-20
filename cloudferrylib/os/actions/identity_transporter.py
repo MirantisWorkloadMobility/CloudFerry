@@ -14,6 +14,7 @@
 
 
 from cloudferrylib.base.action import transporter
+from cloudferrylib.utils import utils as utl
 
 
 class IdentityTransporter(transporter.Transporter):
@@ -22,7 +23,7 @@ class IdentityTransporter(transporter.Transporter):
         super(IdentityTransporter, self).__init__()
 
     def run(self, src_cloud, dst_cloud):
-        src_resource = src_cloud.resources['identity']
-        dst_resource = dst_cloud.resources['identity']
+        src_resource = src_cloud.resources[utl.IDENTITY_RESOURCE]
+        dst_resource = dst_cloud.resources[utl.IDENTITY_RESOURCE]
         info = src_resource.read_info()
         dst_resource.deploy(info)

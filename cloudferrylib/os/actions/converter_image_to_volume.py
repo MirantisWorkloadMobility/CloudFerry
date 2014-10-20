@@ -13,7 +13,6 @@
 # limitations under the License.
 
 from cloudferrylib.base.action import converter
-from cloudferrylib.os.actions.utils import utils
 from cloudferrylib.utils import utils as utl
 __author__ = 'mirrorcoder'
 
@@ -30,17 +29,19 @@ class ConverterImageToVolume(converter.Converter):
         super(ConverterImageToVolume, self).__init__()
 
     def run(self, images_info={}, cloud_current=None, **kwargs):
-        resource_storage = cloud_current.resources['storage']
-        resource_image = cloud_current.resources['image']
+        resource_storage = cloud_current.resources[utl.STORAGE_RESOURCE]
+        resource_image = cloud_current.resources[utl.IMAGE_RESOURCE]
         volumes_info = dict(resource=resource_image, storage=dict(volumes=list()))
-        for img in images_info['image']['images']:
-            img['meta']['image'] = img['image']
-            vol = dict(storage=dict(volumes=[dict(volume=img['meta']['volume'], meta=img['meta'])]))
+        for img in images_info[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE]:
+            img[utl.META_INFO][utl.IMAGE_BODY] = img[utl.IMAGE_BODY]
+            vol = dict(storage=dict(volumes=[
+                dict(volume=img[utl.META_INFO][utl.VOLUME_BODY], meta=img[utl.META_INFO])]))
             volume = resource_storage.deploy(vol)[0]
-            volume = resource_storage.read_info(id=volume.id)['storage']['volumes'][0]['volume']
-            volumes_info['storage']['volumes'].append({
-                'volume': volume,
-                'meta': img['meta']
+            volume = resource_storage \
+                .read_info(id=volume.id)[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][0][utl.VOLUME_BODY]
+            volumes_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE].append({
+                utl.VOLUME_BODY: volume,
+                utl.META_INFO: img[utl.META_INFO]
             })
         return {
             'volumes_info': volumes_info

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from cloudferrylib.base.action import action
+from cloudferrylib.utils import utils as utl
 __author__ = 'mirrorcoder'
 
 FILE_TO_FILE = 1
@@ -26,8 +27,8 @@ ISCSI = 'iscsi'
 
 class DetectAlgorithmStorageTransfer(action.Action):
     def run(self, cloud_src=None, cloud_dst=None, **kwargs):
-        backend_storage_src = cloud_src.resources['storage'].get_backend()
-        backend_storage_dst = cloud_dst.resources['storage'].get_backend()
+        backend_storage_src = cloud_src.resources[utl.STORAGE_RESOURCE].get_backend()
+        backend_storage_dst = cloud_dst.resources[utl.STORAGE_RESOURCE].get_backend()
         res = 0
         if backend_storage_src == ISCSI:
             if backend_storage_dst == ISCSI:
