@@ -22,7 +22,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from functools import wraps
 import json
-from fabric.api import local, run, settings, env
+from fabric.api import local, run, settings, env, cd
 from jinja2 import Environment, FileSystemLoader
 import os
 import inspect
@@ -380,3 +380,75 @@ def get_libvirt_block_info(libvirt_name, init_host, compute_host):
 def init_singletones(cfg):
     globals()['up_ssh_tunnel'] = wrapper_singletone_ssh_tunnel(cfg.migrate.ssh_transfer_port)
 
+
+class QemuImg:
+    def __init__(self, config, config_migrate):
+        self.config = config
+        self.config_migrate = config_migrate
+
+    def diff_commit(self, dest_path, host_compute=None):
+        with settings(host_string=self.config['host']):
+            if host_compute:
+                return self.execute_on_compute("cd %s && qemu-img commit disk" % dest_path, host_compute)
+            else:
+                return run("cd %s && qemu-img commit disk" % dest_path)
+
+    def convert_image(self,
+                      disk_format,
+                      path_to_image,
+                      output_format="raw",
+                      baseimage="baseimage",
+                      baseimage_tmp="baseimage.tmp",
+                      host_compute=None):
+        with settings(host_string=self.config['host']):
+            if host_compute:
+                self.execute_on_compute("cd %s && qemu-img convert -f %s -O %s %s %s" %
+                                        (path_to_image, disk_format, output_format, baseimage, baseimage_tmp),
+                                        host_compute)
+                self.execute_on_compute("cd %s && mv -f %s %s" %
+                                        (path_to_image, baseimage_tmp, baseimage), host_compute)
+            else:
+                run("cd %s && qemu-img convert -f %s -O %s %s %s" %
+                    (path_to_image, disk_format, output_format, baseimage, baseimage_tmp))
+                run("cd %s && mv -f %s %s" %
+                    (path_to_image, baseimage_tmp, baseimage))
+
+    def detect_backing_file(self, dest_disk_ephemeral, host_instance):
+        with settings(host_string=self.config['host']):
+            with forward_agent(self.config_migrate.key_filename):
+                out = run("ssh -oStrictHostKeyChecking=no %s 'qemu-img info %s | grep \"backing file\"'" %
+                          (host_instance, dest_disk_ephemeral)).split('\n')
+                backing_file = ""
+                for i in out:
+                    line_out = i.split(":")
+                    if line_out[0] == "backing file":
+                        backing_file = line_out[1].replace(" ", "")
+                return backing_file
+
+    def diff_rebase(self, baseimage, disk, host_compute=None):
+        cmd = "qemu-img rebase -u -b %s %s" % (baseimage, disk)
+        with settings(host_string=self.config['host']):
+            if host_compute:
+                self.execute_on_compute(cmd, host_compute)
+            else:
+                run(cmd)
+
+    def convert(self, format_to, source_path, dest_path, host_compute=None):
+        cmd = "qemu-img convert -O %s %s %s" % (format_to, source_path, dest_path)
+        with settings(host_string=self.config['host']):
+            if host_compute:
+                self.execute_on_compute(cmd, host_compute)
+            else:
+                run(cmd)
+
+    def convert_rbd_to_file(self, diff_path, image_format, name_file_diff_path, host_compute=None):
+        cmd = "qemu-img convert -O %s rbd:%s %s" % (image_format, diff_path, name_file_diff_path)
+        with settings(host_string=self.config['host']):
+            if host_compute:
+                self.execute_on_compute(cmd, host_compute)
+            else:
+                run(cmd)
+
+    def execute_on_compute(self, cmd, host):
+        with forward_agent(self.config_migrate.key_filename):
+            return run("ssh -oStrictHostKeyChecking=no %s '%s'" % (host, cmd))
