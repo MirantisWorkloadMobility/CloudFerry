@@ -16,26 +16,27 @@
 
 import mock
 
-from cloudferrylib.os.actions import convertor_image_to_volume
+from cloudferrylib.os.actions import converter_image_to_volume
 from tests import test
 
 
-class ConvertorImageToVolumeTest(test.TestCase):
+class ConverterImageToVolumeTest(test.TestCase):
     def setUp(self):
-        super(ConvertorImageToVolumeTest, self).setUp()
+        super(ConverterImageToVolumeTest, self).setUp()
         self.fake_cloud = mock.Mock()
         self.fake_storage = mock.Mock()
         self.fake_storage.deploy = mock.Mock()
         vol1 = mock.Mock(id="id1")
         self.fake_storage.deploy.return_value = [vol1]
         volume = 'volume_body_dst'
-        self.fake_storage.read_info.return_value = {'storage': {'volumes': [{'volume': volume, 'meta': {}}]}}
+        self.fake_storage.read_info.return_value = {
+            'storage': {'volumes': [{'volume': volume, 'meta': {}}]}}
         self.fake_image = mock.Mock()
         self.fake_cloud.resources = {'storage': self.fake_storage,
                                      'image': self.fake_image}
 
     def test_action(self):
-        action = convertor_image_to_volume.ConvertorImageToVolume()
+        action = converter_image_to_volume.ConverterImageToVolume()
         images_fake = dict(image=dict(images=[{
             'image': 'image_body',
             'meta': {
@@ -43,7 +44,9 @@ class ConvertorImageToVolumeTest(test.TestCase):
             }
         }]))
         res = action.run(images_fake, self.fake_cloud)
-        self.assertEqual('volume_body_dst', res['volumes_info']['storage']['volumes'][0]['volume'])
-        self.assertEqual('image_body', res['volumes_info']['storage']['volumes'][0]['meta']['image'])
-
-
+        self.assertEqual(
+            'volume_body_dst',
+            res['volumes_info']['storage']['volumes'][0]['volume'])
+        self.assertEqual(
+            'image_body',
+            res['volumes_info']['storage']['volumes'][0]['meta']['image'])
