@@ -22,7 +22,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from functools import wraps
 import json
-from fabric.api import local, run, settings, env
 from jinja2 import Environment, FileSystemLoader
 import os
 import inspect
@@ -357,7 +356,7 @@ class ChecksumImageInvalid(Exception):
                     (self.checksum_source, self.checksum_dest))
 
 
-def render_info(info_values, template_path = "templates", template_file = "info.html"):
+def render_info(info_values, template_path="templates", template_file="info.html"):
     info_env = Environment(loader=FileSystemLoader(template_path))
     template = info_env.get_template(template_file)
     return template.render(info_values)
