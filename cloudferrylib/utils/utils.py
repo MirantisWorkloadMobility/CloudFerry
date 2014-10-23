@@ -22,7 +22,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from functools import wraps
 import json
-from fabric.api import local, run, settings, env, cd
 from jinja2 import Environment, FileSystemLoader
 import os
 import inspect
@@ -380,101 +379,3 @@ def get_libvirt_block_info(libvirt_name, init_host, compute_host):
 def init_singletones(cfg):
     globals()['up_ssh_tunnel'] = wrapper_singletone_ssh_tunnel(cfg.migrate.ssh_transfer_port)
 
-
-class SshUtil(object):
-    def __init__(self, config, config_migrate):
-        self.config = config
-        self.config_migrate = config_migrate
-
-    def execute(self, cmd, host_compute):
-        with settings(host_string=self.config['host']):
-            if host_compute:
-                return self.execute_on_compute(cmd, host_compute)
-            else:
-                return run(cmd)
-
-    def execute_on_compute(self, cmd, host):
-        with forward_agent(self.config_migrate.key_filename):
-            return run("ssh -oStrictHostKeyChecking=no %s '%s'" % (host, cmd))
-
-
-class RbdUtil(SshUtil):
-    rbd_rm_cmd = "rbd rm -p %s %s"
-    rbd_import_cmd = "rbd import --image-format=%s %s %s/%s"
-    rbd_export_cmd = "rbd export -p %s %s %s"
-    rbd_info_cmd = "rbd -p %s info %s --format %s"
-
-    #exmaple pool=compute filename = %s_disk.local % instane_id
-    def rm(self, pool, filename, host_compute=None):
-        cmd = self.rbd_rm_cmd % (pool, filename)
-        return self.execute(cmd, host_compute)
-
-    #example image-format=2 output="-" pool=compute filename=%s_disk.local
-    def rbd_import(self, image_format, output, pool, filename, host_compute=None):
-        cmd = self.rbd_import_cmd % (image_format, output, pool, filename)
-        return self.execute(cmd, host_compute)
-
-    #example pool=volume filename=volume-id1 output=-
-    def rbd_export(self, pool, filename, output, host_compute=None):
-        cmd = self.rbd_export_cmd % (pool, filename, output)
-        return self.execute(cmd, host_compute)
-
-    #pool=images filename=image_id format=json
-    def rbd_get_info(self, pool, filename, format_output='json', host_compute=None):
-        cmd = self.rbd_info_cmd % (pool, filename, format_output)
-        return self.execute(cmd, host_compute)
-
-
-class QemuImg(SshUtil):
-    commit_cmd = "cd %s && qemu-img commit %s"
-    convert_image_cmd = "cd %s && qemu-img convert -f %s -O %s %s %s"
-    move_cmd = "cd %s && mv -f %s %s"
-    get_backing_file_cmd = 'qemu-img info %s | grep \"backing file\"'
-    rebase_cmd = "qemu-img rebase -u -b %s %s"
-    convert_cmd = "qemu-img convert -O %s %s %s"
-
-    def diff_commit(self, dest_path, filename="disk", host_compute=None):
-        cmd = self.commit_cmd % (dest_path, filename)
-        return self.execute(cmd, host_compute)
-
-    def convert_image(self,
-                      disk_format,
-                      path_to_image,
-                      output_format="raw",
-                      baseimage="baseimage",
-                      baseimage_tmp="baseimage.tmp",
-                      host_compute=None):
-        cmd1 = self.convert_image_cmd % \
-               (path_to_image,
-                disk_format,
-                output_format,
-                baseimage,
-                baseimage_tmp)
-        cmd2 = self.move_cmd % \
-               (path_to_image,
-                baseimage_tmp,
-                baseimage)
-        return self.execute(cmd1, host_compute), \
-               self.execute(cmd2, host_compute)
-
-    def detect_backing_file(self, dest_disk_ephemeral, host_instance):
-        cmd = self.get_backing_file_cmd % (host_instance, dest_disk_ephemeral)
-        return self.parsing_output_backing(self.execute(cmd, host_instance))
-
-    def parsing_output_backing(self, output):
-        out = output.split('\n')
-        backing_file = ""
-        for i in out:
-            line_out = i.split(":")
-            if line_out[0] == "backing file":
-                backing_file = line_out[1].replace(" ", "")
-        return backing_file
-
-    def diff_rebase(self, baseimage, disk, host_compute=None):
-        cmd = self.rebase_cmd % (baseimage, disk)
-        return self.execute(cmd, host_compute)
-
-    # example source_path = rbd:compute/QWEQWE-QWE231-QWEWQ
-    def convert(self, format_to, source_path, dest_path, host_compute=None):
-        cmd = self.convert_cmd % (format_to, source_path, dest_path)
-        return self.execute(cmd, host_compute)
