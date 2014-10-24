@@ -26,7 +26,7 @@ from jinja2 import Environment, FileSystemLoader
 import os
 import inspect
 from multiprocessing import Lock
-
+from fabric.api import run, settings, local, env
 
 __author__ = 'mirrorcoder'
 
@@ -48,8 +48,8 @@ VOLUMES_TYPE = 'volumes'
 VOLUME_BODY = 'volume'
 
 COMPUTE_RESOURCE = 'compute'
-VOLUMES_TYPE = 'instances'
-VOLUME_BODY = 'instance'
+INSTANCES_TYPE = 'instances'
+INSTANCE_BODY = 'instance'
 
 IMAGE_RESOURCE = 'image'
 IMAGES_TYPE = 'images'
