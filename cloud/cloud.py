@@ -38,7 +38,8 @@ class Cloud(object):
         cloud_config = utils.ext_dict(migrate=utils.ext_dict(),
                                       cloud=utils.ext_dict(),
                                       import_rules=utils.ext_dict(),
-                                      mail=utils.ext_dict())
+                                      mail=utils.ext_dict(),
+                                      mysql=utils.ext_dict())
         for k, v in config.migrate.iteritems():
             cloud_config['migrate'][k] = v
 
@@ -50,6 +51,9 @@ class Cloud(object):
 
         for k, v in config.mail.iteritems():
             cloud_config['mail'][k] = v
+
+        for k, v in getattr(config, position + '_mysql').iteritems():
+            cloud_config['mysql'][k] = v
 
         return cloud_config
 
@@ -69,8 +73,9 @@ class Cloud(object):
 
         identity_conf = self.make_resource_config(self.config, self.position,
                                                   cloud_config, 'identity')
-        identity = self.resources['identity'](identity_conf,
-                                              init_resources['mysql_connector'])
+        identity = self.resources['identity'](
+            identity_conf,
+            init_resources['mysql_connector'])
         init_resources['identity'] = identity
 
         for resource in self.resources:

@@ -87,7 +87,9 @@ class GlanceImage(image.Image):
 
         :param image_id: Id of specified image
         :param image_name: Name of specified image
-        :param images_list:
+        :param images_list: List of specified images
+        :param images_list_meta: Tuple of specified images with metadata in
+                                 format [(image, meta)]
         :rtype: Dictionary with all necessary images info
         """
 
@@ -107,6 +109,12 @@ class GlanceImage(image.Image):
             for im in kwargs['images_list']:
                 glance_image = self.get_image(im)
                 info = self.make_image_info(glance_image, info)
+
+        elif kwargs.get('images_list_meta'):
+            for (im, meta) in kwargs['images_list_meta']:
+                glance_image = self.get_image(im)
+                info = self.make_image_info(glance_image, info)
+                info['image']['images'][glance_image.id]['meta'] = meta
 
         else:
             for glance_image in self.get_image_list():
@@ -154,11 +162,14 @@ class GlanceImage(image.Image):
                     FileLikeProxy.callback_print_progress,
                     self.config['migrate']['speed_limit']))
 
-            migrate_images_list.append(migrate_image)
+            meta = gl_image['meta']
+            migrate_images_list.append((migrate_image, meta))
 
         if migrate_images_list:
-            im_name_list = [im.name for im in migrate_images_list]
-            new_info = self.read_info(images_list=im_name_list)
+            im_name_list = [(im.name, meta) for (im, meta) in
+                            migrate_images_list]
+            print im_name_list
+            new_info = self.read_info(images_list_meta=im_name_list)
             return new_info
 
         return {}
