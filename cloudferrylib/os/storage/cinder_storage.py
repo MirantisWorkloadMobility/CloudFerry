@@ -13,11 +13,16 @@
 # limitations under the License.
 
 
-from cloudferrylib.base import storage
-from cinderclient.v1 import client as cinder_client
-from fabric.api import settings
-from fabric.api import run
 import time
+
+from fabric.api import run
+from fabric.api import settings
+
+from cinderclient.v1 import client as cinder_client
+
+from cloudferrylib.base import storage
+
+
 AVAILABLE = 'available'
 IN_USE = "in-use"
 
@@ -39,29 +44,32 @@ class CinderStorage(storage.Storage):
 
         """ Getting cinder client """
 
-        return cinder_client.Client(params.cloud.user,
-                                    params.cloud.password,
-                                    params.cloud.tenant,
-                                    "http://%s:35357/v2.0/" % params.cloud.host)
+        return cinder_client.Client(
+            params.cloud.user,
+            params.cloud.password,
+            params.cloud.tenant,
+            "http://%s:35357/v2.0/" % params.cloud.host)
 
     def read_info(self, **kwargs):
         info = dict(resource=self, storage={})
-        info['storage'] = {'volumes': []}
+        info['storage'] = {'volumes': {}}
         for vol in self.get_volumes_list(search_opts=kwargs):
             volume = {
                 'id': vol.id,
                 'size': vol.size,
                 'display_name': vol.display_name,
                 'display_description': vol.display_description,
-                'volume_type': vol.volume_type,
+                'volume_type': (
+                    None if vol.volume_type == u'None' else vol.volume_type),
                 'availability_zone': vol.availability_zone,
-                'device': vol.attachments[0]['device'] if vol.attachments else None,
-                'bootable': vol.bootable,
+                'device': vol.attachments[0][
+                    'device'] if vol.attachments else None,
+                'bootable': True if vol.bootable.lower() == 'true' else False,
             }
-            info['storage']['volumes'].append({'volume': volume,
-                                               'meta': {
-                                                   'image': None
-                                               }})
+            info['storage']['volumes'][vol.id] = {'volume': volume,
+                                                  'meta': {
+                                                      'image': None
+                                                  }}
         return info
 
     def convert(self, vol):
@@ -79,7 +87,7 @@ class CinderStorage(storage.Storage):
 
     def deploy(self, info):
         volumes = []
-        for vol in info['storage']['volumes']:
+        for vol in info['storage']['volumes'].itervalues():
             vol_for_deploy = self.convert(vol)
             volume = self.create_volume(**vol_for_deploy)
             vol['volume']['id'] = volume.id
@@ -92,7 +100,9 @@ class CinderStorage(storage.Storage):
     def attach_volume_to_instance(self, volume_info):
         if 'instance' in volume_info['meta']:
             if volume_info['meta']['instance']:
-                self.attach_volume(volume_info['volume']['id'], volume_info['meta']['instance']['id'], volume_info['volume']['device'])
+                self.attach_volume(volume_info['volume']['id'],
+                                   volume_info['meta']['instance']['id'],
+                                   volume_info['volume']['device'])
                 self.wait_for_status(volume_info['volume']['id'], IN_USE)
 
     def get_volumes_list(self, detailed=True, search_opts=None):
@@ -123,19 +133,22 @@ class CinderStorage(storage.Storage):
         return self.cinder_client.volumes.detach(volume_id)
 
     def finish(self, vol):
-        self.__patch_option_bootable_of_volume(vol['volume']['id'], vol['volume'].bootable)
+        self.__patch_option_bootable_of_volume(vol['volume']['id'],
+                                               vol['volume']['bootable'])
 
     def __patch_option_bootable_of_volume(self, volume_id, bootable):
-        cmd = 'use cinder;update volumes set volumes.bootable=%s where volumes.id="%s"' % (int(bootable), volume_id)
+        cmd = ('use cinder;update volumes set volumes.bootable=%s where '
+               'volumes.id="%s"') % (int(bootable), volume_id)
         self.__cmd_mysql_on_dest_controller(cmd)
 
     def __cmd_mysql_on_dest_controller(self, cmd):
-        with settings(host_string=self.config['host']):
-            run('mysql %s %s -e \'%s\'' % (("-u "+self.config['mysql']['user'])
-                                           if self.config['mysql']['user'] else "",
-                                           "-p"+self.config['mysql']['password']
-                                           if self.config['mysql']['password'] else "",
-                                           cmd))
+        with settings(host_string=self.host):
+            run('mysql %s %s -e \'%s\'' % (
+                ("-u " + self.config['mysql']['user'])
+                if self.config['mysql']['user'] else "",
+                "-p" + self.config['mysql']['password']
+                if self.config['mysql']['password'] else "",
+                cmd))
 
     def upload_volume_to_image(self, volume_id, force, image_name,
                                container_format, disk_format):
@@ -149,5 +162,5 @@ class CinderStorage(storage.Storage):
         return resp, image['os-volume_upload_image']['image_id']
 
     def wait_for_status(self, id_res, status):
-        while self.cinder_client.volumes.get(id).status != status:
+        while self.cinder_client.volumes.get(id_res).status != status:
             time.sleep(1)

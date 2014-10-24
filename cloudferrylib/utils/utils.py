@@ -28,7 +28,6 @@ import inspect
 from multiprocessing import Lock
 from fabric.api import run, settings, local, env
 
-__author__ = 'mirrorcoder'
 
 ISCSI = "iscsi"
 CEPH = "ceph"
@@ -48,8 +47,8 @@ VOLUMES_TYPE = 'volumes'
 VOLUME_BODY = 'volume'
 
 COMPUTE_RESOURCE = 'compute'
-INSTANCES_TYPE = 'instances'
-INSTANCE_BODY = 'instance'
+COMPUTE_TYPE = 'instances'
+COMPUTE_BODY = 'instance'
 
 IMAGE_RESOURCE = 'image'
 IMAGES_TYPE = 'images'

@@ -42,19 +42,39 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)
         
     def migrate(self):
+        #action1 = get_info_volumes.GetInfoVolumes(self.src_cloud)
+        #action2 = converter_volume_to_image.ConverterVolumeToImage("qcow2", self.src_cloud)
+        #action3 = copy_g2g.CopyFromGlanceToGlance()
+        #data = action1.run()
+        #images = action2.run(data['storage_data'])
+        #action3.run(self.src_cloud, self.dst_cloud)
+        #transporter = identity_transporter.IdentityTransporter()
+        #transporter.run(self.src_cloud, self.dst_cloud)
+        #
+        #action_get_im = get_info_images.GetInfoImages(self.src_cloud)
+        #images_info = action_get_im.run(image_name='cirros_image')
+        #
+        #action_copy_im = copy_g2g.CopyFromGlanceToGlance(self.src_cloud,
+        #                                                 self.dst_cloud)
+        #new_info = action_copy_im.run()
+        #print new_info
+
         action1 = get_info_volumes.GetInfoVolumes(self.src_cloud)
-        action2 = converter_volume_to_image.ConverterVolumeToImage("qcow2", self.src_cloud)
-        action3 = copy_g2g.CopyFromGlanceToGlance()
-        data = action1.run()
-        images = action2.run(data['storage_data'])
-        action3.run(self.src_cloud, self.dst_cloud)
-        transporter = identity_transporter.IdentityTransporter()
-        transporter.run(self.src_cloud, self.dst_cloud)
+        volumes_info = action1.run()
+        #volumes_info['storage_data']['storage']['volumes'].pop('b9f3a274-1025-444e-9a2b-24f8deabd629')
 
-        action_get_im = get_info_images.GetInfoImages(self.src_cloud)
-        images_info = action_get_im.run(image_name='cirros_image')
+        action2 = converter_volume_to_image.ConverterVolumeToImage(
+            "qcow2",
+            self.src_cloud)
+        images = action2.run(volumes_info['storage_data'])
 
-        action_copy_im = copy_g2g.CopyFromGlanceToGlance(self.src_cloud,
-                                                         self.dst_cloud)
-        new_info = action_copy_im.run()
-        print new_info
+        action3 = copy_g2g.CopyFromGlanceToGlance(self.src_cloud,
+                                                  self.dst_cloud)
+
+        new_info = action3.run(image_info=images)
+
+        action4 = converter_image_to_volume.ConverterImageToVolume()
+        new_vol_info = action4.run(images_info=new_info,
+                                   cloud_current=self.dst_cloud)
+
+        print new_vol_info
