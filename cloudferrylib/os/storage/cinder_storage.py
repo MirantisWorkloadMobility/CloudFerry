@@ -104,6 +104,10 @@ class CinderStorage(storage.Storage):
             self.__update_column_with_condition('volumes', {'attach_status': ['attached', 'detached']})
             self.__update_column_with_condition('volumes', {'status': ['in-use', 'available']})
             self.__update_column('volumes', 'instance_uuid', 'NULL')
+            for vol in info['storage']['volumes']:
+                self.attach_volume_to_instance(vol)
+            volumes = self.get_volumes_list(search_opts={'all_tenants': True})
+            return volumes
         volumes = []
         for vol in info['storage']['volumes'].itervalues():
             vol_for_deploy = self.convert(vol)

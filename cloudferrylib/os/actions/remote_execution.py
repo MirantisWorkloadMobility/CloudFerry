@@ -12,24 +12,25 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-__author__ = 'mirrorcoder'
-from fabric.api import run, settings
-from utils import forward_agent
-import cmd_cfg
+
+from cloudferrylib.base.action import action
+from cloudferrylib.utils.ssh_util import SshUtil
 
 
-class SshUtil(object):
-    def __init__(self, host, config_migrate):
-        self.host = host
+class RemoteExecution(action.Action):
+
+    def __init__(self, config_migrate, host, command):
         self.config_migrate = config_migrate
+        self.host = host
+        self.command = command
+        self.remote_exec_obj = SshUtil(self.host, self.config_migrate)
+        super(RemoteExecution, self).__init__()
 
-    def execute(self, cmd, host_compute=None):
-        with settings(host_string=self.host):
-            if host_compute:
-                return self.execute_on_compute(str(cmd), host_compute)
-            else:
-                return run(str(cmd))
+    def run(self, **kwargs):
+        self.remote_exec_obj.execute(self.command)
+        return {}
 
-    def execute_on_compute(self, cmd, host):
-        with forward_agent(self.config_migrate.key_filename):
-            return run(str(cmd_cfg.ssh_cmd(host, str(cmd))))
+
+
+
+
