@@ -22,11 +22,12 @@ NOVA_SERVICE = 'nova'
 class KeystoneIdentity(identity.Identity):
     """The main class for working with OpenStack Keystone Identity Service."""
 
-    def __init__(self, config, mysql_connector):
+    def __init__(self, config, cloud):
         super(KeystoneIdentity, self).__init__()
         self.config = config
         self.keystone_client = self.get_client()
-        self.mysql_connector = mysql_connector
+        self.mysql_connector = cloud.mysql_connector
+        self.cloud = cloud
         self.postman = None
         if self.config['mail']:
             self.postman = Postman(self.config['mail']['username'],

@@ -46,7 +46,11 @@ class GlanceImageTestCase(test.TestCase):
         self.useFixture(self.glance_client_patch)
         self.identity_mock = mock.Mock()
 
-        self.glance_image = GlanceImage(FAKE_CONFIG, self.identity_mock)
+        self.fake_cloud = mock.Mock()
+        self.fake_cloud.mysql_connector = mock.Mock()
+
+        self.fake_cloud.resources = dict(identity=self.identity_mock)
+        self.glance_image = GlanceImage(FAKE_CONFIG, self.fake_cloud)
 
         self.fake_image_1 = mock.Mock()
         self.fake_image_1.id = 'fake_image_id_1'

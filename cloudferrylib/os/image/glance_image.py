@@ -30,10 +30,11 @@ class GlanceImage(image.Image):
     The main class for working with Openstack Glance Image Service.
 
     """
-    def __init__(self, config, identity_client):
+    def __init__(self, config, cloud):
         self.config = config
         self.host = config.cloud.host
-        self.identity_client = identity_client
+        self.cloud = cloud
+        self.identity_client = cloud.resources['identity']
         self.glance_client = self.get_glance_client()
         super(GlanceImage, self).__init__()
 

@@ -33,10 +33,11 @@ class CinderStorage(storage.Storage):
     The main class for working with Openstack cinder client
     """
 
-    def __init__(self, config, identity_client):
+    def __init__(self, config, cloud):
         self.config = config
         self.host = config.cloud.host
-        self.identity_client = identity_client
+        self.cloud = cloud
+        self.identity_client = cloud.resources['identity']
         self.cinder_client = self.get_cinder_client(self.config)
         super(CinderStorage, self).__init__(config)
 
