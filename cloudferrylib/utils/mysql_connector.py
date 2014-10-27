@@ -18,4 +18,3 @@ class MysqlConnector():
         with sqlalchemy.create_engine(
                 self.connection_url).begin() as connection:
             return connection.execute(sqlalchemy.text(command), **kwargs)
-

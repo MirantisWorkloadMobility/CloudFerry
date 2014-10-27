@@ -29,8 +29,3 @@ class RemoteExecution(action.Action):
     def run(self, **kwargs):
         self.remote_exec_obj.execute(self.command)
         return {}
-
-
-
-
-

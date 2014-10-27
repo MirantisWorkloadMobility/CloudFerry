@@ -33,3 +33,4 @@ class SshUtil(object):
     def execute_on_compute(self, cmd, host):
         with forward_agent(self.config_migrate.key_filename):
             return run(str(cmd_cfg.ssh_cmd(host, str(cmd))))
+

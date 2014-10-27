@@ -69,9 +69,10 @@ class CinderStorage(storage.Storage):
                                                       'image': None
                                                   }}
         if kwargs.get('db_info'):
-            info['storage']['volumes_db'] = {'volumes': '/tmp/volumes',
-                                             'quota_usages': '/tmp/quota_usages'}
-            self.__download_tables_from_db_to_file(info['storage']['volumes_db'])
+            info['storage']['volumes_db'] = \
+                {'volumes': '/tmp/volumes',
+                 'quota_usages': '/tmp/quota_usages'}
+            self.download_tables_from_db_to_file(info['storage']['volumes_db'])
         return info
 
     def convert(self, vol):
@@ -89,24 +90,32 @@ class CinderStorage(storage.Storage):
 
     def deploy(self, info):
         if info['storage']['volumes_db']:
-            self.__upload_table_to_db(info['storage']['volumes_db'])
+            self.upload_table_to_db(info['storage']['volumes_db'])
             for tenant in info['identity']['tenants']:
-                self.__update_column_with_condition('volumes',
-                                                    {'project_id': [tenant['id'],
-                                                                    tenant['meta']['new_id']]})
-                self.__update_column_with_condition('quota_usages',
-                                                    {'project_id':[tenant['id'],
-                                                                   tenant['meta']['new_id']]})
+                self.update_column_with_condition(
+                    'volumes',
+                    {'project_id': [tenant['id'],
+                                    tenant['meta']['new_id']]})
+                self.update_column_with_condition(
+                    'quota_usages',
+                    {'project_id': [tenant['id'],
+                                    tenant['meta']['new_id']]})
             for user in info['identity']['users']:
-                self.__update_column_with_condition('volumes',
-                                 {'user_id': [user['id'], user['meta']['new_id']]})
+                self.update_column_with_condition(
+                    'volumes',
+                    {'user_id': [user['id'], user['meta']['new_id']]})
 
-            self.__update_column_with_condition('volumes', {'attach_status': ['attached', 'detached']})
-            self.__update_column_with_condition('volumes', {'status': ['in-use', 'available']})
-            self.__update_column('volumes', 'instance_uuid', 'NULL')
+            self.update_column_with_condition(
+                'volumes',
+                {'attach_status': ['attached', 'detached']})
+            self.update_column_with_condition(
+                'volumes',
+                {'status': ['in-use', 'available']})
+            self.update_column('volumes', 'instance_uuid', 'NULL')
             for vol in info['storage']['volumes']:
                 self.attach_volume_to_instance(vol)
-            volumes = self.get_volumes_list(search_opts={'all_tenants': True})
+            volumes = self.get_volumes_list(
+                search_opts={'all_tenants': True})
             return volumes
         volumes = []
         for vol in info['storage']['volumes'].itervalues():
@@ -187,29 +196,30 @@ class CinderStorage(storage.Storage):
         while self.cinder_client.volumes.get(id_res).status != status:
             time.sleep(1)
 
-    def __download_tables_from_db_to_file(self, **table_outfile):
+    def download_tables_from_db_to_file(self, **table_outfile):
         connector = mysql_connector.MysqlConnector(self.config, 'cinder')
         for table_name, out_file in table_outfile.iteritems():
-            connector.execute("SELECT * FROM %s INTO OUTFILE '%s'") % (table_name,
-                                                                       out_file)
+            connector.execute("SELECT * FROM %s INTO "
+                              "OUTFILE '%s'") % (table_name, out_file)
 
-    def __upload_table_to_db(self, **table_info):
+    def upload_table_to_db(self, **table_info):
         connector = mysql_connector.MysqlConnector(self.config, 'cinder')
         for table_name, table_file in table_info.iteritems():
-            connector.execute("LOAD DATA INFILE %s INTO TABLE %s") % (table_file,
-                                                                      table_name)
+            connector.execute("LOAD DATA INFILE %s INTO "
+                              "TABLE %s") % (table_file, table_name)
 
-    def __update_column_with_condition(self, table_name, **columns):
+    def update_column_with_condition(self, table_name, **columns):
 
-        # columns = {'project_id': ['old_id', 'new_id'],
-        #           'user_id': ['old_id', 'new_id']}
+        # Example: columns = {'project_id': ['old_id', 'new_id'],
+        #          'user_id': ['old_id', 'new_id']}
 
         connector = mysql_connector.MysqlConnector(self.config, 'cinder')
         for column in columns:
-            connector.execute("UPDATE %s SET %s=%s WHERE %s=%s") % \
-            (table_name, column, column[1], column ,column[0])
+            connector.execute("UPDATE %s SET %s=%s "
+                              "WHERE %s=%s") % (table_name, column,
+                                                column[1], column, column[0])
 
-    def __update_column(self, table_name, column_name, new_value):
+    def update_column(self, table_name, column_name, new_value):
         connector = mysql_connector.MysqlConnector(self.config, 'cinder')
-        connector.execute("UPDATE %s SET %s=%s") % (table_name, column_name, new_value)
-
+        connector.execute("UPDATE %s SET %s=%s") % (table_name,
+                                                    column_name, new_value)
