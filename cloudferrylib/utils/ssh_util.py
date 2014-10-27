@@ -15,6 +15,7 @@
 __author__ = 'mirrorcoder'
 from fabric.api import run, settings
 from utils import forward_agent
+import cmd_cfg
 
 
 class SshUtil(object):
@@ -25,10 +26,10 @@ class SshUtil(object):
     def execute(self, cmd, host_compute):
         with settings(host_string=self.config['host']):
             if host_compute:
-                return self.execute_on_compute(cmd, host_compute)
+                return self.execute_on_compute(str(cmd), host_compute)
             else:
-                return run(cmd)
+                return run(str(cmd))
 
     def execute_on_compute(self, cmd, host):
         with forward_agent(self.config_migrate.key_filename):
-            return run("ssh -oStrictHostKeyChecking=no %s '%s'" % (host, cmd))
+            return run(str(cmd_cfg.ssh_cmd(host, str(cmd))))
