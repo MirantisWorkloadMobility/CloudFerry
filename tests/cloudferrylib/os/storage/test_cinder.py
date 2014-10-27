@@ -34,8 +34,15 @@ class CinderStorageTestCase(test.TestCase):
         self.cs_patch = mockpatch.PatchObject(cinder_client, 'Client',
                                               new=self.mock_client)
         self.useFixture(self.cs_patch)
-        self.identity_client = mock.Mock()
-        self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG, self.identity_client)
+
+        self.identity_mock = mock.Mock()
+
+        self.fake_cloud = mock.Mock()
+        self.fake_cloud.mysql_connector = mock.Mock()
+
+        self.fake_cloud.resources = dict(identity=self.identity_mock)
+
+        self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG, self.fake_cloud)
 
         self.fake_volume_0 = mock.Mock()
         self.fake_volume_1 = mock.Mock()

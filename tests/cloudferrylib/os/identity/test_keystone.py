@@ -38,8 +38,10 @@ class KeystoneIdentityTestCase(test.TestCase):
         self.kc_patch = mockpatch.PatchObject(keystone_client, 'Client',
                                               new=self.mock_client)
         self.useFixture(self.kc_patch)
+        self.fake_cloud = mock.Mock()
+        self.fake_cloud.mysql_connector = mock.Mock()
 
-        self.keystone_client = keystone.KeystoneIdentity(FAKE_CONFIG, None)
+        self.keystone_client = keystone.KeystoneIdentity(FAKE_CONFIG, self.fake_cloud)
 
         self.fake_tenant_0 = mock.Mock()
         self.fake_tenant_0.name = 'tenant_name_0'

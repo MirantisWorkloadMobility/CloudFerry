@@ -27,9 +27,10 @@ class NeutronNetwork(network.Network):
     The main class for working with Openstack neutron client
     """
 
-    def __init__(self, config, identity_client):
+    def __init__(self, config, cloud):
         self.config = config
-        self.identity_client = identity_client
+        self.cloud = cloud
+        self.identity_client = cloud.resources['identity']
         # TODO: implement switch to quantumclient if we have quantum-server
         self.neutron_client = self.get_client()
         super(NeutronNetwork, self).__init__()

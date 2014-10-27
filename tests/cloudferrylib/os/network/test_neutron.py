@@ -42,8 +42,12 @@ class NeutronTestCase(test.TestCase):
                                   new=self.neutron_mock_client)
         self.useFixture(self.neutron_client_patch)
         self.identity_mock = mock.Mock()
+        self.fake_cloud = mock.Mock()
+        self.fake_cloud.mysql_connector = mock.Mock()
+        self.fake_cloud.resources = dict(identity=self.identity_mock)
+
         self.neutron_network_client = \
-            neutron.NeutronNetwork(FAKE_CONFIG, self.identity_mock)
+            neutron.NeutronNetwork(FAKE_CONFIG, self.fake_cloud)
 
         self.identity_mock.get_tenant_id_by_name = self.f_tenant_id_by_name
         self.identity_mock.get_tenants_func = \

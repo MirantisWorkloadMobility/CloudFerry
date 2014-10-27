@@ -16,6 +16,8 @@
 import copy
 from cloudferrylib.utils import utils
 from cloudferrylib.utils import mysql_connector
+from cloudferrylib.utils import rbd_util
+from cloudferrylib.utils import qemu_img
 
 SRC = "src"
 DST = "dst"
@@ -68,14 +70,17 @@ class Cloud(object):
         return resource_config
 
     def init_resources(self, cloud_config):
-        init_resources = {'mysql_connector': mysql_connector.MysqlConnector(
-            getattr(self.config, "%s_mysql" % self.position))}
+        init_resources = dict()
+        self.mysql_connector = mysql_connector.MysqlConnector(
+            getattr(self.config, "%s_mysql" % self.position))
+        self.rbd_util = rbd_util.RbdUtil(getattr(self.config, "%s" % self.position), self.config.miragte)
+        self.qemu_img = qemu_img.QemuImg(getattr(self.config, "%s" % self.position), self.config.miragte)
 
         identity_conf = self.make_resource_config(self.config, self.position,
                                                   cloud_config, 'identity')
         identity = self.resources['identity'](
             identity_conf,
-            init_resources['mysql_connector'])
+            self)
         init_resources['identity'] = identity
 
         for resource in self.resources:
@@ -85,6 +90,6 @@ class Cloud(object):
                                                             cloud_config,
                                                             resource)
                 init_resources[resource] = self.resources[resource](
-                    resource_config, identity)
+                    resource_config, self)
 
         self.resources = init_resources
