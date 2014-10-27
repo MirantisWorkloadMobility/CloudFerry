@@ -23,11 +23,12 @@ class DetachVolumes(action.Action):
         self.cloud = cloud
         super(DetachVolumes, self).__init__()
 
-    def run(self, volumes_info = {}, **kwargs):
+    def run(self, volumes_info={}, **kwargs):
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
-        for volume in volumes_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE]:
-            if 'instance' in volume['meta']:
-                if volume['meta']['instance']:
-                    resource_storage.detach_volume(volume['id'])
+        for (vol_id, vol_info) \
+                in volumes_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE].\
+                iteritems():
+            if 'instance' in vol_info['meta']:
+                if vol_info['meta']['instance']:
+                    resource_storage.detach_volume(vol_id)
         return {}
-

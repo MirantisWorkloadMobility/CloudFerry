@@ -68,7 +68,7 @@ class CinderStorage(storage.Storage):
                                                   'meta': {
                                                       'image': None
                                                   }}
-        if kwargs.get('db_info'):
+        if self.config['migrate']['keep_volume_storage']:
             info['storage']['volumes_db'] = \
                 {'volumes': '/tmp/volumes',
                  'quota_usages': '/tmp/quota_usages'}
@@ -104,7 +104,6 @@ class CinderStorage(storage.Storage):
                 self.update_column_with_condition(
                     'volumes',
                     {'user_id': [user['id'], user['meta']['new_id']]})
-
             self.update_column_with_condition(
                 'volumes',
                 {'attach_status': ['attached', 'detached']})
@@ -223,3 +222,4 @@ class CinderStorage(storage.Storage):
         connector = mysql_connector.MysqlConnector(self.config, 'cinder')
         connector.execute("UPDATE %s SET %s=%s") % (table_name,
                                                     column_name, new_value)
+
