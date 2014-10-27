@@ -14,18 +14,20 @@
 
 __author__ = 'mirrorcoder'
 import ssh_util
+import cmd_cfg
 
 
 class QemuImg(ssh_util.SshUtil):
-    commit_cmd = "cd %s && qemu-img commit %s"
-    convert_image_cmd = "cd %s && qemu-img convert -f %s -O %s %s %s"
-    move_cmd = "cd %s && mv -f %s %s"
-    get_backing_file_cmd = 'qemu-img info %s | grep \"backing file\"'
-    rebase_cmd = "qemu-img rebase -u -b %s %s"
-    convert_cmd = "qemu-img convert -O %s %s %s"
+    commit_cmd = cmd_cfg.qemu_img_cmd("commit %s")
+    commit_cd_cmd = cmd_cfg.cd_cmd & commit_cmd
+    convert_cmd = cmd_cfg.qemu_img_cmd("convert %s")
+    convert_full_image_cmd = cmd_cfg.cd_cmd & convert_cmd("-f %s -O %s %s %s")
+    backing_file_cmd = cmd_cfg.qemu_img_cmd("info %s") | cmd_cfg.grep_cmd("\"backing file\"")
+    rebase_cmd = cmd_cfg.qemu_img_cmd("rebase -u -b %s %s")
+    convert_cmd = convert_cmd("-O %s %s %s")
 
     def diff_commit(self, dest_path, filename="disk", host_compute=None):
-        cmd = self.commit_cmd % (dest_path, filename)
+        cmd = self.commit_cmd(dest_path, filename)
         return self.execute(cmd, host_compute)
 
     def convert_image(self,
@@ -35,21 +37,19 @@ class QemuImg(ssh_util.SshUtil):
                       baseimage="baseimage",
                       baseimage_tmp="baseimage.tmp",
                       host_compute=None):
-        cmd1 = self.convert_image_cmd % \
-               (path_to_image,
-                disk_format,
-                output_format,
-                baseimage,
-                baseimage_tmp)
-        cmd2 = self.move_cmd % \
-               (path_to_image,
-                baseimage_tmp,
-                baseimage)
+        cmd1 = self.convert_full_image_cmd(path_to_image,
+                                           disk_format,
+                                           output_format,
+                                           baseimage,
+                                           baseimage_tmp)
+        cmd2 = cmd_cfg.move_cmd(path_to_image,
+                                baseimage_tmp,
+                                baseimage)
         return self.execute(cmd1, host_compute), \
                self.execute(cmd2, host_compute)
 
     def detect_backing_file(self, dest_disk_ephemeral, host_instance):
-        cmd = self.get_backing_file_cmd % (host_instance, dest_disk_ephemeral)
+        cmd = self.backing_file_cmd(host_instance, dest_disk_ephemeral)
         return self.parsing_output_backing(self.execute(cmd, host_instance))
 
     def parsing_output_backing(self, output):
@@ -62,10 +62,10 @@ class QemuImg(ssh_util.SshUtil):
         return backing_file
 
     def diff_rebase(self, baseimage, disk, host_compute=None):
-        cmd = self.rebase_cmd % (baseimage, disk)
+        cmd = self.rebase_cmd(baseimage, disk)
         return self.execute(cmd, host_compute)
 
     # example source_path = rbd:compute/QWEQWE-QWE231-QWEWQ
     def convert(self, format_to, source_path, dest_path, host_compute=None):
-        cmd = self.convert_cmd % (format_to, source_path, dest_path)
+        cmd = self.convert_cmd(format_to, source_path, dest_path)
         return self.execute(cmd, host_compute)
