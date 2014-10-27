@@ -64,6 +64,12 @@ class NeutronNetwork(network.Network):
         self.upload_neutron_security_groups(info['security_groups'])
         self.upload_sec_group_rules(info['security_groups'])
 
+    def get_mac_by_ip(self, ip_address):
+        for port in self.neutron_client.list_ports()["ports"]:
+            for fixed_ip_info in port['fixed_ips']:
+                if fixed_ip_info['ip_address'] == ip_address:
+                    return port["mac_address"]
+
     def get_networks(self):
         networks = self.neutron_client.list_networks()['networks']
         get_tenant_name = self.identity_client.get_tenants_func()
