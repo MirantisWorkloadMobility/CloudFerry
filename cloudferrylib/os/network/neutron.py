@@ -16,6 +16,7 @@ from cloudferrylib.base import network
 from neutronclient.v2_0 import client as neutron_client
 from neutronclient.common.exceptions import IpAddressGenerationFailureClient
 from utils import get_log
+import ipaddr
 
 LOG = get_log(__name__)
 DEFAULT_SECGR = 'default'
@@ -65,10 +66,36 @@ class NeutronNetwork(network.Network):
         self.upload_sec_group_rules(info['security_groups'])
 
     def get_mac_by_ip(self, ip_address):
-        for port in self.neutron_client.list_ports()["ports"]:
+        for port in self.get_list_ports():
             for fixed_ip_info in port['fixed_ips']:
                 if fixed_ip_info['ip_address'] == ip_address:
                     return port["mac_address"]
+
+    def get_list_ports(self, **kwargs):
+        return self.neutron_client.list_ports(**kwargs)['ports']
+
+    def create_port(self, **kwargs):
+        return self.neutron_client.create_port(**kwargs)['port']
+
+    def delete_port(self, port_id):
+        return self.neutron_client.delete_port(port_id)
+
+    def get_security_groups_list(self, **kwargs):
+        return self.neutron_client.list_security_groups(**kwargs)['security_groups']
+
+    def get_network(self, network_info, tenant_id, keep_ip=False):
+        if keep_ip:
+            instance_addr = ipaddr.IPAddress(network_info['ip'])
+            for snet in self.neutron_client.list_subnets()['subnets']:
+                if snet['tenant_id'] == tenant_id:
+                    if ipaddr.IPNetwork(snet['cidr']).Contains(instance_addr):
+                        return self.neutron_client.list_networks(id=snet['network_id'])['networks'][0]
+        if 'id' in network_info:
+            return self.neutron_client.list_networks(id=network_info['id'])['networks'][0]
+        if 'name' in network_info:
+            return self.neutron_client.list_networks(name=network_info['name'])['networks'][0]
+        else:
+            raise Exception("Can't find suitable network")
 
     def get_networks(self):
         networks = self.neutron_client.list_networks()['networks']
