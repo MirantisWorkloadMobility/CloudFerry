@@ -13,8 +13,9 @@
 # limitations under the License.
 
 __author__ = 'mirrorcoder'
-import ssh_util
+
 import cmd_cfg
+import ssh_util
 
 
 class QemuImg(ssh_util.SshUtil):

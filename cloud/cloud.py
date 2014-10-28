@@ -70,26 +70,24 @@ class Cloud(object):
         return resource_config
 
     def init_resources(self, cloud_config):
-        init_resources = dict()
-        self.mysql_connector = mysql_connector.MysqlConnector(
-            getattr(self.config, "%s_mysql" % self.position))
-        self.rbd_util = rbd_util.RbdUtil(getattr(self.config, "%s" % self.position), self.config.miragte)
-        self.qemu_img = qemu_img.QemuImg(getattr(self.config, "%s" % self.position), self.config.miragte)
+        resources = self.resources
+        self.resources = dict()
+        self.mysql_connector = mysql_connector.MysqlConnector(getattr(self.config, "%s_mysql" % self.position))
+        self.rbd_util = rbd_util.RbdUtil(getattr(self.config, "%s" % self.position), self.config.migrate)
+        self.qemu_img = qemu_img.QemuImg(getattr(self.config, "%s" % self.position), self.config.migrate)
 
         identity_conf = self.make_resource_config(self.config, self.position,
                                                   cloud_config, 'identity')
-        identity = self.resources['identity'](
+        identity = resources['identity'](
             identity_conf,
             self)
-        init_resources['identity'] = identity
+        self.resources['identity'] = identity
 
-        for resource in self.resources:
+        for resource in resources:
             if resource != 'identity':
                 resource_config = self.make_resource_config(self.config,
                                                             self.position,
                                                             cloud_config,
                                                             resource)
-                init_resources[resource] = self.resources[resource](
+                self.resources[resource] = resources[resource](
                     resource_config, self)
-
-        self.resources = init_resources

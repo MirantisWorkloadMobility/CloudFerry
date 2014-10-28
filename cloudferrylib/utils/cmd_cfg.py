@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from cmd import Cmd
+from console_cmd import BC
 __author__ = 'mirrorcoder'
 
-cd_cmd = Cmd("cd %s")
-qemu_img_cmd = Cmd("qemu-img %s")
-move_cmd = Cmd("mv -f %s %s")
+cd_cmd = BC("cd %s")
+qemu_img_cmd = BC("qemu-img %s")
+move_cmd = BC("mv -f %s %s")
 move_with_cd_cmd = cd_cmd & move_cmd
-grep_cmd = Cmd("grep %s")
-rbd_cmd = Cmd("rbd %s")
-base_ssh_cmd = Cmd("ssh %s")
+grep_cmd = BC("grep %s")
+rbd_cmd = BC("rbd %s")
+base_ssh_cmd = BC("ssh %s")
 ssh_cmd = base_ssh_cmd("-oStrictHostKeyChecking=no %s '%s'")
