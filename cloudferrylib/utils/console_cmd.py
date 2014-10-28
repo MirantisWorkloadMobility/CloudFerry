@@ -15,21 +15,21 @@
 __author__ = 'mirrorcoder'
 
 
-class Cmd(object):
+class BC(object):
     def __init__(self, command):
         self.command = command
 
     def __add__(self, other):
-        return Cmd(self.command + "; " + other.command)
+        return BC(self.command + "; " + other.command)
 
     def __rshift__(self, other):
-        return Cmd(self.command + " | " + other.command)
+        return BC(self.command + " | " + other.command)
 
     def __and__(self, other):
-        return Cmd(self.command + " && " + other.command)
+        return BC(self.command + " && " + other.command)
 
     def __call__(self, *args):
-        return Cmd(str(self) % args)
+        return BC(str(self) % args)
 
     def __str__(self):
         return self.command
