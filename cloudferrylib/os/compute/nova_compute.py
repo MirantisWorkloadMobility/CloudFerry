@@ -16,9 +16,11 @@
 import time
 
 from novaclient.v1_1 import client as nova_client
+from fabric.api import run, settings, env
 
 from cloudferrylib.base import compute
 from utils.utils import get_libvirt_block_info
+from utils import forward_agent
 
 
 DISK = "disk"
@@ -71,31 +73,43 @@ class NovaCompute(compute.Compute):
         # FIXME(toha) This code should be cleaned up and covered by unit tests
         instance = self.nova_client.servers.get(instance_id)
         instance_info = dict()
-        attributes = ['id', 'name', 'metadata', 'OS-EXT-AZ:availability_zone', 'config_drive', 'OS-DCF:diskConfig',
-                      'OS-EXT-SRV-ATTR:instance_name', 'security_groups', 'key_name', 'addresses',
+        attributes = ['id', 'name', 'metadata', 'OS-EXT-AZ:availability_zone',
+                      'config_drive', 'OS-DCF:diskConfig',
+                      'OS-EXT-SRV-ATTR:instance_name', 'security_groups',
+                      'key_name', 'addresses',
                       'OS-EXT-SRV-ATTR:host', 'flavor']
         for attribut in attributes:
-            instance_info[attribut] = getattr(instance, attribut) if hasattr(instance, attribut) else None
-        instance_blkinfo = get_libvirt_block_info(instance_info['OS-EXT-SRV-ATTR:instance_name'], self.config['host'],
-                                                  instance_info['OS-EXT-SRV-ATTR:host'])
-        instance_info['root_disk_path'] = self.__get_disk_path(DISK, instance_blkinfo, instance_info,
-                                                               self.config['ephemeral_drives']['ceph'])
+            instance_info[attribut] = getattr(instance, attribut) if hasattr(
+                instance, attribut) else None
+        instance_blkinfo = get_libvirt_block_info(
+            instance_info['OS-EXT-SRV-ATTR:instance_name'], self.config['host'],
+            instance_info['OS-EXT-SRV-ATTR:host'])
+        instance_info['root_disk_path'] = self.__get_disk_path(DISK,
+                                                               instance_blkinfo,
+                                                               instance_info,
+                                                               self.config[
+                                                                   'ephemeral_drives'][
+                                                                   'ceph'])
         if (instance_info['root_disk_path'] + LOCAL) in instance_blkinfo:
-            instance_info['ephem_disk_path'] = instance_info['root_disk_path'] + LOCAL
+            instance_info['ephem_disk_path'] = instance_info[
+                                                   'root_disk_path'] + LOCAL
         else:
             instance_info['ephem_disk_path'] = None
         return instance_info
 
-    def __get_disk_path(self, disk, blk_list, instance_info, is_ceph_ephemeral=False):
+    def __get_disk_path(self, disk, blk_list, instance_info,
+                        is_ceph_ephemeral=False):
         # FIXME(toha) This code should be cleaned up and covered by unit tests
         disk_path = None
         if not is_ceph_ephemeral:
             disk = "/" + disk
             for i in blk_list:
-                if instance_info['id'] + disk == i[-(LEN_UUID_INSTANCE+len(disk)):]:
+                if instance_info['id'] + disk == i[-(
+                    LEN_UUID_INSTANCE + len(disk)):]:
                     disk_path = i
                 if instance_info['OS-EXT-SRV-ATTR:instance_name'] + disk == \
-                        i[-(len(instance_info['OS-EXT-SRV-ATTR:instance_name'])+len(disk)):]:
+                        i[-(len(instance_info[
+                            'OS-EXT-SRV-ATTR:instance_name']) + len(disk)):]:
                     disk_path = i
         else:
             disk = "_" + disk
@@ -123,3 +137,33 @@ class NovaCompute(compute.Compute):
 
     def get_status(self, getter, id):
         return getter.get(id).status
+
+    def get_networks(self, instance):
+        networks = []
+        func_mac_address = self.__get_func_mac_address(instance)
+        for network in instance.networks.items():
+            networks.append({
+                'name': network[0],
+                'ip': network[1][0],
+                'mac': func_mac_address(network[1][0])
+            })
+
+        return networks
+
+    def __get_func_mac_address(self, instance):
+        list_mac = self.get_mac_addresses(instance)
+        return lambda x: next(list_mac)
+
+    def get_mac_addresses(self, instance):
+        compute_node = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        libvirt_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
+
+        with settings(host_string=self.config['host']):
+            with forward_agent(env.key_filename):
+                cmd = "virsh dumpxml %s | grep 'mac address' | " \
+                      "cut -d\\' -f2" % libvirt_name
+                out = run("ssh -oStrictHostKeyChecking=no %s %s" %
+                          (compute_node, cmd))
+                mac_addresses = out.split()
+        mac_iter = iter(mac_addresses)
+        return mac_iter
