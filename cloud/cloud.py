@@ -72,7 +72,7 @@ class Cloud(object):
     def init_resources(self, cloud_config):
         resources = self.resources
         self.resources = dict()
-        self.mysql_connector = mysql_connector.MysqlConnector(getattr(self.config, "%s_mysql" % self.position))
+        self.mysql_connector = mysql_connector.MysqlConnector(getattr(self.config, "%s_mysql" % self.position), 'cinder')
         self.rbd_util = rbd_util.RbdUtil(getattr(self.config, "%s" % self.position), self.config.migrate)
         self.qemu_img = qemu_img.QemuImg(getattr(self.config, "%s" % self.position), self.config.migrate)
 

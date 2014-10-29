@@ -23,7 +23,7 @@ class QemuImg(ssh_util.SshUtil):
     commit_cd_cmd = cmd_cfg.cd_cmd & commit_cmd
     convert_cmd = cmd_cfg.qemu_img_cmd("convert %s")
     convert_full_image_cmd = cmd_cfg.cd_cmd & convert_cmd("-f %s -O %s %s %s")
-    backing_file_cmd = cmd_cfg.qemu_img_cmd("info %s") | cmd_cfg.grep_cmd("\"backing file\"")
+    backing_file_cmd = cmd_cfg.qemu_img_cmd("info %s") >> cmd_cfg.grep_cmd("\"backing file\"")
     rebase_cmd = cmd_cfg.qemu_img_cmd("rebase -u -b %s %s")
     convert_cmd = convert_cmd("-O %s %s %s")
 
