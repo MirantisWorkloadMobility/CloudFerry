@@ -45,6 +45,7 @@ PATH_TO_SNAPSHOTS = 'snapshots'
 STORAGE_RESOURCE = 'storage'
 VOLUMES_TYPE = 'volumes'
 VOLUME_BODY = 'volume'
+VOLUMES_DB = 'volumes_db'
 
 COMPUTE_RESOURCE = 'compute'
 COMPUTE_TYPE = 'instances'

@@ -2,15 +2,17 @@ import sqlalchemy
 
 
 class MysqlConnector():
-    def __init__(self, config):
+    def __init__(self, config, db):
         self.config = config
+        self.db = db
         self.connection_url = self.compose_connection_url()
 
     def compose_connection_url(self):
-        return '{}://{}:{}@{}/keystone'.format(self.config['connection'],
-                                               self.config['user'],
-                                               self.config['password'],
-                                               self.config['host'])
+        return '{}://{}:{}@{}/{}'.format(self.config['connection'],
+                                         self.config['user'],
+                                         self.config['password'],
+                                         self.config['host'],
+                                         self.db)
 
     def execute(self, command, **kwargs):
         with sqlalchemy.create_engine(

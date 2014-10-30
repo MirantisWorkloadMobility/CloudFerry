@@ -28,5 +28,5 @@ class GetInfoVolumes(action.Action):
         storage = self.cloud.resources[utl.STORAGE_RESOURCE]
         volumes = storage.read_info(**self.criteria_search_volumes)
         return {
-            'storage_data': volumes
+            'storage_info': volumes
         }
