@@ -74,8 +74,14 @@ class NeutronNetwork(network.Network):
     def get_list_ports(self, **kwargs):
         return self.neutron_client.list_ports(**kwargs)['ports']
 
-    def create_port(self, **kwargs):
-        return self.neutron_client.create_port(**kwargs)['port']
+    def create_port(self, net_id, mac, ip, sg_ids, tenant_id, keep_ip):
+        param_create_port = {'network_id': net_id,
+                             'mac_address': mac,
+                             'security_groups': sg_ids,
+                             'tenant_id': tenant_id }
+        if keep_ip:
+            param_create_port['fixed_ips'] = [{"ip_address": ip}]
+        return self.neutron_client.create_port({'port': param_create_port})['port']
 
     def delete_port(self, port_id):
         return self.neutron_client.delete_port(port_id)
@@ -96,6 +102,12 @@ class NeutronNetwork(network.Network):
             return self.neutron_client.list_networks(name=network_info['name'])['networks'][0]
         else:
             raise Exception("Can't find suitable network")
+
+    def check_existing_port(self, network_id, mac):
+        for port in self.get_list_ports(fields=['network_id', 'mac_address', 'id']):
+            if (port['network_id'] == network_id) and (port['mac_address'] == mac):
+                return port['id']
+        return None
 
     def get_networks(self):
         networks = self.neutron_client.list_networks()['networks']

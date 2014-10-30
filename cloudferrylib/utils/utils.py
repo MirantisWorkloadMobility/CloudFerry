@@ -48,8 +48,12 @@ VOLUME_BODY = 'volume'
 VOLUMES_DB = 'volumes_db'
 
 COMPUTE_RESOURCE = 'compute'
-COMPUTE_TYPE = 'instances'
-COMPUTE_BODY = 'instance'
+INSTANCES_TYPE = 'instances'
+INSTANCE_BODY = 'instance'
+
+NETWORK_RESOURCE = 'network'
+NETWORKS_TYPE = 'networks'
+NETWORK_BODY = 'network'
 
 IMAGE_RESOURCE = 'image'
 IMAGES_TYPE = 'images'
