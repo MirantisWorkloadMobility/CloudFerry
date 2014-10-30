@@ -13,18 +13,19 @@
 # limitations under the License.
 
 
-from cloudferrylib.base.action import transporter
-from cloudferrylib.utils import utils as utl
+from cloudferrylib.base.action import action
+from cloudferrylib.utils.ssh_util import SshUtil
 
 
-class IdentityTransporter(transporter.Transporter):
+class RemoteExecution(action.Action):
 
-    def __init__(self):
-        super(IdentityTransporter, self).__init__()
+    def __init__(self, config_migrate, host, command):
+        self.config_migrate = config_migrate
+        self.host = host
+        self.command = command
+        self.remote_exec_obj = SshUtil(self.host, self.config_migrate)
+        super(RemoteExecution, self).__init__()
 
-    def run(self, src_cloud=None, dst_cloud=None):
-        src_resource = src_cloud.resources[utl.IDENTITY_RESOURCE]
-        dst_resource = dst_cloud.resources[utl.IDENTITY_RESOURCE]
-        info = src_resource.read_info()
-        dst_resource.deploy(info)
-        return {'info_identity': info}
+    def run(self, **kwargs):
+        self.remote_exec_obj.execute(self.command)
+        return {}

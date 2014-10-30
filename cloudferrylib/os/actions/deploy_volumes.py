@@ -13,18 +13,21 @@
 # limitations under the License.
 
 
-from cloudferrylib.base.action import transporter
+from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
 
+class DeployVolumes(action.Action):
 
-class IdentityTransporter(transporter.Transporter):
+    def __init__(self, cloud):
+        self.cloud = cloud
+        super(DeployVolumes, self).__init__()
 
-    def __init__(self):
-        super(IdentityTransporter, self).__init__()
+    def run(self, volumes_info=None, identity_info=None, **kwargs):
+        deploy_info = {utl.STORAGE_RESOURCE: volumes_info[utl.STORAGE_RESOURCE],
+                       utl.IDENTITY_RESOURCE: identity_info[utl.IDENTITY_RESOURCE]}
+        volume_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
+        new_volumes_info = volume_resource.deploy(deploy_info)
+        return new_volumes_info
 
-    def run(self, src_cloud=None, dst_cloud=None):
-        src_resource = src_cloud.resources[utl.IDENTITY_RESOURCE]
-        dst_resource = dst_cloud.resources[utl.IDENTITY_RESOURCE]
-        info = src_resource.read_info()
-        dst_resource.deploy(info)
-        return {'info_identity': info}
+
+

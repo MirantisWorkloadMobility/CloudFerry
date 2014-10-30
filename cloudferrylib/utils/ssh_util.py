@@ -19,12 +19,12 @@ import cmd_cfg
 
 
 class SshUtil(object):
-    def __init__(self, config, config_migrate):
-        self.config = config
+    def __init__(self, host, config_migrate):
+        self.host = host
         self.config_migrate = config_migrate
 
-    def execute(self, cmd, host_compute):
-        with settings(host_string=self.config['host']):
+    def execute(self, cmd, host_compute=None):
+        with settings(host_string=self.host):
             if host_compute:
                 return self.execute_on_compute(str(cmd), host_compute)
             else:
@@ -33,3 +33,4 @@ class SshUtil(object):
     def execute_on_compute(self, cmd, host):
         with forward_agent(self.config_migrate.key_filename):
             return run(str(cmd_cfg.ssh_cmd(host, str(cmd))))
+

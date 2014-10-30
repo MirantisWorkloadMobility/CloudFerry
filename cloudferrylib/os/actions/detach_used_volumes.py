@@ -13,18 +13,22 @@
 # limitations under the License.
 
 
-from cloudferrylib.base.action import transporter
+from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
 
 
-class IdentityTransporter(transporter.Transporter):
+class DetachVolumes(action.Action):
 
-    def __init__(self):
-        super(IdentityTransporter, self).__init__()
+    def __init__(self, cloud):
+        self.cloud = cloud
+        super(DetachVolumes, self).__init__()
 
-    def run(self, src_cloud=None, dst_cloud=None):
-        src_resource = src_cloud.resources[utl.IDENTITY_RESOURCE]
-        dst_resource = dst_cloud.resources[utl.IDENTITY_RESOURCE]
-        info = src_resource.read_info()
-        dst_resource.deploy(info)
-        return {'info_identity': info}
+    def run(self, volumes_info={}, **kwargs):
+        resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
+        for (vol_id, vol_info) \
+                in volumes_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE].\
+                iteritems():
+            if 'instance' in vol_info['meta']:
+                if vol_info['meta']['instance']:
+                    resource_storage.detach_volume(vol_id)
+        return {}
