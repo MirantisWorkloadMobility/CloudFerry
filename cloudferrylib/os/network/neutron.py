@@ -38,10 +38,10 @@ class NeutronNetwork(network.Network):
 
     def get_client(self):
         return neutron_client.Client(
-            username=self.config["user"],
-            password=self.config["password"],
-            tenant_name=self.config["tenant"],
-            auth_url="http://" + self.config["host"] + ":35357/v2.0/")
+            username=self.config['cloud']["user"],
+            password=self.config['cloud']["password"],
+            tenant_name=self.config['cloud']["tenant"],
+            auth_url="http://" + self.config['cloud']["host"] + ":35357/v2.0/")
 
     def read_info(self, **kwargs):
 
@@ -58,12 +58,13 @@ class NeutronNetwork(network.Network):
         return info
 
     def deploy(self, info):
-        self.upload_networks(info['networks'])
-        self.upload_subnets(info['networks'], info['subnets'])
-        self.upload_routers(info['networks'], info['subnets'], info['routers'])
-        self.upload_floatingips(info['networks'], info['floating_ips'])
-        self.upload_neutron_security_groups(info['security_groups'])
-        self.upload_sec_group_rules(info['security_groups'])
+        deploy_info = info['network']
+        self.upload_networks(deploy_info['networks'])
+        self.upload_subnets(deploy_info['networks'], deploy_info['subnets'])
+        self.upload_routers(deploy_info['networks'], deploy_info['subnets'], deploy_info['routers'])
+        self.upload_floatingips(deploy_info['networks'], deploy_info['floating_ips'])
+        self.upload_neutron_security_groups(deploy_info['security_groups'])
+        self.upload_sec_group_rules(deploy_info['security_groups'])
 
     def get_mac_by_ip(self, ip_address):
         for port in self.get_list_ports():
@@ -311,6 +312,7 @@ class NeutronNetwork(network.Network):
                     rinfo = \
                         {'security_group_rule': {
                             'direction': rule['direction'],
+                            'protocol': rule['protocol'],
                             'port_range_min': rule['port_range_min'],
                             'port_range_max': rule['port_range_min'],
                             'ethertype': rule['ethertype'],
@@ -523,7 +525,7 @@ class NeutronNetwork(network.Network):
                 for argitem in arg:
                     if type(argitem) is str:
                         argitem = argitem.lower()
-                    list_info.append(neutron_resource[arg][argitem])
+                    list_info.append(argitem)
         hash_list = \
             [info.lower() if type(info) is str else info for info in list_info]
         hash_list.sort()
