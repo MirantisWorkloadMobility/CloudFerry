@@ -295,7 +295,8 @@ class NeutronNetwork(network.Network):
                                     'description': sec_group['description']
                                 }
                         }
-                    self.neutron_client.create_security_group(sec_group_info)
+                    sec_group['meta']['id'] = \
+                        self.neutron_client.create_security_group(sec_group_info)['security_group']['id']
 
     def upload_sec_group_rules(self, sec_groups):
         ex_secgrs = self.get_security_groups()
@@ -325,7 +326,8 @@ class NeutronNetwork(network.Network):
                                                  remote_sghash)
                         rinfo['security_group_rule']['remote_group_id'] = \
                             rem_ex_sec_gr['id']
-                    self.neutron_client.create_security_group_rule(rinfo)
+                    rule['meta']['id'] = \
+                        self.neutron_client.create_security_group_rule(rinfo)['security_group_rule']['id']
 
     def upload_networks(self, networks):
         existing_nets_hashlist = \
@@ -351,7 +353,8 @@ class NeutronNetwork(network.Network):
                     network_info['network']['provider:segmentation_id'] = \
                         net['provider:segmentation_id']
             if net['res_hash'] not in existing_nets_hashlist:
-                self.neutron_client.create_network(network_info)
+                net['meta']['id'] = \
+                    self.neutron_client.create_network(network_info)['network']['id']
             else:
                 LOG.info("| Dst cloud already has the same network "
                          "with name %s in tenant %s" %
@@ -379,7 +382,8 @@ class NeutronNetwork(network.Network):
                      'ip_version': snet['ip_version'],
                      'tenant_id': tenant_id}}
             if snet['res_hash'] not in existing_subnets_hashlist:
-                self.neutron_client.create_subnet(subnet_info)
+                snet['meta']['id'] = \
+                    self.neutron_client.create_subnet(subnet_info)['subnet']['id']
             else:
                 LOG.info("| Dst cloud already has the same subnetwork "
                          "with name %s in tenant %s" %
@@ -407,6 +411,7 @@ class NeutronNetwork(network.Network):
             if router['res_hash'] not in existing_routers_hashlist:
                 new_router = \
                     self.neutron_client.create_router(r_info)['router']
+                router['meta']['id'] = new_router['id']
                 self.add_router_interfaces(router,
                                            new_router,
                                            subnets,
@@ -417,6 +422,7 @@ class NeutronNetwork(network.Network):
                 if not set(router['ips']).intersection(existing_router['ips']):
                     new_router = \
                         self.neutron_client.create_router(r_info)['router']
+                    router['meta']['id'] = new_router['id']
                     self.add_router_interfaces(router,
                                                new_router,
                                                subnets,
