@@ -23,10 +23,10 @@ import copy
 from neutronclient.v2_0 import client as neutron_client
 
 
-FAKE_CONFIG = {'user': 'fake_user',
-               'password': 'fake_password',
-               'tenant': 'fake_tenant',
-               'host': '1.1.1.1'}
+FAKE_CONFIG = {'cloud': {'user': 'fake_user',
+                         'password': 'fake_password',
+                         'tenant': 'fake_tenant',
+                         'host': '1.1.1.1'}}
 
 
 class NeutronTestCase(test.TestCase):
@@ -328,12 +328,14 @@ class NeutronTestCase(test.TestCase):
         sg1_info = {'name': 'fake_secgr_name_1',
                     'tenant_name': 'fake_tenant_name_1',
                     'description': 'fake_secgr_1_description',
-                    'res_hash': 'fake_secgr_1_hash'}
+                    'res_hash': 'fake_secgr_1_hash',
+                    'meta': {}}
 
         sg2_info = {'name': 'fake_secgr_name_2',
                     'tenant_name': 'fake_tenant_name_1',
                     'description': 'fake_secgr_2_description',
-                    'res_hash': 'fake_secgr_2_hash'}
+                    'res_hash': 'fake_secgr_2_hash',
+                    'meta': {}}
 
         self.neutron_network_client.get_security_groups = \
             mock.Mock(return_value=[sg1_info])
@@ -364,7 +366,8 @@ class NeutronTestCase(test.TestCase):
                                       'port_range_max': 22,
                                       'ethertype': 'IPv4',
                                       'security_group_id': 'fake_secgr_id_1',
-                                      'rule_hash': 'fake_rule_1_hash'}],
+                                      'rule_hash': 'fake_rule_1_hash',
+                                      'meta': {}}],
             'res_hash': 'fake_secgr_1_hash'}
 
         sg2_info = {
@@ -379,7 +382,8 @@ class NeutronTestCase(test.TestCase):
                                       'port_range_max': 80,
                                       'ethertype': 'IPv4',
                                       'security_group_id': 'fake_secgr_id_2',
-                                      'rule_hash': 'fake_rule_2_hash'}],
+                                      'rule_hash': 'fake_rule_2_hash',
+                                      'meta': {}}],
             'res_hash': 'fake_secgr_2_hash'}
 
         existing_sg2_info = {
@@ -411,6 +415,7 @@ class NeutronTestCase(test.TestCase):
         rule_info = {
             'security_group_rule':
                 {'direction': 'egress',
+                 'protocol': 'tcp',
                  'port_range_min': 80,
                  'port_range_max': 80,
                  'ethertype': 'IPv4',
@@ -490,7 +495,8 @@ class NeutronTestCase(test.TestCase):
             'tenant_name': 'fake_tenant_name_1',
             'ips': ['fake_ipaddr_1'],
             'subnet_ids': ['fake_subnet_id_1'],
-            'res_hash': 'fake_router_hash_1'}
+            'res_hash': 'fake_router_hash_1',
+            'meta': {}}
 
         router2_info = {
             'name': 'fake_router_name_2',
@@ -505,7 +511,8 @@ class NeutronTestCase(test.TestCase):
             'tenant_name': 'fake_tenant_name_2',
             'ips': ['fake_ipaddr_2'],
             'subnet_ids': ['fake_subnet_id_2'],
-            'res_hash': 'fake_router_hash_2'}
+            'res_hash': 'fake_router_hash_2',
+            'meta': {}}
 
         src_nets_info = [self.net_1_info, self.net_2_info]
         src_subnets_info = [self.subnet_1_info, self.subnet_2_info]
