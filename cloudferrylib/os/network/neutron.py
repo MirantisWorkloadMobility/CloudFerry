@@ -16,6 +16,7 @@ from cloudferrylib.base import network
 from neutronclient.v2_0 import client as neutron_client
 from neutronclient.common.exceptions import IpAddressGenerationFailureClient
 from utils import get_log
+import ipaddr
 
 LOG = get_log(__name__)
 DEFAULT_SECGR = 'default'
@@ -37,10 +38,10 @@ class NeutronNetwork(network.Network):
 
     def get_client(self):
         return neutron_client.Client(
-            username=self.config["user"],
-            password=self.config["password"],
-            tenant_name=self.config["tenant"],
-            auth_url="http://" + self.config["host"] + ":35357/v2.0/")
+            username=self.config['cloud']["user"],
+            password=self.config['cloud']["password"],
+            tenant_name=self.config['cloud']["tenant"],
+            auth_url="http://" + self.config['cloud']["host"] + ":35357/v2.0/")
 
     def read_info(self, **kwargs):
 
@@ -57,12 +58,68 @@ class NeutronNetwork(network.Network):
         return info
 
     def deploy(self, info):
-        self.upload_networks(info['networks'])
-        self.upload_subnets(info['networks'], info['subnets'])
-        self.upload_routers(info['networks'], info['subnets'], info['routers'])
-        self.upload_floatingips(info['networks'], info['floating_ips'])
-        self.upload_neutron_security_groups(info['security_groups'])
-        self.upload_sec_group_rules(info['security_groups'])
+        deploy_info = info['network']
+        self.upload_networks(deploy_info['networks'])
+        self.upload_subnets(deploy_info['networks'],
+                            deploy_info['subnets'])
+        self.upload_routers(deploy_info['networks'],
+                            deploy_info['subnets'],
+                            deploy_info['routers'])
+        self.upload_floatingips(deploy_info['networks'],
+                                deploy_info['floating_ips'])
+        self.upload_neutron_security_groups(deploy_info['security_groups'])
+        self.upload_sec_group_rules(deploy_info['security_groups'])
+
+    def get_mac_by_ip(self, ip_address):
+        for port in self.get_list_ports():
+            for fixed_ip_info in port['fixed_ips']:
+                if fixed_ip_info['ip_address'] == ip_address:
+                    return port["mac_address"]
+
+    def get_list_ports(self, **kwargs):
+        return self.neutron_client.list_ports(**kwargs)['ports']
+
+    def create_port(self, net_id, mac, ip, sg_ids, tenant_id, keep_ip):
+        param_create_port = {'network_id': net_id,
+                             'mac_address': mac,
+                             'security_groups': sg_ids,
+                             'tenant_id': tenant_id}
+        if keep_ip:
+            param_create_port['fixed_ips'] = [{"ip_address": ip}]
+        return self.neutron_client.create_port({
+            'port': param_create_port})['port']
+
+    def delete_port(self, port_id):
+        return self.neutron_client.delete_port(port_id)
+
+    def get_security_groups_list(self, **kwargs):
+        return self.neutron_client.\
+            list_security_groups(**kwargs)['security_groups']
+
+    def get_network(self, network_info, tenant_id, keep_ip=False):
+        if keep_ip:
+            instance_addr = ipaddr.IPAddress(network_info['ip'])
+            for snet in self.neutron_client.list_subnets()['subnets']:
+                if snet['tenant_id'] == tenant_id:
+                    if ipaddr.IPNetwork(snet['cidr']).Contains(instance_addr):
+                        return self.neutron_client.\
+                            list_networks(id=snet['network_id'])['networks'][0]
+        if 'id' in network_info:
+            return self.neutron_client.\
+                list_networks(id=network_info['id'])['networks'][0]
+        if 'name' in network_info:
+            return self.neutron_client.\
+                list_networks(name=network_info['name'])['networks'][0]
+        else:
+            raise Exception("Can't find suitable network")
+
+    def check_existing_port(self, network_id, mac):
+        for port in self.get_list_ports(fields=['network_id',
+                                                'mac_address', 'id']):
+            if (port['network_id'] == network_id) \
+                    and (port['mac_address'] == mac):
+                return port['id']
+        return None
 
     def get_networks(self):
         networks = self.neutron_client.list_networks()['networks']
@@ -179,6 +236,7 @@ class NeutronNetwork(network.Network):
             extnet = \
                 self.neutron_client.show_network(ext_id)['network']
             floatingip_info['id'] = floating['id']
+            floatingip_info['tenant_id'] = floating['tenant_id']
             floatingip_info['floating_network_id'] = ext_id
             floatingip_info['network_name'] = extnet['name']
             floatingip_info['ext_net_tenant_name'] = \
@@ -241,7 +299,7 @@ class NeutronNetwork(network.Network):
                         self.identity_client.get_tenant_id_by_name(
                             sec_group['tenant_name']
                         )
-                    sec_group_info = \
+                    sg_info = \
                         {
                             'security_group':
                                 {
@@ -250,7 +308,8 @@ class NeutronNetwork(network.Network):
                                     'description': sec_group['description']
                                 }
                         }
-                    self.neutron_client.create_security_group(sec_group_info)
+                    sec_group['meta']['id'] = self.neutron_client.\
+                        create_security_group(sg_info)['security_group']['id']
 
     def upload_sec_group_rules(self, sec_groups):
         ex_secgrs = self.get_security_groups()
@@ -265,6 +324,7 @@ class NeutronNetwork(network.Network):
                     rinfo = \
                         {'security_group_rule': {
                             'direction': rule['direction'],
+                            'protocol': rule['protocol'],
                             'port_range_min': rule['port_range_min'],
                             'port_range_max': rule['port_range_min'],
                             'ethertype': rule['ethertype'],
@@ -280,7 +340,9 @@ class NeutronNetwork(network.Network):
                                                  remote_sghash)
                         rinfo['security_group_rule']['remote_group_id'] = \
                             rem_ex_sec_gr['id']
-                    self.neutron_client.create_security_group_rule(rinfo)
+                    new_rule = \
+                        self.neutron_client.create_security_group_rule(rinfo)
+                    rule['meta']['id'] = new_rule['security_group_rule']['id']
 
     def upload_networks(self, networks):
         existing_nets_hashlist = \
@@ -306,7 +368,8 @@ class NeutronNetwork(network.Network):
                     network_info['network']['provider:segmentation_id'] = \
                         net['provider:segmentation_id']
             if net['res_hash'] not in existing_nets_hashlist:
-                self.neutron_client.create_network(network_info)
+                net['meta']['id'] = self.neutron_client.\
+                    create_network(network_info)['network']['id']
             else:
                 LOG.info("| Dst cloud already has the same network "
                          "with name %s in tenant %s" %
@@ -334,7 +397,8 @@ class NeutronNetwork(network.Network):
                      'ip_version': snet['ip_version'],
                      'tenant_id': tenant_id}}
             if snet['res_hash'] not in existing_subnets_hashlist:
-                self.neutron_client.create_subnet(subnet_info)
+                snet['meta']['id'] = self.neutron_client.\
+                    create_subnet(subnet_info)['subnet']['id']
             else:
                 LOG.info("| Dst cloud already has the same subnetwork "
                          "with name %s in tenant %s" %
@@ -362,6 +426,7 @@ class NeutronNetwork(network.Network):
             if router['res_hash'] not in existing_routers_hashlist:
                 new_router = \
                     self.neutron_client.create_router(r_info)['router']
+                router['meta']['id'] = new_router['id']
                 self.add_router_interfaces(router,
                                            new_router,
                                            subnets,
@@ -372,6 +437,7 @@ class NeutronNetwork(network.Network):
                 if not set(router['ips']).intersection(existing_router['ips']):
                     new_router = \
                         self.neutron_client.create_router(r_info)['router']
+                    router['meta']['id'] = new_router['id']
                     self.add_router_interfaces(router,
                                                new_router,
                                                subnets,
@@ -385,10 +451,15 @@ class NeutronNetwork(network.Network):
                               src_snets, dst_sets):
         for snet_id in src_router['subnet_ids']:
             snet_hash = self.get_res_hash_by_id(src_snets, snet_id)
-            ex_snet_id = self.get_res_by_hash(dst_sets,
-                                              snet_hash)['id']
-            self.neutron_client.add_interface_router(dst_router['id'],
-                                                     {"subnet_id": ex_snet_id})
+            ex_snet = self.get_res_by_hash(dst_sets,
+                                           snet_hash)
+            if dst_router['external_gateway_info']:
+                if ex_snet['network_id'] == \
+                        dst_router['external_gateway_info']['network_id']:
+                    continue
+            self.neutron_client.add_interface_router(
+                dst_router['id'],
+                {"subnet_id": ex_snet['id']})
 
     def upload_floatingips(self, networks, src_floats):
         existing_nets = self.get_networks()
@@ -472,7 +543,7 @@ class NeutronNetwork(network.Network):
                 for argitem in arg:
                     if type(argitem) is str:
                         argitem = argitem.lower()
-                    list_info.append(neutron_resource[arg][argitem])
+                    list_info.append(argitem)
         hash_list = \
             [info.lower() if type(info) is str else info for info in list_info]
         hash_list.sort()

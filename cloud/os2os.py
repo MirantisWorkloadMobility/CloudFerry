@@ -20,15 +20,14 @@ from cloudferrylib.os.actions import identity_transporter
 from cloudferrylib.os.image import glance_image
 from cloudferrylib.os.storage import cinder_storage
 from cloudferrylib.os.identity import keystone
+from cloudferrylib.os.network import neutron
 
 from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.os.actions import get_info_images
 from cloudferrylib.os.actions import get_info_volumes
 from cloudferrylib.os.actions import identity_transporter
 from cloudferrylib.os.actions import get_info_volumes
-from cloudferrylib.os.actions import transport_db_via_ssh
-from cloudferrylib.os.actions import detach_used_volumes
-from cloudferrylib.os.actions import deploy_volumes
+from cloudferrylib.os.actions import networks_transporter
 from cloudferrylib.os.actions import converter_image_to_volume
 from cloudferrylib.os.actions import converter_volume_to_image
 from cloudferrylib.utils import utils as utl
@@ -39,26 +38,16 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         super(OS2OSFerry, self). __init__(config)
         resources = {'identity': keystone.KeystoneIdentity,
                      'image': glance_image.GlanceImage,
-                     'storage': cinder_storage.CinderStorage
-                     }
+                     'storage': cinder_storage.CinderStorage,
+                     'network': neutron.NeutronNetwork}
         self.src_cloud = cloud.Cloud(resources, cloud.SRC, config)
         self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)
         
     def migrate(self):
 
         action1 = identity_transporter.IdentityTransporter()
-        info_identity = action1.run(self.src_cloud, self.dst_cloud)['info_identity']
+        action1.run(self.src_cloud, self.dst_cloud)
 
-        action2 = get_info_volumes.GetInfoVolumes(self.src_cloud)
-        volumes_info = action2.run()['storage_info']
+        action2 = networks_transporter.NetworkTransporter()
+        action2.run(self.src_cloud, self.dst_cloud)
 
-        action3 = transport_db_via_ssh.TransportDbViaSsh()
-        action3.run(self.config, self.src_cloud, self.dst_cloud, volumes_info)
-
-        action4 = detach_used_volumes.DetachVolumes(self.src_cloud)
-        action4.run(volumes_info=volumes_info)
-
-        action5 = deploy_volumes.DeployVolumes(self.dst_cloud)
-        new_volumes = action5.run(volumes_info, info_identity)
-
-        print new_volumes
