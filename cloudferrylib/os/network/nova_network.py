@@ -13,8 +13,6 @@
 # limitations under the License.
 from cloudferrylib.base import network
 from novaclient.v1_1 import client as nova_client
-from fabric.api import run, settings, env
-from utils import forward_agent
 
 
 class NovaNetwork(network.Network):
@@ -29,9 +27,9 @@ class NovaNetwork(network.Network):
                                   self.config["tenant"],
                                   "http://" + self.config["host"] + ":35357/v2.0/")
 
-    def read_info(self, **kwargs):
-        # TODO: make normal read_info
-        instance = kwargs.get('instance')
+    def read_info(self, opts=None):
+        opts = {} if not opts else opts
+        instance = opts['instance']
         resource = {'security_groups': self.get_security_groups(instance)}
         return resource
 
@@ -57,10 +55,10 @@ class NovaNetwork(network.Network):
                                                                  cidr=rule['ip_range']['cidr'])
 
     def get_func_mac_address(self, instance):
-        list_mac = self.get_mac_addresses(instance)
+        list_mac = self._get_mac_addresses(instance)
         return lambda x: next(list_mac)
 
-    def get_mac_addresses(self, instance):
+    def _get_mac_addresses(self, instance):
         compute_node = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         libvirt_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
 
@@ -73,3 +71,4 @@ class NovaNetwork(network.Network):
                 mac_addresses = out.split()
         mac_iter = iter(mac_addresses)
         return mac_iter
+

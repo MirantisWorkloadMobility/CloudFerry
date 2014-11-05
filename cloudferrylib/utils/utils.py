@@ -55,6 +55,10 @@ NETWORK_RESOURCE = 'network'
 NETWORKS_TYPE = 'networks'
 NETWORK_BODY = 'network'
 
+DIFF_BODY = 'diff'
+EPHEMERAL_BODY = 'ephemeral'
+
+
 IMAGE_RESOURCE = 'image'
 IMAGES_TYPE = 'images'
 IMAGE_BODY = 'image'
