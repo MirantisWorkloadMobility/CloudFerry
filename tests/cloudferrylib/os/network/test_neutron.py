@@ -252,6 +252,7 @@ class NeutronTestCase(test.TestCase):
                          'tenant_id': 'fake_tenant_id_1'}}
 
         floatingips_info = [{'id': 'fake_floating_ip_id_1',
+                             'tenant_id': 'fake_tenant_id_1',
                              'floating_network_id': 'fake_network_id_1',
                              'network_name': 'fake_network_name_1',
                              'ext_net_tenant_name': 'fake_tenant_name_1',
@@ -545,11 +546,13 @@ class NeutronTestCase(test.TestCase):
 
     def test_add_router_interfaces(self):
         src_router = {'id': 'fake_router_id_1',
-                      'subnet_ids': ['fake_subnet_id_1']}
+                      'subnet_ids': ['fake_subnet_id_1'],
+                      'external_gateway_info': None}
         src_subnets = [{'id': 'fake_subnet_id_1',
                         'res_hash': 'fake_subnet_hash'}]
         dst_router = {'id': 'fake_router_id_2',
-                      'subnet_ids': ['fake_subnet_id_2']}
+                      'subnet_ids': ['fake_subnet_id_2'],
+                      'external_gateway_info': None}
         dst_subnets = [{'id': 'fake_subnet_id_2',
                         'res_hash': 'fake_subnet_hash'}]
         self.neutron_network_client.add_router_interfaces(src_router,
