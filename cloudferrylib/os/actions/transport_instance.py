@@ -8,6 +8,12 @@ from cloudferrylib.os.actions import convert_file_to_image
 from cloudferrylib.utils import utils as utl, forward_agent
 
 from fabric.api import run, settings, env
+from cloudferrylib.utils import utils as utl
+
+TRANSPORTER_MAP = {True: {True: transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(),
+                          False: transport_ceph_to_file_via_ssh.TransportCephToFileViaSsh},
+                   False: {True: transport_file_to_ceph_via_ssh.TransportFileToCephViaSsh(),
+                           False: transport_file_to_file_via_ssh.TransportFileToFileViaSsh()}}
 
 CLOUD = 'cloud'
 BACKEND = 'backend'
@@ -16,6 +22,7 @@ ISCSI = 'iscsi'
 COMPUTE = 'compute'
 INSTANCES = 'instances'
 INSTANCE_BODY = 'instance'
+INSTANCE = 'instance'
 DIFF = 'diff'
 EPHEMERAL = 'ephemeral'
 PATH_DST = 'path_dst'
@@ -23,14 +30,11 @@ TEMP = 'temp'
 BOOT_VOLUME = 'boot_volume'
 BOOT_IMAGE = 'boot_image'
 
-TRANSPORTER_MAP = {CEPH: {CEPH: transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(),
-                          ISCSI: transport_ceph_to_file_via_ssh.TransportCephToFileViaSsh},
-                   ISCSI: {CEPH: transport_file_to_ceph_via_ssh.TransportFileToCephViaSsh(),
-                           ISCSI: transport_file_to_file_via_ssh.TransportFileToFileViaSsh()}}
+
 
 
 class TransportInstance(action.Action):
-
+    #TODO constants
     def run(self, cfg=None, cloud_src=None, cloud_dst=None, info=None, **kwargs):
         backend_ephem_drv_src = cloud_src.resources[utl.COMPUTE_RESOURCE].config.compute.backend
         backend_storage_dst = cloud_dst.resources[utl.STORAGE_RESOURCE].config.storage.backend

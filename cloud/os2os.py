@@ -60,14 +60,3 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         new_volumes = action5.run(volumes_info, info_identity)
 
         print new_volumes
-
-        action6 = remote_execution.RemoteExecution(self.config.migrate,
-                                                   self.dst_cloud.cloud_config.cloud.host,
-                                                   'cinder-manage db sync')
-        action6.run()
-
-        action7 = attach_used_volumes.AttachVolumes(self.dst_cloud)
-        action7.run(volumes_info)
-
-
-
