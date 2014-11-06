@@ -62,8 +62,17 @@ class CinderStorage(storage.Storage):
                 'availability_zone': vol.availability_zone,
                 'device': vol.attachments[0][
                     'device'] if vol.attachments else None,
-                'bootable': True if vol.bootable.lower() == 'true' else False,
+                'bootable': False,
+                'volume_image_metadata': {}
             }
+            if 'bootable' in vol.__dict__:
+                volume['bootable'] = True if vol.bootable.lower() == 'true' else False
+            if 'volume_image_metadata' in vol.__dict__:
+                volume['volume_image_metadata'] = {
+                    'image_id': vol['volume_image_metadata']['image_id'],
+                    'checksum': vol['volume_image_metadata']['checksum']
+                }
+
             info['storage']['volumes'][vol.id] = {'volume': volume,
                                                   'meta': {
                                                       'image': None

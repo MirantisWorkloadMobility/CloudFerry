@@ -5,10 +5,14 @@ from cloudferrylib.os.actions import transport_file_to_ceph_via_ssh
 from cloudferrylib.os.actions import transport_file_to_file_via_ssh
 from cloudferrylib.os.actions import convert_image_to_file
 from cloudferrylib.os.actions import convert_file_to_image
+from cloudferrylib.os.actions import converter_volume_to_image
+from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.utils import utils as utl, forward_agent
 
 from fabric.api import run, settings, env
 from cloudferrylib.utils import utils as utl
+import copy
+from fabric.api import run, settings
 
 TRANSPORTER_MAP = {True: {True: transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(),
                           False: transport_ceph_to_file_via_ssh.TransportCephToFileViaSsh},
@@ -31,32 +35,65 @@ BOOT_VOLUME = 'boot_volume'
 BOOT_IMAGE = 'boot_image'
 
 
-
-
 class TransportInstance(action.Action):
-    #TODO constants
+    # TODO constants
     def run(self, cfg=None, cloud_src=None, cloud_dst=None, info=None, **kwargs):
-        backend_ephem_drv_src = cloud_src.resources[utl.COMPUTE_RESOURCE].config.compute.backend
-        backend_storage_dst = cloud_dst.resources[utl.STORAGE_RESOURCE].config.storage.backend
-
         instance_id = info[COMPUTE][INSTANCES].iterkeys().next()
-
-        instance_boot = BOOT_IMAGE if info[COMPUTE][INSTANCES][instance_id][INSTANCE_BODY]['image'] else BOOT_VOLUME
+        instance_boot = BOOT_IMAGE if info[COMPUTE][INSTANCES][instance_id][utl.INSTANCE_BODY]['image'] else BOOT_VOLUME
+        instance = info[COMPUTE][INSTANCES][instance_id]
+        src_storage = cloud_src.resources[utl.STORAGE_RESOURCE]
+        dst_storage = cloud_dst.resources[utl.STORAGE_RESOURCE]
+        src_compute = cloud_src.resources[utl.COMPUTE_RESOURCE]
+        dst_compute = cloud_dst.resources[utl.COMPUTE_RESOURCE]
+        backend_ephem_drv_src = src_storage.config.compute.backend
+        backend_storage_dst = dst_storage.config.storage.backend
+        act_v_to_i = converter_volume_to_image.ConverterVolumeToImage('qcow2', cloud_src)
+        act_g_to_g = copy_g2g.CopyFromGlanceToGlance(cloud_src, cloud_dst)
         is_ephemeral = info[COMPUTE][INSTANCES][instance_id][INSTANCE_BODY]['is_ephemeral']
+       
+        one_instance = {
+            utl.COMPUTE_RESOURCE: {
+                utl.INSTANCES_TYPE: {
+                    instance_id: copy.deepcopy(instance)
+                }
+            }
+        }
+        dst_instance = {
+            utl.COMPUTE_RESOURCE: {
+                utl.INSTANCES_TYPE: {
 
+                }
+            }
+        }
+        
+        instance = one_instance[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE][instance_id]
         if instance_boot == BOOT_IMAGE:
             if backend_ephem_drv_src == CEPH:
+                #Transport D -> I ---> I
+                #Deploy Instance
                 self.transport_image(cfg, cloud_src, cloud_dst, info, instance_id)
                 self.deploy_instance(cloud_dst, info, instance_id)
             elif backend_ephem_drv_src == ISCSI:
                 if backend_storage_dst == CEPH:
                     self.transport_diff_and_merge(cfg, cloud_src, cloud_dst, info, instance_id)
                     self.deploy_instance(cloud_dst, info, instance_id)
+                    #Transport D ---> Dt
+                    #Convert to File B -> Bf
+                    #Merge Dt + Bf
+                    #Convert to Image Dt -> B
+                    #Deploy Instance
                 elif backend_storage_dst == ISCSI:
                     self.deploy_instance(cloud_dst, info, instance_id)
                     self.copy_diff_file(cfg, cloud_src, cloud_dst, info, backend_ephem_drv_src, backend_storage_dst)
+                    #Deploy Instance
+                    #Transport D ---> D
         elif instance_boot == BOOT_VOLUME:
-            pass
+            volume = src_storage.read_info(id=instance['volumes'][0]['id'])
+            image = act_v_to_i.run(volume)
+            image_dst = act_g_to_g.run(image)[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE]
+            instance[utl.META_INFO][utl.IMAGE_BODY] = image_dst[image_dst.keys()[0]][utl.IMAGE_BODY]
+            dst_instance = dst_compute.deploy(one_instance)
+        # TODO: import ephemeral
 
         if is_ephemeral:
             self.copy_ephemeral(cfg, cloud_src, cloud_dst, info, backend_ephem_drv_src, backend_storage_dst)
@@ -155,7 +192,6 @@ class TransportInstance(action.Action):
                 run("qemu-img convert -f %s -O raw %s %s.tmp" %
                     (filepath, filepath, 'qcow'))
                 run("cd %s && mv -f %s.tmp %s" % (filepath, filepath))
-
 
     def rebase_diff_file(self, host, base_file, diff_file):
         cmd = "qemu-img rebase -u -b %s %s" % (base_file, diff_file)

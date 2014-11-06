@@ -15,6 +15,7 @@
 from cloudferrylib.utils import utils
 from fabric.api import run, settings, env
 import copy
+from cloudferrylib.utils import utils as utl
 
 LOG = utils.get_log(__name__)
 
@@ -104,3 +105,11 @@ def require_methods(methods, obj):
         if method not in methods:
             return False
     return True
+
+
+
+def select_boot_volume(info):
+    for k, v in info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE].iteritems():
+        if not((v['num_device'] == 0) and v['bootable']):
+            del info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][k]
+    return info

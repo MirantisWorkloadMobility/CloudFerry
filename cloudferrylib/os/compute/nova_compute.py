@@ -110,7 +110,12 @@ class NovaCompute(compute.Compute):
                              'security_groups': security_groups,
                              'volume': None,
                              'interfaces': interfaces,
-                             'host': host
+                             'host': host,
+                             'volumes': [{'id': v.id,
+                                          'num_device': i,
+                                          'device': v.device}
+                                         for i, v in enumerate(
+                                     self.nova_client.volumes.get_server_volumes(instance.id))]
                              },
                 'ephemeral': ephemeral_path,
                 'diff': diff,
