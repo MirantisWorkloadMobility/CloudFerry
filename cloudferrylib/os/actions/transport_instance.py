@@ -3,8 +3,11 @@ from cloudferrylib.os.actions import transport_ceph_to_ceph_via_ssh
 from cloudferrylib.os.actions import transport_ceph_to_file_via_ssh
 from cloudferrylib.os.actions import transport_file_to_ceph_via_ssh
 from cloudferrylib.os.actions import transport_file_to_file_via_ssh
+from cloudferrylib.os.actions import convert_image_to_file
 from cloudferrylib.os.actions import convert_file_to_image
 from cloudferrylib.utils import utils as utl
+
+from fabric.api import run, settings
 
 TRANSPORTER_MAP = {True: {True: transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(),
                           False: transport_ceph_to_file_via_ssh.TransportCephToFileViaSsh},
@@ -23,10 +26,8 @@ PATH_DST = 'path_dst'
 TEMP = 'temp'
 
 
-
-
 class TransportInstance(action.Action):
-    #TODO constants
+    # TODO constants
     def run(self, cfg=None, cloud_src=None, cloud_dst=None, info=None, **kwargs):
         is_src_ceph = cloud_src.config[CLOUD][BACKEND].lower() == CEPH
         is_dst_ceph = cloud_dst.config[CLOUD][BACKEND].lower() == CEPH
@@ -46,14 +47,42 @@ class TransportInstance(action.Action):
                             resource_root_name=utl.DIFF_BODY)
 
             converter = convert_file_to_image.ConvertFileToImage()
-            image_id = converter.run(cfg=cloud_dst.config[CLOUD],
-                                     file_path=path_dst,
-                                     image_format='raw',
-                                     image_name="%s-image" % instance_id)
-            info[COMPUTE][INSTANCES][instance_id][INSTANCE]['image_id'] = image_id
-        else:
-            # TODO
-            pass
+            dst_image_id = converter.run(cfg=cloud_dst.config[CLOUD],
+                                         file_path=path_dst,
+                                         image_format='raw',
+                                         image_name="%s-image" % instance_id)
+            info[COMPUTE][INSTANCES][instance_id][INSTANCE]['image_id'] = dst_image_id
+        elif is_dst_ceph:
+            image_id = info[COMPUTE][INSTANCES][instance_id]['image_id']
+            base_file = "%s/%s" % (cloud_dst[CLOUD][TEMP], "temp%s_base" % instance_id)
+            diff_file = "%s/%s" % (cloud_dst[CLOUD][TEMP], "temp%s" % instance_id)
+
+            info[COMPUTE][INSTANCES][instance_id][DIFF][PATH_DST] = diff_file
+
+            convertor = convert_image_to_file.ConvertImageToFile()
+            convertor(cfg=cfg,
+                      cloud_src=cloud_src,
+                      cloud_dst=cloud_dst,
+                      image_id=image_id,
+                      base_file_name=base_file)
+
+            transporter = transport_file_to_file_via_ssh.TransportFileToFileViaSsh()
+            transporter.run(cfg=cfg,
+                            cloud_src=cloud_src,
+                            cloud_dst=cloud_dst,
+                            info=info,
+                            resource_type=utl.COMPUTE_RESOURCE,
+                            resource_name=utl.INSTANCES_TYPE,
+                            resources_root_name=utl.DIFF_BODY)
+            self.rebase_diff_file(cloud_dst[CLOUD]['host'], base_file, diff_file)
+            self.commit_diff_file(cloud_dst[CLOUD]['host'], diff_file)
+            converter = convert_file_to_image.ConvertFileToImage()
+            dst_image_id = converter.run(cfg=cloud_dst.config[CLOUD],
+                                         file_path=diff_file,
+                                         image_format='raw',
+                                         image_name="%s-image" % instance_id)
+            info[COMPUTE][INSTANCES][instance_id][INSTANCE]['image_id'] = dst_image_id
+
         dst_compute = cloud_dst[COMPUTE]
         dst_compute.deploy(info)
 
@@ -90,8 +119,11 @@ class TransportInstance(action.Action):
                             resource_name=utl.INSTANCES_TYPE,
                             resource_root_name=utl.EPHEMERAL_BODY)
 
+    def rebase_diff_file(self, host, base_file, diff_file):
+        cmd = "qemu-img rebase -u -b %s %s" % (base_file, diff_file)
+        with settings(host_string=host):
+            run(cmd)
 
-
-
-
-
+    def commit_diff_file(self, host, diff_file):
+        with settings(host_string='host'):
+            run("qemu-img commit %s" % diff_file)
