@@ -102,8 +102,6 @@ class CinderStorage(storage.Storage):
             self.update_column_with_condition('volumes', 'attach_status', 'attached', 'detached')
             self.update_column_with_condition('volumes', 'status', 'in-use', 'available')
             self.update_column('volumes', 'instance_uuid', 'NULL')
-            for vol in info['storage']['volumes'].itervalues():
-                self.attach_volume_to_instance(vol)
             volumes = self.get_volumes_list(
                 search_opts={'all_tenants': True})
             return volumes
@@ -114,7 +112,6 @@ class CinderStorage(storage.Storage):
             vol['volume']['id'] = volume.id
             self.wait_for_status(volume.id, AVAILABLE)
             self.finish(vol)
-            self.attach_volume_to_instance(vol)
             volumes.append(volume)
         return volumes
 
