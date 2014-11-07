@@ -112,6 +112,7 @@ class CinderStorage(storage.Storage):
             vol['volume']['id'] = volume.id
             self.wait_for_status(volume.id, AVAILABLE)
             self.finish(vol)
+            self.attach_volume_to_instance(vol)
             volumes.append(volume)
         return volumes
 
