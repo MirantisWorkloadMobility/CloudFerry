@@ -15,6 +15,7 @@
 
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
+import copy
 
 
 class PrepareNetworks(action.Action):
@@ -25,6 +26,8 @@ class PrepareNetworks(action.Action):
         super(PrepareNetworks, self).__init__()
 
     def run(self, info_compute=None, **kwargs):
+
+        info_compute = copy.deepcopy(info_compute)
 
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
         network_resource = self.cloud.resources[utl.NETWORK_RESOURCE]

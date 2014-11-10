@@ -38,6 +38,20 @@ BOOT_IMAGE = 'boot_image'
 
 class TransportInstance(action.Action):
     # TODO constants
+
+    @staticmethod
+    def mapping_info(self, cloud=None, compute_info=None):
+
+        new_instances_info = copy.deepcopy(compute_info)
+
+        flavors_dict = {compute_info['flavors'][flavor_id]['src_id']:flavor_id for flavor_id in compute_info['flavors']}
+
+        for instance in compute_info['instances'].values():
+            _instance = instance['instance']
+            _instance['flavor_id'] = flavors_dict[_instance['flavor_id']]
+
+        return new_instances_info
+
     def run(self, cfg=None, cloud_src=None, cloud_dst=None, info=None, **kwargs):
         instance_id = info[COMPUTE][INSTANCES].iterkeys().next()
         instance_boot = BOOT_IMAGE if info[COMPUTE][INSTANCES][instance_id][utl.INSTANCE_BODY]['image'] else BOOT_VOLUME
@@ -58,6 +72,7 @@ class TransportInstance(action.Action):
         instance_id = info[COMPUTE][INSTANCES].iterkeys().next()
         instance_boot = BOOT_IMAGE if info[COMPUTE][INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id'] else BOOT_VOLUME
         instance = info[COMPUTE][INSTANCES][instance_id]
+
 
         one_instance = {
             utl.COMPUTE_RESOURCE: {
