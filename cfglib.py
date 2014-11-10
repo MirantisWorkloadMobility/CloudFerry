@@ -85,20 +85,6 @@ mail_opts = [
                help='field FROM in letter')
 ]
 
-mail = cfg.OptGroup(name='mail',
-                    title='Mail credentials for notifications')
-
-mail_opts = [
-    cfg.StrOpt('mail_server', default='-',
-               help='name mail server'),
-    cfg.StrOpt('mail_username', default='-',
-               help='name username for mail'),
-    cfg.StrOpt('mail_password', default='-',
-               help='password for mail'),
-    cfg.StrOpt('mail_from_addr', default='-',
-               help='field FROM in letter')
-]
-
 src_mysql = cfg.OptGroup(name='src_mysql',
                          title='Config mysql for source cloud')
 

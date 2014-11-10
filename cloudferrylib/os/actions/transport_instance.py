@@ -40,7 +40,7 @@ class TransportInstance(action.Action):
     # TODO constants
 
     @staticmethod
-    def mapping_info(self, cloud=None, compute_info=None):
+    def mapping_instance_info(self, compute_info=None):
 
         new_instances_info = copy.deepcopy(compute_info)
 
@@ -53,33 +53,33 @@ class TransportInstance(action.Action):
         return new_instances_info
 
     def run(self, cfg=None, cloud_src=None, cloud_dst=None, info=None, **kwargs):
-        instance_id = info[COMPUTE][INSTANCES].iterkeys().next()
-        instance_boot = BOOT_IMAGE if info[COMPUTE][INSTANCES][instance_id][utl.INSTANCE_BODY]['image'] else BOOT_VOLUME
-        instance = info[COMPUTE][INSTANCES][instance_id]
+
         src_storage = cloud_src.resources[utl.STORAGE_RESOURCE]
         dst_storage = cloud_dst.resources[utl.STORAGE_RESOURCE]
         src_compute = cloud_src.resources[utl.COMPUTE_RESOURCE]
         dst_compute = cloud_dst.resources[utl.COMPUTE_RESOURCE]
+
+        if not info:
+            info = src_compute.read_info()
+
+        compute_info = self.mapping_instance_info(info[COMPUTE])
+
+        instance_id = compute_info[INSTANCES].iterkeys().next()
+        instance_boot = BOOT_IMAGE if compute_info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image'] else BOOT_VOLUME
+        instance = compute_info[INSTANCES][instance_id]
+
         backend_ephem_drv_src = src_compute.config.compute.backend
         backend_storage_dst = dst_storage.config.storage.backend
         act_v_to_i = converter_volume_to_image.ConverterVolumeToImage('qcow2', cloud_src)
         act_g_to_g = copy_g2g.CopyFromGlanceToGlance(cloud_src, cloud_dst)
-        is_ephemeral = info[COMPUTE][INSTANCES][instance_id][utl.INSTANCE_BODY]['is_ephemeral']
-       
-
-        if not info:
-            info = src_compute.read_info()
-        instance_id = info[COMPUTE][INSTANCES].iterkeys().next()
-        instance_boot = BOOT_IMAGE if info[COMPUTE][INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id'] else BOOT_VOLUME
-        instance = info[COMPUTE][INSTANCES][instance_id]
-
+        is_ephemeral = compute_info[INSTANCES][instance_id][utl.INSTANCE_BODY]['is_ephemeral']
 
         one_instance = {
             utl.COMPUTE_RESOURCE: {
                 utl.INSTANCES_TYPE: {
-                    instance_id: copy.deepcopy(instance)
+                    instance_id: instance
                 },
-                FLAVORS: info[utl.COMPUTE_RESOURCE][FLAVORS]
+                FLAVORS: compute_info[FLAVORS]
             }
         }
         dst_instance = {
@@ -89,8 +89,7 @@ class TransportInstance(action.Action):
                 }
             }
         }
-        
-        instance = one_instance[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE][instance_id]
+
         if instance_boot == BOOT_IMAGE:
             if backend_ephem_drv_src == CEPH:
                 #Transport D -> I ---> I
@@ -118,6 +117,7 @@ class TransportInstance(action.Action):
             image_dst = act_g_to_g.run(image)
             instance[utl.META_INFO][utl.IMAGE_BODY] = image_dst['image']['images'].values()[0]
             dst_instance = dst_compute.deploy(one_instance)
+            print "!!!!!! dst_instance = ", dst_instance
         # TODO: import ephemeral
 
         if is_ephemeral:

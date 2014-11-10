@@ -19,6 +19,7 @@ from novaclient.v1_1 import client as nova_client
 
 from cloudferrylib.base import compute
 from utils import forward_agent
+import copy
 
 
 DISK = "disk"
@@ -159,6 +160,9 @@ class NovaCompute(compute.Compute):
         return info
 
     def deploy(self, info, **kwargs):
+
+        info = copy.deepcopy(info)
+
         resources_deploy = kwargs.get('resources_deploy', False)
         if resources_deploy:
             self._deploy_keypair(info['compute']['keypairs'])
@@ -167,7 +171,6 @@ class NovaCompute(compute.Compute):
                 self._deploy_project_quotas(info['compute']['project_quotas'])
                 self._deploy_user_quotas(info['compute']['user_quotas'])
         else:
-            self._deploy_flavors(info['compute']['flavors'])
             self._deploy_instances(info['compute'])
 
     def _deploy_user_quotas(self, quotas):
@@ -235,17 +238,15 @@ class NovaCompute(compute.Compute):
             meta = _instance['meta']
             flavor_id = info_compute['flavors'][instance['flavor_id']]['meta']['id']
             self.nova_client = nova_tenants_clients[instance['tenant_name']]
-            _instance['meta']['dest_id'] = self.create_instance(
-                name=instance['name'],
-                image=meta['image']['id'],
-                flavor=flavor_id,
-                #key_name=instance['key_name'],
-                availability_zone=instance[
-                    'availability_zone'],
-                security_groups=instance['security_groups'],
-                # Manualy inserted key_name and network id for test from dest env
-                key_name='dest-key-1',
-                nics=[{'net-id': '6a8349e9-ce16-4370-9caf-93fd301a340b'}])
+            create_params = {'name': instance['name'],
+                             'image': meta['image']['id'],
+                             'flavor': flavor_id,
+                             'key_name': instance['key_name'],
+                             'availability_zone': instance[
+                                 'availability_zone'],
+                             'security_groups':instance['security_groups'],
+                             'nics': [{'net-id': '6a8349e9-ce16-4370-9caf-93fd301a340b'}]}
+            _instance['meta']['dest_id'] = self.create_instance(create_params)
 
         self.nova_client = nova_tenants_clients[self.config['cloud']['tenant']]
 

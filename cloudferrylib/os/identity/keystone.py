@@ -29,7 +29,7 @@ class KeystoneIdentity(identity.Identity):
         self.mysql_connector = cloud.mysql_connector
         self.cloud = cloud
         self.postman = None
-        if self.config['mail']:
+        if self.config['mail']['server'] != "-":
             self.postman = Postman(self.config['mail']['username'],
                                    self.config['mail']['password'],
                                    self.config['mail']['from_addr'],
