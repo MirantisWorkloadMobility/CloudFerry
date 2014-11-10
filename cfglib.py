@@ -50,8 +50,8 @@ migrate_opts = [
                help='name pub key'),
     cfg.StrOpt('keep_ip', default='no',
                help='yes - keep ip, no - not keep ip'),
-    cfg.StrOpt('keep_volume_storage', default='no',
-               help='yes - keep volume_storage, no - not keep volume_storage'),
+    cfg.BoolOpt('keep_volume_storage', default=False,
+               help='True - keep volume_storage, False - not keep volume_storage'),
     cfg.StrOpt('speed_limit', default='10MB',
                help='speed limit for glance to glance'),
     cfg.StrOpt('instances', default='key_name-qwerty',
@@ -66,7 +66,9 @@ migrate_opts = [
     cfg.StrOpt('port', default='9990',
                help='interval ports for ssh tunnel'),
     cfg.BoolOpt('overwrite_user_passwords', default=False,
-                help='Overwrite password for exists users on destination')
+                help='Overwrite password for exists users on destination'),
+    cfg.BoolOpt('migrate_quotas', default=False,
+                help='Migrate tenant quotas')
 ]
 
 mail = cfg.OptGroup(name='mail',

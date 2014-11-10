@@ -32,6 +32,7 @@ EPHEMERAL = 'ephemeral'
 PATH_DST = 'path_dst'
 TEMP = 'temp'
 BOOT_VOLUME = 'boot_volume'
+FLAVORS = 'flavors'
 BOOT_IMAGE = 'boot_image'
 
 
@@ -45,17 +46,25 @@ class TransportInstance(action.Action):
         dst_storage = cloud_dst.resources[utl.STORAGE_RESOURCE]
         src_compute = cloud_src.resources[utl.COMPUTE_RESOURCE]
         dst_compute = cloud_dst.resources[utl.COMPUTE_RESOURCE]
-        backend_ephem_drv_src = src_storage.config.compute.backend
+        backend_ephem_drv_src = src_compute.config.compute.backend
         backend_storage_dst = dst_storage.config.storage.backend
         act_v_to_i = converter_volume_to_image.ConverterVolumeToImage('qcow2', cloud_src)
         act_g_to_g = copy_g2g.CopyFromGlanceToGlance(cloud_src, cloud_dst)
-        is_ephemeral = info[COMPUTE][INSTANCES][instance_id][INSTANCE_BODY]['is_ephemeral']
+        is_ephemeral = info[COMPUTE][INSTANCES][instance_id][utl.INSTANCE_BODY]['is_ephemeral']
        
+
+        if not info:
+            info = src_compute.read_info()
+        instance_id = info[COMPUTE][INSTANCES].iterkeys().next()
+        instance_boot = BOOT_IMAGE if info[COMPUTE][INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id'] else BOOT_VOLUME
+        instance = info[COMPUTE][INSTANCES][instance_id]
+
         one_instance = {
             utl.COMPUTE_RESOURCE: {
                 utl.INSTANCES_TYPE: {
                     instance_id: copy.deepcopy(instance)
-                }
+                },
+                FLAVORS: info[utl.COMPUTE_RESOURCE][FLAVORS]
             }
         }
         dst_instance = {
@@ -88,10 +97,11 @@ class TransportInstance(action.Action):
                     #Deploy Instance
                     #Transport D ---> D
         elif instance_boot == BOOT_VOLUME:
-            volume = src_storage.read_info(id=instance['volumes'][0]['id'])
+            volume = src_storage.read_info(id=instance['instance']['volumes'][0]['id'])
             image = act_v_to_i.run(volume)
-            image_dst = act_g_to_g.run(image)[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE]
-            instance[utl.META_INFO][utl.IMAGE_BODY] = image_dst[image_dst.keys()[0]][utl.IMAGE_BODY]
+            # image_dst = act_g_to_g.run(image)[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE]
+            image_dst = act_g_to_g.run(image)
+            instance[utl.META_INFO][utl.IMAGE_BODY] = image_dst['image']['images'].values()[0]
             dst_instance = dst_compute.deploy(one_instance)
         # TODO: import ephemeral
 
@@ -200,4 +210,4 @@ class TransportInstance(action.Action):
 
     def commit_diff_file(self, host, diff_file):
         with settings(host_string='host'):
-            run("qemu-img commit %s" % diff_file)
+            run("qemu-img commit %s" % diff_file)        

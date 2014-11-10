@@ -33,7 +33,7 @@ class NovaCompute(compute.Compute):
         super(NovaCompute, self).__init__()
         self.config = config
         self.cloud = cloud
-        self.identity = cloud.identity
+        self.identity = cloud.resources['identity']
         self.mysql_connector = cloud.mysql_connector
         self.nova_client = self.get_nova_client()
 
@@ -58,6 +58,7 @@ class NovaCompute(compute.Compute):
                             'flavors': {},
                             'user_quotas': [],
                             'project_quotas': []}}
+        get_tenant_name = self.identity.get_tenants_func()
 
         for keypair in self.get_keypair_list():
             info['compute']['keypairs'][keypair.id] = {
@@ -77,7 +78,7 @@ class NovaCompute(compute.Compute):
                                    'net_id': interface.net_id,
                                    'fixed_ip': None})
             is_ephemeral = self.get_flavor_from_id(instance.flavor['id']).ephemeral > 0
-            is_ceph = self.config['cloud']['backend'].lower == 'ceph'
+            is_ceph = self.config['compute']['backend'].lower == 'ceph'
             host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
             if is_ceph:
                 host = self.config['cloud']['host']
@@ -98,15 +99,17 @@ class NovaCompute(compute.Compute):
             if instance.image:
                 diff['path_src'] = self._get_file_path(instance, False, is_ceph)
 
+
             info['compute']['instances'][instance.id] = {
                 'instance': {'name': instance.name,
                              'id': instance.id,
                              'tenant_id': instance.tenant_id,
+                             'tenant_name': get_tenant_name(instance.tenant_id),
                              'status': instance.status,
                              'flavor_id': instance.flavor['id'],
-                             'image_id': instance.image['id'],
-                             'key_name': instance.keyname,
-                             'availability_zone': instance.availability_zone,
+                             'image_id': instance.image['id'] if instance.image else None,
+                             'key_name': instance.key_name,
+                             'availability_zone': getattr(instance, 'OS-EXT-AZ:availability_zone'),
                              'security_groups': security_groups,
                              'volume': None,
                              'interfaces': interfaces,
@@ -158,13 +161,14 @@ class NovaCompute(compute.Compute):
     def deploy(self, info, **kwargs):
         resources_deploy = kwargs.get('resources_deploy', False)
         if resources_deploy:
-            self._deploy_keypair(info['compute']['keypair'])
+            self._deploy_keypair(info['compute']['keypairs'])
             self._deploy_flavors(info['compute']['flavors'])
             if self.config['migrate']['migrate_quotas']:
                 self._deploy_project_quotas(info['compute']['project_quotas'])
                 self._deploy_user_quotas(info['compute']['user_quotas'])
         else:
-            self._deploy_instances(info['compute']['instances'])
+            self._deploy_flavors(info['compute']['flavors'])
+            self._deploy_instances(info['compute'])
 
     def _deploy_user_quotas(self, quotas):
         insert_cmd = "use nova;INSERT INTO quotas " \
@@ -201,16 +205,17 @@ class NovaCompute(compute.Compute):
         for _flavor in flavors.itervalues():
             flavor = _flavor['flavor']
             if flavor['name'] in dest_flavors:
-                _flavor['meta']['dest_id'] = dest_flavors[flavor['name']]
+                # _flavor['meta']['dest_id'] = dest_flavors[flavor['name']]
+                _flavor['meta']['id'] = dest_flavors[flavor['name']]
                 continue
-            self.create_flavor(name=flavor['name'], ram=flavor['ram'],
-                               vcpus=flavor['vcpus'], disk=flavor['disk'],
-                               ephemeral=flavor['ephemeral'],
-                               swap=flavor['swap'],
-                               rxtx_factor=flavor['rxtx_factor'],
-                               is_public=flavor['is_public'])
+            _flavor['meta']['id'] = self.create_flavor(name=flavor['name'], ram=flavor['ram'],
+                                    vcpus=flavor['vcpus'], disk=flavor['disk'],
+                                    ephemeral=flavor['ephemeral'],
+                                    swap=flavor['swap'],
+                                    rxtx_factor=flavor['rxtx_factor'],
+                                    is_public=flavor['is_public'])['flavor']
 
-    def _deploy_instances(self, instances):
+    def _deploy_instances(self, info_compute):
         nova_tenants_clients = {
             self.config['cloud']['tenant']: self.nova_client}
 
@@ -219,24 +224,28 @@ class NovaCompute(compute.Compute):
                   'tenant': self.config['cloud']['tenant'],
                   'host': self.config['cloud']['host']}
 
-        for _instance in instances.itervalues():
+        for _instance in info_compute['instances'].itervalues():
             tenant_name = _instance['instance']['tenant_name']
             if tenant_name not in nova_tenants_clients:
                 params['tenant'] = tenant_name
                 nova_tenants_clients[tenant_name] = self.get_nova_client(params)
 
-        for _instance in instances:
+        for _instance in info_compute['instances'].itervalues():
             instance = _instance['instance']
             meta = _instance['meta']
+            flavor_id = info_compute['flavors'][instance['flavor_id']]['meta']['id']
             self.nova_client = nova_tenants_clients[instance['tenant_name']]
             _instance['meta']['dest_id'] = self.create_instance(
                 name=instance['name'],
                 image=meta['image']['id'],
-                flavor=meta['flavor']['id'],
-                key_name=instance['key_name'],
+                flavor=flavor_id,
+                #key_name=instance['key_name'],
                 availability_zone=instance[
                     'availability_zone'],
-                security_groups=instance['security_groups'])
+                security_groups=instance['security_groups'],
+                # Manualy inserted key_name and network id for test from dest env
+                key_name='dest-key-1',
+                nics=[{'net-id': '6a8349e9-ce16-4370-9caf-93fd301a340b'}])
 
         self.nova_client = nova_tenants_clients[self.config['cloud']['tenant']]
 

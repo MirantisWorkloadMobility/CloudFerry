@@ -69,8 +69,8 @@ class CinderStorage(storage.Storage):
                 volume['bootable'] = True if vol.bootable.lower() == 'true' else False
             if 'volume_image_metadata' in vol.__dict__:
                 volume['volume_image_metadata'] = {
-                    'image_id': vol['volume_image_metadata']['image_id'],
-                    'checksum': vol['volume_image_metadata']['checksum']
+                    'image_id': vol.volume_image_metadata['image_id'],
+                    'checksum': vol.volume_image_metadata['checksum']
                 }
 
             info['storage']['volumes'][vol.id] = {'volume': volume,
