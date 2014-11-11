@@ -28,7 +28,7 @@ class TransportFileToCephViaSsh(transporter.Transporter):
             resource_name=utl.VOLUMES_TYPE,
             resource_root_name=utl.VOLUME_BODY, **kwargs):
         data_for_trans = info[resource_type][resource_name]
-        for item in data_for_trans:
+        for item in data_for_trans.itervalues():
             i = item[resource_root_name]
             path_src = i['path_src']
             path_dst = i['path_dst']

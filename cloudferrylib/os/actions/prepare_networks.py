@@ -61,5 +61,5 @@ class PrepareNetworks(action.Action):
             instances[id_inst][utl.INSTANCE_BODY]['nics'] = params
         info_compute[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE] = instances
         return {
-            'info_compute': info_compute
+            'info': info_compute
         }

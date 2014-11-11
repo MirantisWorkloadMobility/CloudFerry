@@ -17,16 +17,13 @@ from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
 
 
-class GetInfoVolumes(action.Action):
-
+class GetInfoInstances(action.Action):
     def __init__(self, cloud, search_opts=dict()):
         self.cloud = cloud
         self.search_opts = search_opts
-        super(GetInfoVolumes, self).__init__()
+        super(GetInfoInstances, self).__init__()
 
     def run(self, **kwargs):
-        storage = self.cloud.resources[utl.STORAGE_RESOURCE]
-        volumes = storage.read_info(**self.search_opts)
-        return {
-            'storage_info': volumes
-        }
+        compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
+        info = compute_resource.read_info(**self.search_opts)
+        return {'info': info}

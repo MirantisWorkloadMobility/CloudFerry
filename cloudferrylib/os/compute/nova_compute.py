@@ -18,7 +18,7 @@ import time
 from novaclient.v1_1 import client as nova_client
 
 from cloudferrylib.base import compute
-from utils import forward_agent
+from cloudferrylib.utils import utils as utl
 import copy
 from cloudferrylib.utils import timeout_exception
 
@@ -82,22 +82,33 @@ class NovaCompute(compute.Compute):
             if is_ceph:
                 host = self.config['cloud']['host']
 
+            instance_block_info = utl.get_libvirt_block_info(
+                getattr(instance, "OS-EXT-SRV-ATTR:instance_name"),
+                self.config['cloud']['host'],
+                host)
+
             ephemeral_path = {
                 'path_src': None,
                 'path_dst': None,
-                'host_src': host}
+                'host_src': host,
+                'host_dst': None}
+
             if is_ephemeral:
-                ephemeral_path['path_src'] = self._get_file_path(instance,
-                                                     is_ephemeral,
-                                                     is_ceph)
+                ephemeral_path['path_src'] = utl.get_disk_path(
+                    instance,
+                    instance_block_info,
+                    is_ceph_ephemeral=True)
             diff = {
                 'path_src': None,
                 'path_dst': None,
-                'host_src': host
+                'host_src': host,
+                'host_dst': None
             }
             if instance.image:
-                diff['path_src'] = self._get_file_path(instance, False, is_ceph)
-
+                diff['path_src'] = utl.get_disk_path(
+                    instance,
+                    instance_block_info,
+                    is_ceph_ephemeral=is_ceph)
 
             info['compute']['instances'][instance.id] = {
                 'instance': {'name': instance.name,
@@ -236,18 +247,17 @@ class NovaCompute(compute.Compute):
 
         for _instance in info_compute['instances'].itervalues():
             instance = _instance['instance']
-            print "----- instance = ", instance
             meta = _instance['meta']
             self.nova_client = nova_tenants_clients[instance['tenant_name']]
-            image_id = meta['image']['image']['id']
             create_params = {'name': instance['name'],
                              'flavor': instance['flavor_id'],
                              'key_name': instance['key_name'],
                              'availability_zone': instance['availability_zone'],
                              'security_groups': instance['security_groups'],
                              'nics': instance['nics'],
-                             'image': image_id}
+                             'image': instance['image_id']}
             if not instance['image_id']:
+                image_id = meta['image']['image']['id']
                 create_params["block_device_mapping_v2"] = [{
                     "source_type": "image",
                     "uuid": image_id,
@@ -277,8 +287,8 @@ class NovaCompute(compute.Compute):
     def change_status(self, status, instance=None, instance_id=None):
         if instance_id:
             instance = self.nova_client.servers.get(instance_id)
-        was = self.get_status(self.nova_client.servers, instance.id).lower()
-        curr = status.lower()
+        curr = self.get_status(self.nova_client.servers, instance.id).lower()
+        will = status.lower()
         func_restore = {
             'start': lambda instance: instance.start(),
             'stop': lambda instance: instance.stop(),
@@ -331,9 +341,9 @@ class NovaCompute(compute.Compute):
                             func_restore['status']('suspend'))
             }
         }
-        if was != curr:
+        if curr != will:
             try:
-                reduce(lambda res, f: f(instance), map_status[curr][was], None)
+                reduce(lambda res, f: f(instance), map_status[curr][will], None)
             except timeout_exception.TimeoutException as e:
                 return e
         else:

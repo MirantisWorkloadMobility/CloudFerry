@@ -16,9 +16,11 @@
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
 
+
 class GetInfoImages(action.Action):
-    def __init__(self, cloud):
+    def __init__(self, cloud, search_opts=dict()):
         self.cloud = cloud
+        self.search_opts = search_opts
         super(GetInfoImages, self).__init__()
 
     def run(self, **kwargs):
@@ -31,5 +33,5 @@ class GetInfoImages(action.Action):
         """
 
         image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
-        images_info = image_resource.read_info(**kwargs)
-        return {'image_data': images_info}
+        images_info = image_resource.read_info(**self.search_opts)
+        return {'info': images_info}

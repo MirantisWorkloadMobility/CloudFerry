@@ -1,16 +1,21 @@
 
 from cloudferrylib.base.action import action
+import copy
 
 
 class ConvertImageToCompute(action.Action):
+    def __init__(self, cfg=None):
+        self.cfg = cfg
+        super(ConvertImageToCompute, self).__init__()
 
-    def run(self, cfg=None, cloud_src=None, cloud_dst=None, info=None, **kwargs):
+    def run(self, images_info=None, **kwargs):
+        images_info = copy.deepcopy(images_info)
         instance_info = {'compute': {'instances': {}}}
-        for image in info['image']['images'].itervalues():
+        for image in images_info['image']['images'].itervalues():
             if 'instance' not in image['meta']:
                 continue
             instance = image['meta']['instance']
-            instance['image_id'] = image['image']['id']
-            instance_info['compute']['instances'][instance['id']] = instance
-        return instance_info
+            instance['instance']['image_id'] = image['image']['id']
+            instance_info['compute']['instances'][instance['instance']['id']] = instance
+        return {'info': instance_info}
 

@@ -28,7 +28,7 @@ class TransportFileToFileViaSsh(transporter.Transporter):
             resource_name=utl.VOLUMES_TYPE,
             resource_root_name=utl.VOLUME_BODY, **kwargs):
         data_for_trans = info[resource_type][resource_name]
-        for item in data_for_trans:
+        for item in data_for_trans.itervalues():
             i = item[resource_root_name]
             host_src = i['host_src']
             host_dst = i['host_dst']

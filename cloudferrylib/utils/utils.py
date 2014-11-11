@@ -42,6 +42,9 @@ YES = "yes"
 NAME_LOG_FILE = 'migrate.log'
 PATH_TO_SNAPSHOTS = 'snapshots'
 
+DISK = "disk"
+LEN_UUID_INSTANCE = 36
+
 STORAGE_RESOURCE = 'storage'
 VOLUMES_TYPE = 'volumes'
 VOLUME_BODY = 'volume'
@@ -391,3 +394,19 @@ def get_libvirt_block_info(libvirt_name, init_host, compute_host):
 def init_singletones(cfg):
     globals()['up_ssh_tunnel'] = wrapper_singletone_ssh_tunnel(cfg.migrate.ssh_transfer_port)
 
+
+def get_disk_path(instance, blk_list, is_ceph_ephemeral=False, disk=DISK):
+    disk_path = None
+    if not is_ceph_ephemeral:
+        disk = "/" + disk
+        for i in blk_list:
+            if instance.id + disk == i[-(LEN_UUID_INSTANCE + len(disk)):]:
+                disk_path = i
+            if instance.name + disk == i[-(len(instance.name) + len(disk)):]:
+                disk_path = i
+    else:
+        disk = "_" + disk
+        for i in blk_list:
+            if ("compute/%s%s" % (instance.id, disk)) == i:
+                disk_path = i
+    return disk_path

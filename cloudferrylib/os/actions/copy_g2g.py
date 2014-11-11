@@ -24,12 +24,12 @@ class CopyFromGlanceToGlance(transporter.Transporter):
         self.dst_cloud = dst_cloud
         super(CopyFromGlanceToGlance, self).__init__()
 
-    def run(self, image_info=None, **kwargs):
+    def run(self, images_info=None, **kwargs):
         dst_image = self.dst_cloud.resources[utl.IMAGE_RESOURCE]
 
-        if not image_info:
+        if not images_info:
             action_get_im = get_info_images.GetInfoImages(self.src_cloud)
-            image_info = action_get_im.run()
+            images_info = action_get_im.run()
 
-        new_info = dst_image.deploy(image_info)
-        return new_info
+        new_info = dst_image.deploy(images_info)
+        return {'images_info': new_info}
