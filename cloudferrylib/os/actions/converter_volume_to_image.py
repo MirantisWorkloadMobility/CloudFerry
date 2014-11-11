@@ -17,7 +17,7 @@ from cloudferrylib.base.action import converter
 from cloudferrylib.utils import utils as utl
 
 from utils import utils
-
+import copy
 LOG = utils.get_log(__name__)
 CEPH = 'ceph'
 ACTIVE = 'active'
@@ -40,6 +40,7 @@ class ConverterVolumeToImage(converter.Converter):
         super(ConverterVolumeToImage, self).__init__()
 
     def run(self, volumes_info={}, **kwargs):
+        volumes_info = copy.deepcopy(volumes_info)
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
         resource_image = self.cloud.resources[utl.IMAGE_RESOURCE]
         images_info = {utl.IMAGE_RESOURCE: {}}

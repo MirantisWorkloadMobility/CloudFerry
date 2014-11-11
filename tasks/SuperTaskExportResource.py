@@ -81,7 +81,7 @@ class TaskNetworkServiceInfoResource(Task):
 class TaskSecurityGroupsResource(Task):
 
     def run(self, res_exporter=None, **kwargs):
-        resources = res_exporter.get_security_groups()
+        resources = res_exporter.get_sec_gr_and_rules()
         return {
             'resources': resources
         }

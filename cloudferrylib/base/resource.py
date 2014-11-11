@@ -29,8 +29,11 @@ class Resource(object):
     def restore(self):
         pass
 
-    def wait_for_status(self, id_res, status):
+    def wait_for_status(self, id_obj, status, limit_retry=60):
         pass
 
     def get_status(self):
         pass
+
+    def __deepcopy__(self, memo):
+        return self

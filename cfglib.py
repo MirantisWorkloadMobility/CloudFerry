@@ -48,7 +48,7 @@ migrate_opts = [
                     'False - not keep user passwords'),
     cfg.StrOpt('key_filename', default='id_rsa',
                help='name pub key'),
-    cfg.StrOpt('keep_ip', default='no',
+    cfg.BoolOpt('keep_ip', default=False,
                help='yes - keep ip, no - not keep ip'),
     cfg.BoolOpt('keep_volume_storage', default=False,
                help='True - keep volume_storage, False - not keep volume_storage'),

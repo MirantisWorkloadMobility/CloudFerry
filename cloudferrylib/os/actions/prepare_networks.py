@@ -34,11 +34,11 @@ class PrepareNetworks(action.Action):
         identity_resource = self.cloud.resources[utl.IDENTITY_RESOURCE]
 
         params = []
-        keep_ip = self.config['keep_ip']
+        keep_ip = self.config.migrate.keep_ip
 
         instances = info_compute[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE]
-        for (id_inst, inst) in instances.itervalues():
-            networks_info = inst[utl.INSTANCE_BODY][utl.NETWORK_BODY]
+        for (id_inst, inst) in instances.iteritems():
+            networks_info = inst[utl.INSTANCE_BODY][utl.INTERFACES]
             security_groups = inst[utl.INSTANCE_BODY]['security_groups']
             tenant_name = inst[utl.INSTANCE_BODY]['tenant_name']
             tenant_id = identity_resource.get_tenant_id_by_name(tenant_name)
@@ -48,9 +48,9 @@ class PrepareNetworks(action.Action):
                 if port_id:
                     network_resource.delete_port(port_id)
                 sg_ids = []
-                for sg in compute_resource.get_security_groups:
-                    if sg.name in security_groups:
-                        sg_ids.append(sg.id)
+                for sg in network_resource.get_security_groups():
+                    if sg['name'] in security_groups:
+                        sg_ids.append(sg['id'])
                 port = network_resource.create_port(dst_net['id'],
                                                     src_net['mac'],
                                                     src_net['ip'],
@@ -58,7 +58,7 @@ class PrepareNetworks(action.Action):
                                                     tenant_id,
                                                     keep_ip)
                 params.append({'net-id': dst_net['id'], 'port-id': port['id']})
-            instances[id_inst][utl.META_INFO][utl.NETWORK_BODY] = params
+            instances[id_inst][utl.INSTANCE_BODY]['nics'] = params
         info_compute[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE] = instances
         return {
             'info_compute': info_compute

@@ -49,7 +49,7 @@ class CinderStorage(storage.Storage):
             "http://%s:35357/v2.0/" % params.cloud.host)
 
     def read_info(self, **kwargs):
-        info = dict(resource=self, storage={})
+        info = dict(storage={})
         info['storage'] = {'volumes': {}}
         for vol in self.get_volumes_list(search_opts=kwargs):
             volume = {

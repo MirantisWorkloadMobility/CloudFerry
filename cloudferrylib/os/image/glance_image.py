@@ -23,6 +23,7 @@ from cloudferrylib.base import image
 from glanceclient.v1 import client as glance_client
 from migrationlib.os.utils import FileLikeProxy
 
+import copy
 
 class GlanceImage(image.Image):
 
@@ -95,8 +96,7 @@ class GlanceImage(image.Image):
         """
 
         info = {'image': {'resource': self,
-                          'images': {}}
-                }
+                          'images': {}}}
 
         if kwargs.get('image_id'):
             glance_image = self.get_image_by_id(kwargs['image_id'])
@@ -123,8 +123,7 @@ class GlanceImage(image.Image):
 
         return info
 
-    @staticmethod
-    def make_image_info(glance_image, info):
+    def make_image_info(self, glance_image, info):
         if glance_image:
             gl_image = {
                 'id': glance_image.id,
@@ -134,7 +133,7 @@ class GlanceImage(image.Image):
                 'container_format': glance_image.container_format,
                 'disk_format': glance_image.disk_format,
                 'is_public': glance_image.is_public,
-                'protected': glance_image.protected,
+                'protected': glance_image.protected
             }
             info['image']['images'][glance_image.id] = {'image': gl_image,
                                                         'meta': {},
@@ -145,10 +144,14 @@ class GlanceImage(image.Image):
         return info
 
     def deploy(self, info):
+        info = copy.deepcopy(info)
         migrate_images_list = []
         for gl_image in info['image']['images'].itervalues():
-            if gl_image['image']['checksum'] in [x.checksum for x in
-                                                 self.get_image_list()]:
+            dst_images = {x.checksum: x for x in self.get_image_list()}
+            checksum_current = gl_image['image']['checksum']
+            meta = gl_image['meta']
+            if checksum_current in dst_images:
+                migrate_images_list.append((dst_images[checksum_current], meta))
                 continue
             gl_image['image']['resource_src'] = info['image']['resource']
             migrate_image = self.create_image(
@@ -162,8 +165,6 @@ class GlanceImage(image.Image):
                     gl_image['image'],
                     FileLikeProxy.callback_print_progress,
                     self.config['migrate']['speed_limit']))
-
-            meta = gl_image['meta']
             migrate_images_list.append((migrate_image, meta))
 
         if migrate_images_list:

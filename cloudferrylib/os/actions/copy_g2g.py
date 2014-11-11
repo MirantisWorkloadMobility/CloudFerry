@@ -31,5 +31,5 @@ class CopyFromGlanceToGlance(transporter.Transporter):
             action_get_im = get_info_images.GetInfoImages(self.src_cloud)
             image_info = action_get_im.run()
 
-        new_info = dst_image.deploy(image_info['image_data'])
+        new_info = dst_image.deploy(image_info)
         return new_info

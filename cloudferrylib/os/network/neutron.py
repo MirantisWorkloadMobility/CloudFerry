@@ -48,12 +48,11 @@ class NeutronNetwork(network.Network):
         """Get info about neutron resources:
         :rtype: Dictionary with all necessary neutron info
         """
-        info = {'network': {'resource': self,
-                            'networks': self.get_networks(),
+        info = {'network': {'networks': self.get_networks(),
                             'subnets': self.get_subnets(),
                             'routers': self.get_routers(),
                             'floating_ips': self.get_floatingips(),
-                            'security_groups': self.get_security_groups(),
+                            'security_groups': self.get_sec_gr_and_rules(),
                             'meta': {}}}
         return info
 
@@ -69,6 +68,9 @@ class NeutronNetwork(network.Network):
                                 deploy_info['floating_ips'])
         self.upload_neutron_security_groups(deploy_info['security_groups'])
         self.upload_sec_group_rules(deploy_info['security_groups'])
+
+    def get_func_mac_address(self, instance):
+        return self.get_mac_by_ip
 
     def get_mac_by_ip(self, ip_address):
         for port in self.get_list_ports():
@@ -252,6 +254,10 @@ class NeutronNetwork(network.Network):
 
     def get_security_groups(self):
         sec_grs = self.neutron_client.list_security_groups()['security_groups']
+        return sec_grs
+
+    def get_sec_gr_and_rules(self):
+        sec_grs = self.get_security_groups()
         get_tenant_name = self.identity_client.get_tenants_func()
         sec_groups_info = []
         for sec_gr in sec_grs:
@@ -290,7 +296,7 @@ class NeutronNetwork(network.Network):
         return sec_groups_info
 
     def upload_neutron_security_groups(self, sec_groups):
-        exist_secgrs = self.get_security_groups()
+        exist_secgrs = self.get_sec_gr_and_rules()
         exis_secgrs_hashlist = [ex_sg['res_hash'] for ex_sg in exist_secgrs]
         for sec_group in sec_groups:
             if sec_group['name'] != DEFAULT_SECGR:
@@ -312,7 +318,7 @@ class NeutronNetwork(network.Network):
                         create_security_group(sg_info)['security_group']['id']
 
     def upload_sec_group_rules(self, sec_groups):
-        ex_secgrs = self.get_security_groups()
+        ex_secgrs = self.get_sec_gr_and_rules()
         for sec_gr in sec_groups:
             ex_secgr = \
                 self.get_res_by_hash(ex_secgrs, sec_gr['res_hash'])

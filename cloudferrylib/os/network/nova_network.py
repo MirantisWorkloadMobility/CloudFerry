@@ -13,6 +13,8 @@
 # limitations under the License.
 from cloudferrylib.base import network
 from novaclient.v1_1 import client as nova_client
+from fabric.api import run, settings, env
+from utils import forward_agent
 
 
 class NovaNetwork(network.Network):
@@ -38,8 +40,12 @@ class NovaNetwork(network.Network):
 
     def get_security_groups(self, instance=None):
         if instance is None:
-            return self.nova_client.security_groups.list()
-        return self.nova_client.servers.list_security_group(instance)
+            return self.convert_to_dict_sc_grs(self.nova_client.security_groups.list())
+        return self.convert_to_dict_sc_grs(self.nova_client.security_groups.list(instance))
+
+    def convert_to_dict_sc_grs(self, sc_grs):
+        # TODO: Refactor this code. Mapping params to dict.
+        return [x.__dict__ for x in sc_grs]
 
     def upload_security_groups(self, security_groups):
         existing = {sg.name for sg in self.get_security_groups()}
@@ -55,10 +61,10 @@ class NovaNetwork(network.Network):
                                                                  cidr=rule['ip_range']['cidr'])
 
     def get_func_mac_address(self, instance):
-        list_mac = self._get_mac_addresses(instance)
+        list_mac = self.get_mac_addresses(instance)
         return lambda x: next(list_mac)
 
-    def _get_mac_addresses(self, instance):
+    def get_mac_addresses(self, instance):
         compute_node = getattr(instance, 'OS-EXT-SRV-ATTR:host')
         libvirt_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
 

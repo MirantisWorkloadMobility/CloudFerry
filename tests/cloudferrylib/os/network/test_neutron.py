@@ -321,7 +321,7 @@ class NeutronTestCase(test.TestCase):
                                                           'description')
         secgroups_info = [secgr_info]
 
-        secgr_info_result = self.neutron_network_client.get_security_groups()
+        secgr_info_result = self.neutron_network_client.get_sec_gr_and_rules()
         self.assertEquals(secgroups_info, secgr_info_result)
 
     def test_upload_neutron_security_groups(self):
@@ -338,7 +338,7 @@ class NeutronTestCase(test.TestCase):
                     'res_hash': 'fake_secgr_2_hash',
                     'meta': {}}
 
-        self.neutron_network_client.get_security_groups = \
+        self.neutron_network_client.get_sec_gr_and_rules = \
             mock.Mock(return_value=[sg1_info])
 
         fake_secgs = [sg1_info, sg2_info]
@@ -407,7 +407,7 @@ class NeutronTestCase(test.TestCase):
 
         fake_existing_secgroups = [sg1_info, existing_sg2_info]
 
-        self.neutron_network_client.get_security_groups = \
+        self.neutron_network_client.get_sec_gr_and_rules = \
             mock.Mock(return_value=fake_existing_secgroups)
 
         self.neutron_network_client.upload_sec_group_rules([sg1_info,

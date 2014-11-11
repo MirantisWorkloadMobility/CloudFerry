@@ -7,6 +7,7 @@ from cloudferrylib.os.actions import convert_image_to_file
 from cloudferrylib.os.actions import convert_file_to_image
 from cloudferrylib.os.actions import converter_volume_to_image
 from cloudferrylib.os.actions import copy_g2g
+from cloudferrylib.os.actions import prepare_networks
 from cloudferrylib.utils import utils as utl, forward_agent
 
 from fabric.api import run, settings, env
@@ -40,17 +41,20 @@ class TransportInstance(action.Action):
     # TODO constants
 
     @staticmethod
-    def mapping_instance_info(self, compute_info=None):
+    def mapping_instance_info(compute_info=None):
 
-        new_instances_info = copy.deepcopy(compute_info)
+        new_compute_info = copy.deepcopy(compute_info)
 
-        flavors_dict = {compute_info['flavors'][flavor_id]['src_id']:flavor_id for flavor_id in compute_info['flavors']}
+        # flavors_dict = {compute_info['flavors'][flavor_id]['src_id']:flavor_id for flavor_id in compute_info['flavors']}
 
-        for instance in compute_info['instances'].values():
+        flavors_dict = \
+            {flavor_id: compute_info['flavors'][flavor_id]['meta']['id'] for flavor_id in compute_info['flavors']}
+
+        for instance in new_compute_info['instances'].values():
             _instance = instance['instance']
             _instance['flavor_id'] = flavors_dict[_instance['flavor_id']]
 
-        return new_instances_info
+        return new_compute_info
 
     def run(self, cfg=None, cloud_src=None, cloud_dst=None, info=None, **kwargs):
 
@@ -61,11 +65,15 @@ class TransportInstance(action.Action):
 
         if not info:
             info = src_compute.read_info()
+            act_prep_net = prepare_networks.PrepareNetworks(cloud_dst, cfg)
+            info = act_prep_net.run(info)['info_compute']
 
-        compute_info = self.mapping_instance_info(info[COMPUTE])
+        info = src_compute.deploy(info, resources_deploy=True)
+
+        compute_info = self.mapping_instance_info(compute_info=info[COMPUTE])
 
         instance_id = compute_info[INSTANCES].iterkeys().next()
-        instance_boot = BOOT_IMAGE if compute_info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image'] else BOOT_VOLUME
+        instance_boot = BOOT_IMAGE if compute_info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id'] else BOOT_VOLUME
         instance = compute_info[INSTANCES][instance_id]
 
         backend_ephem_drv_src = src_compute.config.compute.backend
@@ -78,10 +86,10 @@ class TransportInstance(action.Action):
             utl.COMPUTE_RESOURCE: {
                 utl.INSTANCES_TYPE: {
                     instance_id: instance
-                },
-                FLAVORS: compute_info[FLAVORS]
+                }
             }
         }
+
         dst_instance = {
             utl.COMPUTE_RESOURCE: {
                 utl.INSTANCES_TYPE: {
@@ -111,12 +119,14 @@ class TransportInstance(action.Action):
                     #Deploy Instance
                     #Transport D ---> D
         elif instance_boot == BOOT_VOLUME:
-            volume = src_storage.read_info(id=instance['instance']['volumes'][0]['id'])
-            image = act_v_to_i.run(volume)
+            volume = src_storage.read_info(id=instance[INSTANCE_BODY]['volumes'][0]['id'])
+            image = act_v_to_i.run(volume)['image_data']
             # image_dst = act_g_to_g.run(image)[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE]
             image_dst = act_g_to_g.run(image)
             instance[utl.META_INFO][utl.IMAGE_BODY] = image_dst['image']['images'].values()[0]
-            dst_instance = dst_compute.deploy(one_instance)
+            print "------ instance[utl.META_INFO][utl.IMAGE_BODY] = ", instance[utl.META_INFO][utl.IMAGE_BODY]
+
+            info = dst_compute.deploy(one_instance)
             print "!!!!!! dst_instance = ", dst_instance
         # TODO: import ephemeral
 
@@ -124,6 +134,9 @@ class TransportInstance(action.Action):
             self.copy_ephemeral(cfg, cloud_src, cloud_dst, info, backend_ephem_drv_src, backend_storage_dst)
 
         self.start_instance(cloud_dst, info, instance_id)
+        return {
+            'info': info
+        }
 
     def deploy_instance(self, cloud_dst, info, instance_id):
         dst_compute = cloud_dst[COMPUTE]
@@ -190,8 +203,8 @@ class TransportInstance(action.Action):
         info[COMPUTE][INSTANCES][instance_id][INSTANCE_BODY]['image_id'] = dst_image_id
 
     def start_instance(self, cloud_dst, info, instance_id):
-        instance_dst_id = info[COMPUTE][INSTANCES][instance_id]['meta']['new_id']
-        cloud_dst.resource[COMPUTE].change_status('start', instance_id=instance_dst_id)
+        instance_dst_id = info[COMPUTE][INSTANCES][instance_id]['meta']['dst_id']
+        cloud_dst.resources[COMPUTE].change_status('start', instance_id=instance_dst_id)
 
     def transport_image(self, cfg, cloud_src, cloud_dst, info, instance_id):
         transporter = transport_ceph_to_file_via_ssh.TransportCephToFileViaSsh()

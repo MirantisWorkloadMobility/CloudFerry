@@ -20,12 +20,12 @@ from novaclient.v1_1 import client as nova_client
 from cloudferrylib.base import compute
 from utils import forward_agent
 import copy
-
+from cloudferrylib.utils import timeout_exception
 
 DISK = "disk"
 LOCAL = ".local"
 LEN_UUID_INSTANCE = 36
-
+INTERFACES = "interfaces"
 
 class NovaCompute(compute.Compute):
     """The main class for working with Openstack Nova Compute Service. """
@@ -74,10 +74,8 @@ class NovaCompute(compute.Compute):
             for security_group in instance.security_groups:
                 security_groups.append(security_group['name'])
 
-            for interface in self.get_interface_list(instance.id):
-                interfaces.append({'port_id': interface.port_id,
-                                   'net_id': interface.net_id,
-                                   'fixed_ip': None})
+            interfaces = self.get_networks(instance)
+
             is_ephemeral = self.get_flavor_from_id(instance.flavor['id']).ephemeral > 0
             is_ceph = self.config['compute']['backend'].lower == 'ceph'
             host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
@@ -115,6 +113,7 @@ class NovaCompute(compute.Compute):
                              'volume': None,
                              'interfaces': interfaces,
                              'host': host,
+                             'is_ephemeral': is_ephemeral,
                              'volumes': [{'id': v.id,
                                           'num_device': i,
                                           'device': v.device}
@@ -172,6 +171,8 @@ class NovaCompute(compute.Compute):
                 self._deploy_user_quotas(info['compute']['user_quotas'])
         else:
             self._deploy_instances(info['compute'])
+
+        return info
 
     def _deploy_user_quotas(self, quotas):
         insert_cmd = "use nova;INSERT INTO quotas " \
@@ -235,18 +236,28 @@ class NovaCompute(compute.Compute):
 
         for _instance in info_compute['instances'].itervalues():
             instance = _instance['instance']
+            print "----- instance = ", instance
             meta = _instance['meta']
-            flavor_id = info_compute['flavors'][instance['flavor_id']]['meta']['id']
             self.nova_client = nova_tenants_clients[instance['tenant_name']]
+            image_id = meta['image']['image']['id']
             create_params = {'name': instance['name'],
-                             'image': meta['image']['id'],
-                             'flavor': flavor_id,
+                             'flavor': instance['flavor_id'],
                              'key_name': instance['key_name'],
-                             'availability_zone': instance[
-                                 'availability_zone'],
-                             'security_groups':instance['security_groups'],
-                             'nics': [{'net-id': '6a8349e9-ce16-4370-9caf-93fd301a340b'}]}
-            _instance['meta']['dest_id'] = self.create_instance(create_params)
+                             'availability_zone': instance['availability_zone'],
+                             'security_groups': instance['security_groups'],
+                             'nics': instance['nics'],
+                             'image': image_id}
+            if not instance['image_id']:
+                create_params["block_device_mapping_v2"] = [{
+                    "source_type": "image",
+                    "uuid": image_id,
+                    "destination_type": "volume",
+                    "volume_size": meta['image']['meta']['volume']['size'],
+                    "delete_on_termination": True,
+                    "boot_index": 0
+                }]
+                create_params['image'] = None
+            _instance['meta']['dst_id'] = self.create_instance(**create_params)
 
         self.nova_client = nova_tenants_clients[self.config['cloud']['tenant']]
 
@@ -265,19 +276,78 @@ class NovaCompute(compute.Compute):
 
     def change_status(self, status, instance=None, instance_id=None):
         if instance_id:
-            instance = self.get_instance(instance_id)
-
-        status_map = {
-            'start': lambda inst: inst.start(),
-            'stop': lambda inst: inst.stop(),
-            'resume': lambda inst: inst.resume(),
-            'paused': lambda inst: inst.pause(),
-            'unpaused': lambda inst: inst.unpause(),
-            'suspend': lambda inst: inst.suspend()
+            instance = self.nova_client.servers.get(instance_id)
+        was = self.get_status(self.nova_client.servers, instance.id).lower()
+        curr = status.lower()
+        func_restore = {
+            'start': lambda instance: instance.start(),
+            'stop': lambda instance: instance.stop(),
+            'resume': lambda instance: instance.resume(),
+            'paused': lambda instance: instance.pause(),
+            'unpaused': lambda instance: instance.unpause(),
+            'suspend': lambda instance: instance.suspend(),
+            'status': lambda status: lambda instance: self.wait_for_status(instance_id,
+                                                                           status)
         }
-        if self.get_status(self.nova_client.servers, instance.id).lower() != status:
-            status_map[status](instance)
-        self.wait_for_status(self.get_instance, instance_id, status)
+        map_status = {
+            'paused': {
+                'active': (func_restore['unpaused'],
+                           func_restore['status']('active')),
+                'shutoff': (func_restore['stop'],
+                            func_restore['status']('shutoff')),
+                'suspend': (func_restore['unpaused'],
+                            func_restore['status']('active'),
+                            func_restore['suspend'],
+                            func_restore['status']('suspend'))
+            },
+            'suspend': {
+                'active': (func_restore['resume'],
+                           func_restore['status']('active')),
+                'shutoff': (func_restore['stop'],
+                            func_restore['status']('shutoff')),
+                'paused': (func_restore['resume'],
+                           func_restore['status']('active'),
+                           func_restore['paused'],
+                           func_restore['status']('paused'))
+            },
+            'active': {
+                'paused': (func_restore['paused'],
+                           func_restore['status']('paused')),
+                'suspend': (func_restore['suspend'],
+                            func_restore['status']('suspend')),
+                'shutoff': (func_restore['stop'],
+                            func_restore['status']('shutoff'))
+            },
+            'shutoff': {
+                'active': (func_restore['start'],
+                           func_restore['status']('active')),
+                'paused': (func_restore['start'],
+                           func_restore['status']('active'),
+                           func_restore['paused'],
+                           func_restore['status']('paused')),
+                'suspend': (func_restore['start'],
+                            func_restore['status']('active'),
+                            func_restore['suspend'],
+                            func_restore['status']('suspend'))
+            }
+        }
+        if was != curr:
+            try:
+                reduce(lambda res, f: f(instance), map_status[curr][was], None)
+            except timeout_exception.TimeoutException as e:
+                return e
+        else:
+            return True
+
+    def wait_for_status(self, id_obj, status, limit_retry=60):
+        count = 0
+        getter = self.nova_client.servers
+        while getter.get(id_obj).status.lower() != status.lower():
+            time.sleep(1)
+            count += 1
+            if count > limit_retry:
+                raise timeout_exception.TimeoutException(getter.get(id_obj).status.lower(), status, "Timeout exp")
+
 
     def get_flavor_from_id(self, flavor_id):
         return self.nova_client.flavors.get(flavor_id)
@@ -307,17 +377,12 @@ class NovaCompute(compute.Compute):
         return self.nova_client.servers.interface_attach(server_id, port_id,
                                                          net_id, fixed_ip)
 
-    def wait_for_status(self, getter, id, status):
-        # FIXME(toha) What if it is infinite loop here?
-        while getter.get(id).status != status:
-            time.sleep(1)
-
     def get_status(self, getter, id):
         return getter.get(id).status
 
     def get_networks(self, instance):
         networks = []
-        func_mac_address = self.__get_func_mac_address(instance)
+        func_mac_address = self.get_func_mac_address(instance)
         for network in instance.networks.items():
             networks.append({
                 'name': network[0],
@@ -327,7 +392,13 @@ class NovaCompute(compute.Compute):
 
         return networks
 
-    def __get_func_mac_address(self, instance):
-        list_mac = self.get_mac_addresses(instance)
-        return lambda x: next(list_mac)
+    def get_func_mac_address(self, instance):
+        resources = self.cloud.resources
+        if 'network' in resources:
+            network = resources['network']
+            if 'get_func_mac_address' in dir(network):
+                return network.get_func_mac_address(instance)
+        return self.default_detect_mac(instance)
 
+    def default_detect_mac(self, arg):
+        raise NotImplemented("Not implemented yet function for detect mac address")

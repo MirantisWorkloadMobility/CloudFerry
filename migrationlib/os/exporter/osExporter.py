@@ -65,7 +65,7 @@ class Exporter(osCommon.osCommon):
             .get_name()\
             .get_image()\
             .get_flavor()\
-            .get_security_groups()\
+            .get_sec_gr_and_rules()\
             .get_metadata()\
             .get_key()\
             .get_availability_zone()\
