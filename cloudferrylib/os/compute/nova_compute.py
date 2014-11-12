@@ -77,7 +77,7 @@ class NovaCompute(compute.Compute):
             interfaces = self.get_networks(instance)
 
             is_ephemeral = self.get_flavor_from_id(instance.flavor['id']).ephemeral > 0
-            is_ceph = self.config['compute']['backend'].lower == 'ceph'
+            is_ceph = self.config['compute']['backend'].lower() == 'ceph'
             host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
             if is_ceph:
                 host = self.config['cloud']['host']
@@ -85,7 +85,7 @@ class NovaCompute(compute.Compute):
             instance_block_info = utl.get_libvirt_block_info(
                 getattr(instance, "OS-EXT-SRV-ATTR:instance_name"),
                 self.config['cloud']['host'],
-                host)
+                getattr(instance, 'OS-EXT-SRV-ATTR:host'))
 
             ephemeral_path = {
                 'path_src': None,

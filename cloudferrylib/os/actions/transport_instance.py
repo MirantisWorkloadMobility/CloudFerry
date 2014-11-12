@@ -78,6 +78,7 @@ class TransportInstance(action.Action):
         # info = dst_compute.deploy(info, resources_deploy=True)
 
         compute_info = self.mapping_compute_info(cloud_src, cloud_dst, compute_info=info[COMPUTE])
+        info[COMPUTE] = compute_info
 
         instance_id = compute_info[INSTANCES].iterkeys().next()
         instance_boot = BOOT_IMAGE if compute_info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id'] else BOOT_VOLUME
@@ -110,28 +111,30 @@ class TransportInstance(action.Action):
                 #Transport D -> I ---> I
                 #Deploy Instance
                 self.transport_image(cfg, cloud_src, cloud_dst, info, instance_id)
-                self.deploy_instance(cloud_dst, info, instance_id)
+                info = self.deploy_instance(cloud_dst, info, instance_id)
             elif backend_ephem_drv_src == ISCSI:
                 if backend_storage_dst == CEPH:
-                    self.transport_diff_and_merge(cfg, cloud_src, cloud_dst, info, instance_id)
-                    self.deploy_instance(cloud_dst, info, instance_id)
                     #Transport D ---> Dt
                     #Convert to File B -> Bf
                     #Merge Dt + Bf
                     #Convert to Image Dt -> B
                     #Deploy Instance
-                elif backend_storage_dst == ISCSI:
+                    self.transport_diff_and_merge(cfg, cloud_src, cloud_dst, info, instance_id)
                     info = self.deploy_instance(cloud_dst, info, instance_id)
-                    self.copy_diff_file(cfg, cloud_src, cloud_dst, info, backend_ephem_drv_src, backend_storage_dst)
+                elif backend_storage_dst == ISCSI:
                     #Deploy Instance
                     #Transport D ---> D
+                    info = self.deploy_instance(cloud_dst, info, instance_id)
+                    self.copy_diff_file(cfg, cloud_src, cloud_dst, info, backend_ephem_drv_src, backend_storage_dst)
         elif instance_boot == BOOT_VOLUME:
             volume = src_storage.read_info(id=instance[INSTANCE_BODY]['volumes'][0]['id'])
             image = act_v_to_i.run(volume)['image_data']
             image_dst = act_g_to_g.run(image)['images_info']
             instance[utl.META_INFO][utl.IMAGE_BODY] = image_dst['image']['images'].values()[0]
-            info = dst_compute.deploy(one_instance)
+            info = self.deploy_instance(cloud_dst, info, instance_id)
         # TODO: import ephemeral
+
+
 
         if is_ephemeral:
             self.copy_ephemeral(cfg, cloud_src, cloud_dst, info, backend_ephem_drv_src, backend_storage_dst)
@@ -184,16 +187,18 @@ class TransportInstance(action.Action):
                         resource_root_name=utl.EPHEMERAL_BODY)
 
     def transport_diff_and_merge(self, cfg, cloud_src, cloud_dst, info, instance_id):
-        image_id = info[COMPUTE][INSTANCES][instance_id]['image_id']
-        base_file = "%s/%s" % (cloud_dst[CLOUD][TEMP], "temp%s_base" % instance_id)
-        diff_file = "%s/%s" % (cloud_dst[CLOUD][TEMP], "temp%s" % instance_id)
+        image_id = info[COMPUTE][INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id']
+        cloud_cfg_dst = cloud_dst.cloud_config.cloud
+        temp_dir_dst = cloud_cfg_dst.temp
+        host_dst = cloud_cfg_dst.host
+        base_file = "%s/%s" % (temp_dir_dst, "temp%s_base" % instance_id)
+        diff_file = "%s/%s" % (temp_dir_dst, "temp%s" % instance_id)
         info[COMPUTE][INSTANCES][instance_id][DIFF][PATH_DST] = diff_file
-        convertor = convert_image_to_file.ConvertImageToFile()
-        convertor(cfg=cfg,
-                  cloud_src=cloud_src,
-                  cloud_dst=cloud_dst,
-                  image_id=image_id,
-                  base_file_name=base_file)
+        info[COMPUTE][INSTANCES][instance_id][DIFF][HOST_DST] = cloud_dst.getIpSsh()
+        image_res = cloud_dst.resources[utl.IMAGE_RESOURCE]
+        convertor = convert_image_to_file.ConvertImageToFile(cloud_dst)
+        convertor.run(image_id=image_id,
+                      base_filename=base_file)
         transporter = transport_file_to_file_via_ssh.TransportFileToFileViaSsh()
         transporter.run(cfg=cfg,
                         cloud_src=cloud_src,
@@ -201,13 +206,17 @@ class TransportInstance(action.Action):
                         info=info,
                         resource_type=utl.COMPUTE_RESOURCE,
                         resource_name=utl.INSTANCES_TYPE,
-                        resources_root_name=utl.DIFF_BODY)
-        self.rebase_diff_file(cloud_dst[CLOUD]['host'], base_file, diff_file)
-        self.commit_diff_file(cloud_dst[CLOUD]['host'], diff_file)
-        converter = convert_file_to_image.ConvertFileToImage()
-        self.convert_to_raw(cloud_dst[CLOUD]['host'], diff_file)
-        dst_image_id = converter.run(cfg=cloud_dst.config[CLOUD],
-                                     file_path=diff_file,
+                        resource_root_name=utl.DIFF_BODY)
+        self.rebase_diff_file(host_dst, base_file, diff_file)
+        self.commit_diff_file(host_dst, diff_file)
+        converter = convert_file_to_image.ConvertFileToImage(cloud_dst)
+        if image_res.config.image.convert_to_raw:
+            images = image_res.read_info(image_id=image_id)
+            image = images[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE][image_id]
+            disk_format = image[utl.IMAGE_BODY]['disk_format']
+            if disk_format.lower() != 'raw':
+                self.convert_file_to_raw(host_dst, disk_format, base_file)
+        dst_image_id = converter.run(file_path=base_file,
                                      image_format='raw',
                                      image_name="%s-image" % instance_id)
         info[COMPUTE][INSTANCES][instance_id][INSTANCE_BODY]['image_id'] = dst_image_id
@@ -216,10 +225,17 @@ class TransportInstance(action.Action):
         instance_dst_id = info[COMPUTE][INSTANCES][instance_id]['meta']['dst_id']
         cloud_dst.resources[COMPUTE].change_status('active', instance_id=instance_dst_id)
 
+    def stop_instance(self, cloud_dst, info, instance_id):
+        instance_dst_id = info[COMPUTE][INSTANCES][instance_id]['meta']['dst_id']
+        cloud_dst.resources[COMPUTE].change_status('shutoff', instance_id=instance_dst_id)
+
     def transport_image(self, cfg, cloud_src, cloud_dst, info, instance_id):
+        cloud_cfg_dst = cloud_dst.cloud_config.cloud
+        temp_dir_dst = cloud_cfg_dst.temp
         transporter = transport_ceph_to_file_via_ssh.TransportCephToFileViaSsh()
-        path_dst = "%s/%s" % (cloud_dst[CLOUD][TEMP], "temp%s" % instance_id)
+        path_dst = "%s/%s" % (temp_dir_dst, "temp%s" % instance_id)
         info[COMPUTE][INSTANCES][instance_id][DIFF][PATH_DST] = path_dst
+        info[COMPUTE][INSTANCES][instance_id][DIFF][HOST_DST] = cloud_dst.getIpSsh()
         transporter.run(cfg=cfg,
                         cloud_src=cloud_src,
                         cloud_dst=cloud_dst,
@@ -227,19 +243,18 @@ class TransportInstance(action.Action):
                         resource_type=utl.COMPUTE_RESOURCE,
                         resource_name=utl.INSTANCES_TYPE,
                         resource_root_name=utl.DIFF_BODY)
-        converter = convert_file_to_image.ConvertFileToImage()
-        dst_image_id = converter.run(cfg=cloud_dst.config[CLOUD],
-                                     file_path=path_dst,
+        converter = convert_file_to_image.ConvertFileToImage(cloud_dst)
+        dst_image_id = converter.run(file_path=path_dst,
                                      image_format='raw',
                                      image_name="%s-image" % instance_id)
         info[COMPUTE][INSTANCES][instance_id][INSTANCE_BODY]['image_id'] = dst_image_id
 
-    def convert_file_to_raw(self, host, filepath):
+    def convert_file_to_raw(self, host, disk_format, filepath):
         with settings(host_string=host):
             with forward_agent(env.key_filename):
                 run("qemu-img convert -f %s -O raw %s %s.tmp" %
-                    (filepath, filepath, 'qcow'))
-                run("cd %s && mv -f %s.tmp %s" % (filepath, filepath))
+                    (disk_format, filepath, filepath))
+                run("mv -f %s.tmp %s" % (filepath, filepath))
 
     def rebase_diff_file(self, host, base_file, diff_file):
         cmd = "qemu-img rebase -u -b %s %s" % (base_file, diff_file)
@@ -247,5 +262,5 @@ class TransportInstance(action.Action):
             run(cmd)
 
     def commit_diff_file(self, host, diff_file):
-        with settings(host_string='host'):
+        with settings(host_string=host):
             run("qemu-img commit %s" % diff_file)        
