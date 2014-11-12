@@ -25,6 +25,9 @@ INSTANCE_BODY = 'instance'
 INSTANCE = 'instance'
 DIFF = 'diff'
 EPHEMERAL = 'ephemeral'
+DIFF_OLD = 'diff_old'
+EPHEMERAL_OLD = 'ephemeral_old'
+
 PATH_DST = 'path_dst'
 HOST_DST = 'host_dst'
 TEMP = 'temp'
@@ -65,108 +68,109 @@ class TransportInstance(action.Action):
 
     def run(self, cfg=None, cloud_src=None, cloud_dst=None, info=None, **kwargs):
         info = copy.deepcopy(info)
-        src_storage = cloud_src.resources[utl.STORAGE_RESOURCE]
+        #Init before run
         dst_storage = cloud_dst.resources[utl.STORAGE_RESOURCE]
         src_compute = cloud_src.resources[utl.COMPUTE_RESOURCE]
-        dst_compute = cloud_dst.resources[utl.COMPUTE_RESOURCE]
-
-        # if not info:
-        #     info = src_compute.read_info()
-        #     act_prep_net = prepare_networks.PrepareNetworks(cloud_dst, cfg)
-        #     info = act_prep_net.run(info)['info_compute']
-
-        # info = dst_compute.deploy(info, resources_deploy=True)
-
-        compute_info = self.mapping_compute_info(cloud_src, cloud_dst, compute_info=info[COMPUTE])
-        info[COMPUTE] = compute_info
-
-        instance_id = compute_info[INSTANCES].iterkeys().next()
-        instance_boot = BOOT_IMAGE if compute_info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id'] else BOOT_VOLUME
-        instance = compute_info[INSTANCES][instance_id]
-
         backend_ephem_drv_src = src_compute.config.compute.backend
         backend_storage_dst = dst_storage.config.storage.backend
-        act_v_to_i = converter_volume_to_image.ConverterVolumeToImage('qcow2', cloud_src)
-        act_g_to_g = copy_g2g.CopyFromGlanceToGlance(cloud_src, cloud_dst)
+
+        #Mapping another params(flavors, etc)
+        info[COMPUTE] = self.mapping_compute_info(cloud_src, cloud_dst, compute_info=info[COMPUTE])
+
+        compute_info = info[COMPUTE]
+
+        #Get next one instance
+        instance_id = compute_info[INSTANCES].iterkeys().next()
+        instance_boot = BOOT_IMAGE \
+            if compute_info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id'] \
+            else BOOT_VOLUME
         is_ephemeral = compute_info[INSTANCES][instance_id][utl.INSTANCE_BODY]['is_ephemeral']
-
-        one_instance = {
-            utl.COMPUTE_RESOURCE: {
-                utl.INSTANCES_TYPE: {
-                    instance_id: instance
-                }
-            }
-        }
-
-        dst_instance = {
-            utl.COMPUTE_RESOURCE: {
-                utl.INSTANCES_TYPE: {
-
-                }
-            }
-        }
 
         if instance_boot == BOOT_IMAGE:
             if backend_ephem_drv_src == CEPH:
-                #Transport D -> I ---> I
-                #Deploy Instance
                 self.transport_image(cfg, cloud_src, cloud_dst, info, instance_id)
                 info = self.deploy_instance(cloud_dst, info, instance_id)
             elif backend_ephem_drv_src == ISCSI:
                 if backend_storage_dst == CEPH:
-                    #Transport D ---> Dt
-                    #Convert to File B -> Bf
-                    #Merge Dt + Bf
-                    #Convert to Image Dt -> B
-                    #Deploy Instance
                     self.transport_diff_and_merge(cfg, cloud_src, cloud_dst, info, instance_id)
                     info = self.deploy_instance(cloud_dst, info, instance_id)
                 elif backend_storage_dst == ISCSI:
-                    #Deploy Instance
-                    #Transport D ---> D
                     info = self.deploy_instance(cloud_dst, info, instance_id)
-                    self.copy_diff_file(cfg, cloud_src, cloud_dst, info, backend_ephem_drv_src, backend_storage_dst)
+                    self.copy_diff_file(cfg, cloud_src, cloud_dst, info)
         elif instance_boot == BOOT_VOLUME:
-            volume = src_storage.read_info(id=instance[INSTANCE_BODY]['volumes'][0]['id'])
-            image = act_v_to_i.run(volume)['image_data']
-            image_dst = act_g_to_g.run(image)['images_info']
-            instance[utl.META_INFO][utl.IMAGE_BODY] = image_dst['image']['images'].values()[0]
+            info = self.transport_boot_volume_src_to_dst(cloud_src, cloud_dst, info, instance_id)
             info = self.deploy_instance(cloud_dst, info, instance_id)
-        # TODO: import ephemeral
-
-
 
         if is_ephemeral:
-            self.copy_ephemeral(cfg, cloud_src, cloud_dst, info, backend_ephem_drv_src, backend_storage_dst)
+            self.copy_ephemeral(cfg, cloud_src, cloud_dst, info)
 
-        self.start_instance(cloud_dst, info, instance_id)
+        # self.start_instance(cloud_dst, info, instance_id)
         return {
             'info': info
         }
 
     def deploy_instance(self, cloud_dst, info, instance_id):
+        info = copy.deepcopy(info)
         dst_compute = cloud_dst.resources[COMPUTE]
+
         info = dst_compute.deploy(info)
-        instance_dst_id = info[COMPUTE][INSTANCES][instance_id]['meta']['dst_id']
+
+        instance_dst_id = self.find_id_by_old_id(info[COMPUTE][INSTANCES], instance_id)
+
         dst_compute.wait_for_status(instance_dst_id, 'active')
-        dst_info = dst_compute.read_info(search_opts={'instance_id': instance_dst_id})
         dst_compute.change_status('shutoff', instance_id=instance_dst_id)
 
-        ephemeral_path_dst = dst_info[COMPUTE][INSTANCES][instance_dst_id][EPHEMERAL]['path_src']
-        info[COMPUTE][INSTANCES][instance_id][EPHEMERAL][PATH_DST] = ephemeral_path_dst
-
-        diff_path_dst = dst_info[COMPUTE][INSTANCES][instance_dst_id][DIFF]['path_src']
-        info[COMPUTE][INSTANCES][instance_id][DIFF][PATH_DST] = diff_path_dst
-
-        ephemeral_host_dst = dst_info[COMPUTE][INSTANCES][instance_dst_id][EPHEMERAL]['host_src']
-        info[COMPUTE][INSTANCES][instance_id][EPHEMERAL][HOST_DST] = ephemeral_host_dst
-
-        diff_host_dst = dst_info[COMPUTE][INSTANCES][instance_dst_id][DIFF]['host_src']
-        info[COMPUTE][INSTANCES][instance_id][DIFF][HOST_DST] = diff_host_dst
+        info = self.prepare_ephemeral_drv(info, instance_dst_id)
 
         return info
 
-    def copy_diff_file(self, cfg, cloud_src, cloud_dst, info, src_backend, dst_backend):
+    def prepare_ephemeral_drv(self, info, instance_dst_id):
+        info = copy.deepcopy(info)
+        ephemeral_path_dst = info[COMPUTE][INSTANCES][instance_dst_id][EPHEMERAL]['path_src']
+        info[COMPUTE][INSTANCES][instance_dst_id][EPHEMERAL_OLD][PATH_DST] = ephemeral_path_dst
+
+        diff_path_dst = info[COMPUTE][INSTANCES][instance_dst_id][DIFF]['path_src']
+        info[COMPUTE][INSTANCES][instance_dst_id][DIFF_OLD][PATH_DST] = diff_path_dst
+
+        ephemeral_host_dst = info[COMPUTE][INSTANCES][instance_dst_id][EPHEMERAL]['host_src']
+        info[COMPUTE][INSTANCES][instance_dst_id][EPHEMERAL_OLD][HOST_DST] = ephemeral_host_dst
+
+        diff_host_dst = info[COMPUTE][INSTANCES][instance_dst_id][DIFF]['host_src']
+        info[COMPUTE][INSTANCES][instance_dst_id][DIFF_OLD][HOST_DST] = diff_host_dst
+
+        info[COMPUTE][INSTANCES][instance_dst_id][DIFF] = \
+            copy.deepcopy(info[COMPUTE][INSTANCES][instance_dst_id][DIFF_OLD])
+        info[COMPUTE][INSTANCES][instance_dst_id][EPHEMERAL] = \
+            copy.deepcopy(info[COMPUTE][INSTANCES][instance_dst_id][EPHEMERAL_OLD])
+        return info
+
+    def find_id_by_old_id(self, info, old_id):
+        for key, value in info.iteritems():
+            if value['old_id'] == old_id:
+                return key
+        return None
+
+    def transport_boot_volume_src_to_dst(self, cloud_src, cloud_dst, info, instance_id):
+        info = copy.deepcopy(info)
+        instance = info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE][instance_id]
+
+        src_storage = cloud_src.resources[utl.STORAGE_RESOURCE]
+        volume = src_storage.read_info(id=instance[INSTANCE_BODY]['volumes'][0]['id'])
+
+        act_v_to_i = converter_volume_to_image.ConverterVolumeToImage('qcow2', cloud_src)
+        image = act_v_to_i.run(volume)['image_data']
+
+        act_g_to_g = copy_g2g.CopyFromGlanceToGlance(cloud_src, cloud_dst)
+        image_dst = act_g_to_g.run(image)['images_info']
+        instance[utl.META_INFO][utl.IMAGE_BODY] = image_dst['image']['images'].values()[0]
+
+        return info
+
+    def copy_ephem_drive(self, cfg, cloud_src, cloud_dst, info, body):
+        dst_storage = cloud_dst.resources[utl.STORAGE_RESOURCE]
+        src_compute = cloud_src.resources[utl.COMPUTE_RESOURCE]
+        src_backend = src_compute.config.compute.backend
+        dst_backend = dst_storage.config.storage.backend
         transporter = TRANSPORTER_MAP[src_backend][dst_backend]
         transporter.run(cfg=cfg,
                         cloud_src=cloud_src,
@@ -174,31 +178,15 @@ class TransportInstance(action.Action):
                         info=info,
                         resource_type=utl.COMPUTE_RESOURCE,
                         resource_name=utl.INSTANCES_TYPE,
-                        resource_root_name=utl.DIFF_BODY)
+                        resource_root_name=body)
 
-    def copy_ephemeral(self, cfg, cloud_src, cloud_dst, info, src_backend, dst_backend):
-        transporter = TRANSPORTER_MAP[src_backend][dst_backend]
-        transporter.run(cfg=cfg,
-                        cloud_src=cloud_src,
-                        cloud_dst=cloud_dst,
-                        info=info,
-                        resource_type=utl.COMPUTE_RESOURCE,
-                        resource_name=utl.INSTANCES_TYPE,
-                        resource_root_name=utl.EPHEMERAL_BODY)
+    def copy_diff_file(self, cfg, cloud_src, cloud_dst, info):
+        self.copy_ephem_drive(cfg, cloud_src, cloud_dst, info, utl.DIFF_BODY)
 
-    def transport_diff_and_merge(self, cfg, cloud_src, cloud_dst, info, instance_id):
-        image_id = info[COMPUTE][INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id']
-        cloud_cfg_dst = cloud_dst.cloud_config.cloud
-        temp_dir_dst = cloud_cfg_dst.temp
-        host_dst = cloud_cfg_dst.host
-        base_file = "%s/%s" % (temp_dir_dst, "temp%s_base" % instance_id)
-        diff_file = "%s/%s" % (temp_dir_dst, "temp%s" % instance_id)
-        info[COMPUTE][INSTANCES][instance_id][DIFF][PATH_DST] = diff_file
-        info[COMPUTE][INSTANCES][instance_id][DIFF][HOST_DST] = cloud_dst.getIpSsh()
-        image_res = cloud_dst.resources[utl.IMAGE_RESOURCE]
-        convertor = convert_image_to_file.ConvertImageToFile(cloud_dst)
-        convertor.run(image_id=image_id,
-                      base_filename=base_file)
+    def copy_ephemeral(self, cfg, cloud_src, cloud_dst, info):
+        self.copy_ephem_drive(cfg, cloud_src, cloud_dst, info, utl.EPHEMERAL_BODY)
+
+    def transport_from_src_to_dst(self, cfg, cloud_src, cloud_dst, info):
         transporter = transport_file_to_file_via_ssh.TransportFileToFileViaSsh()
         transporter.run(cfg=cfg,
                         cloud_src=cloud_src,
@@ -207,27 +195,56 @@ class TransportInstance(action.Action):
                         resource_type=utl.COMPUTE_RESOURCE,
                         resource_name=utl.INSTANCES_TYPE,
                         resource_root_name=utl.DIFF_BODY)
-        self.rebase_diff_file(host_dst, base_file, diff_file)
-        self.commit_diff_file(host_dst, diff_file)
-        converter = convert_file_to_image.ConvertFileToImage(cloud_dst)
+
+    def transport_diff_and_merge(self, cfg, cloud_src, cloud_dst, info, instance_id):
+        image_id = info[COMPUTE][INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id']
+        cloud_cfg_dst = cloud_dst.cloud_config.cloud
+        temp_dir_dst = cloud_cfg_dst.temp
+        host_dst = cloud_cfg_dst.host
+
+        base_file = "%s/%s" % (temp_dir_dst, "temp%s_base" % instance_id)
+        diff_file = "%s/%s" % (temp_dir_dst, "temp%s" % instance_id)
+
+        info[COMPUTE][INSTANCES][instance_id][DIFF][PATH_DST] = diff_file
+        info[COMPUTE][INSTANCES][instance_id][DIFF][HOST_DST] = cloud_dst.getIpSsh()
+
+        image_res = cloud_dst.resources[utl.IMAGE_RESOURCE]
+
+        images = image_res.read_info(image_id=image_id)
+        image = images[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE][image_id]
+        disk_format = image[utl.IMAGE_BODY]['disk_format']
+
+        self.convert_image_to_file(cloud_dst, image_id, base_file)
+
+        self.transport_from_src_to_dst(cfg, cloud_src, cloud_dst, info)
+
+        self.merge_file(cloud_dst, base_file, diff_file)
+
         if image_res.config.image.convert_to_raw:
-            images = image_res.read_info(image_id=image_id)
-            image = images[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE][image_id]
-            disk_format = image[utl.IMAGE_BODY]['disk_format']
             if disk_format.lower() != 'raw':
                 self.convert_file_to_raw(host_dst, disk_format, base_file)
-        dst_image_id = converter.run(file_path=base_file,
-                                     image_format='raw',
-                                     image_name="%s-image" % instance_id)
+                disk_format = 'raw'
+
+        dst_image_id = self.convert_file_to_image(cloud_dst, base_file, disk_format, instance_id)
+
         info[COMPUTE][INSTANCES][instance_id][INSTANCE_BODY]['image_id'] = dst_image_id
 
-    def start_instance(self, cloud_dst, info, instance_id):
-        instance_dst_id = info[COMPUTE][INSTANCES][instance_id]['meta']['dst_id']
-        cloud_dst.resources[COMPUTE].change_status('active', instance_id=instance_dst_id)
+    def convert_file_to_image(self, cloud_dst, base_file, disk_format, instance_id):
+        converter = convert_file_to_image.ConvertFileToImage(cloud_dst)
+        dst_image_id = converter.run(file_path=base_file,
+                                     image_format=disk_format,
+                                     image_name="%s-image" % instance_id)
+        return dst_image_id
 
-    def stop_instance(self, cloud_dst, info, instance_id):
-        instance_dst_id = info[COMPUTE][INSTANCES][instance_id]['meta']['dst_id']
-        cloud_dst.resources[COMPUTE].change_status('shutoff', instance_id=instance_dst_id)
+    def convert_image_to_file(self, cloud, image_id, filename):
+        convertor = convert_image_to_file.ConvertImageToFile(cloud)
+        convertor.run(image_id=image_id,
+                      base_filename=filename)
+
+    def merge_file(self, cloud, base_file, diff_file):
+        host = cloud.cloud_config.cloud.host
+        self.rebase_diff_file(host, base_file, diff_file)
+        self.commit_diff_file(host, diff_file)
 
     def transport_image(self, cfg, cloud_src, cloud_dst, info, instance_id):
         cloud_cfg_dst = cloud_dst.cloud_config.cloud

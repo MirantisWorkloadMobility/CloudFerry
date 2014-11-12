@@ -181,7 +181,7 @@ class NovaCompute(compute.Compute):
                 self._deploy_project_quotas(info['compute']['project_quotas'])
                 self._deploy_user_quotas(info['compute']['user_quotas'])
         else:
-            self._deploy_instances(info['compute'])
+            info = self._deploy_instances(info['compute'])
 
         return info
 
@@ -231,6 +231,8 @@ class NovaCompute(compute.Compute):
                                     is_public=flavor['is_public'])['flavor']
 
     def _deploy_instances(self, info_compute):
+        new_info = {utl.INSTANCES_TYPE: {}}
+        instances_new = new_info[utl.INSTANCES_TYPE]
         nova_tenants_clients = {
             self.config['cloud']['tenant']: self.nova_client}
 
@@ -267,9 +269,18 @@ class NovaCompute(compute.Compute):
                     "boot_index": 0
                 }]
                 create_params['image'] = None
-            _instance['meta']['dst_id'] = self.create_instance(**create_params)
-
+            # _instance['meta']['dst_id'] = self.create_instance(**create_params)
+            new_id = self.create_instance(**create_params)
+            instance_new_res = self.read_info(search_opts={'instance_id': new_id})
+            instances_new.update(instance_new_res[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE])
+            instance_new = instances_new[new_id]
+            instance_new['id_old'] = _instance['id']
+            instance_new['diff_old'] = _instance['diff']
+            instance_new['ephemeral_old'] = _instance['ephemeral']
+            instance_new['ephemeral_old'] = _instance['ephemeral']
+            instance_new['meta'] = _instance['meta']
         self.nova_client = nova_tenants_clients[self.config['cloud']['tenant']]
+        return new_info
 
     def create_instance(self, **kwargs):
         return self.nova_client.servers.create(**kwargs).id
