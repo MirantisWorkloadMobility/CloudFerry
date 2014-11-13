@@ -30,10 +30,12 @@ class TransportFileToCephViaSsh(transporter.Transporter):
         data_for_trans = info[resource_type][resource_name]
         for item in data_for_trans.itervalues():
             i = item[resource_root_name]
+            host_src = i['host_src']
             path_src = i['path_src']
             path_dst = i['path_dst']
             utils.transfer_from_iscsi_to_ceph(cloud_src,
                                               cloud_dst,
+                                              host_src,
                                               path_src,
                                               path_dst.split("/")[0],
                                               path_dst.split("/")[1])

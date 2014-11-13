@@ -50,10 +50,11 @@ class QemuImg(ssh_util.SshUtil):
                self.execute(cmd2, host_compute)
 
     def detect_backing_file(self, dest_disk_ephemeral, host_instance):
-        cmd = self.backing_file_cmd(host_instance, dest_disk_ephemeral)
+        cmd = self.backing_file_cmd(dest_disk_ephemeral)
         return self.parsing_output_backing(self.execute(cmd, host_instance))
 
-    def parsing_output_backing(self, output):
+    @staticmethod
+    def parsing_output_backing(output):
         out = output.split('\n')
         backing_file = ""
         for i in out:

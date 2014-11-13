@@ -38,11 +38,13 @@ NO = "no"
 EPHEMERAL = "ephemeral"
 REMOTE_FILE = "remote file"
 QCOW2 = "qcow2"
+RAW = "raw"
 YES = "yes"
 NAME_LOG_FILE = 'migrate.log'
 PATH_TO_SNAPSHOTS = 'snapshots'
 
 DISK = "disk"
+DISK_EPHEM = "disk.local"
 LEN_UUID_INSTANCE = 36
 
 STORAGE_RESOURCE = 'storage'

@@ -19,8 +19,9 @@ import cmd_cfg
 
 
 class SshUtil(object):
-    def __init__(self, host, config_migrate):
-        self.host = host
+    def __init__(self, cloud, config_migrate):
+        self.cloud = cloud
+        self.host = cloud.host
         self.config_migrate = config_migrate
 
     def execute(self, cmd, host_compute=None):

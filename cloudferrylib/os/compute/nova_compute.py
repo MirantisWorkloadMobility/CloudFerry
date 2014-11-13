@@ -27,6 +27,7 @@ LOCAL = ".local"
 LEN_UUID_INSTANCE = 36
 INTERFACES = "interfaces"
 
+
 class NovaCompute(compute.Compute):
     """The main class for working with Openstack Nova Compute Service. """
 
@@ -96,8 +97,8 @@ class NovaCompute(compute.Compute):
             if is_ephemeral:
                 ephemeral_path['path_src'] = utl.get_disk_path(
                     instance,
-                    instance_block_info,
-                    is_ceph_ephemeral=True)
+                    is_ceph_ephemeral=is_ceph,
+                    disk=DISK+LOCAL)
             diff = {
                 'path_src': None,
                 'path_dst': None,
@@ -123,7 +124,7 @@ class NovaCompute(compute.Compute):
                              'security_groups': security_groups,
                              'volume': None,
                              'interfaces': interfaces,
-                             'host': host,
+                             'host': getattr(instance, 'OS-EXT-SRV-ATTR:host'),
                              'is_ephemeral': is_ephemeral,
                              'volumes': [{'id': v.id,
                                           'num_device': i,
@@ -231,8 +232,7 @@ class NovaCompute(compute.Compute):
                                     is_public=flavor['is_public'])['flavor']
 
     def _deploy_instances(self, info_compute):
-        new_info = {utl.INSTANCES_TYPE: {}}
-        instances_new = new_info[utl.INSTANCES_TYPE]
+        new_ids = {}
         nova_tenants_clients = {
             self.config['cloud']['tenant']: self.nova_client}
 
@@ -269,18 +269,10 @@ class NovaCompute(compute.Compute):
                     "boot_index": 0
                 }]
                 create_params['image'] = None
-            # _instance['meta']['dst_id'] = self.create_instance(**create_params)
             new_id = self.create_instance(**create_params)
-            instance_new_res = self.read_info(search_opts={'instance_id': new_id})
-            instances_new.update(instance_new_res[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE])
-            instance_new = instances_new[new_id]
-            instance_new['id_old'] = _instance['id']
-            instance_new['diff_old'] = _instance['diff']
-            instance_new['ephemeral_old'] = _instance['ephemeral']
-            instance_new['ephemeral_old'] = _instance['ephemeral']
-            instance_new['meta'] = _instance['meta']
+            new_ids[new_id] = instance['id']
         self.nova_client = nova_tenants_clients[self.config['cloud']['tenant']]
-        return new_info
+        return new_ids
 
     def create_instance(self, **kwargs):
         return self.nova_client.servers.create(**kwargs).id
@@ -288,9 +280,16 @@ class NovaCompute(compute.Compute):
     def get_instances_list(self, detailed=True, search_opts=None,
                            marker=None,
                            limit=None):
-        return self.nova_client.servers.list(detailed=detailed,
-                                             search_opts=search_opts,
-                                             marker=marker, limit=limit)
+        ids = search_opts.get('id', None) if search_opts else None
+        if not ids:
+            return self.nova_client.servers.list(detailed=detailed,
+                                                 search_opts=search_opts,
+                                                 marker=marker, limit=limit)
+        else:
+            if type(ids) is list:
+                return [self.nova_client.servers.get(i) for i in ids]
+            else:
+                return [self.nova_client.servers.get(ids)]
 
     def get_instance(self, instance_id):
         return self.get_instances_list(search_opts={'id': instance_id})[0]
@@ -360,7 +359,7 @@ class NovaCompute(compute.Compute):
         else:
             return True
 
-    def wait_for_status(self, id_obj, status, limit_retry=60):
+    def wait_for_status(self, id_obj, status, limit_retry=90):
         count = 0
         getter = self.nova_client.servers
         while getter.get(id_obj).status.lower() != status.lower():
@@ -368,7 +367,6 @@ class NovaCompute(compute.Compute):
             count += 1
             if count > limit_retry:
                 raise timeout_exception.TimeoutException(getter.get(id_obj).status.lower(), status, "Timeout exp")
-
 
     def get_flavor_from_id(self, flavor_id):
         return self.nova_client.flavors.get(flavor_id)
