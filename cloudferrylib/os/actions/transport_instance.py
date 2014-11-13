@@ -249,14 +249,14 @@ class TransportInstance(action.Action):
         instances = info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE]
         qemu_img_src = cloud_src.qemu_img
         temp_src = cloud_src.cloud_config.cloud.temp
-        transporter = TRANSPORTER_MAP[ISCSI][ISCSI]
-        temp_path_src = temp_src+"/%s"+utl.DISK_EPHEM
+        transporter = TRANSPORTER_MAP[ISCSI][CEPH]
         for inst_id, inst in instances.iteritems():
-            path_src_id_temp = temp_path_src % inst_id
             path_src = inst[EPHEMERAL][PATH_SRC]
+            path_src_temp_raw = path_src + "." + utl.RAW
+
             host_src = inst[EPHEMERAL][HOST_SRC]
-            qemu_img_src.convert(utl.RAW, path_src, path_src_id_temp, host_src)
-            inst[EPHEMERAL][PATH_SRC] = path_src_id_temp
+            qemu_img_src.convert(utl.RAW, path_src, path_src_temp_raw, host_src)
+            inst[EPHEMERAL][PATH_SRC] = path_src_temp_raw
             transporter.run(cfg=cfg,
                             cloud_src=cloud_src,
                             cloud_dst=cloud_dst,
