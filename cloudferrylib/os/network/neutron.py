@@ -81,11 +81,12 @@ class NeutronNetwork(network.Network):
     def get_list_ports(self, **kwargs):
         return self.neutron_client.list_ports(**kwargs)['ports']
 
-    def create_port(self, net_id, mac, ip, sg_ids, tenant_id, keep_ip):
+    def create_port(self, net_id, mac, ip, tenant_id, keep_ip, sg_ids=None):
         param_create_port = {'network_id': net_id,
                              'mac_address': mac,
-                             'security_groups': sg_ids,
                              'tenant_id': tenant_id}
+        if sg_ids:
+            param_create_port['security_groups'] = sg_ids
         if keep_ip:
             param_create_port['fixed_ips'] = [{"ip_address": ip}]
         return self.neutron_client.create_port({
