@@ -27,9 +27,14 @@ from cloudferrylib.os.actions import get_info_volumes
 from cloudferrylib.os.actions import transport_instance
 from cloudferrylib.os.actions import transport_db_via_ssh
 from cloudferrylib.os.actions import detach_used_volumes
+from cloudferrylib.os.actions import attach_used_volumes
 from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.os.actions import convert_image_to_compute
+from cloudferrylib.os.actions import convert_image_to_volume
 from cloudferrylib.os.actions import convert_compute_to_image
+from cloudferrylib.os.actions import convert_compute_to_volume
+from cloudferrylib.os.actions import convert_volume_to_image
+from cloudferrylib.os.actions import convert_volume_to_compute
 from cloudferrylib.os.actions import get_info_instances
 from cloudferrylib.utils import utils as utl
 
@@ -50,19 +55,43 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
 
         # action1 = identity_transporter.IdentityTransporter()
         # info_identity = action1.run(self.src_cloud, self.dst_cloud)['info_identity']
+
         act_get_info = get_info_instances.GetInfoInstances(self.src_cloud)
         act_convert_c_to_i = convert_compute_to_image.ConvertComputeToImage(self.config, self.src_cloud)
         act_copy_g2g = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
         act_convert_i_to_c = convert_image_to_compute.ConvertImageToCompute()
+        act_convert_c_to_v = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
+        act_convert_v_to_i = convert_volume_to_image.ConvertVolumeToImage('qcow2', self.src_cloud)
+        act_convert_i_to_v = convert_image_to_volume.ConvertImageToVolume(self.dst_cloud)
+        act_convert_v_to_c = convert_volume_to_compute.ConvertVolumeToCompute(self.dst_cloud)
+        act_attaching = attach_used_volumes.AttachVolumes(self.dst_cloud)
         act_prep_net = prepare_networks.PrepareNetworks(self.dst_cloud, self.config)
         action2 = transport_instance.TransportInstance()
 
+        #Get instances
         info = act_get_info.run()['info']
+        print info
+
+        #Transport images
         images_info = act_convert_c_to_i.run(info=info)['images_info']
         images_info = act_copy_g2g.run(images_info=images_info)['images_info']
         info = act_convert_i_to_c.run(images_info=images_info)['info']
-        info = act_prep_net.run(info)['info']
-        info = action2.run(self.config, self.src_cloud, self.dst_cloud, info)
+
+        #Transport volumes
+        info_storage = act_convert_c_to_v.run(info=info)['storage_info']
+        images_info = act_convert_v_to_i.run(volumes_info=info_storage)['images_info']
+        images_info = act_copy_g2g.run(images_info=images_info)['images_info']
+        info_storage = act_convert_i_to_v.run(images_info=images_info)['volumes_info']
+        info = act_convert_v_to_c.run(volume_info=info_storage)['instance_info']
+
+        ##Prepare network
+        #info = act_prep_net.run(info)['info']
+        #
+        ##Transport instances
+        #info = action2.run(self.config, self.src_cloud, self.dst_cloud, info)
+        #
+        ##Attaching volumes
+        #info = act_attaching.run(info=info)
 
 
 

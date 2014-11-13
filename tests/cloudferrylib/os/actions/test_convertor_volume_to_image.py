@@ -16,7 +16,7 @@
 
 import mock
 
-from cloudferrylib.os.actions import converter_volume_to_image
+from cloudferrylib.os.actions import convert_volume_to_image
 from tests import test
 
 
@@ -53,7 +53,7 @@ class ConverterVolumeToImageTest(test.TestCase):
         }
 
     def test_action(self):
-        fake_action = converter_volume_to_image.ConverterVolumeToImage(
+        fake_action = convert_volume_to_image.ConverterVolumeToImage(
             "QCOW2",
             self.fake_cloud)
         res = fake_action.run(self.fake_volumes_info)

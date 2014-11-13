@@ -14,17 +14,22 @@
 
 
 from cloudferrylib.base.action import action
-from cloudferrylib.utils.ssh_util import SshUtil
 
 
-class RemoteExecution(action.Action):
+class ConvertVolumeToCompute(action.Action):
+    def __init__(self, cloud):
+        self.cloud = cloud
+        super(ConvertVolumeToCompute, self).__init__()
 
-    def __init__(self, config_migrate, host):
-        self.config_migrate = config_migrate
-        self.host = host
-        self.remote_exec_obj = SshUtil(self.host, self.config_migrate)
-        super(RemoteExecution, self).__init__()
+    def run(self, volume_info, **kwargs):
 
-    def run(self, command, **kwargs):
-        self.remote_exec_obj.execute(command)
-        return {}
+        new_instance_info = {'compute': {'instances': {}}}
+
+        for volume in volume_info['storage']['volumes'].itervalues():
+            temp_inst_info = {'compute': volume['meta'].pop('compute')}
+            temp_inst_info['compute']['meta'] = volume
+
+            new_instance_info['compute']['instances'].update(temp_inst_info['compute'])
+
+        return {'instance_info': new_instance_info}
+

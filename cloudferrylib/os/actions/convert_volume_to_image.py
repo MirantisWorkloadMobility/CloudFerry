@@ -31,13 +31,13 @@ def require_methods(methods, obj):
     return True
 
 
-class ConverterVolumeToImage(converter.Converter):
+class ConvertVolumeToImage(converter.Converter):
 
     def __init__(self, disk_format, cloud, container_format=BARE):
         self.cloud = cloud
         self.disk_format = disk_format
         self.container_format = container_format
-        super(ConverterVolumeToImage, self).__init__()
+        super(ConvertVolumeToImage, self).__init__()
 
     def run(self, volumes_info={}, **kwargs):
         volumes_info = copy.deepcopy(volumes_info)
@@ -73,5 +73,5 @@ class ConverterVolumeToImage(converter.Converter):
         images_info[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE] = images_from_volumes
         images_info[utl.IMAGE_RESOURCE]['resource'] = resource_image
         return {
-            'image_data': images_info
+            'images_info': images_info
         }

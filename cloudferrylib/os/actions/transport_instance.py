@@ -5,7 +5,7 @@ from cloudferrylib.os.actions import transport_file_to_ceph_via_ssh
 from cloudferrylib.os.actions import transport_file_to_file_via_ssh
 from cloudferrylib.os.actions import convert_image_to_file
 from cloudferrylib.os.actions import convert_file_to_image
-from cloudferrylib.os.actions import converter_volume_to_image
+from cloudferrylib.os.actions import convert_volume_to_image
 from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.utils import utils as utl, forward_agent
 
@@ -171,7 +171,7 @@ class TransportInstance(action.Action):
         src_storage = cloud_src.resources[utl.STORAGE_RESOURCE]
         volume = src_storage.read_info(id=instance[INSTANCE_BODY]['volumes'][0]['id'])
 
-        act_v_to_i = converter_volume_to_image.ConverterVolumeToImage('qcow2', cloud_src)
+        act_v_to_i = convert_volume_to_image.ConverterVolumeToImage('qcow2', cloud_src)
         image = act_v_to_i.run(volume)['image_data']
 
         act_g_to_g = copy_g2g.CopyFromGlanceToGlance(cloud_src, cloud_dst)

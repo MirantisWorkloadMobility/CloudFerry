@@ -23,16 +23,17 @@ BARE = "bare"
 AVAILABLE = 'available'
 
 
-class ConverterImageToVolume(converter.Converter):
+class ConvertImageToVolume(converter.Converter):
 
-    def __init__(self):
-        super(ConverterImageToVolume, self).__init__()
+    def __init__(self, cloud):
+        self.cloud = cloud
+        super(ConvertImageToVolume, self).__init__()
 
-    def run(self, images_info=None, cloud_current=None, **kwargs):
+    def run(self, images_info=None, **kwargs):
         if not images_info:
             return {}
-        resource_storage = cloud_current.resources[utl.STORAGE_RESOURCE]
-        resource_image = cloud_current.resources[utl.IMAGE_RESOURCE]
+        resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
+        resource_image = self.cloud.resources[utl.IMAGE_RESOURCE]
         volumes_info = dict(resource=resource_image, storage=dict(volumes={}))
         for img in images_info[utl.IMAGE_RESOURCE][
                 utl.IMAGES_TYPE].itervalues():
@@ -45,6 +46,7 @@ class ConverterImageToVolume(converter.Converter):
             new_volume = (
                 resource_storage.read_info(id=volume.id)[utl.STORAGE_RESOURCE][
                     utl.VOLUMES_TYPE][volume.id][utl.VOLUME_BODY])
+            img[utl.META_INFO].pop('volume')
             volumes_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][volume.id] = {
                 utl.VOLUME_BODY: new_volume,
                 utl.META_INFO: img[utl.META_INFO]

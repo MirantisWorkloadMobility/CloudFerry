@@ -170,7 +170,6 @@ class GlanceImage(image.Image):
         if migrate_images_list:
             im_name_list = [(im.name, meta) for (im, meta) in
                             migrate_images_list]
-            print im_name_list
             new_info = self.read_info(images_list_meta=im_name_list)
             return new_info
 
@@ -184,7 +183,7 @@ class GlanceImage(image.Image):
     def patch_image(backend_storage, cloud, image_id):
         resource_image = cloud.resources['image']
         if backend_storage == 'ceph':
-            image_from_glance = resource_image.read_info({'id': image_id})
+            image_from_glance = resource_image.read_info(id=image_id)
             with settings(host_string=cloud.getIpSsh()):
                 out = json.loads(
                     run("rbd -p images info %s --format json" % image_id))

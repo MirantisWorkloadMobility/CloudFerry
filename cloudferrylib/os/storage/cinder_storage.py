@@ -13,12 +13,19 @@
 # limitations under the License.
 
 
-from cloudferrylib.base import storage
-from cinderclient.v1 import client as cinder_client
-from cloudferrylib.utils import mysql_connector
-from fabric.api import settings
-from fabric.api import run
 import time
+
+from fabric.api import run
+from fabric.api import settings
+
+from cinderclient.v1 import client as cinder_client
+
+from cloudferrylib.base import storage
+from cloudferrylib.os.actions import remote_execution # move it to utils
+from cloudferrylib.utils import mysql_connector
+
+
+
 
 AVAILABLE = 'available'
 IN_USE = "in-use"
@@ -78,8 +85,14 @@ class CinderStorage(storage.Storage):
                                                       'image': None
                                                   }}
         if self.config['migrate']['keep_volume_storage']:
-            info['storage']['volumes_db'] = \
-                {'volumes': '/tmp/volumes'}
+            info['storage']['volumes_db'] = {'volumes': '/tmp/volumes'}
+
+             #cleanup db
+            rem_exec = remote_execution.RemoteExecution(
+                self.config.migrate,
+                self.host)
+            rem_exec.run('rm -rf /tmp/volumes')
+
             for table_name, file_name in info['storage']['volumes_db'].iteritems():
                 self.download_table_from_db_to_file(table_name, file_name)
         return info
@@ -98,7 +111,7 @@ class CinderStorage(storage.Storage):
         return info
 
     def deploy(self, info):
-        if info['storage']['volumes_db']:
+        if info['storage'].get('volumes_db'):
             for table_name, file_name in info['storage']['volumes_db'].iteritems():
                 self.upload_table_to_db(table_name, file_name)
             for tenant in info['identity']['tenants']:

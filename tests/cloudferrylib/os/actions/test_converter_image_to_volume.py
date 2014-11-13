@@ -16,7 +16,7 @@
 
 import mock
 
-from cloudferrylib.os.actions import converter_image_to_volume
+from cloudferrylib.os.actions import convert_image_to_volume
 from tests import test
 
 
@@ -36,7 +36,7 @@ class ConverterImageToVolumeTest(test.TestCase):
                                      'image': self.fake_image}
 
     def test_action(self):
-        action = converter_image_to_volume.ConverterImageToVolume()
+        action = convert_image_to_volume.ConverterImageToVolume()
         images_fake = dict(image=dict(images=[{
             'image': 'image_body',
             'meta': {
