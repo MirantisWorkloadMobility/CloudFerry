@@ -82,7 +82,7 @@ def transfer_from_ceph_to_ceph(cloud_src,
     delete_file_from_rbd(ssh_ip_dst, ceph_pool_dst, name_file_dst)
     with settings(host_string=ssh_ip_src):
         with utils.forward_agent(env.key_filename):
-            run(("rbd export -p %s volume-%s - | " +
+            run(("rbd export -p %s %s - | " +
                  "ssh -oStrictHostKeyChecking=no %s 'rbd import --image-format=2 - %s/%s'") %
                 (ceph_pool_src, name_file_src, ssh_ip_dst, ceph_pool_dst, name_file_dst))
 

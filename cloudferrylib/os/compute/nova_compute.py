@@ -97,6 +97,7 @@ class NovaCompute(compute.Compute):
             if is_ephemeral:
                 ephemeral_path['path_src'] = utl.get_disk_path(
                     instance,
+                    instance_block_info,
                     is_ceph_ephemeral=is_ceph,
                     disk=DISK+LOCAL)
             diff = {
