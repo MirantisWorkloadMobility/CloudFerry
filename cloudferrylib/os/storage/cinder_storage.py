@@ -141,7 +141,8 @@ class CinderStorage(storage.Storage):
         if 'instance' in volume_info['meta']:
             if volume_info['meta']['instance']:
                 self.attach_volume(volume_info['volume']['id'],
-                                   volume_info['meta']['instance']['id'],
+                                   volume_info['meta']['instance']['instance'][
+                                       'id'],
                                    volume_info['volume']['device'])
                 self.wait_for_status(volume_info['volume']['id'], IN_USE)
 

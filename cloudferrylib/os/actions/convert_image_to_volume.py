@@ -13,6 +13,8 @@
 # limitations under the License.
 
 
+import copy
+
 from cloudferrylib.base.action import converter
 from cloudferrylib.utils import utils as utl
 
@@ -30,6 +32,7 @@ class ConvertImageToVolume(converter.Converter):
         super(ConvertImageToVolume, self).__init__()
 
     def run(self, images_info=None, **kwargs):
+        images_info = copy.deepcopy(images_info)
         if not images_info:
             return {}
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
@@ -42,7 +45,11 @@ class ConvertImageToVolume(converter.Converter):
                 img[utl.META_INFO][utl.VOLUME_BODY]['id']: dict(
                     volume=img[utl.META_INFO][utl.VOLUME_BODY],
                     meta=img[utl.META_INFO])}))
+
+            temp_instance_info = img[utl.META_INFO].pop(utl.INSTANCE_BODY)
             volume = resource_storage.deploy(vol)[0]
+            img[utl.META_INFO][utl.INSTANCE_BODY] = temp_instance_info
+
             new_volume = (
                 resource_storage.read_info(id=volume.id)[utl.STORAGE_RESOURCE][
                     utl.VOLUMES_TYPE][volume.id][utl.VOLUME_BODY])

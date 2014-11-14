@@ -1,18 +1,35 @@
+# Copyright (c) 2014 Mirantis Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the License);
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and#
+# limitations under the License.
+
+
+import copy
+
+from fabric.api import env
+from fabric.api import run
+from fabric.api import settings
+
 from cloudferrylib.base.action import action
+from cloudferrylib.os.actions import convert_file_to_image
+from cloudferrylib.os.actions import convert_image_to_file
+from cloudferrylib.os.actions import convert_volume_to_image
+from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.os.actions import transport_ceph_to_ceph_via_ssh
 from cloudferrylib.os.actions import transport_ceph_to_file_via_ssh
 from cloudferrylib.os.actions import transport_file_to_ceph_via_ssh
 from cloudferrylib.os.actions import transport_file_to_file_via_ssh
-from cloudferrylib.os.actions import convert_image_to_file
-from cloudferrylib.os.actions import convert_file_to_image
-from cloudferrylib.os.actions import convert_volume_to_image
-from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.utils import utils as utl, forward_agent
 
-from fabric.api import run, settings, env
-from cloudferrylib.utils import utils as utl
-import copy
-from fabric.api import run, settings
 
 CLOUD = 'cloud'
 BACKEND = 'backend'
@@ -121,6 +138,9 @@ class TransportInstance(action.Action):
         new_info = dst_compute.read_info(search_opts={'id': new_ids.keys()})
         for i in new_ids.iterkeys():
             dst_compute.change_status('shutoff', instance_id=i)
+        for new_id, old_id in new_ids.iteritems():
+            new_info['compute']['instances'][new_id]['meta'] = info[
+                'compute']['instances'][old_id]['meta']
         info = self.prepare_ephemeral_drv(info, new_info, new_ids)
         return info
 
@@ -171,7 +191,8 @@ class TransportInstance(action.Action):
         src_storage = cloud_src.resources[utl.STORAGE_RESOURCE]
         volume = src_storage.read_info(id=instance[INSTANCE_BODY]['volumes'][0]['id'])
 
-        act_v_to_i = convert_volume_to_image.ConverterVolumeToImage('qcow2', cloud_src)
+        act_v_to_i = convert_volume_to_image.ConvertVolumeToImage('qcow2',
+                                                                  cloud_src)
         image = act_v_to_i.run(volume)['image_data']
 
         act_g_to_g = copy_g2g.CopyFromGlanceToGlance(cloud_src, cloud_dst)

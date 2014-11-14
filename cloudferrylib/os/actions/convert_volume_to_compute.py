@@ -13,23 +13,34 @@
 # limitations under the License.
 
 
+import copy
+
 from cloudferrylib.base.action import action
+from cloudferrylib.os.actions import get_info_instances
 
 
 class ConvertVolumeToCompute(action.Action):
-    def __init__(self, cloud):
-        self.cloud = cloud
+    def __init__(self, src_cloud, dst_cloud):
+        self.src_cloud = src_cloud
+        self.dst_cloud = dst_cloud
         super(ConvertVolumeToCompute, self).__init__()
 
     def run(self, volume_info, **kwargs):
+        volume_info = copy.deepcopy(volume_info)
 
         new_instance_info = {'compute': {'instances': {}}}
+        instances = new_instance_info['compute']['instances']
 
         for volume in volume_info['storage']['volumes'].itervalues():
-            temp_inst_info = {'compute': volume['meta'].pop('compute')}
-            temp_inst_info['compute']['meta'] = volume
-
-            new_instance_info['compute']['instances'].update(temp_inst_info['compute'])
+            instance_id = volume['meta']['instance']['instance']['id']
+            if instance_id not in instances:
+                get_inst_info_action = get_info_instances.GetInfoInstances(
+                    self.src_cloud)
+                info = get_inst_info_action.run(id=instance_id)['info']
+                instances[instance_id] = info['compute']['instances'][
+                    instance_id]
+                instances[instance_id]['meta']['volume'] = []
+            volume['meta'].pop('instance')
+            instances[instance_id]['meta']['volume'].append(volume)
 
         return {'instance_info': new_instance_info}
-
