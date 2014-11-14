@@ -145,46 +145,47 @@ class GlanceImage(image.Image):
 
     def deploy(self, info):
         info = copy.deepcopy(info)
+        new_info = {'image': {'images': {}}}
         migrate_images_list = []
-        for gl_image in info['image']['images'].itervalues():
-            dst_images = {x.checksum: x for x in self.get_image_list()}
-            checksum_current = gl_image['image']['checksum']
-            meta = gl_image['meta']
-            if checksum_current in dst_images:
-                migrate_images_list.append((dst_images[checksum_current], meta))
-                continue
-            gl_image['image']['resource_src'] = info['image']['resource']
-            migrate_image = self.create_image(
-                name=gl_image['image']['name'] + 'Migrate',
-                container_format=gl_image['image']['container_format'],
-                disk_format=gl_image['image']['disk_format'],
-                is_public=gl_image['image']['is_public'],
-                protected=gl_image['image']['protected'],
-                size=gl_image['image']['size'],
-                data=FileLikeProxy.FileLikeProxy(
-                    gl_image['image'],
-                    FileLikeProxy.callback_print_progress,
-                    self.config['migrate']['speed_limit']))
-            migrate_images_list.append((migrate_image, meta))
-
+        empty_image_list = {}
+        for image_id_src, gl_image in info['image']['images'].iteritems():
+            if gl_image['image']:
+                dst_images = {x.checksum: x for x in self.get_image_list()}
+                checksum_current = gl_image['image']['checksum']
+                meta = gl_image['meta']
+                if checksum_current in dst_images:
+                    migrate_images_list.append((dst_images[checksum_current], meta))
+                    continue
+                gl_image['image']['resource_src'] = info['image']['resource']
+                migrate_image = self.create_image(
+                    name=gl_image['image']['name'] + 'Migrate',
+                    container_format=gl_image['image']['container_format'],
+                    disk_format=gl_image['image']['disk_format'],
+                    is_public=gl_image['image']['is_public'],
+                    protected=gl_image['image']['protected'],
+                    size=gl_image['image']['size'],
+                    data=FileLikeProxy.FileLikeProxy(
+                        gl_image['image'],
+                        FileLikeProxy.callback_print_progress,
+                        self.config['migrate']['speed_limit']))
+                migrate_images_list.append((migrate_image, meta))
+            else:
+                empty_image_list[image_id_src] = gl_image
         if migrate_images_list:
             im_name_list = [(im.name, meta) for (im, meta) in
                             migrate_images_list]
             new_info = self.read_info(images_list_meta=im_name_list)
-            return new_info
-
-        return {}
+        new_info['image']['images'].update(empty_image_list)
+        return new_info
 
     def wait_for_status(self, id_res, status):
         while self.glance_client.images.get(id_res).status != status:
             time.sleep(1)
 
-    @staticmethod
-    def patch_image(backend_storage, cloud, image_id):
-        resource_image = cloud.resources['image']
+    def patch_image(self, backend_storage, image_id):
         if backend_storage == 'ceph':
-            image_from_glance = resource_image.read_info(id=image_id)
-            with settings(host_string=cloud.getIpSsh()):
+            image_from_glance = self.get_image_by_id(image_id)
+            with settings(host_string=self.cloud.getIpSsh()):
                 out = json.loads(
                     run("rbd -p images info %s --format json" % image_id))
                 image_from_glance.update(size=out["size"])

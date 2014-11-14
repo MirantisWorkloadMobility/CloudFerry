@@ -15,7 +15,10 @@ class ConvertImageToCompute(action.Action):
             if 'instance' not in image['meta']:
                 continue
             instance = image['meta']['instance']
-            instance['instance']['image_id'] = image['image']['id']
+            if not (instance['instance']['image_id'] is None):
+                if image['image']:
+                    instance['instance']['image_id'] = image['image']['id']
+                else:
+                    instance['instance']['image_id'] = None
             instance_info['compute']['instances'][instance['instance']['id']] = instance
         return {'info': instance_info}
-

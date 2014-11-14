@@ -364,7 +364,7 @@ class NovaCompute(compute.Compute):
         count = 0
         getter = self.nova_client.servers
         while getter.get(id_obj).status.lower() != status.lower():
-            time.sleep(1)
+            time.sleep(2)
             count += 1
             if count > limit_retry:
                 raise timeout_exception.TimeoutException(getter.get(id_obj).status.lower(), status, "Timeout exp")

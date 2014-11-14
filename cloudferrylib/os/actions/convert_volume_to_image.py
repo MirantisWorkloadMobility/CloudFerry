@@ -59,8 +59,7 @@ class ConvertVolumeToImage(converter.Converter):
                 container_format=self.container_format,
                 disk_format=self.disk_format)
             resource_image.wait_for_status(image_id, ACTIVE)
-            resource_image.patch_image(resource_storage.get_backend(),
-                                       self.cloud, image_id)
+            resource_image.patch_image(resource_storage.get_backend(), image_id)
             image_vol = resource_image.read_info(image_id=image_id)
             img_new = {
                 utl.IMAGE_BODY: (
