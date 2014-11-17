@@ -23,8 +23,8 @@ class AttachVolumes(action.Action):
         self.cloud = cloud
         super(AttachVolumes, self).__init__()
 
-    def run(self, volumes_info={}, **kwargs):
+    def run(self, storage_info={}, **kwargs):
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
-        for vol in volumes_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE].itervalues():
+        for vol in storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE].itervalues():
             resource_storage.attach_volume_to_instance(vol)
         return {}

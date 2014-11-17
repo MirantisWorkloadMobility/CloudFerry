@@ -25,9 +25,9 @@ class PrepareNetworks(action.Action):
         self.config = config
         super(PrepareNetworks, self).__init__()
 
-    def run(self, info_compute=None, **kwargs):
+    def run(self, info=None, **kwargs):
 
-        info_compute = copy.deepcopy(info_compute)
+        info_compute = copy.deepcopy(info)
 
         network_resource = self.cloud.resources[utl.NETWORK_RESOURCE]
         identity_resource = self.cloud.resources[utl.IDENTITY_RESOURCE]

@@ -16,7 +16,9 @@
 import cloud
 import cloud_ferry
 from cloudferrylib.os.actions import identity_transporter
-
+from cloudferrylib.scheduler import scheduler
+from cloudferrylib.scheduler import namespace
+from cloudferrylib.scheduler import cursor
 from cloudferrylib.os.image import glance_image
 from cloudferrylib.os.storage import cinder_storage
 from cloudferrylib.os.identity import keystone
@@ -54,48 +56,32 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         
     def migrate(self):
 
-        # action1 = identity_transporter.IdentityTransporter()
-        # info_identity = action1.run(self.src_cloud, self.dst_cloud)['info_identity']
-
         act_get_info = get_info_instances.GetInfoInstances(self.src_cloud)
         act_convert_c_to_i = convert_compute_to_image.ConvertComputeToImage(self.config, self.src_cloud)
-        act_copy_g2g = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
+        act_copy_g2g_vols = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
+        act_copy_g2g_imgs = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
         act_convert_i_to_c = convert_image_to_compute.ConvertImageToCompute()
         act_convert_c_to_v = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
+        act_convert_c_to_v_attach = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
         act_convert_v_to_i = convert_volume_to_image.ConvertVolumeToImage('qcow2', self.src_cloud)
         act_convert_i_to_v = convert_image_to_volume.ConvertImageToVolume(self.dst_cloud)
         act_convert_v_to_c = convert_volume_to_compute.ConvertVolumeToCompute(self.src_cloud, self.dst_cloud)
         act_attaching = attach_used_volumes.AttachVolumes(self.dst_cloud)
         act_prep_net = prepare_networks.PrepareNetworks(self.dst_cloud, self.config)
-        action2 = transport_instance.TransportInstance()
+        action2 = transport_instance.TransportInstance(self.config, self.src_cloud, self.dst_cloud)
         act_start_vm = start_vm.StartVms(self.dst_cloud)
 
-        #Get instances
-        info = act_get_info.run()['info']
+        namespace_scheduler = namespace.Namespace()
 
-        #Transport volumes
-        info_storage = act_convert_c_to_v.run(info=info)['storage_info']
-        images_info = act_convert_v_to_i.run(volumes_info=info_storage)['images_info']
-        images_info = act_copy_g2g.run(images_info=images_info)['images_info']
-        info_storage = act_convert_i_to_v.run(images_info=images_info)['volumes_info']
-        info = act_convert_v_to_c.run(volume_info=info_storage)['instance_info']
+        task_convert_c_to_v_to_i = act_convert_c_to_v >> act_convert_v_to_i
+        task_convert_i_to_v_to_c = act_convert_i_to_v >> act_convert_v_to_c
+        task_transport_volumes = task_convert_c_to_v_to_i >> act_copy_g2g_vols >> task_convert_i_to_v_to_c
+        task_transport_images = act_convert_c_to_i >> act_copy_g2g_imgs >> act_convert_i_to_c
+        task_transport_instances = act_prep_net >> action2 >> act_start_vm
+        task_attaching_volumes = act_convert_c_to_v_attach >> act_attaching
+        transport_resources = task_transport_volumes >> task_transport_images
+        process_migration = act_get_info >> transport_resources >> task_transport_instances >> task_attaching_volumes
 
-        #Transport images
-        images_info = act_convert_c_to_i.run(info=info)['images_info']
-        images_info = act_copy_g2g.run(images_info=images_info)['images_info']
-        info = act_convert_i_to_c.run(images_info=images_info)['info']
-
-        #Prepare network
-        info = act_prep_net.run(info)['info']
-
-        #Transport instances
-        info = action2.run(self.config, self.src_cloud, self.dst_cloud, info)['info']
-
-        # Start instance
-        act_start_vm.run(info)
-
-        #convert volume to compute
-        info_storage = act_convert_c_to_v.run(info=info)['storage_info']
-
-        #Attaching volumes
-        info = act_attaching.run(volumes_info=info_storage)
+        process_migration = cursor.Cursor(process_migration)
+        scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, cursor=process_migration)
+        scheduler_migr.start()

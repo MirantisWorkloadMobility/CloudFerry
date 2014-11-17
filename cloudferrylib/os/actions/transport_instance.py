@@ -64,8 +64,14 @@ TRANSPORTER_MAP = {CEPH: {CEPH: transport_ceph_to_ceph_via_ssh.TransportCephToCe
 class TransportInstance(action.Action):
     # TODO constants
 
+    def __init__(self, config, src_cloud, dst_cloud):
+        self.cfg = config
+        self.cloud_src = src_cloud
+        self.cloud_dst = dst_cloud
+        super(TransportInstance, self).__init__()
+
     @staticmethod
-    def mapping_compute_info(src_cloud, dst_cloud, compute_info):
+    def mapping_compute_info(src_cloud, dst_cloud, compute_info, **kwargs):
 
         new_compute_info = copy.deepcopy(compute_info)
 
@@ -85,47 +91,59 @@ class TransportInstance(action.Action):
 
         return new_compute_info
 
-    def run(self, cfg=None, cloud_src=None, cloud_dst=None, info=None, **kwargs):
+    def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)
         #Init before run
-        dst_storage = cloud_dst.resources[utl.STORAGE_RESOURCE]
-        src_compute = cloud_src.resources[utl.COMPUTE_RESOURCE]
+        dst_storage = self.cloud_dst.resources[utl.STORAGE_RESOURCE]
+        src_compute = self.cloud_src.resources[utl.COMPUTE_RESOURCE]
         backend_ephem_drv_src = src_compute.config.compute.backend
         backend_storage_dst = dst_storage.config.storage.backend
 
         #Mapping another params(flavors, etc)
-        info[COMPUTE] = self.mapping_compute_info(cloud_src, cloud_dst, compute_info=info[COMPUTE])
-
-        compute_info = info[COMPUTE]
+        info[COMPUTE] = self.mapping_compute_info(self.cloud_src, self.cloud_dst, compute_info=info[COMPUTE])
+        new_info = {
+            utl.COMPUTE_RESOURCE: {
+                utl.INSTANCES_TYPE: {
+                }
+            }
+        }
 
         #Get next one instance
-        instance_id = compute_info[INSTANCES].iterkeys().next()
-        instance_boot = BOOT_IMAGE \
-            if compute_info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id'] \
-            else BOOT_VOLUME
-        is_ephemeral = compute_info[INSTANCES][instance_id][utl.INSTANCE_BODY]['is_ephemeral']
+        for instance_id, instance in info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE].iteritems():
+            instance_boot = BOOT_IMAGE \
+                if instance[utl.INSTANCE_BODY]['image_id'] \
+                else BOOT_VOLUME
+            is_ephemeral = instance[utl.INSTANCE_BODY]['is_ephemeral']
+            one_instance = {
+                utl.COMPUTE_RESOURCE: {
+                    utl.INSTANCES_TYPE: {
+                        instance_id: instance
+                    }
+                }
+            }
+            if instance_boot == BOOT_IMAGE:
+                if backend_ephem_drv_src == CEPH:
+                    self.transport_image(self.cfg, self.cloud_src, self.cloud_dst, one_instance, instance_id)
+                    one_instance = self.deploy_instance(self.cloud_dst, one_instance)
+                elif backend_ephem_drv_src == ISCSI:
+                    if backend_storage_dst == CEPH:
+                        self.transport_diff_and_merge(self.cfg, self.cloud_src, self.cloud_dst, one_instance, instance_id)
+                        one_instance = self.deploy_instance(self.cloud_dst, one_instance)
+                    elif backend_storage_dst == ISCSI:
+                        one_instance = self.deploy_instance(self.cloud_dst, one_instance)
+                        self.copy_diff_file(self.cfg, self.cloud_src, self.cloud_dst, one_instance)
+            elif instance_boot == BOOT_VOLUME:
+                one_instance = self.transport_boot_volume_src_to_dst(self.cloud_src, self.cloud_dst, one_instance, instance_id)
+                one_instance = self.deploy_instance(self.cloud_dst, one_instance)
 
-        if instance_boot == BOOT_IMAGE:
-            if backend_ephem_drv_src == CEPH:
-                self.transport_image(cfg, cloud_src, cloud_dst, info, instance_id)
-                info = self.deploy_instance(cloud_dst, info)
-            elif backend_ephem_drv_src == ISCSI:
-                if backend_storage_dst == CEPH:
-                    self.transport_diff_and_merge(cfg, cloud_src, cloud_dst, info, instance_id)
-                    info = self.deploy_instance(cloud_dst, info)
-                elif backend_storage_dst == ISCSI:
-                    info = self.deploy_instance(cloud_dst, info)
-                    self.copy_diff_file(cfg, cloud_src, cloud_dst, info)
-        elif instance_boot == BOOT_VOLUME:
-            info = self.transport_boot_volume_src_to_dst(cloud_src, cloud_dst, info, instance_id)
-            info = self.deploy_instance(cloud_dst, info)
-
-        if is_ephemeral:
-            self.copy_ephemeral(cfg, cloud_src, cloud_dst, info)
+            if is_ephemeral:
+                self.copy_ephemeral(self.cfg, self.cloud_src, self.cloud_dst, one_instance)
+            new_info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE].update(
+                one_instance[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE])
 
         # self.start_instance(cloud_dst, info, instance_id)
         return {
-            'info': info
+            'info': new_info
         }
 
     def deploy_instance(self, cloud_dst, info):

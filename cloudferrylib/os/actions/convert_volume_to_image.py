@@ -39,16 +39,16 @@ class ConvertVolumeToImage(converter.Converter):
         self.container_format = container_format
         super(ConvertVolumeToImage, self).__init__()
 
-    def run(self, volumes_info={}, **kwargs):
-        volumes_info = copy.deepcopy(volumes_info)
+    def run(self, storage_info={}, **kwargs):
+        volumes_info = copy.deepcopy(storage_info)
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
         resource_image = self.cloud.resources[utl.IMAGE_RESOURCE]
-        images_info = {utl.IMAGE_RESOURCE: {}}
+        images_info = {utl.IMAGE_RESOURCE: {utl.IGNORE: {}}}
         if not require_methods(['upload_volume_to_image'], resource_storage):
             raise RuntimeError("No require methods")
         images_from_volumes = {}
-        for volume in volumes_info[utl.STORAGE_RESOURCE][
-                utl.VOLUMES_TYPE].itervalues():
+        for volume_id, volume in volumes_info[utl.STORAGE_RESOURCE][
+                utl.VOLUMES_TYPE].iteritems():
             vol = volume['volume']
             LOG.debug(
                 "| | uploading volume %s [%s] to image service bootable=%s" % (

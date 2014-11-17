@@ -22,7 +22,7 @@ class NetworkTransporter(transporter.Transporter):
     def __init__(self):
         super(NetworkTransporter, self).__init__()
 
-    def run(self, src_cloud, dst_cloud):
+    def run(self, src_cloud, dst_cloud, **kwargs):
         src_resource = src_cloud.resources[utl.NETWORK_RESOURCE]
         dst_resource = dst_cloud.resources[utl.NETWORK_RESOURCE]
         info = src_resource.read_info()

@@ -22,12 +22,12 @@ class DeployVolumes(action.Action):
         self.cloud = cloud
         super(DeployVolumes, self).__init__()
 
-    def run(self, volumes_info=None, identity_info=None, **kwargs):
-        deploy_info = {utl.STORAGE_RESOURCE: volumes_info[utl.STORAGE_RESOURCE],
+    def run(self, storage_info=None, identity_info=None, **kwargs):
+        deploy_info = {utl.STORAGE_RESOURCE: storage_info[utl.STORAGE_RESOURCE],
                        utl.IDENTITY_RESOURCE: identity_info[utl.IDENTITY_RESOURCE]}
         volume_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
         new_volumes_info = volume_resource.deploy(deploy_info)
-        return new_volumes_info
+        return {'storage_info': new_volumes_info}
 
 
 

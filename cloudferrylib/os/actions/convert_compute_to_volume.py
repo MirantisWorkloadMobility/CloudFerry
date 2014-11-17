@@ -29,9 +29,19 @@ class ConvertComputeToVolume(action.Action):
     def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)
         info[utl.STORAGE_RESOURCE] = {utl.VOLUMES_TYPE: {}}
+        ignored = {}
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
-        for instance in info[utl.COMPUTE_RESOURCE][
-                utl.INSTANCES_TYPE].itervalues():
+        for instance_id, instance in info[utl.COMPUTE_RESOURCE][
+                utl.INSTANCES_TYPE].iteritems():
+            volumes_exists = True
+            if not instance[utl.INSTANCE_BODY]['volumes']:
+                if 'volume' in instance['meta']:
+                    if not instance['meta']['volume']:
+                        volumes_exists = False
+                else:
+                    volumes_exists = False
+            if not volumes_exists:
+                ignored[instance_id] = instance
             for v in instance[utl.INSTANCE_BODY]['volumes']:
                 volume = resource_storage.read_info(id=v['id'])
                 volume[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']][
@@ -50,8 +60,7 @@ class ConvertComputeToVolume(action.Action):
                         utl.META_INFO]['instance'] = instance
                     info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']][
                         utl.VOLUME_BODY] = v
-
-        info.pop('compute')
         return {
-            'storage_info': info
+            'storage_info': info,
+            'compute_ignored': ignored
         }

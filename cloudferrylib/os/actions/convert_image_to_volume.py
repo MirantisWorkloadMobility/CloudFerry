@@ -59,5 +59,5 @@ class ConvertImageToVolume(converter.Converter):
                 utl.META_INFO: img[utl.META_INFO]
             }
         return {
-            'volumes_info': volumes_info
+            'storage_info': volumes_info
         }

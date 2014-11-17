@@ -73,7 +73,7 @@ IMAGES_TYPE = 'images'
 IMAGE_BODY = 'image'
 
 IDENTITY_RESOURCE = 'identity'
-
+IGNORE = 'ignore'
 
 META_INFO = 'meta'
 

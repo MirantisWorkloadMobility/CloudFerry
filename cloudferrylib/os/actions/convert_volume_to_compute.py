@@ -25,10 +25,10 @@ class ConvertVolumeToCompute(action.Action):
         self.dst_cloud = dst_cloud
         super(ConvertVolumeToCompute, self).__init__()
 
-    def run(self, volume_info, **kwargs):
-        volume_info = copy.deepcopy(volume_info)
+    def run(self, storage_info, compute_ignored={}, **kwargs):
+        volume_info = copy.deepcopy(storage_info)
 
-        new_instance_info = {'compute': {'instances': {}}}
+        new_instance_info = {'compute': {'instances': compute_ignored}}
         instances = new_instance_info['compute']['instances']
 
         for volume in volume_info['storage']['volumes'].itervalues():
@@ -42,5 +42,4 @@ class ConvertVolumeToCompute(action.Action):
                 instances[instance_id]['meta']['volume'] = []
             volume['meta'].pop('instance')
             instances[instance_id]['meta']['volume'].append(volume)
-
-        return {'instance_info': new_instance_info}
+        return {'info': new_instance_info}

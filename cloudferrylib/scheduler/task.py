@@ -28,6 +28,18 @@ class Element(object):
     def set_next_path(self, num):
         self.num_element = num
 
+    def get_starting_element(self):
+        elem = self
+        while elem.prev_element:
+            elem = elem.prev_element
+        return elem
+
+    def get_finite_element(self):
+        elem = self
+        while self.next_element:
+            elem = self.next_element[-1]
+        return elem
+
 
 class ClassicSyntax(Element):
     def add_closure_link_with(self, other):
@@ -45,8 +57,9 @@ class ClassicSyntax(Element):
         return self
 
     def dual_link_with(self, other):
-        self.next_element.insert(0, other)
-        other.prev_element = self if not other.prev_element else other.prev_element
+        other_begin = other.get_starting_element()
+        self.next_element.insert(0, other_begin)
+        other_begin.prev_element = self if not other_begin.prev_element else other_begin.prev_element
         return other
 
 

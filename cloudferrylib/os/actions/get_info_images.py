@@ -34,4 +34,4 @@ class GetInfoImages(action.Action):
 
         image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
         images_info = image_resource.read_info(**self.search_opts)
-        return {'info': images_info}
+        return {'images_info': images_info}
