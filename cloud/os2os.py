@@ -56,7 +56,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)
         
     def migrate(self):
-
+        act_identity_trans = identity_transporter.IdentityTransporter(self.src_cloud, self.dst_cloud)
         act_get_info = get_info_instances.GetInfoInstances(self.src_cloud)
         act_convert_c_to_i = convert_compute_to_image.ConvertComputeToImage(self.config, self.src_cloud)
         act_copy_g2g_vols = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
@@ -81,7 +81,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         task_transport_instances = act_prep_net >> action2 >> act_start_vm
         task_attaching_volumes = act_convert_c_to_v_attach >> act_attaching
         transport_resources = task_transport_volumes >> task_transport_images
-        process_migration = act_get_info >> transport_resources >> task_transport_instances >> task_attaching_volumes
+        process_migration = act_identity_trans >> act_get_info >> transport_resources >> task_transport_instances >> task_attaching_volumes
 
         process_migration = cursor.Cursor(process_migration)
         scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, cursor=process_migration)
