@@ -30,6 +30,7 @@ from cloudferrylib.os.actions import transport_instance
 from cloudferrylib.os.actions import transport_db_via_ssh
 from cloudferrylib.os.actions import detach_used_volumes
 from cloudferrylib.os.actions import attach_used_volumes
+from cloudferrylib.os.actions import attach_used_volumes_via_nova
 from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.os.actions import convert_image_to_compute
 from cloudferrylib.os.actions import convert_image_to_volume
@@ -66,7 +67,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_convert_v_to_i = convert_volume_to_image.ConvertVolumeToImage('qcow2', self.src_cloud)
         act_convert_i_to_v = convert_image_to_volume.ConvertImageToVolume(self.dst_cloud)
         act_convert_v_to_c = convert_volume_to_compute.ConvertVolumeToCompute(self.src_cloud, self.dst_cloud)
-        act_attaching = attach_used_volumes.AttachVolumes(self.dst_cloud)
+        act_attaching = attach_used_volumes_via_nova.AttachVolumesNova(self.dst_cloud)
         act_prep_net = prepare_networks.PrepareNetworks(self.dst_cloud, self.config)
         action2 = transport_instance.TransportInstance(self.config, self.src_cloud, self.dst_cloud)
         act_start_vm = start_vm.StartVms(self.dst_cloud)
