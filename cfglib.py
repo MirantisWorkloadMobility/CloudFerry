@@ -123,11 +123,16 @@ src_storage_opts = [
                help='name service for storage'),
     cfg.StrOpt('backend', default='iscsi',
                help='backend for storage'),
+    cfg.StrOpt('host', default='',
+               help='storage node ip address'),
     cfg.StrOpt('protocol_transfer', default='GLANCE',
                help='mode transporting volumes GLANCE or SSH'),
     cfg.StrOpt('disk_format', default='qcow2',
                help='convert volume'),
-
+    cfg.StrOpt('volume_name_template', default='volume-',
+               help='template for creating names of volumes on storage backend'),
+    cfg.StrOpt('rbd_pool', default='volumes',
+               help='name of pool for volumes in Ceph RBD storage')
 ]
 
 src_image = cfg.OptGroup(name='src_image',
@@ -194,11 +199,16 @@ dst_storage_opts = [
                help='name service for storage'),
     cfg.StrOpt('backend', default='iscsi',
                help='backend for storage'),
+    cfg.StrOpt('host', default='',
+               help='storage node ip address'),
     cfg.StrOpt('protocol_transfer', default='GLANCE',
                help='mode transporting volumes GLANCE or SSH'),
     cfg.StrOpt('disk_format', default='qcow2',
                help='convert volume'),
-
+    cfg.StrOpt('volume_name_template', default='volume-',
+               help='template for creating names of volumes on storage backend'),
+    cfg.StrOpt('rbd_pool', default='volumes',
+               help='name of pool for volumes in Ceph RBD storage')
 ]
 
 dst_image = cfg.OptGroup(name='dst_image',

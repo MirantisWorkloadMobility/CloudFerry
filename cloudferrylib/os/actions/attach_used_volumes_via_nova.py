@@ -15,6 +15,8 @@
 
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
+import copy
+__author__ = 'mirrorcoder'
 
 
 class AttachVolumesNova(action.Action):
@@ -23,6 +25,7 @@ class AttachVolumesNova(action.Action):
         super(AttachVolumesNova, self).__init__()
 
     def run(self, storage_info, **kwargs):
+        storage_info = copy.deepcopy(storage_info)
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
         storage_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
 

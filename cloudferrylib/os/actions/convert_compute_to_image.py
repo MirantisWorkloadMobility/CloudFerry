@@ -32,9 +32,10 @@ def get_image_id_from_volume(volume, storage):
 
 class ConvertComputeToImage(action.Action):
 
-    def __init__(self, cfg=None, cloud=None):
+    def __init__(self, cfg=None, cloud=None, target_output='images_info'):
         self.cfg = cfg
         self.cloud = cloud
+        self.target_output = target_output
         super(ConvertComputeToImage, self).__init__()
 
     def run(self, info=None, **kwargs):
@@ -63,4 +64,4 @@ class ConvertComputeToImage(action.Action):
                 images_body.update(img)
                 images_body[image_id][utl.META_INFO][
                     utl.INSTANCE_BODY] = instance
-        return {'images_info': image_info}
+        return {self.target_output: image_info}

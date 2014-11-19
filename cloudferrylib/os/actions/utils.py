@@ -73,24 +73,26 @@ def transfer_from_iscsi_to_ceph(cloud_src,
 
 def transfer_from_ceph_to_ceph(cloud_src,
                                cloud_dst,
-                               ceph_pool_src="volumes",
-                               name_file_src="volume-",
-                               ceph_pool_dst="volumes",
-                               name_file_dst="volume-"):
-    ssh_ip_src = cloud_src.getIpSsh()
-    ssh_ip_dst = cloud_dst.getIpSsh()
-    delete_file_from_rbd(ssh_ip_dst, ceph_pool_dst, name_file_dst)
-    with settings(host_string=ssh_ip_src):
+                               host_src=None,
+                               host_dst=None,
+                               src_path="volumes",
+                               dst_path="volumes"):
+    if not host_src:
+        host_src = cloud_src.getIpSsh()
+    if not host_dst:
+        host_dst = cloud_dst.getIpSsh()
+    delete_file_from_rbd(host_dst, dst_path)
+    with settings(host_string=host_src):
         with utils.forward_agent(env.key_filename):
-            run(("rbd export -p %s %s - | " +
-                 "ssh -oStrictHostKeyChecking=no %s 'rbd import --image-format=2 - %s/%s'") %
-                (ceph_pool_src, name_file_src, ssh_ip_dst, ceph_pool_dst, name_file_dst))
+            run(("rbd export %s - | " +
+                 "ssh -oStrictHostKeyChecking=no %s 'rbd import --image-format=2 - %s'") %
+                (src_path, host_dst, dst_path))
 
 
-def delete_file_from_rbd(ssh_ip, ceph_pool, name_file):
+def delete_file_from_rbd(ssh_ip, file_path):
     with settings(host_string=ssh_ip):
         with utils.forward_agent(env.key_filename):
-            run("rbd rm -p %s %s" % (ceph_pool, name_file))
+            run("rbd rm %s" % file_path)
 
 
 def convert_to_dest(data, source, dest):

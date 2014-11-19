@@ -47,6 +47,11 @@ DISK = "disk"
 DISK_EPHEM = "disk.local"
 LEN_UUID_INSTANCE = 36
 
+SRC_HOST = 'src_host'
+DST_HOST = 'dst_host'
+SRC_PATH = 'src_path'
+DST_PATH = 'dst_path'
+
 STORAGE_RESOURCE = 'storage'
 VOLUMES_TYPE = 'volumes'
 VOLUME_BODY = 'volume'
@@ -73,6 +78,7 @@ IDENTITY_RESOURCE = 'identity'
 IGNORE = 'ignore'
 
 META_INFO = 'meta'
+OLD_ID = 'old_id'
 
 up_ssh_tunnel = None
 

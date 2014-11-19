@@ -23,6 +23,7 @@ from cinderclient.v1 import client as cinder_client
 from cloudferrylib.base import storage
 from cloudferrylib.os.actions import remote_execution # move it to utils
 from cloudferrylib.utils import mysql_connector
+from cloudferrylib.utils import utils as utl
 
 
 
@@ -84,6 +85,12 @@ class CinderStorage(storage.Storage):
                                                   'meta': {
                                                       'image': None
                                                   }}
+            if self.config.storage.backend == utl.CEPH:
+                rbd_pool = self.config.storage.rbd_pool
+                vol_prefix = self.config.storage.volume_name_template
+                volume['path'] = rbd_pool + "/" + vol_prefix + vol.id
+                if self.config.storage.host:
+                    volume['host'] = self.config.storage.host
         if self.config['migrate']['keep_volume_storage']:
             info['storage']['volumes_db'] = {'volumes': '/tmp/volumes'}
 
@@ -110,7 +117,8 @@ class CinderStorage(storage.Storage):
                 info['imageRef'] = vol['meta']['image']['id']
         return info
 
-    def deploy(self, info):
+    def deploy(self, info, attach=False):
+        new_ids = {}
         if info['storage'].get('volumes_db'):
             for table_name, file_name in info['storage']['volumes_db'].iteritems():
                 self.upload_table_to_db(table_name, file_name)
@@ -124,18 +132,17 @@ class CinderStorage(storage.Storage):
             self.update_column_with_condition('volumes', 'attach_status', 'attached', 'detached')
             self.update_column_with_condition('volumes', 'status', 'in-use', 'available')
             self.update_column('volumes', 'instance_uuid', 'NULL')
-            volumes = self.get_volumes_list(
-                search_opts={'all_tenants': True})
-            return volumes
-        volumes = []
-        for vol in info['storage']['volumes'].itervalues():
+            return {}
+        for id, vol in info['storage']['volumes'].iteritems():
             vol_for_deploy = self.convert(vol)
             volume = self.create_volume(**vol_for_deploy)
             vol['volume']['id'] = volume.id
             self.wait_for_status(volume.id, AVAILABLE)
             self.finish(vol)
-            volumes.append(volume)
-        return volumes
+            if attach:
+                self.attach_volume_to_instance(vol)
+            new_ids[volume.id] = id
+        return new_ids
 
     def attach_volume_to_instance(self, volume_info):
         if 'instance' in volume_info['meta']:

@@ -15,6 +15,11 @@
 
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
+import copy
+
+
+OLD_ID = 'old_id'
+
 
 class DeployVolumes(action.Action):
 
@@ -23,11 +28,31 @@ class DeployVolumes(action.Action):
         super(DeployVolumes, self).__init__()
 
     def run(self, storage_info=None, identity_info=None, **kwargs):
+        storage_info = copy.deepcopy(storage_info)
+        # identity_info = copy.deepcopy(identity_info)
         deploy_info = {utl.STORAGE_RESOURCE: storage_info[utl.STORAGE_RESOURCE],
                        utl.IDENTITY_RESOURCE: identity_info[utl.IDENTITY_RESOURCE]}
         volume_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
-        new_volumes_info = volume_resource.deploy(deploy_info)
-        return {'storage_info': new_volumes_info}
+        new_ids = volume_resource.deploy(deploy_info)
+        storage_info_new = {
+            utl.STORAGE_RESOURCE: {
+                utl.VOLUMES_TYPE:
+                    {
+
+                    }
+            }
+        }
+        volumes = storage_info_new[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE]
+        for new_id, old_id in new_ids.iteritems():
+            volume = volume_resource.read_info(id=new_id)
+            volume[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][new_id][OLD_ID] = old_id
+            volume[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][new_id][utl.META_INFO] = \
+                storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][old_id][utl.META_INFO]
+            volumes.update(volume[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE])
+        return {
+            'storage_info': storage_info_new
+        }
+
 
 
 

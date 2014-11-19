@@ -58,8 +58,9 @@ class BaseScheduler(object):
             except Exception as e:
                 self.status_error = ERROR
                 self.exception = e
-                self.error_task(task, e)
                 traceback.print_exc()
+                self.error_task(task, e)
+                break
 
     def task_run(self, task):
         task(namespace=self.namespace)

@@ -20,22 +20,35 @@ __author__ = 'mirrorcoder'
 
 class TransportCephToCephViaSsh(transporter.Transporter):
 
-    def run(self, cfg=None,
-            cloud_src=None,
-            cloud_dst=None,
-            info={},
-            resource_type=utl.STORAGE_RESOURCE,
-            resource_name=utl.VOLUMES_TYPE,
-            resource_root_name=utl.VOLUME_BODY, **kwargs):
-        data_for_trans = info[resource_type][resource_name]
+    def __init__(self, cfg,
+                 cloud_src,
+                 cloud_dst,
+                 resource_type=utl.STORAGE_RESOURCE,
+                 resource_name=utl.VOLUMES_TYPE,
+                 resource_root_name=utl.VOLUME_BODY,
+                 input_info='info'):
+        self.cfg = cfg
+        self.cloud_src = cloud_src
+        self.cloud_dst = cloud_dst
+        self.resource_type = resource_type
+        self.resource_name = resource_name
+        self.resource_root_name = resource_root_name
+        self.input_info = input_info
+        super(TransportCephToCephViaSsh, self).__init__()
+
+    def run(self, **kwargs):
+        info = kwargs[self.input_info]
+        data_for_trans = info[self.resource_type][self.resource_name]
         for item in data_for_trans.itervalues():
-            i = item[resource_root_name]
-            path_src = i['path_src']
-            path_dst = i['path_dst']
-            utils.transfer_from_ceph_to_ceph(cloud_src,
-                                             cloud_dst,
-                                             path_src.split("/")[0],
-                                             path_src.split("/")[1],
-                                             path_dst.split("/")[0],
-                                             path_dst.split("/")[1])
+            i = item[self.resource_root_name]
+            src_host = i['src_host']
+            dst_host = i['dst_host']
+            src_path = i['src_path']
+            dst_path = i['dst_path']
+            utils.transfer_from_ceph_to_ceph(self.cloud_src,
+                                             self.cloud_dst,
+                                             src_host,
+                                             dst_host,
+                                             src_path,
+                                             dst_path)
         return {}

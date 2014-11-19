@@ -55,10 +55,10 @@ FLAVORS = 'flavors'
 BOOT_IMAGE = 'boot_image'
 
 
-TRANSPORTER_MAP = {CEPH: {CEPH: transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(),
-                          ISCSI: transport_ceph_to_file_via_ssh.TransportCephToFileViaSsh()},
-                   ISCSI: {CEPH: transport_file_to_ceph_via_ssh.TransportFileToCephViaSsh(),
-                           ISCSI: transport_file_to_file_via_ssh.TransportFileToFileViaSsh()}}
+TRANSPORTER_MAP = {CEPH: {CEPH: transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh,
+                          ISCSI: transport_ceph_to_file_via_ssh.TransportCephToFileViaSsh},
+                   ISCSI: {CEPH: transport_file_to_ceph_via_ssh.TransportFileToCephViaSsh,
+                           ISCSI: transport_file_to_file_via_ssh.TransportFileToFileViaSsh}}
 
 
 class TransportInstance(action.Action):
