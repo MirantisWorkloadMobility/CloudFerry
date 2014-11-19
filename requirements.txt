@@ -1,0 +1,15 @@
+fabric>=1.8.2
+ipaddr
+jinja2
+mysql-connector-python
+nose
+oslo.config>=1.2.0
+oslotest
+paramiko>=1.8.0
+python-cinderclient
+python-glanceclient<=0.13.0
+python-keystoneclient
+python-neutronclient>=2.3.0,<3
+python-novaclient
+sqlalchemy
+virtualenv
