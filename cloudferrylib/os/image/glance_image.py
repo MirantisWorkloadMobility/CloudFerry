@@ -13,6 +13,7 @@
 # limitations under the License.
 
 
+import copy
 import json
 import time
 
@@ -20,10 +21,9 @@ from fabric.api import run
 from fabric.api import settings
 
 from cloudferrylib.base import image
+from cloudferrylib.utils import file_like_proxy
 from glanceclient.v1 import client as glance_client
-from migrationlib.os.utils import FileLikeProxy
 
-import copy
 
 class GlanceImage(image.Image):
 
@@ -154,7 +154,8 @@ class GlanceImage(image.Image):
                 checksum_current = gl_image['image']['checksum']
                 meta = gl_image['meta']
                 if checksum_current in dst_images:
-                    migrate_images_list.append((dst_images[checksum_current], meta))
+                    migrate_images_list.append(
+                        (dst_images[checksum_current], meta))
                     continue
                 gl_image['image']['resource_src'] = info['image']['resource']
                 migrate_image = self.create_image(
@@ -164,9 +165,9 @@ class GlanceImage(image.Image):
                     is_public=gl_image['image']['is_public'],
                     protected=gl_image['image']['protected'],
                     size=gl_image['image']['size'],
-                    data=FileLikeProxy.FileLikeProxy(
+                    data=file_like_proxy.FileLikeProxy(
                         gl_image['image'],
-                        FileLikeProxy.callback_print_progress,
+                        file_like_proxy.callback_print_progress,
                         self.config['migrate']['speed_limit']))
                 migrate_images_list.append((migrate_image, meta))
             else:

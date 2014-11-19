@@ -19,9 +19,9 @@ from glanceclient.v1 import client as glance_client
 from oslotest import mockpatch
 
 from cloudferrylib.os.image.glance_image import GlanceImage
+from cloudferrylib.utils import file_like_proxy
 from cloudferrylib.utils import utils
 from tests import test
-from migrationlib.os.utils import FileLikeProxy
 
 
 FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
@@ -207,7 +207,7 @@ class GlanceImageTestCase(test.TestCase):
         info = self.glance_image.read_info()
         self.assertEqual(self.fake_result_info, info)
 
-    @mock.patch('migrationlib.os.utils.FileLikeProxy.FileLikeProxy')
+    @mock.patch('cloudferrylib.utils.file_like_proxy.FileLikeProxy')
     def test_deploy(self, mock_proxy):
         info = copy.deepcopy(self.fake_result_info)
         self.glance_mock_client().images.create.return_value = (
@@ -224,5 +224,5 @@ class GlanceImageTestCase(test.TestCase):
         self.assertEqual(self.fake_result_info, new_info)
         mock_proxy.assert_called_once_with(
             info['image']['images']['fake_image_id_1']['image'],
-            FileLikeProxy.callback_print_progress,
+            file_like_proxy.callback_print_progress,
             '10MB')
