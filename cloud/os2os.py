@@ -41,9 +41,12 @@ from cloudferrylib.os.actions import prepare_volumes_data_map
 from cloudferrylib.os.actions import transport_ceph_to_ceph_via_ssh
 from cloudferrylib.os.actions import get_info_instances
 from cloudferrylib.os.actions import prepare_networks
+from cloudferrylib.os.actions import get_info_iter
 from cloudferrylib.os.actions import start_vm
+from cloudferrylib.os.actions import copy_var
 from cloudferrylib.scheduler import task
 from cloudferrylib.utils import utils as utl
+
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
 
@@ -59,33 +62,61 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         
     def migrate(self):
 
-        # Available volumes migration only (both ceph cases)
+        # # Available volumes migration only (both ceph cases)
+        #
+        # act_ident_trans = identity_transporter.IdentityTransporter(self.src_cloud, self.dst_cloud)
+        # act_get_vol_info = get_info_volumes.GetInfoVolumes(self.src_cloud,
+        #                                                    search_opts={utl.STATUS: utl.AVAILABLE})
+        # act_deploy_vol = deploy_volumes.DeployVolumes(self.dst_cloud)
+        # act_rename_vol_src = create_reference.CreateReference('storage_info',
+        # 'src_storage_info')
+        # act_rename_vol_dst = create_reference.CreateReference('storage_info',
+        # 'dst_storage_info')
+        # act_vol_data_map = prepare_volumes_data_map.PrepareVolumesDataMap('src_storage_info',
+        # 'dst_storage_info')
+        # act_transport_data = transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(self.config,
+        #                                                                               self.src_cloud,
+        #                                                                               self.dst_cloud,
+        #                                                                               input_info='storage_info')
+        #
+        # namespace_scheduler = namespace.Namespace()
+        #
+        # task_identity_transfer = act_ident_trans
+        # task_get_vol_info = act_get_vol_info >> act_rename_vol_src
+        # task_deploy_vol = act_deploy_vol >> act_rename_vol_dst
+        # task_transfer_vol_data = act_vol_data_map >> act_transport_data
+        #
+        # process_migration = task_identity_transfer >> task_get_vol_info >> task_deploy_vol >> task_transfer_vol_data
+        # process_migration = cursor.Cursor(process_migration)
+        #
+        # scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, cursor=process_migration)
+        # scheduler_migr.start()
 
-        act_ident_trans = identity_transporter.IdentityTransporter(self.src_cloud, self.dst_cloud)
-        act_get_vol_info = get_info_volumes.GetInfoVolumes(self.src_cloud,
-                                                           search_opts={utl.STATUS: utl.AVAILABLE})
-        act_deploy_vol = deploy_volumes.DeployVolumes(self.dst_cloud)
-        act_rename_vol_src = create_reference.CreateReference('storage_info',
-        'src_storage_info')
-        act_rename_vol_dst = create_reference.CreateReference('storage_info',
-        'dst_storage_info')
-        act_vol_data_map = prepare_volumes_data_map.PrepareVolumesDataMap('src_storage_info',
-        'dst_storage_info')
-        act_transport_data = transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(self.config,
-                                                                                      self.src_cloud,
-                                                                                      self.dst_cloud,
-                                                                                      input_info='storage_info')
 
-        namespace_scheduler = namespace.Namespace()
 
-        task_identity_transfer = act_ident_trans
-        task_get_vol_info = act_get_vol_info >> act_rename_vol_src
-        task_deploy_vol = act_deploy_vol >> act_rename_vol_dst
-        task_transfer_vol_data = act_vol_data_map >> act_transport_data
 
-        process_migration = task_identity_transfer >> task_get_vol_info >> task_deploy_vol >> task_transfer_vol_data
-        process_migration = cursor.Cursor(process_migration)
+        act_identity_trans = identity_transporter.IdentityTransporter(self.src_cloud, self.dst_cloud)
 
-        scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, cursor=process_migration)
-        scheduler_migr.start()
+        act_get_info_images = get_info_images.GetInfoImages(self.src_cloud)
+        act_get_info_inst = get_info_instances.GetInfoInstances(self.src_cloud)
+        act_get_vol_in_use_info = get_info_volumes.GetInfoVolumes(self.src_cloud,
+                                                                  search_opts={utl.STATUS: utl.IN_USE})
+
+        act_create_backup = copy_var.CopyVar('info', 'info_backup', deepcopy=True)
+        act_create_ref_info_iter = create_reference.CreateReference('info', 'info_iter')
+        act_get_comp_info_iter = get_info_iter.GetInfoIter()
+
+        act_deploy_images = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
+        act_prepare_nets = prepare_networks.PrepareNetworks(self.dst_cloud, self.config)
+        act_trans_inst = transport_instance.TransportInstance(self.config, self.src_cloud, self.dst_cloud)
+
+
+
+
+
+
+
+
+
+
 
