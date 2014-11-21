@@ -13,14 +13,16 @@
 # limitations under the License.
 
 
+import copy
 import time
 
 from novaclient.v1_1 import client as nova_client
 
 from cloudferrylib.base import compute
-from cloudferrylib.utils import utils as utl
-import copy
+from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import timeout_exception
+from cloudferrylib.utils import utils as utl
+
 
 DISK = "disk"
 LOCAL = ".local"
@@ -36,7 +38,8 @@ class NovaCompute(compute.Compute):
         self.config = config
         self.cloud = cloud
         self.identity = cloud.resources['identity']
-        self.mysql_connector = cloud.mysql_connector
+        self.mysql_connector = mysql_connector.MysqlConnector(config.mysql,
+                                                              'nova')
         self.nova_client = self.get_nova_client()
 
     def get_nova_client(self, params=None):
@@ -48,6 +51,56 @@ class NovaCompute(compute.Compute):
                                   params['tenant'],
                                   "http://%s:35357/v2.0/" % params['host'])
 
+    def read_info_resources(self, **kwargs):
+        """
+        Read info about compute resources except instances from the cloud.
+        """
+
+        info = {'compute': {'keypairs': {},
+                            'flavors': {},
+                            'user_quotas': [],
+                            'project_quotas': []}}
+
+        for keypair in self.get_keypair_list():
+            info['compute']['keypairs'][keypair.id] = {
+                'keypair': {'name': keypair.name,
+                            'public_key': keypair.public_key},
+                'meta': {}}
+
+        for flavor in self.get_flavor_list():
+            info['compute']['flavors'][flavor.id] = {
+                'flavor': {'name': flavor.name,
+                           'ram': flavor.ram,
+                           'vcpus': flavor.vcpus,
+                           'disk': flavor.disk,
+                           'ephemeral': flavor.ephemeral,
+                           'swap': flavor.swap,
+                           'rxtx_factor': flavor.rxtx_factor,
+                           'is_public': flavor.is_public},
+                'meta': {}}
+
+        if self.config['migrate']['migrate_quotas']:
+            user_quotas_cmd = ("SELECT user_id, project_id, resource, "
+                               "hard_limit FROM project_user_quotas WHERE "
+                               "deleted = 0")
+            for quota in self.mysql_connector.execute(user_quotas_cmd):
+                info['compute']['user_quotas'].append(
+                    {'quota': {'user_id': quota[0],
+                               'project_id': quota[1],
+                               'resource': quota[2],
+                               'hard_limit': quota[3]},
+                     'meta': {}})
+
+            project_quotas_cmd = ("SELECT project_id, resource, hard_limit "
+                                  "FROM quotas WHERE deleted = 0")
+            for quota in self.mysql_connector.execute(project_quotas_cmd):
+                info['compute']['project_quotas'].append(
+                    {'quota': {'project_id': quota[0],
+                               'resource': quota[1],
+                               'hard_limit': quota[2]},
+                     'meta': {}})
+        return info
+
     def read_info(self, **kwargs):
         """
         Read info from cloud
@@ -55,18 +108,9 @@ class NovaCompute(compute.Compute):
         :param search_opts: Search options to filter out servers (optional).
         """
         search_opts = kwargs.get('search_opts', None)
-        info = {'compute': {'keypairs': {},
-                            'instances': {},
-                            'flavors': {},
-                            'user_quotas': [],
-                            'project_quotas': []}}
+        info = {'compute': {'instances': {},
+                            }}
         get_tenant_name = self.identity.get_tenants_func()
-
-        for keypair in self.get_keypair_list():
-            info['compute']['keypairs'][keypair.id] = {
-                'keypair': {'name': keypair.name,
-                            'public_key': keypair.public_key},
-                'meta': {}}
 
         for instance in self.get_instances_list(search_opts=search_opts):
             security_groups = []
@@ -137,39 +181,20 @@ class NovaCompute(compute.Compute):
                 'diff': diff,
                 'meta': {}}
 
-        for flavor in self.get_flavor_list():
-            info['compute']['flavors'][flavor.id] = {
-                'flavor': {'name': flavor.name,
-                           'ram': flavor.ram,
-                           'vcpus': flavor.vcpus,
-                           'disk': flavor.disk,
-                           'ephemeral': flavor.ephemeral,
-                           'swap': flavor.swap,
-                           'rxtx_factor': flavor.rxtx_factor,
-                           'is_public': flavor.is_public},
-                'meta': {}}
-
-        if self.config['migrate']['migrate_quotas']:
-            user_quotas_cmd = "use nova; SELECT user_id, project_id, " \
-                              "resource, hard_limit FROM project_user_quotas " \
-                              "WHERE deleted = 0"
-            for quota in self.mysql_connector.execute(user_quotas_cmd):
-                info['compute']['user_quotas'].append(
-                    {'quota': {'user_id': quota[0],
-                               'project_id': quota[1],
-                               'resource': quota[2],
-                               'hard_limit': quota[3]},
-                     'meta': {}})
-
-            project_quotas_cmd = "use nova; SELECT project_id, resource, " \
-                                 "hard_limit FROM quotas WHERE deleted = 0"
-            for quota in self.mysql_connector.execute(project_quotas_cmd):
-                info['compute']['project_quotas'].append(
-                    {'quota': {'project_id': quota[0],
-                               'resource': quota[1],
-                               'hard_limit': quota[2]},
-                     'meta': {}})
         return info
+
+    def deploy_resources(self, info, **kwargs):
+        info = copy.deepcopy(info)
+
+        self._deploy_keypair(info['compute']['keypairs'])
+        self._deploy_flavors(info['compute']['flavors'])
+        if self.config['migrate']['migrate_quotas']:
+            self._deploy_project_quotas(info['compute']['project_quotas'])
+            self._deploy_user_quotas(info['compute']['user_quotas'])
+
+        new_info = self.read_info_resources()
+
+        return new_info
 
     def deploy(self, info, **kwargs):
 
@@ -188,9 +213,8 @@ class NovaCompute(compute.Compute):
         return info
 
     def _deploy_user_quotas(self, quotas):
-        insert_cmd = "use nova;INSERT INTO quotas " \
-                     "(user_id, project_id, resource, hard_limit) " \
-                     "VALUES ('%s', '%s', '%s', %s)"
+        insert_cmd = ("INSERT INTO quotas (user_id, project_id, resource, "
+                      "hard_limit) VALUES ('%s', '%s', '%s', %s)")
         for _quota in quotas:
             quota = _quota['quota']
             meta = _quota['meta']
@@ -199,9 +223,8 @@ class NovaCompute(compute.Compute):
                 quota['hard_limit']))
 
     def _deploy_project_quotas(self, quotas):
-        insert_cmd = "use nova;INSERT INTO project_user_quotas " \
-                     "(project_id, resource, hard_limit) " \
-                     "VALUES ('%s', '%s', %s)"
+        insert_cmd = ("INSERT INTO project_user_quotas (project_id, resource, "
+                      "hard_limit) VALUES ('%s', '%s', %s)")
         for _quota in quotas:
             quota = _quota['quota']
             meta = _quota['meta']
@@ -219,18 +242,22 @@ class NovaCompute(compute.Compute):
     def _deploy_flavors(self, flavors):
         dest_flavors = {flavor.name: flavor.id for flavor in
                         self.get_flavor_list()}
-        for _flavor in flavors.itervalues():
+        for flavor_id, _flavor in flavors.iteritems():
             flavor = _flavor['flavor']
             if flavor['name'] in dest_flavors:
                 # _flavor['meta']['dest_id'] = dest_flavors[flavor['name']]
                 _flavor['meta']['id'] = dest_flavors[flavor['name']]
                 continue
-            _flavor['meta']['id'] = self.create_flavor(name=flavor['name'], ram=flavor['ram'],
-                                    vcpus=flavor['vcpus'], disk=flavor['disk'],
-                                    ephemeral=flavor['ephemeral'],
-                                    swap=flavor['swap'],
-                                    rxtx_factor=flavor['rxtx_factor'],
-                                    is_public=flavor['is_public'])['flavor']
+            _flavor['meta']['id'] = self.create_flavor(
+                name=flavor['name'],
+                flavorid=flavor_id,
+                ram=flavor['ram'],
+                vcpus=flavor['vcpus'],
+                disk=flavor['disk'],
+                ephemeral=flavor['ephemeral'],
+                swap=int(flavor['swap']) if flavor['swap'] else 0,
+                rxtx_factor=flavor['rxtx_factor'],
+                is_public=flavor['is_public']).id
 
     def _deploy_instances(self, info_compute):
         new_ids = {}
@@ -397,8 +424,8 @@ class NovaCompute(compute.Compute):
         return self.nova_client.servers.interface_attach(server_id, port_id,
                                                          net_id, fixed_ip)
 
-    def get_status(self, getter, id):
-        return getter.get(id).status
+    def get_status(self, getter, res_id):
+        return getter.get(res_id).status
 
     def get_networks(self, instance):
         networks = []

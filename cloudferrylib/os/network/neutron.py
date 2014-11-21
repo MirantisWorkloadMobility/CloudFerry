@@ -15,10 +15,10 @@
 from cloudferrylib.base import network
 from neutronclient.v2_0 import client as neutron_client
 from neutronclient.common.exceptions import IpAddressGenerationFailureClient
-from utils import get_log
+from cloudferrylib.utils import utils as utl
 import ipaddr
 
-LOG = get_log(__name__)
+LOG = utl.get_log(__name__)
 DEFAULT_SECGR = 'default'
 
 

@@ -224,7 +224,7 @@ class TransportInstance(action.Action):
         src_compute = cloud_src.resources[resources]
         src_backend = src_compute.config.compute.backend
         dst_backend = dst_storage.config.compute.backend
-        transporter = TRANSPORTER_MAP[src_backend][dst_backend]
+        transporter = TRANSPORTER_MAP[src_backend][dst_backend]()
         transporter.run(cfg=cfg,
                         cloud_src=cloud_src,
                         cloud_dst=cloud_dst,
