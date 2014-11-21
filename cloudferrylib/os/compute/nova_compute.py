@@ -51,7 +51,7 @@ class NovaCompute(compute.Compute):
                                   params['tenant'],
                                   "http://%s:35357/v2.0/" % params['host'])
 
-    def read_info_resources(self, **kwargs):
+    def _read_info_resources(self, **kwargs):
         """
         Read info about compute resources except instances from the cloud.
         """
@@ -101,12 +101,21 @@ class NovaCompute(compute.Compute):
                      'meta': {}})
         return info
 
-    def read_info(self, **kwargs):
+    def read_info(self, target='instances', **kwargs):
         """
-        Read info from cloud
+        Read info from cloud.
 
+        :param target: Target objects to get info about. Possible values:
+                       "instances" or "resources",
         :param search_opts: Search options to filter out servers (optional).
         """
+
+        if target == 'resources':
+            return self._read_info_resources(**kwargs)
+
+        if target != 'instances':
+            raise ValueError('Only "resources" or "instances" values allowed')
+
         search_opts = kwargs.get('search_opts', None)
         info = {'compute': {'instances': {},
                             }}
@@ -185,8 +194,10 @@ class NovaCompute(compute.Compute):
 
         return info
 
-    def deploy_resources(self, info, **kwargs):
-        info = copy.deepcopy(info)
+    def _deploy_resources(self, info, **kwargs):
+        """
+        Deploy compute resources except instances to the cloud.
+        """
 
         self._deploy_keypair(info['compute']['keypairs'])
         self._deploy_flavors(info['compute']['flavors'])
@@ -194,23 +205,26 @@ class NovaCompute(compute.Compute):
             self._deploy_project_quotas(info['compute']['project_quotas'])
             self._deploy_user_quotas(info['compute']['user_quotas'])
 
-        new_info = self.read_info_resources()
+        new_info = self.read_info(target='resources')
 
         return new_info
 
-    def deploy(self, info, **kwargs):
+    def deploy(self, info, target='instances', **kwargs):
+        """
+        Deploy compute resources to the cloud.
+
+        :param target: Target objects to deploy. Possible values:
+                       "instances" or "resources",
+        """
 
         info = copy.deepcopy(info)
 
-        resources_deploy = kwargs.get('resources_deploy', False)
-        if resources_deploy:
-            self._deploy_keypair(info['compute']['keypairs'])
-            self._deploy_flavors(info['compute']['flavors'])
-            if self.config['migrate']['migrate_quotas']:
-                self._deploy_project_quotas(info['compute']['project_quotas'])
-                self._deploy_user_quotas(info['compute']['user_quotas'])
-        else:
+        if target == 'resources':
+            info = self._deploy_resources(info)
+        elif target == 'instances':
             info = self._deploy_instances(info['compute'])
+        else:
+            raise ValueError('Only "resources" or "instances" values allowed')
 
         return info
 
@@ -229,9 +243,8 @@ class NovaCompute(compute.Compute):
                       "hard_limit) VALUES ('%s', '%s', %s)")
         for _quota in quotas:
             quota = _quota['quota']
-            meta = _quota['meta']
             self.mysql_connector.execute(insert_cmd % (
-                meta['project']['id'], quota['resource'], quota['hard_limit']))
+                quota['project_id'], quota['resource'], quota['hard_limit']))
 
     def _deploy_keypair(self, keypairs):
         dest_keypairs = [keypair.name for keypair in self.get_keypair_list()]
