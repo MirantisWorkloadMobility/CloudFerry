@@ -63,9 +63,6 @@ NETWORK_BODY = 'network'
 DIFF_BODY = 'diff'
 EPHEMERAL_BODY = 'ephemeral'
 
-NETWORK_RESOURCE = 'network'
-NETWORKS_TYPE = 'networks'
-NETWORK_BODY = 'network'
 INTERFACES = 'interfaces'
 
 IMAGE_RESOURCE = 'image'
