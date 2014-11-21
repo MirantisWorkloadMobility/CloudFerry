@@ -42,6 +42,8 @@ RAW = "raw"
 YES = "yes"
 NAME_LOG_FILE = 'migrate.log'
 PATH_TO_SNAPSHOTS = 'snapshots'
+AVAILABLE = 'available'
+STATUS = 'status'
 
 DISK = "disk"
 DISK_EPHEM = "disk.local"

@@ -29,4 +29,4 @@ class IdentityTransporter(transporter.Transporter):
         dst_resource = self.dst_cloud.resources[utl.IDENTITY_RESOURCE]
         info = src_resource.read_info()
         dst_resource.deploy(info)
-        return {'info_identity': info}
+        return {'identity_info': info}

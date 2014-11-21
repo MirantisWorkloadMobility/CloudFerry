@@ -49,7 +49,7 @@ class ClassicSyntax(Element):
     def add_another_link_with(self, other):
         other = Cursor.forward_back(other)
         self.next_element.append(other)
-        other.prev_element = self
+        # other.prev_element = self if not other.prev_element else other.prev_element
         return self
 
     def add_thread(self, other):
@@ -83,7 +83,7 @@ class BaseTask(AltSyntax, EquInstance):
         self.class_name = BaseTask.__name__
         super(BaseTask, self).__init__()
 
-    def run(self):
+    def run(self, **kwargs):
         pass
 
     def __call__(self, namespace=None):
