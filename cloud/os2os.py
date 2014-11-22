@@ -64,35 +64,29 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
     def migrate(self):
 
         act_identity_trans = identity_transporter.IdentityTransporter(self.src_cloud, self.dst_cloud)
-        act_get_info = get_info_instances.GetInfoInstances(self.src_cloud)
-        act_convert_c_to_i = convert_compute_to_image.ConvertComputeToImage(self.config, self.src_cloud)
-        act_copy_g2g_vols = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
-        act_copy_g2g_imgs = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
-        act_convert_i_to_c = convert_image_to_compute.ConvertImageToCompute()
-        act_convert_c_to_v = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
-        act_convert_c_to_v_attach = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
-        act_convert_v_to_i = convert_volume_to_image.ConvertVolumeToImage('qcow2', self.src_cloud)
-        act_convert_i_to_v = convert_image_to_volume.ConvertImageToVolume(self.dst_cloud)
-        act_convert_v_to_c = convert_volume_to_compute.ConvertVolumeToCompute(self.src_cloud, self.dst_cloud)
-        act_attaching = attach_used_volumes_via_nova.AttachVolumesNova(self.dst_cloud)
-        act_prep_net = prepare_networks.PrepareNetworks(self.dst_cloud, self.config)
-        action2 = transport_instance.TransportInstance(self.config, self.src_cloud, self.dst_cloud)
-        act_start_vm = start_vm.StartVms(self.dst_cloud)
+        act_comp_res_trans = transport_compute_resources.TransportComputeResources(self.src_cloud, self.dst_cloud)
 
-        act_migrate_compute_res = transport_compute_resources.TransportComputeResources(self.src_cloud, self.dst_cloud)
+        act_get_info_images = get_info_images.GetInfoImages(self.src_cloud)
+        act_get_info_inst = get_info_instances.GetInfoInstances(self.src_cloud)
+
+        act_conv_comp_img = convert_compute_to_image.ConvertComputeToImage(self.config, self.src_cloud)
+        act_conv_image_comp = convert_image_to_compute.ConvertImageToCompute()
+
+        act_deploy_images = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
+        act_copy_inst_images = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
+        act_net_prep = prepare_networks.PrepareNetworks(self.dst_cloud, self.config)
+        act_deploy_instances = transport_instance.TransportInstance(self.config, self.src_cloud, self.dst_cloud)
 
         namespace_scheduler = namespace.Namespace()
 
-        task_convert_c_to_v_to_i = act_convert_c_to_v >> act_convert_v_to_i
-        task_convert_i_to_v_to_c = act_convert_i_to_v >> act_convert_v_to_c
-        task_transport_volumes = task_convert_c_to_v_to_i >> act_copy_g2g_vols >> task_convert_i_to_v_to_c
-        task_transport_images = act_convert_c_to_i >> act_copy_g2g_imgs >> act_convert_i_to_c
-        task_transport_instances = act_prep_net >> act_migrate_compute_res >> action2 >> act_start_vm
-        task_attaching_volumes = act_convert_c_to_v_attach >> act_attaching
-        transport_resources = task_transport_volumes >> task_transport_images
-        process_migration = act_identity_trans >> act_get_info >> transport_resources >> task_transport_instances >> task_attaching_volumes
+        task_ident_trans = act_identity_trans
+
+        tast_images_trans = act_get_info_images >> act_deploy_images
+
+        task_inst_trans = act_get_info_inst >> act_comp_res_trans >> act_conv_comp_img >> act_copy_inst_images >> act_conv_image_comp >> act_net_prep >> act_deploy_instances
+
+        process_migration = task_ident_trans >> tast_images_trans >> task_inst_trans
 
         process_migration = cursor.Cursor(process_migration)
         scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, cursor=process_migration)
         scheduler_migr.start()
-
