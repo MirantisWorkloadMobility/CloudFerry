@@ -20,7 +20,7 @@ import copy
 
 class MapComputeInfo(action.Action):
 
-    def __init__(self, src_cloud, dst_cloud, ):
+    def __init__(self, src_cloud, dst_cloud):
         self.src_cloud = src_cloud
         self.dst_cloud = dst_cloud
         super(MapComputeInfo, self).__init__()

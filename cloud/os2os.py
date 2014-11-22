@@ -41,6 +41,7 @@ from cloudferrylib.os.actions import prepare_volumes_data_map
 from cloudferrylib.os.actions import transport_ceph_to_ceph_via_ssh
 from cloudferrylib.os.actions import get_info_instances
 from cloudferrylib.os.actions import prepare_networks
+from cloudferrylib.os.actions import map_compute_info
 from cloudferrylib.os.actions import get_info_iter
 from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import copy_var
@@ -71,6 +72,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
 
         act_conv_comp_img = convert_compute_to_image.ConvertComputeToImage(self.config, self.src_cloud)
         act_conv_image_comp = convert_image_to_compute.ConvertImageToCompute()
+        act_map_com_info = map_compute_info.MapComputeInfo(self.src_cloud, self.dst_cloud)
 
         act_deploy_images = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
         act_copy_inst_images = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
@@ -83,7 +85,9 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
 
         tast_images_trans = act_get_info_images >> act_deploy_images
 
-        task_inst_trans = act_get_info_inst >> act_comp_res_trans >> act_conv_comp_img >> act_copy_inst_images >> act_conv_image_comp >> act_net_prep >> act_deploy_instances
+        task_inst_trans = act_get_info_inst >> act_comp_res_trans >> act_conv_comp_img >> \
+                          act_copy_inst_images >> act_conv_image_comp >> \
+                          act_net_prep >> act_map_com_info >> act_deploy_instances
 
         process_migration = task_ident_trans >> tast_images_trans >> task_inst_trans
 

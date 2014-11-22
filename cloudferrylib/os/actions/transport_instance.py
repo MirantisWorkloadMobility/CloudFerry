@@ -70,27 +70,6 @@ class TransportInstance(action.Action):
         self.cloud_dst = dst_cloud
         super(TransportInstance, self).__init__()
 
-    @staticmethod
-    def mapping_compute_info(src_cloud, dst_cloud, compute_info, **kwargs):
-
-        new_compute_info = copy.deepcopy(compute_info)
-
-        src_compute = src_cloud.resources[utl.COMPUTE_RESOURCE]
-        dst_compute = dst_cloud.resources[utl.COMPUTE_RESOURCE]
-
-        src_flavors_dict = \
-            {flavor.id: flavor.name for flavor in src_compute.get_flavor_list()}
-
-        dst_flavors_dict = \
-            {flavor.name: flavor.id for flavor in dst_compute.get_flavor_list()}
-
-        for instance in new_compute_info['instances'].values():
-            _instance = instance['instance']
-            flavor_name = src_flavors_dict[_instance['flavor_id']]
-            _instance['flavor_id'] = dst_flavors_dict[flavor_name]
-
-        return new_compute_info
-
     def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)
         #Init before run
@@ -99,8 +78,6 @@ class TransportInstance(action.Action):
         backend_ephem_drv_src = src_compute.config.compute.backend
         backend_storage_dst = dst_storage.config.storage.backend
 
-        #Mapping another params(flavors, etc)
-        info[COMPUTE] = self.mapping_compute_info(self.cloud_src, self.cloud_dst, compute_info=info[COMPUTE])
         new_info = {
             utl.COMPUTE_RESOURCE: {
                 utl.INSTANCES_TYPE: {

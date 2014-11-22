@@ -26,4 +26,6 @@ class GetInfoInstances(action.Action):
     def run(self, **kwargs):
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
         info = compute_resource.read_info(**self.search_opts)
-        return {'info': info}
+        return {
+            'compute_info': info
+        }
