@@ -120,7 +120,7 @@ class TransportInstance(action.Action):
 
         # self.start_instance(cloud_dst, info, instance_id)
         return {
-            'info': new_info
+            'compute_info': new_info
         }
 
     def deploy_instance(self, cloud_dst, info):

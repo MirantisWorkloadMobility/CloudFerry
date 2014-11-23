@@ -36,8 +36,8 @@ class ConvertVolumeToCompute(action.Action):
             if instance_id not in instances:
                 get_inst_info_action = get_info_instances.GetInfoInstances(
                     self.src_cloud)
-                info = get_inst_info_action.run(id=instance_id)['info']
-                instances[instance_id] = info['compute']['instances'][
+                compute_info = get_inst_info_action.run(id=instance_id)['compute_info']
+                instances[instance_id] = compute_info['compute']['instances'][
                     instance_id]
                 instances[instance_id]['meta']['volume'] = []
             volume['meta'].pop('instance')
