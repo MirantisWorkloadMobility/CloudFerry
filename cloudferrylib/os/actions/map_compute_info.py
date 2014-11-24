@@ -25,9 +25,9 @@ class MapComputeInfo(action.Action):
         self.dst_cloud = dst_cloud
         super(MapComputeInfo, self).__init__()
 
-    def run(self, **kwargs):
+    def run(self, info=None, **kwargs):
 
-        new_compute_info = copy.deepcopy(kwargs['compute_info'])
+        new_compute_info = copy.deepcopy(info)
 
         src_compute = self.src_cloud.resources[utl.COMPUTE_RESOURCE]
         dst_compute = self.dst_cloud.resources[utl.COMPUTE_RESOURCE]
@@ -44,5 +44,5 @@ class MapComputeInfo(action.Action):
             _instance['flavor_id'] = dst_flavors_dict[flavor_name]
 
         return {
-            'compute_info': new_compute_info
+            'info': new_compute_info
         }
