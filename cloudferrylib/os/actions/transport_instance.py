@@ -75,8 +75,9 @@ class TransportInstance(action.Action):
         #Init before run
         dst_storage = self.cloud_dst.resources[utl.STORAGE_RESOURCE]
         src_compute = self.cloud_src.resources[utl.COMPUTE_RESOURCE]
+        dst_compute = self.cloud_src.resources[utl.COMPUTE_RESOURCE]
         backend_ephem_drv_src = src_compute.config.compute.backend
-        # backend_ephem_drv_dst = dst_compute.config.compute.backend
+        backend_ephem_drv_dst = dst_compute.config.compute.backend
         backend_storage_dst = dst_storage.config.storage.backend
 
         new_info = {
@@ -99,15 +100,16 @@ class TransportInstance(action.Action):
                     }
                 }
             }
+
             if instance_boot == BOOT_IMAGE:
                 if backend_ephem_drv_src == CEPH:
                     self.transport_image(self.cfg, self.cloud_src, self.cloud_dst, one_instance, instance_id)
                     one_instance = self.deploy_instance(self.cloud_dst, one_instance)
                 elif backend_ephem_drv_src == ISCSI:
-                    if backend_storage_dst == CEPH:
+                    if backend_ephem_drv_dst == CEPH:
                         self.transport_diff_and_merge(self.cfg, self.cloud_src, self.cloud_dst, one_instance, instance_id)
                         one_instance = self.deploy_instance(self.cloud_dst, one_instance)
-                    elif backend_storage_dst == ISCSI:
+                    elif backend_ephem_drv_dst == ISCSI:
                         one_instance = self.deploy_instance(self.cloud_dst, one_instance)
                         self.copy_diff_file(self.cfg, self.cloud_src, self.cloud_dst, one_instance)
             elif instance_boot == BOOT_VOLUME:
