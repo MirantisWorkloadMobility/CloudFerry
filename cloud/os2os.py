@@ -28,7 +28,7 @@ from cloudferrylib.os.actions import get_info_volumes
 from cloudferrylib.os.actions import get_info_images
 from cloudferrylib.os.actions import deploy_volumes
 from cloudferrylib.os.actions import transport_instance
-from cloudferrylib.os.actions import attach_used_volumes_via_nova
+from cloudferrylib.os.actions import attach_used_volumes_via_compute
 from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.os.actions import convert_image_to_compute
 from cloudferrylib.os.actions import convert_image_to_volume

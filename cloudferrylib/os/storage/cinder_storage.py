@@ -133,7 +133,7 @@ class CinderStorage(storage.Storage):
             self.update_column_with_condition('volumes', 'status', 'in-use', 'available')
             self.update_column('volumes', 'instance_uuid', 'NULL')
             return {}
-        for id, vol in info['storage']['volumes'].iteritems():
+        for vol_id, vol in info['storage']['volumes'].iteritems():
             vol_for_deploy = self.convert(vol)
             volume = self.create_volume(**vol_for_deploy)
             vol['volume']['id'] = volume.id
@@ -141,7 +141,7 @@ class CinderStorage(storage.Storage):
             self.finish(vol)
             if attach:
                 self.attach_volume_to_instance(vol)
-            new_ids[volume.id] = id
+            new_ids[volume.id] = vol_id
         return new_ids
 
     def attach_volume_to_instance(self, volume_info):

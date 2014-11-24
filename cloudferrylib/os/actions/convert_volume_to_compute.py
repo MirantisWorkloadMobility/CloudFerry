@@ -20,26 +20,28 @@ from cloudferrylib.os.actions import get_info_instances
 
 
 class ConvertVolumeToCompute(action.Action):
-    def __init__(self, src_cloud, dst_cloud):
-        self.src_cloud = src_cloud
-        self.dst_cloud = dst_cloud
+    def __init__(self, cloud):
+        self.cloud = cloud
         super(ConvertVolumeToCompute, self).__init__()
 
     def run(self, storage_info, compute_ignored={}, **kwargs):
         volume_info = copy.deepcopy(storage_info)
-
-        new_instance_info = {'compute': {'instances': compute_ignored}}
-        instances = new_instance_info['compute']['instances']
+        instances = copy.deepcopy(compute_ignored)
+        new_instance_info = {'compute': {'instances': instances}}
 
         for volume in volume_info['storage']['volumes'].itervalues():
             instance_id = volume['meta']['instance']['instance']['id']
             if instance_id not in instances:
-                get_inst_info_action = get_info_instances.GetInfoInstances(
-                    self.src_cloud)
-                compute_info = get_inst_info_action.run(id=instance_id)['compute_info']
-                instances[instance_id] = compute_info['compute']['instances'][
-                    instance_id]
-                instances[instance_id]['meta']['volume'] = []
+                instances[instance_id] = volume['meta']['instance']
+                instances[instance_id]['meta']['volume'] = {}
             volume['meta'].pop('instance')
-            instances[instance_id]['meta']['volume'].append(volume)
+            instances[instance_id] = self.append_volume(instances[instance_id], volume)
         return {'info': new_instance_info}
+
+    @staticmethod
+    def append_volume(instance, volume):
+        for vol_old in instance['instance']['volumes']:
+            if volume['old_id'] == vol_old['id']:
+                vol_old['id'] = volume['id']
+                instance['meta']['volume'][volume['id']] = volume
+        return instance

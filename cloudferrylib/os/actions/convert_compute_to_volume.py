@@ -55,7 +55,7 @@ class ConvertComputeToVolume(action.Action):
                     volume[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE])
 
             if 'volume' in instance['meta']:
-                for v in instance['meta']['volume']:
+                for v in instance['meta']['volume'].itervalues():
                     v = v[utl.VOLUME_BODY]
                     storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']] = {
                         utl.META_INFO: {}, utl.VOLUME_BODY: {}}

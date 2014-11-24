@@ -450,13 +450,9 @@ class NovaCompute(compute.Compute):
     def default_detect_mac(self, arg):
         raise NotImplemented("Not implemented yet function for detect mac address")
 
-    def attach_volume_to_instance(self, volume_info, storage_resource):
-        if 'instance' in volume_info['meta']:
-            if volume_info['meta']['instance']:
-                self.nova_client.volumes.create_server_volume(
-                    volume_info['meta']['instance']['instance']['id'],
-                    volume_info['volume']['id'],
-                    volume_info['volume']['device'])
+    def attach_volume_to_instance(self, instance, volume):
+        self.nova_client.volumes.create_server_volume(
+            instance['instance']['id'],
+            volume['volume']['id'],
+            volume['volume']['device'])
 
-                storage_resource.wait_for_status(volume_info['volume']['id'],
-                                                 'in-use')
