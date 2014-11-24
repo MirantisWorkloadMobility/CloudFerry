@@ -15,6 +15,7 @@
 
 import copy
 import time
+from sqlalchemy import exc
 
 from novaclient.v1_1 import client as nova_client
 
@@ -55,7 +56,6 @@ class NovaCompute(compute.Compute):
         """
         Read info about compute resources except instances from the cloud.
         """
-
         info = {'compute': {'keypairs': {},
                             'flavors': {},
                             'user_quotas': [],
@@ -197,13 +197,25 @@ class NovaCompute(compute.Compute):
     def _deploy_resources(self, info, **kwargs):
         """
         Deploy compute resources except instances to the cloud.
+
+        :param info: Info about compute resources to deploy,
+        :param identity_info: Identity info.
         """
+
+        identity_info = kwargs.get('identity_info')
+
+        tenant_map = {tenant['tenant']['id']: tenant['meta']['new_id'] for
+                      tenant in identity_info['identity']['tenants']}
+        user_map = {user['user']['id']: user['meta']['new_id'] for user in
+                    identity_info['identity']['users']}
 
         self._deploy_keypair(info['compute']['keypairs'])
         self._deploy_flavors(info['compute']['flavors'])
         if self.config['migrate']['migrate_quotas']:
-            self._deploy_project_quotas(info['compute']['project_quotas'])
-            self._deploy_user_quotas(info['compute']['user_quotas'])
+            self._deploy_project_quotas(info['compute']['project_quotas'],
+                                        tenant_map)
+            self._deploy_user_quotas(info['compute']['user_quotas'],
+                                     tenant_map, user_map)
 
         new_info = self.read_info(target='resources')
 
@@ -215,12 +227,13 @@ class NovaCompute(compute.Compute):
 
         :param target: Target objects to deploy. Possible values:
                        "instances" or "resources",
+        :param identity_info: Identity info.
         """
 
         info = copy.deepcopy(info)
 
         if target == 'resources':
-            info = self._deploy_resources(info)
+            info = self._deploy_resources(info, **kwargs)
         elif target == 'instances':
             info = self._deploy_instances(info['compute'])
         else:
@@ -228,23 +241,57 @@ class NovaCompute(compute.Compute):
 
         return info
 
-    def _deploy_user_quotas(self, quotas):
-        insert_cmd = ("INSERT INTO quotas (user_id, project_id, resource, "
-                      "hard_limit) VALUES ('%s', '%s', '%s', %s)")
-        for _quota in quotas:
-            quota = _quota['quota']
-            meta = _quota['meta']
-            self.mysql_connector.execute(insert_cmd % (
-                meta['user']['id'], meta['project']['id'], quota['resource'],
-                quota['hard_limit']))
+    def _deploy_user_quotas(self, quotas, tenant_map, user_map):
+        insert_cmd = ("INSERT INTO project_user_quotas (user_id, project_id, "
+                      "resource, hard_limit, deleted) VALUES ('%s', '%s', '%s'"
+                      ", %s, 0)")
 
-    def _deploy_project_quotas(self, quotas):
-        insert_cmd = ("INSERT INTO project_user_quotas (project_id, resource, "
-                      "hard_limit) VALUES ('%s', '%s', %s)")
+        update_cmd = ("UPDATE project_user_quotas SET hard_limit=%s WHERE "
+                      "user_id='%s' AND project_id='%s' AND resource='%s' AND "
+                      "deleted=0")
+
         for _quota in quotas:
             quota = _quota['quota']
-            self.mysql_connector.execute(insert_cmd % (
-                quota['project_id'], quota['resource'], quota['hard_limit']))
+            try:
+                self.mysql_connector.execute(insert_cmd % (
+                    user_map[quota['user_id']],
+                    tenant_map[quota['project_id']],
+                    quota['resource'],
+                    quota['hard_limit']))
+            except exc.IntegrityError as e:
+                if 'Duplicate entry' in e.message:
+                    self.mysql_connector.execute(update_cmd % (
+                        quota['hard_limit'],
+                        user_map[quota['user_id']],
+                        tenant_map[quota['project_id']],
+                        quota['resource'],
+                    ))
+                else:
+                    raise
+
+    def _deploy_project_quotas(self, quotas, tenant_map):
+        insert_cmd = ("INSERT INTO quotas (project_id, resource, "
+                      "hard_limit, deleted) VALUES ('%s', '%s', %s, 0)")
+
+        update_cmd = ("UPDATE quotas SET hard_limit=%s WHERE project_id='%s' "
+                      "AND resource='%s' AND deleted=0")
+
+        for _quota in quotas:
+            quota = _quota['quota']
+            try:
+                self.mysql_connector.execute(insert_cmd % (
+                    tenant_map[quota['project_id']],
+                    quota['resource'],
+                    quota['hard_limit']))
+            except exc.IntegrityError as e:
+                if 'Duplicate entry' in e.message:
+                    self.mysql_connector.execute(update_cmd % (
+                        quota['hard_limit'],
+                        tenant_map[quota['project_id']],
+                        quota['resource'],
+                    ))
+                else:
+                    raise
 
     def _deploy_keypair(self, keypairs):
         dest_keypairs = [keypair.name for keypair in self.get_keypair_list()]
