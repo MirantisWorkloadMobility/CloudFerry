@@ -26,13 +26,13 @@ class TransportComputeResources(action.Action):
         super(TransportComputeResources, self).__init__()
 
     def run(self, info=None, **kwargs):
-        instances_info = copy.deepcopy(kwargs['compute_info'])
+        instances_info = copy.deepcopy(info)
 
         src_compute = self.src_cloud.resources[utl.COMPUTE_RESOURCE]
         dst_compute = self.dst_cloud.resources[utl.COMPUTE_RESOURCE]
 
-        info = src_compute.read_info_resources()
-        new_info = dst_compute.deploy_resources(info)
+        info_res = src_compute.read_info_resources()
+        new_info = dst_compute.deploy_resources(info_res)
         new_info[utl.COMPUTE_RESOURCE].update(
             instances_info[utl.COMPUTE_RESOURCE])
 

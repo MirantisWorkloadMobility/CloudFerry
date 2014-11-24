@@ -76,6 +76,7 @@ class TransportInstance(action.Action):
         dst_storage = self.cloud_dst.resources[utl.STORAGE_RESOURCE]
         src_compute = self.cloud_src.resources[utl.COMPUTE_RESOURCE]
         backend_ephem_drv_src = src_compute.config.compute.backend
+        # backend_ephem_drv_dst = dst_compute.config.compute.backend
         backend_storage_dst = dst_storage.config.storage.backend
 
         new_info = {
@@ -120,7 +121,7 @@ class TransportInstance(action.Action):
 
         # self.start_instance(cloud_dst, info, instance_id)
         return {
-            'compute_info': new_info
+            'info': new_info
         }
 
     def deploy_instance(self, cloud_dst, info):

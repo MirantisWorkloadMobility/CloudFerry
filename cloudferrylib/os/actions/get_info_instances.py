@@ -27,5 +27,5 @@ class GetInfoInstances(action.Action):
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
         info = compute_resource.read_info(**self.search_opts)
         return {
-            'compute_info': info
+            'info': info
         }

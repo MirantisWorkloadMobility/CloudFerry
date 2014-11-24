@@ -26,8 +26,8 @@ class ConvertComputeToVolume(action.Action):
         self.cloud = cloud
         super(ConvertComputeToVolume, self).__init__()
 
-    def run(self, **kwargs):
-        compute_info = copy.deepcopy(kwargs['compute_info'])
+    def run(self, info=None, **kwargs):
+        compute_info = copy.deepcopy(info)
         storage_info = {
             utl.STORAGE_RESOURCE:
                             {utl.VOLUMES_TYPE: {}}
