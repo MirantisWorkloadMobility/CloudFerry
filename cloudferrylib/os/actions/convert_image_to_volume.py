@@ -48,7 +48,7 @@ class ConvertImageToVolume(converter.Converter):
 
             temp_instance_info = img[utl.META_INFO].pop(utl.INSTANCE_BODY)
             vol = resource_storage.deploy(vol)
-            vol_new_id, vol_old_id = vol.iterkeys()[0], vol.itervalues()[0]
+            vol_new_id, vol_old_id = vol.keys()[0], vol.values()[0]
             img[utl.META_INFO][utl.INSTANCE_BODY] = temp_instance_info
             new_volume = (
                 resource_storage.read_info(id=vol_new_id)[utl.STORAGE_RESOURCE][

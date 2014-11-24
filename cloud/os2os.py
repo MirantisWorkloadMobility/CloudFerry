@@ -87,9 +87,9 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_convert_c_to_v = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
         act_convert_v_to_i = convert_volume_to_image.ConvertVolumeToImage('qcow2', self.src_cloud)
         act_convert_i_to_v = convert_image_to_volume.ConvertImageToVolume(self.dst_cloud)
-        act_convert_v_to_c = convert_volume_to_compute.ConvertVolumeToCompute(self.src_cloud, self.dst_cloud)
+        act_convert_v_to_c = convert_volume_to_compute.ConvertVolumeToCompute(self.dst_cloud)
         act_convert_c_to_v_attach = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
-        act_attaching = attach_used_volumes_via_nova.AttachVolumesNova(self.dst_cloud)
+        act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.dst_cloud)
 
 
         namespace_scheduler = namespace.Namespace()
@@ -103,7 +103,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         task_convert_c_to_v_to_i = act_convert_c_to_v >> act_convert_v_to_i
         task_convert_i_to_v_to_c = act_convert_i_to_v >> act_convert_v_to_c
         task_transport_volumes = task_convert_c_to_v_to_i >> act_copy_g2g_vols >> task_convert_i_to_v_to_c
-        task_attaching_volumes = act_convert_c_to_v_attach >> act_attaching
+        task_attaching_volumes = act_attaching
         task_get_inst_info = act_get_info_inst
 
         task_inst_trans = act_comp_res_trans >> act_conv_comp_img >> \

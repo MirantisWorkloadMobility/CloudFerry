@@ -28,20 +28,23 @@ class ConvertVolumeToCompute(action.Action):
         volume_info = copy.deepcopy(storage_info)
         instances = copy.deepcopy(compute_ignored)
         new_instance_info = {'compute': {'instances': instances}}
-
-        for volume in volume_info['storage']['volumes'].itervalues():
+        volumes_old = volume_info['storage']['volumes']
+        for volume in volumes_old.itervalues():
             instance_id = volume['meta']['instance']['instance']['id']
             if instance_id not in instances:
                 instances[instance_id] = volume['meta']['instance']
-                instances[instance_id]['meta']['volume'] = {}
+                instances[instance_id]['meta']['volume'] = []
             volume['meta'].pop('instance')
-            instances[instance_id] = self.append_volume(instances[instance_id], volume)
+            instances[instance_id] = self.map_volume(instances[instance_id], volume)
+        for inst in instances.itervalues():
+            for vol in inst['instance']['volumes']:
+                volumes_old[vol['id']]['volume']['device'] = vol['device']
+                inst['meta']['volume'].append(volumes_old[vol['id']])
         return {'info': new_instance_info}
 
     @staticmethod
-    def append_volume(instance, volume):
+    def map_volume(instance, volume):
         for vol_old in instance['instance']['volumes']:
             if volume['old_id'] == vol_old['id']:
-                vol_old['id'] = volume['id']
-                instance['meta']['volume'][volume['id']] = volume
+                vol_old['id'] = volume['volume']['id']
         return instance
