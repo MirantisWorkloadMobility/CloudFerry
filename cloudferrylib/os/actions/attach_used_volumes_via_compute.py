@@ -30,6 +30,7 @@ class AttachVolumesCompute(action.Action):
         storage_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
         for instance in info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE].itervalues():
             for vol in instance[utl.META_INFO][utl.VOLUME_BODY]:
-                compute_resource.attach_volume_to_instance(instance, vol)
-                storage_resource.wait_for_status(vol['volume']['id'], 'in-use')
+                if storage_resource.get_status(vol['volume']['id']) != 'in-use':
+                    compute_resource.attach_volume_to_instance(instance, vol)
+                    storage_resource.wait_for_status(vol['volume']['id'], 'in-use')
         return {}

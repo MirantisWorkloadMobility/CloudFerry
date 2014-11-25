@@ -144,6 +144,7 @@ class NovaCompute(compute.Compute):
                     instance_block_info,
                     is_ceph_ephemeral=is_ceph,
                     disk=DISK+LOCAL)
+
             diff = {
                 'path_src': None,
                 'path_dst': None,
@@ -155,7 +156,11 @@ class NovaCompute(compute.Compute):
                     instance,
                     instance_block_info,
                     is_ceph_ephemeral=is_ceph)
-
+            volumes = [{'id': v.id,
+                        'num_device': i,
+                        'device': v.device}
+                       for i, v in enumerate(
+                    self.nova_client.volumes.get_server_volumes(instance.id))]
             info['compute']['instances'][instance.id] = {
                 'instance': {'name': instance.name,
                              'id': instance.id,
@@ -164,18 +169,15 @@ class NovaCompute(compute.Compute):
                              'status': instance.status,
                              'flavor_id': instance.flavor['id'],
                              'image_id': instance.image['id'] if instance.image else None,
+                             'boot_mode': utl.BOOT_FROM_IMAGE if instance.image else utl.BOOT_FROM_VOLUME,
                              'key_name': instance.key_name,
                              'availability_zone': getattr(instance, 'OS-EXT-AZ:availability_zone'),
                              'security_groups': security_groups,
-                             'volume': None,
+                             'boot_volume': copy.deepcopy(volumes[0]) if volumes else None,
                              'interfaces': interfaces,
                              'host': getattr(instance, 'OS-EXT-SRV-ATTR:host'),
                              'is_ephemeral': is_ephemeral,
-                             'volumes': [{'id': v.id,
-                                          'num_device': i,
-                                          'device': v.device}
-                                         for i, v in enumerate(
-                                     self.nova_client.volumes.get_server_volumes(instance.id))]
+                             'volumes': volumes
                              },
                 'ephemeral': ephemeral_path,
                 'diff': diff,
@@ -286,13 +288,12 @@ class NovaCompute(compute.Compute):
                              'security_groups': instance['security_groups'],
                              'nics': instance['nics'],
                              'image': instance['image_id']}
-            if not instance['image_id']:
-                image_id = meta['image']['image']['id']
+            if instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
+                volume_id = instance['volumes'][0]['id']
                 create_params["block_device_mapping_v2"] = [{
-                    "source_type": "image",
-                    "uuid": image_id,
+                    "source_type": "volume",
+                    "uuid": volume_id,
                     "destination_type": "volume",
-                    "volume_size": meta['image']['meta']['volume']['size'],
                     "delete_on_termination": True,
                     "boot_index": 0
                 }]

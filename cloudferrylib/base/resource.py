@@ -32,7 +32,7 @@ class Resource(object):
     def wait_for_status(self, id_obj, status, limit_retry=60):
         pass
 
-    def get_status(self):
+    def get_status(self, resource_id):
         pass
 
     def __deepcopy__(self, memo):

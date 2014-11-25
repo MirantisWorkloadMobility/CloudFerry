@@ -50,9 +50,7 @@ PATH_SRC = 'path_src'
 HOST_SRC = 'host_src'
 
 TEMP = 'temp'
-BOOT_VOLUME = 'boot_volume'
 FLAVORS = 'flavors'
-BOOT_IMAGE = 'boot_image'
 
 
 TRANSPORTER_MAP = {CEPH: {CEPH: transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh,
@@ -89,9 +87,7 @@ class TransportInstance(action.Action):
 
         #Get next one instance
         for instance_id, instance in info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE].iteritems():
-            instance_boot = BOOT_IMAGE \
-                if instance[utl.INSTANCE_BODY]['image_id'] \
-                else BOOT_VOLUME
+            instance_boot = instance[utl.INSTANCE_BODY]['boot_mode']
             is_ephemeral = instance[utl.INSTANCE_BODY]['is_ephemeral']
             one_instance = {
                 utl.COMPUTE_RESOURCE: {
@@ -101,7 +97,7 @@ class TransportInstance(action.Action):
                 }
             }
 
-            if instance_boot == BOOT_IMAGE:
+            if instance_boot == utl.BOOT_FROM_IMAGE:
                 if backend_ephem_drv_src == CEPH:
                     self.transport_image(self.cfg, self.cloud_src, self.cloud_dst, one_instance, instance_id)
                     one_instance = self.deploy_instance(self.cloud_dst, one_instance)
@@ -112,8 +108,8 @@ class TransportInstance(action.Action):
                     elif backend_ephem_drv_dst == ISCSI:
                         one_instance = self.deploy_instance(self.cloud_dst, one_instance)
                         self.copy_diff_file(self.cfg, self.cloud_src, self.cloud_dst, one_instance)
-            elif instance_boot == BOOT_VOLUME:
-                one_instance = self.transport_boot_volume_src_to_dst(self.cloud_src, self.cloud_dst, one_instance, instance_id)
+            elif instance_boot == utl.BOOT_FROM_VOLUME:
+                # one_instance = self.transport_boot_volume_src_to_dst(self.cloud_src, self.cloud_dst, one_instance, instance_id)
                 one_instance = self.deploy_instance(self.cloud_dst, one_instance)
 
             if is_ephemeral:
