@@ -25,9 +25,10 @@ from cloudferrylib.os.network import neutron
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.os.compute import nova_compute
 from cloudferrylib.os.actions import get_info_volumes
+from cloudferrylib.os.actions import get_info_images
 from cloudferrylib.os.actions import deploy_volumes
 from cloudferrylib.os.actions import transport_instance
-from cloudferrylib.os.actions import attach_used_volumes_via_nova
+from cloudferrylib.os.actions import attach_used_volumes_via_compute
 from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.os.actions import convert_image_to_compute
 from cloudferrylib.os.actions import convert_image_to_volume
@@ -35,12 +36,20 @@ from cloudferrylib.os.actions import convert_compute_to_image
 from cloudferrylib.os.actions import convert_compute_to_volume
 from cloudferrylib.os.actions import convert_volume_to_image
 from cloudferrylib.os.actions import convert_volume_to_compute
+from cloudferrylib.os.actions import attach_used_volumes
 from cloudferrylib.os.actions import create_reference
 from cloudferrylib.os.actions import prepare_volumes_data_map
 from cloudferrylib.os.actions import transport_ceph_to_ceph_via_ssh
 from cloudferrylib.os.actions import get_info_instances
 from cloudferrylib.os.actions import prepare_networks
+from cloudferrylib.os.actions import map_compute_info
+from cloudferrylib.os.actions import get_info_iter
 from cloudferrylib.os.actions import start_vm
+from cloudferrylib.os.actions import stop_vm
+from cloudferrylib.os.actions import copy_var
+from cloudferrylib.scheduler import task
+from cloudferrylib.utils import utils as utl
+from cloudferrylib.os.actions import transport_compute_resources
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
@@ -57,53 +66,54 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         
     def migrate(self):
 
-        act_ident_trans = identity_transporter.IdentityTransporter(self.src_cloud, self.dst_cloud)
-        act_get_vol_info = get_info_volumes.GetInfoVolumes(self.src_cloud)
-        act_deploy_vol = deploy_volumes.DeployVolumes(self.dst_cloud)
-        act_rename_vol_src = create_reference.CreateReference('storage_info',
-                                                              'src_storage_info')
-        act_rename_vol_dst = create_reference.CreateReference('storage_info',
-                                                              'dst_storage_info')
-        act_vol_data_map = prepare_volumes_data_map.PrepareVolumesDataMap('src_storage_info',
-                                                                          'dst_storage_info')
-        act_transport_data = transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(self.config,
-                                                                                      self.src_cloud,
-                                                                                      self.dst_cloud,
-                                                                                      input_info='storage_info')
         act_identity_trans = identity_transporter.IdentityTransporter(self.src_cloud, self.dst_cloud)
-        act_get_info = get_info_instances.GetInfoInstances(self.src_cloud)
-        act_convert_c_to_i = convert_compute_to_image.ConvertComputeToImage(self.config, self.src_cloud)
+        act_comp_res_trans = transport_compute_resources.TransportComputeResources(self.src_cloud, self.dst_cloud)
+
+        act_get_info_images = get_info_images.GetInfoImages(self.src_cloud)
+        act_get_info_inst = get_info_instances.GetInfoInstances(self.src_cloud)
+
+        act_conv_comp_img = convert_compute_to_image.ConvertComputeToImage(self.config, self.src_cloud)
+        act_conv_image_comp = convert_image_to_compute.ConvertImageToCompute()
+        act_map_com_info = map_compute_info.MapComputeInfo(self.src_cloud, self.dst_cloud)
+        act_stop_vms = stop_vm.StopVms(self.src_cloud)
+
+        act_deploy_images = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
+        act_copy_inst_images = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
+        act_net_prep = prepare_networks.PrepareNetworks(self.dst_cloud, self.config)
+        act_deploy_instances = transport_instance.TransportInstance(self.config, self.src_cloud, self.dst_cloud)
+
+
         act_copy_g2g_vols = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
-        act_copy_g2g_imgs = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
-        act_convert_i_to_c = convert_image_to_compute.ConvertImageToCompute()
         act_convert_c_to_v = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
-        act_convert_c_to_v_attach = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
         act_convert_v_to_i = convert_volume_to_image.ConvertVolumeToImage('qcow2', self.src_cloud)
         act_convert_i_to_v = convert_image_to_volume.ConvertImageToVolume(self.dst_cloud)
-        act_convert_v_to_c = convert_volume_to_compute.ConvertVolumeToCompute(self.src_cloud, self.dst_cloud)
-        act_attaching = attach_used_volumes_via_nova.AttachVolumesNova(self.dst_cloud)
-        act_prep_net = prepare_networks.PrepareNetworks(self.dst_cloud, self.config)
-        action2 = transport_instance.TransportInstance(self.config, self.src_cloud, self.dst_cloud)
-        act_start_vm = start_vm.StartVms(self.dst_cloud)
+        act_convert_v_to_c = convert_volume_to_compute.ConvertVolumeToCompute(self.dst_cloud)
+        act_convert_c_to_v_attach = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
+        act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.dst_cloud)
+
 
         namespace_scheduler = namespace.Namespace()
 
-        task_identity_transfer = act_ident_trans
-        task_get_vol_info = act_get_vol_info >> act_rename_vol_src
-        task_deploy_vol = act_deploy_vol >> act_rename_vol_dst
-        task_transfer_vol_data = act_vol_data_map >> act_transport_data
-        process_migration = task_identity_transfer >> task_get_vol_info >> task_deploy_vol >> task_transfer_vol_data
-        
+        task_ident_trans = act_identity_trans
+
+        tast_images_trans = act_get_info_images >> act_deploy_images
+
+        task_stop_vms = act_stop_vms
+
         task_convert_c_to_v_to_i = act_convert_c_to_v >> act_convert_v_to_i
         task_convert_i_to_v_to_c = act_convert_i_to_v >> act_convert_v_to_c
         task_transport_volumes = task_convert_c_to_v_to_i >> act_copy_g2g_vols >> task_convert_i_to_v_to_c
-        task_transport_images = act_convert_c_to_i >> act_copy_g2g_imgs >> act_convert_i_to_c
-        task_transport_instances = act_prep_net >> action2 >> act_start_vm
-        task_attaching_volumes = act_convert_c_to_v_attach >> act_attaching
-        transport_resources = task_transport_volumes >> task_transport_images
-        process_migration = act_identity_trans >> act_get_info >> transport_resources >> task_transport_instances >> task_attaching_volumes
+        task_attaching_volumes = act_attaching
+        task_get_inst_info = act_get_info_inst
+
+        task_inst_trans = act_comp_res_trans >> act_conv_comp_img >> \
+                          act_copy_inst_images >> act_conv_image_comp >> \
+                          act_net_prep >> act_map_com_info >> act_deploy_instances
+
+        process_migration = task_ident_trans >> tast_images_trans >> task_get_inst_info >> \
+                            task_stop_vms >> task_transport_volumes >> \
+                            task_inst_trans >> task_attaching_volumes
 
         process_migration = cursor.Cursor(process_migration)
         scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, cursor=process_migration)
         scheduler_migr.start()
-

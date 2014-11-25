@@ -12,28 +12,20 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+from cloudferrylib.base.action import action
+import copy
 
-class Resource(object):
-    def __init__(self):
-        pass
 
-    def read_info(self, opts={}):
-        pass
+class StopVms(action.Action):
+    def __init__(self, cloud):
+        self.cloud = cloud
+        super(StopVms, self).__init__()
 
-    def deploy(self, *args):
-        pass
+    def run(self, info=None, **kwargs):
+        info = copy.deepcopy(info)
+        compute_resource = self.cloud.resources['compute']
 
-    def save(self):
-        pass
+        for instance in info['compute']['instances']:
+            compute_resource.change_status('shutoff', instance_id=instance)
 
-    def restore(self):
-        pass
-
-    def wait_for_status(self, id_obj, status, limit_retry=60):
-        pass
-
-    def get_status(self, resource_id):
-        pass
-
-    def __deepcopy__(self, memo):
-        return self
+        return {}

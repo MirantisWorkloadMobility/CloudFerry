@@ -20,26 +20,31 @@ from cloudferrylib.os.actions import get_info_instances
 
 
 class ConvertVolumeToCompute(action.Action):
-    def __init__(self, src_cloud, dst_cloud):
-        self.src_cloud = src_cloud
-        self.dst_cloud = dst_cloud
+    def __init__(self, cloud):
+        self.cloud = cloud
         super(ConvertVolumeToCompute, self).__init__()
 
     def run(self, storage_info, compute_ignored={}, **kwargs):
         volume_info = copy.deepcopy(storage_info)
-
-        new_instance_info = {'compute': {'instances': compute_ignored}}
-        instances = new_instance_info['compute']['instances']
-
-        for volume in volume_info['storage']['volumes'].itervalues():
+        instances = copy.deepcopy(compute_ignored)
+        new_instance_info = {'compute': {'instances': instances}}
+        volumes_old = volume_info['storage']['volumes']
+        for volume in volumes_old.itervalues():
             instance_id = volume['meta']['instance']['instance']['id']
             if instance_id not in instances:
-                get_inst_info_action = get_info_instances.GetInfoInstances(
-                    self.src_cloud)
-                info = get_inst_info_action.run(id=instance_id)['info']
-                instances[instance_id] = info['compute']['instances'][
-                    instance_id]
+                instances[instance_id] = volume['meta']['instance']
                 instances[instance_id]['meta']['volume'] = []
             volume['meta'].pop('instance')
-            instances[instance_id]['meta']['volume'].append(volume)
+            instances[instance_id] = self.map_volume(instances[instance_id], volume)
+        for inst in instances.itervalues():
+            for vol in inst['instance']['volumes']:
+                volumes_old[vol['id']]['volume']['device'] = vol['device']
+                inst['meta']['volume'].append(volumes_old[vol['id']])
         return {'info': new_instance_info}
+
+    @staticmethod
+    def map_volume(instance, volume):
+        for vol_old in instance['instance']['volumes']:
+            if volume['old_id'] == vol_old['id']:
+                vol_old['id'] = volume['volume']['id']
+        return instance

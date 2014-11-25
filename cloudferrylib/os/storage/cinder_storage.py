@@ -133,7 +133,7 @@ class CinderStorage(storage.Storage):
             self.update_column_with_condition('volumes', 'status', 'in-use', 'available')
             self.update_column('volumes', 'instance_uuid', 'NULL')
             return {}
-        for id, vol in info['storage']['volumes'].iteritems():
+        for vol_id, vol in info['storage']['volumes'].iteritems():
             vol_for_deploy = self.convert(vol)
             volume = self.create_volume(**vol_for_deploy)
             vol['volume']['id'] = volume.id
@@ -141,7 +141,7 @@ class CinderStorage(storage.Storage):
             self.finish(vol)
             if attach:
                 self.attach_volume_to_instance(vol)
-            new_ids[volume.id] = id
+            new_ids[volume.id] = vol_id
         return new_ids
 
     def attach_volume_to_instance(self, volume_info):
@@ -151,7 +151,6 @@ class CinderStorage(storage.Storage):
                                    volume_info['meta']['instance']['instance'][
                                        'id'],
                                    volume_info['volume']['device'])
-                self.wait_for_status(volume_info['volume']['id'], IN_USE)
 
     def get_volumes_list(self, detailed=True, search_opts=None):
         return self.cinder_client.volumes.list(detailed, search_opts)
@@ -209,8 +208,11 @@ class CinderStorage(storage.Storage):
             disk_format=disk_format)
         return resp, image['os-volume_upload_image']['image_id']
 
-    def wait_for_status(self, id_res, status):
-        while self.cinder_client.volumes.get(id_res).status != status:
+    def get_status(self, resource_id):
+        return self.cinder_client.volumes.get(resource_id).status
+
+    def wait_for_status(self, resource_id, status, limit_retry=60):
+        while self.get_status(resource_id) != status:
             time.sleep(1)
 
     def download_table_from_db_to_file(self, table_name, file_name):

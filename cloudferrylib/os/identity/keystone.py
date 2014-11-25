@@ -14,7 +14,7 @@
 
 from cloudferrylib.base import identity
 from keystoneclient.v2_0 import client as keystone_client
-from utils import Postman, Templater, GeneratorPassword
+from cloudferrylib.utils import Postman, Templater, GeneratorPassword
 
 NOVA_SERVICE = 'nova'
 

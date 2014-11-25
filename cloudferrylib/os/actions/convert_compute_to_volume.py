@@ -27,11 +27,14 @@ class ConvertComputeToVolume(action.Action):
         super(ConvertComputeToVolume, self).__init__()
 
     def run(self, info=None, **kwargs):
-        info = copy.deepcopy(info)
-        info[utl.STORAGE_RESOURCE] = {utl.VOLUMES_TYPE: {}}
+        compute_info = copy.deepcopy(info)
+        storage_info = {
+            utl.STORAGE_RESOURCE:
+                            {utl.VOLUMES_TYPE: {}}
+        }
         ignored = {}
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
-        for instance_id, instance in info[utl.COMPUTE_RESOURCE][
+        for instance_id, instance in compute_info[utl.COMPUTE_RESOURCE][
                 utl.INSTANCES_TYPE].iteritems():
             volumes_exists = True
             if not instance[utl.INSTANCE_BODY]['volumes']:
@@ -48,19 +51,19 @@ class ConvertComputeToVolume(action.Action):
                     'num_device'] = v['num_device']
                 volume[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']][
                     utl.META_INFO]['instance'] = instance
-                info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE].update(
+                storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE].update(
                     volume[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE])
 
             if 'volume' in instance['meta']:
-                for v in instance['meta']['volume']:
+                for v in instance['meta']['volume'].itervalues():
                     v = v[utl.VOLUME_BODY]
-                    info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']] = {
+                    storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']] = {
                         utl.META_INFO: {}, utl.VOLUME_BODY: {}}
-                    info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']][
+                    storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']][
                         utl.META_INFO]['instance'] = instance
-                    info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']][
+                    storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']][
                         utl.VOLUME_BODY] = v
         return {
-            'storage_info': info,
+            'storage_info': storage_info,
             'compute_ignored': ignored
         }

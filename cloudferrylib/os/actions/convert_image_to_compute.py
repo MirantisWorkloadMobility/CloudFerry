@@ -8,9 +8,9 @@ class ConvertImageToCompute(action.Action):
         self.cfg = cfg
         super(ConvertImageToCompute, self).__init__()
 
-    def run(self, images_info=None, **kwargs):
+    def run(self, images_info=None, compute_ignored_images={}, **kwargs):
         images_info = copy.deepcopy(images_info)
-        instance_info = {'compute': {'instances': {}}}
+        instance_info = {'compute': {'instances': compute_ignored_images}}
         for image in images_info['image']['images'].itervalues():
             if 'instance' not in image['meta']:
                 continue

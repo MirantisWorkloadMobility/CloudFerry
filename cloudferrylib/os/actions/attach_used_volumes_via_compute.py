@@ -19,18 +19,18 @@ import copy
 __author__ = 'mirrorcoder'
 
 
-class AttachVolumesNova(action.Action):
+class AttachVolumesCompute(action.Action):
     def __init__(self, cloud):
         self.cloud = cloud
-        super(AttachVolumesNova, self).__init__()
+        super(AttachVolumesCompute, self).__init__()
 
-    def run(self, storage_info, **kwargs):
-        storage_info = copy.deepcopy(storage_info)
+    def run(self, info, **kwargs):
+        info = copy.deepcopy(info)
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
         storage_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
-
-        for vol in storage_info[utl.STORAGE_RESOURCE][
-                utl.VOLUMES_TYPE].itervalues():
-            compute_resource.attach_volume_to_instance(vol, storage_resource)
-
+        for instance in info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE].itervalues():
+            for vol in instance[utl.META_INFO][utl.VOLUME_BODY]:
+                if storage_resource.get_status(vol['volume']['id']) != 'in-use':
+                    compute_resource.attach_volume_to_instance(instance, vol)
+                    storage_resource.wait_for_status(vol['volume']['id'], 'in-use')
         return {}

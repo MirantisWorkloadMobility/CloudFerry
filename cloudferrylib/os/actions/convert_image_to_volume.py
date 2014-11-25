@@ -47,14 +47,15 @@ class ConvertImageToVolume(converter.Converter):
                     meta=img[utl.META_INFO])}))
 
             temp_instance_info = img[utl.META_INFO].pop(utl.INSTANCE_BODY)
-            volume = resource_storage.deploy(vol)[0]
+            vol = resource_storage.deploy(vol)
+            vol_new_id, vol_old_id = vol.keys()[0], vol.values()[0]
             img[utl.META_INFO][utl.INSTANCE_BODY] = temp_instance_info
-
             new_volume = (
-                resource_storage.read_info(id=volume.id)[utl.STORAGE_RESOURCE][
-                    utl.VOLUMES_TYPE][volume.id][utl.VOLUME_BODY])
+                resource_storage.read_info(id=vol_new_id)[utl.STORAGE_RESOURCE][
+                    utl.VOLUMES_TYPE][vol_new_id][utl.VOLUME_BODY])
             img[utl.META_INFO].pop('volume')
-            volumes_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][volume.id] = {
+            volumes_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][vol_new_id] = {
+                'old_id': vol_old_id,
                 utl.VOLUME_BODY: new_volume,
                 utl.META_INFO: img[utl.META_INFO]
             }

@@ -50,9 +50,7 @@ PATH_SRC = 'path_src'
 HOST_SRC = 'host_src'
 
 TEMP = 'temp'
-BOOT_VOLUME = 'boot_volume'
 FLAVORS = 'flavors'
-BOOT_IMAGE = 'boot_image'
 
 
 TRANSPORTER_MAP = {CEPH: {CEPH: transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh,
@@ -70,37 +68,16 @@ class TransportInstance(action.Action):
         self.cloud_dst = dst_cloud
         super(TransportInstance, self).__init__()
 
-    @staticmethod
-    def mapping_compute_info(src_cloud, dst_cloud, compute_info, **kwargs):
-
-        new_compute_info = copy.deepcopy(compute_info)
-
-        src_compute = src_cloud.resources[utl.COMPUTE_RESOURCE]
-        dst_compute = dst_cloud.resources[utl.COMPUTE_RESOURCE]
-
-        src_flavors_dict = \
-            {flavor.id: flavor.name for flavor in src_compute.get_flavor_list()}
-
-        dst_flavors_dict = \
-            {flavor.name: flavor.id for flavor in dst_compute.get_flavor_list()}
-
-        for instance in new_compute_info['instances'].values():
-            _instance = instance['instance']
-            flavor_name = src_flavors_dict[_instance['flavor_id']]
-            _instance['flavor_id'] = dst_flavors_dict[flavor_name]
-
-        return new_compute_info
-
     def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)
         #Init before run
         dst_storage = self.cloud_dst.resources[utl.STORAGE_RESOURCE]
         src_compute = self.cloud_src.resources[utl.COMPUTE_RESOURCE]
+        dst_compute = self.cloud_src.resources[utl.COMPUTE_RESOURCE]
         backend_ephem_drv_src = src_compute.config.compute.backend
+        backend_ephem_drv_dst = dst_compute.config.compute.backend
         backend_storage_dst = dst_storage.config.storage.backend
 
-        #Mapping another params(flavors, etc)
-        info[COMPUTE] = self.mapping_compute_info(self.cloud_src, self.cloud_dst, compute_info=info[COMPUTE])
         new_info = {
             utl.COMPUTE_RESOURCE: {
                 utl.INSTANCES_TYPE: {
@@ -110,9 +87,7 @@ class TransportInstance(action.Action):
 
         #Get next one instance
         for instance_id, instance in info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE].iteritems():
-            instance_boot = BOOT_IMAGE \
-                if instance[utl.INSTANCE_BODY]['image_id'] \
-                else BOOT_VOLUME
+            instance_boot = instance[utl.INSTANCE_BODY]['boot_mode']
             is_ephemeral = instance[utl.INSTANCE_BODY]['is_ephemeral']
             one_instance = {
                 utl.COMPUTE_RESOURCE: {
@@ -121,19 +96,20 @@ class TransportInstance(action.Action):
                     }
                 }
             }
-            if instance_boot == BOOT_IMAGE:
+
+            if instance_boot == utl.BOOT_FROM_IMAGE:
                 if backend_ephem_drv_src == CEPH:
                     self.transport_image(self.cfg, self.cloud_src, self.cloud_dst, one_instance, instance_id)
                     one_instance = self.deploy_instance(self.cloud_dst, one_instance)
                 elif backend_ephem_drv_src == ISCSI:
-                    if backend_storage_dst == CEPH:
+                    if backend_ephem_drv_dst == CEPH:
                         self.transport_diff_and_merge(self.cfg, self.cloud_src, self.cloud_dst, one_instance, instance_id)
                         one_instance = self.deploy_instance(self.cloud_dst, one_instance)
-                    elif backend_storage_dst == ISCSI:
+                    elif backend_ephem_drv_dst == ISCSI:
                         one_instance = self.deploy_instance(self.cloud_dst, one_instance)
                         self.copy_diff_file(self.cfg, self.cloud_src, self.cloud_dst, one_instance)
-            elif instance_boot == BOOT_VOLUME:
-                one_instance = self.transport_boot_volume_src_to_dst(self.cloud_src, self.cloud_dst, one_instance, instance_id)
+            elif instance_boot == utl.BOOT_FROM_VOLUME:
+                # one_instance = self.transport_boot_volume_src_to_dst(self.cloud_src, self.cloud_dst, one_instance, instance_id)
                 one_instance = self.deploy_instance(self.cloud_dst, one_instance)
 
             if is_ephemeral:
@@ -224,7 +200,7 @@ class TransportInstance(action.Action):
         src_compute = cloud_src.resources[resources]
         src_backend = src_compute.config.compute.backend
         dst_backend = dst_storage.config.compute.backend
-        transporter = TRANSPORTER_MAP[src_backend][dst_backend]
+        transporter = TRANSPORTER_MAP[src_backend][dst_backend]()
         transporter.run(cfg=cfg,
                         cloud_src=cloud_src,
                         cloud_dst=cloud_dst,

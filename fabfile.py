@@ -16,12 +16,12 @@ from fabric.api import task, env
 from cloudferrylib.scheduler.namespace import Namespace
 from cloudferrylib.scheduler.scheduler import Scheduler
 import cfglib
-from utils import get_log
+from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import utils
 from cloud import cloud_ferry
 env.forward_agent = True
 env.user = 'root'
-LOG = get_log(__name__)
+LOG = utl.get_log(__name__)
 
 
 @task

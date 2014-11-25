@@ -20,7 +20,7 @@ from cloudferrylib.utils import utils as utl
 
 
 def get_boot_volume(instance):
-    return instance[utl.INSTANCE_BODY]['volumes'][0]
+    return instance[utl.INSTANCE_BODY]['boot_volume']
 
 
 def get_image_id_from_volume(volume, storage):
@@ -44,24 +44,32 @@ class ConvertComputeToImage(action.Action):
         images_body = image_info[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE]
         image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
         storage_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
+        compute_ignored_images = {}
         image_info[utl.IMAGE_RESOURCE]['resource'] = image_resource
-        for instance in info[utl.COMPUTE_RESOURCE][
-                utl.INSTANCES_TYPE].itervalues():
+        for instance_id, instance in info[utl.COMPUTE_RESOURCE][
+                utl.INSTANCES_TYPE].iteritems():
             _instance = instance[utl.INSTANCE_BODY]
-            if _instance['image_id'] is None:
+            if _instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
                 if _instance['volumes']:
                     volume = get_boot_volume(instance)
                     image_id = get_image_id_from_volume(volume,
                                                         storage_resource)
             else:
                 image_id = _instance['image_id']
-            img = image_resource.read_info(image_id=image_id)
-            img = img[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE]
-            images_body[image_id] = {utl.IMAGE_BODY: {}, utl.META_INFO: {
-                utl.INSTANCE_BODY: instance
-            }}
-            if img:
-                images_body.update(img)
-                images_body[image_id][utl.META_INFO][
-                    utl.INSTANCE_BODY] = instance
-        return {self.target_output: image_info}
+            # TODO: Case when image is None
+            if image_id:
+                img = image_resource.read_info(image_id=image_id)
+                img = img[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE]
+                images_body[image_id] = {utl.IMAGE_BODY: {}, utl.META_INFO: {
+                    utl.INSTANCE_BODY: instance
+                }}
+                if img:
+                    images_body.update(img)
+                    images_body[image_id][utl.META_INFO][
+                        utl.INSTANCE_BODY] = instance
+            else:
+                compute_ignored_images[instance_id] = instance
+        return {
+            self.target_output: image_info,
+            'compute_ignored_images': compute_ignored_images
+        }
