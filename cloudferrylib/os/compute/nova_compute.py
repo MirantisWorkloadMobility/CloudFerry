@@ -285,7 +285,6 @@ class NovaCompute(compute.Compute):
                              'flavor': instance['flavor_id'],
                              'key_name': instance['key_name'],
                              'availability_zone': instance['availability_zone'],
-                             'security_groups': instance['security_groups'],
                              'nics': instance['nics'],
                              'image': instance['image_id']}
             if instance['boot_mode'] == utl.BOOT_FROM_VOLUME:

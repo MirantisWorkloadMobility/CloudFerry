@@ -38,6 +38,7 @@ class PrepareNetworks(action.Action):
         instances = info_compute[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE]
         for (id_inst, inst) in instances.iteritems():
             networks_info = inst[utl.INSTANCE_BODY][utl.INTERFACES]
+            security_groups = inst[utl.INSTANCE_BODY]['security_groups']
             tenant_name = inst[utl.INSTANCE_BODY]['tenant_name']
             tenant_id = identity_resource.get_tenant_id_by_name(tenant_name)
             for src_net in networks_info:
@@ -45,11 +46,17 @@ class PrepareNetworks(action.Action):
                 port_id = network_resource.check_existing_port(dst_net['id'], src_net['mac'])
                 if port_id:
                     network_resource.delete_port(port_id)
+                sg_ids = []
+                for sg in network_resource.get_security_groups():
+                    if sg['tenant_id'] == tenant_id:
+                        if sg['name'] in security_groups:
+                            sg_ids.append(sg['id'])
                 port = network_resource.create_port(dst_net['id'],
                                                     src_net['mac'],
                                                     src_net['ip'],
                                                     tenant_id,
-                                                    keep_ip)
+                                                    keep_ip,
+                                                    sg_ids)
                 params.append({'net-id': dst_net['id'], 'port-id': port['id']})
             instances[id_inst][utl.INSTANCE_BODY]['nics'] = params
         info_compute[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE] = instances
