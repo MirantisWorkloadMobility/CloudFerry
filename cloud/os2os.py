@@ -91,26 +91,46 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_convert_c_to_v_attach = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
         act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.dst_cloud)
 
+        act_deploy_vol = deploy_volumes.DeployVolumes(self.dst_cloud)
+        act_rename_vol_src = create_reference.CreateReference('storage_info',
+                                                              'src_storage_info')
+        act_rename_vol_dst = create_reference.CreateReference('storage_info',
+                                                              'dst_storage_info')
+        act_vol_data_map = prepare_volumes_data_map.PrepareVolumesDataMap('src_storage_info',
+                                                                          'dst_storage_info')
+        act_transport_data = transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(self.config,
+                                                                                      self.src_cloud,
+                                                                                      self.dst_cloud,
+                                                                                      input_info='storage_info')
+
 
         namespace_scheduler = namespace.Namespace()
 
         task_ident_trans = act_identity_trans
 
-        tast_images_trans = act_get_info_images >> act_deploy_images
+        task_images_trans = act_get_info_images >> act_deploy_images
 
         task_stop_vms = act_stop_vms
 
-        task_convert_c_to_v_to_i = act_convert_c_to_v >> act_convert_v_to_i
-        task_convert_i_to_v_to_c = act_convert_i_to_v >> act_convert_v_to_c
-        task_transport_volumes = task_convert_c_to_v_to_i >> act_copy_g2g_vols >> task_convert_i_to_v_to_c
+        # task_convert_c_to_v_to_i = act_convert_c_to_v >> act_convert_v_to_i
+        # task_convert_i_to_v_to_c = act_convert_i_to_v >> act_convert_v_to_c
+        # task_transport_volumes = task_convert_c_to_v_to_i >> act_copy_g2g_vols >> task_convert_i_to_v_to_c
+        task_get_inst_vol_info = act_convert_c_to_v >> act_rename_vol_src
+        task_deploy_vol = act_deploy_vol >> act_rename_vol_dst
+        task_transfer_vol_data = act_vol_data_map >> act_transport_data
+
+        task_transport_volumes = task_get_inst_vol_info \
+                                 >> task_deploy_vol >> task_transfer_vol_data >> act_convert_v_to_c
+
         task_attaching_volumes = act_attaching
+
         task_get_inst_info = act_get_info_inst
 
         task_inst_trans = act_comp_res_trans >> act_conv_comp_img >> \
                           act_copy_inst_images >> act_conv_image_comp >> \
                           act_net_prep >> act_map_com_info >> act_deploy_instances
 
-        process_migration = task_ident_trans >> tast_images_trans >> task_get_inst_info >> \
+        process_migration = task_ident_trans >> task_images_trans >> task_get_inst_info >> \
                             task_stop_vms >> task_transport_volumes >> \
                             task_inst_trans >> task_attaching_volumes
 
