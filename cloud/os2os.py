@@ -47,6 +47,7 @@ from cloudferrylib.os.actions import get_info_iter
 from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import stop_vm
 from cloudferrylib.os.actions import copy_var
+from cloudferrylib.os.actions import networks_transporter
 from cloudferrylib.scheduler import task
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.actions import transport_compute_resources
@@ -91,17 +92,34 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_convert_c_to_v_attach = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
         act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.dst_cloud)
 
-        act_deploy_vol = deploy_volumes.DeployVolumes(self.dst_cloud)
-        act_rename_vol_src = create_reference.CreateReference('storage_info',
+        act_deploy_inst_volumes = deploy_volumes.DeployVolumes(self.dst_cloud)
+        act_rename_inst_vol_src = create_reference.CreateReference('storage_info',
                                                               'src_storage_info')
-        act_rename_vol_dst = create_reference.CreateReference('storage_info',
+        act_rename_inst_vol_dst = create_reference.CreateReference('storage_info',
                                                               'dst_storage_info')
-        act_vol_data_map = prepare_volumes_data_map.PrepareVolumesDataMap('src_storage_info',
+        act_inst_vol_data_map = prepare_volumes_data_map.PrepareVolumesDataMap('src_storage_info',
                                                                           'dst_storage_info')
-        act_transport_data = transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(self.config,
+        act_inst_vol_transport_data = transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(self.config,
                                                                                       self.src_cloud,
                                                                                       self.dst_cloud,
                                                                                       input_info='storage_info')
+
+        act_get__available_vol_info = \
+            get_info_volumes.GetInfoVolumes(self.src_cloud, search_opts={'status': 'available'})
+
+        act_deploy_available_volumes = deploy_volumes.DeployVolumes(self.dst_cloud)
+        act_rename_available_vol_src = create_reference.CreateReference('storage_info',
+                                                              'src_storage_info')
+        act_rename_available_vol_dst = create_reference.CreateReference('storage_info',
+                                                              'dst_storage_info')
+        act_available_vol_data_map = prepare_volumes_data_map.PrepareVolumesDataMap('src_storage_info',
+                                                                          'dst_storage_info')
+        act_available_vol_transport_data = transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(self.config,
+                                                                                      self.src_cloud,
+                                                                                      self.dst_cloud,
+                                                                                      input_info='storage_info')
+
+        act_network_trans = networks_transporter.NetworkTransporter(self.src_cloud, self.dst_cloud)
 
 
         namespace_scheduler = namespace.Namespace()
@@ -115,12 +133,12 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         # task_convert_c_to_v_to_i = act_convert_c_to_v >> act_convert_v_to_i
         # task_convert_i_to_v_to_c = act_convert_i_to_v >> act_convert_v_to_c
         # task_transport_volumes = task_convert_c_to_v_to_i >> act_copy_g2g_vols >> task_convert_i_to_v_to_c
-        task_get_inst_vol_info = act_convert_c_to_v >> act_rename_vol_src
-        task_deploy_vol = act_deploy_vol >> act_rename_vol_dst
-        task_transfer_vol_data = act_vol_data_map >> act_transport_data
+        task_get_inst_vol_info = act_convert_c_to_v >> act_rename_inst_vol_src
+        task_deploy_inst_vol = act_deploy_inst_volumes >> act_rename_inst_vol_dst
+        task_transfer_inst_vol_data = act_inst_vol_data_map >> act_inst_vol_transport_data
 
-        task_transport_volumes = task_get_inst_vol_info \
-                                 >> task_deploy_vol >> task_transfer_vol_data >> act_convert_v_to_c
+        task_transport_inst_volumes = task_get_inst_vol_info \
+                                 >> task_deploy_inst_vol >> task_transfer_inst_vol_data >> act_convert_v_to_c
 
         task_attaching_volumes = act_attaching
 
@@ -130,9 +148,24 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                           act_copy_inst_images >> act_conv_image_comp >> \
                           act_net_prep >> act_map_com_info >> act_deploy_instances
 
-        process_migration = task_ident_trans >> task_images_trans >> task_get_inst_info >> \
-                            task_stop_vms >> task_transport_volumes >> \
-                            task_inst_trans >> task_attaching_volumes
+        task_get_info_available_volumes = act_get__available_vol_info >> act_rename_available_vol_src
+        task_deploy_available_vol = act_deploy_available_volumes >> act_rename_available_vol_dst
+        task_transfer_available_vol_data = act_available_vol_data_map >> act_available_vol_transport_data
+
+        task_transport_available_volumes = task_get_info_available_volumes >> \
+                                           task_deploy_available_vol >> task_transfer_available_vol_data
+
+        task_networking_trans = act_network_trans
+
+        # process_migration = task_ident_trans >> task_images_trans >> \
+        #                     task_transport_available_volumes >> task_get_inst_info >> \
+        #                     task_stop_vms >> task_transport_inst_volumes >> \
+        #                     task_inst_trans >> task_attaching_volumes
+
+
+        process_migration = task_ident_trans >> act_network_trans >> \
+                            task_get_inst_info >> task_stop_vms >> \
+                            task_inst_trans
 
         process_migration = cursor.Cursor(process_migration)
         scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, cursor=process_migration)
