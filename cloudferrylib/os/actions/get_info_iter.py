@@ -18,8 +18,6 @@ from cloudferrylib.utils import utils as utl
 import copy
 
 
-
-
 class GetInfoIter(action.Action):
 
     def __init__(self, iter_info_name='info_iter', info_name='info', resource_type=utl.COMPUTE_RESOURCE, resource_name=utl.INSTANCES_TYPE):

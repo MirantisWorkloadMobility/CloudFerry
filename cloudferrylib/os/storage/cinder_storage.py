@@ -25,9 +25,6 @@ from cloudferrylib.os.actions import remote_execution # move it to utils
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import utils as utl
 
-
-
-
 AVAILABLE = 'available'
 IN_USE = "in-use"
 
@@ -42,7 +39,7 @@ class CinderStorage(storage.Storage):
         self.config = config
         self.host = config.cloud.host
         self.cloud = cloud
-        self.identity_client = cloud.resources['identity']
+        self.identity_client = cloud.resources[utl.IDENTITY_RESOURCE]
         self.cinder_client = self.get_cinder_client(self.config)
         super(CinderStorage, self).__init__(config)
 
@@ -58,41 +55,15 @@ class CinderStorage(storage.Storage):
 
     def read_info(self, **kwargs):
         info = dict(storage={})
-        info['storage'] = {'volumes': {}}
+        info[utl.STORAGE_RESOURCE] = {utl.VOLUMES_TYPE: {}}
         for vol in self.get_volumes_list(search_opts=kwargs):
-            volume = {
-                'id': vol.id,
-                'size': vol.size,
-                'display_name': vol.display_name,
-                'display_description': vol.display_description,
-                'volume_type': (
-                    None if vol.volume_type == u'None' else vol.volume_type),
-                'availability_zone': vol.availability_zone,
-                'device': vol.attachments[0][
-                    'device'] if vol.attachments else None,
-                'bootable': False,
-                'volume_image_metadata': {}
-            }
-            if 'bootable' in vol.__dict__:
-                volume['bootable'] = True if vol.bootable.lower() == 'true' else False
-            if 'volume_image_metadata' in vol.__dict__:
-                volume['volume_image_metadata'] = {
-                    'image_id': vol.volume_image_metadata['image_id'],
-                    'checksum': vol.volume_image_metadata['checksum']
-                }
-
-            info['storage']['volumes'][vol.id] = {'volume': volume,
-                                                  'meta': {
-                                                      'image': None
-                                                  }}
-            if self.config.storage.backend == utl.CEPH:
-                rbd_pool = self.config.storage.rbd_pool
-                vol_prefix = self.config.storage.volume_name_template
-                volume['path'] = rbd_pool + "/" + vol_prefix + vol.id
-                if self.config.storage.host:
-                    volume['host'] = self.config.storage.host
-        if self.config['migrate']['keep_volume_storage']:
-            info['storage']['volumes_db'] = {'volumes': '/tmp/volumes'}
+            volume = self.convert(self.config, vol)
+            info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][vol.id] = {utl.VOLUME_BODY: volume,
+                                                                    utl.META_INFO: {
+                                                                        utl.META_INFO: None
+                                                                    }}
+        if self.config.migrate.keep_volume_storage:
+            info[utl.STORAGE_RESOURCE]['volumes_db'] = {utl.VOLUMES_TYPE: '/tmp/volumes'}
 
              #cleanup db
             rem_exec = remote_execution.RemoteExecution(
@@ -100,57 +71,22 @@ class CinderStorage(storage.Storage):
                 self.host)
             rem_exec.run('rm -rf /tmp/volumes')
 
-            for table_name, file_name in info['storage']['volumes_db'].iteritems():
+            for table_name, file_name in info[utl.STORAGE_RESOURCE]['volumes_db'].iteritems():
                 self.download_table_from_db_to_file(table_name, file_name)
         return info
 
-    def convert(self, vol):
-        info = {
-            'size': vol['volume']['size'],
-            'display_name': vol['volume']['display_name'],
-            'display_description': vol['volume']['display_description'],
-            'volume_type': vol['volume']['volume_type'],
-            'availability_zone': vol['volume']['availability_zone'],
-        }
-        if 'image' in vol['meta']:
-            if vol['meta']['image']:
-                info['imageRef'] = vol['meta']['image']['id']
-        return info
-
-    def deploy(self, info, attach=False):
-        new_ids = {}
-        if info['storage'].get('volumes_db'):
-            for table_name, file_name in info['storage']['volumes_db'].iteritems():
-                self.upload_table_to_db(table_name, file_name)
-            for tenant in info['identity']['tenants']:
-                self.update_column_with_condition('volumes',
-                                                  'project_id',
-                                                  tenant['tenant']['id'],
-                                                  tenant['meta']['new_id'])
-            for user in info['identity']['users']:
-                self.update_column_with_condition('volumes', 'user_id', user['user']['id'], user['meta']['new_id'])
-            self.update_column_with_condition('volumes', 'attach_status', 'attached', 'detached')
-            self.update_column_with_condition('volumes', 'status', 'in-use', 'available')
-            self.update_column('volumes', 'instance_uuid', 'NULL')
-            return {}
-        for vol_id, vol in info['storage']['volumes'].iteritems():
-            vol_for_deploy = self.convert(vol)
-            volume = self.create_volume(**vol_for_deploy)
-            vol['volume']['id'] = volume.id
-            self.wait_for_status(volume.id, AVAILABLE)
-            self.finish(vol)
-            if attach:
-                self.attach_volume_to_instance(vol)
-            new_ids[volume.id] = vol_id
-        return new_ids
+    def deploy(self, info):
+        if info[utl.STORAGE_RESOURCE].get('volumes_db'):
+            return self.deploy_volumes_db(info)
+        return self.deploy_volumes(info)
 
     def attach_volume_to_instance(self, volume_info):
-        if 'instance' in volume_info['meta']:
-            if volume_info['meta']['instance']:
-                self.attach_volume(volume_info['volume']['id'],
-                                   volume_info['meta']['instance']['instance'][
+        if 'instance' in volume_info[utl.META_INFO]:
+            if volume_info[utl.META_INFO]['instance']:
+                self.attach_volume(volume_info[utl.VOLUME_BODY]['id'],
+                                   volume_info[utl.META_INFO]['instance']['instance'][
                                        'id'],
-                                   volume_info['volume']['device'])
+                                   volume_info[utl.VOLUME_BODY]['device'])
 
     def get_volumes_list(self, detailed=True, search_opts=None):
         return self.cinder_client.volumes.list(detailed, search_opts)
@@ -159,18 +95,18 @@ class CinderStorage(storage.Storage):
         return self.cinder_client.volumes.create(size, **kwargs)
 
     def delete_volume(self, volume_id):
-        volume = self.__get_volume_by_id(volume_id)
+        volume = self.get_volume_by_id(volume_id)
         self.cinder_client.volumes.delete(volume)
 
-    def __get_volume_by_id(self, volume_id):
+    def get_volume_by_id(self, volume_id):
         return self.cinder_client.volumes.get(volume_id)
 
     def update_volume(self, volume_id, **kwargs):
-        volume = self.__get_volume_by_id(volume_id)
+        volume = self.get_volume_by_id(volume_id)
         return self.cinder_client.volumes.update(volume, **kwargs)
 
     def attach_volume(self, volume_id, instance_id, mountpoint, mode='rw'):
-        volume = self.__get_volume_by_id(volume_id)
+        volume = self.get_volume_by_id(volume_id)
         return self.cinder_client.volumes.attach(volume,
                                                  instance_uuid=instance_id,
                                                  mountpoint=mountpoint,
@@ -180,26 +116,12 @@ class CinderStorage(storage.Storage):
         return self.cinder_client.volumes.detach(volume_id)
 
     def finish(self, vol):
-        self.__patch_option_bootable_of_volume(vol['volume']['id'],
-                                               vol['volume']['bootable'])
-
-    def __patch_option_bootable_of_volume(self, volume_id, bootable):
-        cmd = ('use cinder;update volumes set volumes.bootable=%s where '
-               'volumes.id="%s"') % (int(bootable), volume_id)
-        self.__cmd_mysql_on_dest_controller(cmd)
-
-    def __cmd_mysql_on_dest_controller(self, cmd):
-        with settings(host_string=self.host):
-            run('mysql %s %s -e \'%s\'' % (
-                ("-u " + self.config['mysql']['user'])
-                if self.config['mysql']['user'] else "",
-                "-p" + self.config['mysql']['password']
-                if self.config['mysql']['password'] else "",
-                cmd))
+        self.__patch_option_bootable_of_volume(vol[utl.VOLUME_BODY]['id'],
+                                               vol[utl.VOLUME_BODY]['bootable'])
 
     def upload_volume_to_image(self, volume_id, force, image_name,
                                container_format, disk_format):
-        volume = self.__get_volume_by_id(volume_id)
+        volume = self.get_volume_by_id(volume_id)
         resp, image = self.cinder_client.volumes.upload_to_image(
             volume=volume,
             force=force,
@@ -214,6 +136,92 @@ class CinderStorage(storage.Storage):
     def wait_for_status(self, resource_id, status, limit_retry=60):
         while self.get_status(resource_id) != status:
             time.sleep(1)
+
+    def deploy_volumes(self, info):
+        new_ids = {}
+        if info[utl.STORAGE_RESOURCE].get('volumes_db'):
+            return self.deploy_volumes_db(info)
+        for vol_id, vol in info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE].iteritems():
+            vol_for_deploy = self.convert_to_params(vol)
+            volume = self.create_volume(**vol_for_deploy)
+            vol[utl.VOLUME_BODY]['id'] = volume.id
+            self.wait_for_status(volume.id, AVAILABLE)
+            self.finish(vol)
+            new_ids[volume.id] = vol_id
+        return new_ids
+
+    def deploy_volumes_db(self, info):
+        for table_name, file_name in info[utl.STORAGE_RESOURCE]['volumes_db'].iteritems():
+            self.upload_table_to_db(table_name, file_name)
+        for tenant in info[utl.IDENTITY_RESOURCE]['tenants']:
+            self.update_column_with_condition('volumes',
+                                              'project_id',
+                                              tenant['tenant']['id'],
+                                              tenant[utl.META_INFO]['new_id'])
+        for user in info[utl.IDENTITY_RESOURCE]['users']:
+            self.update_column_with_condition('volumes', 'user_id', user['user']['id'], user[utl.META_INFO]['new_id'])
+        self.update_column_with_condition('volumes', 'attach_status', 'attached', 'detached')
+        self.update_column_with_condition('volumes', 'status', 'in-use', 'available')
+        self.update_column('volumes', 'instance_uuid', 'NULL')
+        return {}
+
+    @staticmethod
+    def convert(vol, cfg):
+        volume = {
+            'id': vol.id,
+            'size': vol.size,
+            'display_name': vol.display_name,
+            'display_description': vol.display_description,
+            'volume_type': (
+                None if vol.volume_type == u'None' else vol.volume_type),
+            'availability_zone': vol.availability_zone,
+            'device': vol.attachments[0][
+                'device'] if vol.attachments else None,
+            'bootable': False,
+            'volume_image_metadata': {}
+        }
+        if 'bootable' in vol.__dict__:
+            volume['bootable'] = True if vol.bootable.lower() == 'true' else False
+        if 'volume_image_metadata' in vol.__dict__:
+            volume['volume_image_metadata'] = {
+                'image_id': vol.volume_image_metadata['image_id'],
+                'checksum': vol.volume_image_metadata['checksum']
+            }
+        if cfg.storage.backend == utl.CEPH:
+            rbd_pool = cfg.storage.rbd_pool
+            vol_prefix = cfg.storage.volume_name_template
+            volume['path'] = rbd_pool + "/" + vol_prefix + vol.id
+            if cfg.storage.host:
+                volume['host'] = cfg.storage.host
+        return volume
+
+    @staticmethod
+    def convert_to_params(vol):
+        info = {
+            'size': vol[utl.VOLUME_BODY]['size'],
+            'display_name': vol[utl.VOLUME_BODY]['display_name'],
+            'display_description': vol[utl.VOLUME_BODY]['display_description'],
+            'volume_type': vol[utl.VOLUME_BODY]['volume_type'],
+            'availability_zone': vol[utl.VOLUME_BODY]['availability_zone'],
+        }
+        if 'image' in vol[utl.META_INFO]:
+            if vol[utl.META_INFO]['image']:
+                info['imageRef'] = vol[utl.META_INFO]['image']['id']
+        return info
+
+    def __patch_option_bootable_of_volume(self, volume_id, bootable):
+        cmd = ('use cinder;update volumes set volumes.bootable=%s where '
+               'volumes.id="%s"') % (int(bootable), volume_id)
+        self.__cmd_mysql_on_dest_controller(cmd)
+
+    def __cmd_mysql_on_dest_controller(self, cmd):
+        with settings(host_string=self.host):
+            run('mysql %s %s -e \'%s\'' % (
+                ("-u " + self.config['mysql']['user'])
+                if self.config['mysql']['user'] else "",
+                "-p" + self.config['mysql']['password']
+                if self.config['mysql']['password'] else "",
+                cmd))
 
     def download_table_from_db_to_file(self, table_name, file_name):
         connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
