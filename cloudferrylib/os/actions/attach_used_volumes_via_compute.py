@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import copy
 
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
-import copy
-__author__ = 'mirrorcoder'
 
 
 class AttachVolumesCompute(action.Action):
@@ -28,9 +27,14 @@ class AttachVolumesCompute(action.Action):
         info = copy.deepcopy(info)
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
         storage_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
-        for instance in info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE].itervalues():
+        for instance in info[utl.COMPUTE_RESOURCE][
+                utl.INSTANCES_TYPE].itervalues():
+            if not instance[utl.META_INFO].get(utl.VOLUME_BODY):
+                continue
             for vol in instance[utl.META_INFO][utl.VOLUME_BODY]:
-                if storage_resource.get_status(vol['volume']['id']) != 'in-use':
+                if storage_resource.get_status(
+                        vol['volume']['id']) != 'in-use':
                     compute_resource.attach_volume_to_instance(instance, vol)
-                    storage_resource.wait_for_status(vol['volume']['id'], 'in-use')
+                    storage_resource.wait_for_status(vol['volume']['id'],
+                                                     'in-use')
         return {}

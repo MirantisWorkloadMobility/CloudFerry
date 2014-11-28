@@ -60,13 +60,17 @@ class ConvertComputeToImage(action.Action):
             if image_id:
                 img = image_resource.read_info(image_id=image_id)
                 img = img[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE]
-                images_body[image_id] = {utl.IMAGE_BODY: {}, utl.META_INFO: {
-                    utl.INSTANCE_BODY: instance
-                }}
-                if img:
-                    images_body.update(img)
+                if image_id in images_body:
                     images_body[image_id][utl.META_INFO][
-                        utl.INSTANCE_BODY] = instance
+                        utl.INSTANCE_BODY].append(instance)
+                else:
+                    images_body[image_id] = {utl.IMAGE_BODY: {},
+                                             utl.META_INFO: {
+                                             utl.INSTANCE_BODY: [instance]}}
+                    if img:
+                        images_body.update(img)
+                        images_body[image_id][utl.META_INFO][
+                            utl.INSTANCE_BODY] = [instance]
             else:
                 compute_ignored_images[instance_id] = instance
         return {
