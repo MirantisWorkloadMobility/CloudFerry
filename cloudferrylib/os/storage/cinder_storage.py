@@ -57,7 +57,7 @@ class CinderStorage(storage.Storage):
         info = dict(storage={})
         info[utl.STORAGE_RESOURCE] = {utl.VOLUMES_TYPE: {}}
         for vol in self.get_volumes_list(search_opts=kwargs):
-            volume = self.convert(self.config, vol)
+            volume = self.convert(vol, self.config)
             info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][vol.id] = {utl.VOLUME_BODY: volume,
                                                                     utl.META_INFO: {
                                                                         utl.META_INFO: None

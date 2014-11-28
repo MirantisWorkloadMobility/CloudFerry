@@ -68,6 +68,13 @@ class GlanceImage(image.Image):
             if glance_image.name == image_name:
                 return glance_image
 
+    def get_img_id_list_by_checksum(self, checksum):
+        l = []
+        for glance_image in self.get_image_list():
+            if glance_image.checksum == checksum:
+                l.append(glance_image.id)
+        return l
+
     def get_image(self, im):
         """ Get image by id or name. """
 
@@ -150,12 +157,13 @@ class GlanceImage(image.Image):
         empty_image_list = {}
         for image_id_src, gl_image in info['image']['images'].iteritems():
             if gl_image['image']:
-                dst_images = {x.checksum: x for x in self.get_image_list()}
+                dst_img_checksums = {x.checksum: x for x in self.get_image_list()}
+                dst_img_names = [x.name for x in self.get_image_list()]
                 checksum_current = gl_image['image']['checksum']
+                name_current = gl_image['image']['name']
                 meta = gl_image['meta']
-                if checksum_current in dst_images:
-                    migrate_images_list.append(
-                        (dst_images[checksum_current], meta))
+                if checksum_current in dst_img_checksums and (name_current + 'Migrate') in dst_img_names:
+                    migrate_images_list.append((dst_img_checksums[checksum_current], meta))
                     continue
                 gl_image['image']['resource_src'] = info['image']['resource']
                 migrate_image = self.create_image(
