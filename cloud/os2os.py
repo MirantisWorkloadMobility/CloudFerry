@@ -97,7 +97,9 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.dst_cloud)
         save_result = merge.Merge('info', 'info_result', 'info_result', 'compute', 'instances')
 
-        namespace_scheduler = namespace.Namespace()
+        namespace_scheduler = namespace.Namespace({'info_result': {
+            utl.COMPUTE_RESOURCE: {utl.INSTANCES_TYPE: {}}
+        }})
 
         task_ident_trans = act_identity_trans
 
@@ -123,9 +125,9 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
 
         task_cleanup_images = act_cleanup_images
 
-        process_migration = task_ident_trans >> tast_images_trans >> task_get_inst_info >> \
-                            task_stop_vms >> task_transport_volumes >> \
-                            task_inst_trans >> task_attaching_volumes >> task_cleanup_images
+        #process_migration = task_ident_trans >> tast_images_trans >> task_get_inst_info >> \
+        #                    task_stop_vms >> task_transport_volumes >> \
+        #                    task_inst_trans >> task_attaching_volumes >> task_cleanup_images
         transport_image = act_conv_comp_img >> act_copy_inst_images >> act_conv_image_comp
 
         trans_one_inst = act_stop_vms >>\
@@ -139,8 +141,9 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             init_iteration_instance >> \
             get_next_instance >> \
             trans_one_inst >> \
-            (is_instances | (save_result - get_next_instance)) >> \
-            save_result >> rename_info_iter
+            save_result >> \
+            (is_instances | get_next_instance) >>\
+            rename_info_iter >> task_cleanup_images
 
         process_migration = transport_instances_and_dependency_resources
 
