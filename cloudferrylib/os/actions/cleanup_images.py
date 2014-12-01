@@ -25,23 +25,26 @@ class CleanupImages(action.Action):
         self.dst_cloud = dst_cloud
         super(CleanupImages, self).__init__()
 
-    def run(self, storage_info, **kwargs):
-        volume_info = copy.deepcopy(storage_info)
+    def run(self, info, **kwargs):
+        info = copy.deepcopy(info)
 
         src_img = self.src_cloud.resources[utl.IMAGE_RESOURCE]
         dst_img = self.dst_cloud.resources[utl.IMAGE_RESOURCE]
 
         checksum_list = []
 
-        for volume in volume_info[utl.STORAGE_RESOURCE][
-                utl.VOLUMES_TYPE].itervalues():
-            if not volume.get(utl.META_INFO):
+        for instance in info[utl.COMPUTE_RESOURCE][
+                utl.INSTANCES_TYPE].itervalues():
+            volumes = instance[utl.META_INFO].get(utl.VOLUME_BODY)
+
+            if not volumes:
                 continue
 
-            image_checksum = volume[utl.META_INFO][utl.IMAGE_BODY]['checksum']
+            for vol in volumes:
+                image_checksum = vol[utl.META_INFO][utl.IMAGE_BODY]['checksum']
 
-            if image_checksum not in checksum_list:
-                checksum_list.append(image_checksum)
+                if image_checksum not in checksum_list:
+                    checksum_list.append(image_checksum)
 
         for chs in checksum_list:
             map(src_img.delete_image, src_img.get_img_id_list_by_checksum(chs))
