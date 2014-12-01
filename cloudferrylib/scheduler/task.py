@@ -47,7 +47,7 @@ class ClassicSyntax(Element):
         return self
 
     def add_another_link_with(self, other):
-        other = Cursor.forward_back(other)
+        #other = Cursor.forward_back(other)
         self.next_element.append(other)
         # other.prev_element = self if not other.prev_element else other.prev_element
         return self

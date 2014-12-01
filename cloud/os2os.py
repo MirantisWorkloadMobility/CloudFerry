@@ -45,12 +45,15 @@ from cloudferrylib.os.actions import get_info_instances
 from cloudferrylib.os.actions import prepare_networks
 from cloudferrylib.os.actions import map_compute_info
 from cloudferrylib.os.actions import get_info_iter
+from cloudferrylib.os.actions import rename_info
 from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import stop_vm
 from cloudferrylib.os.actions import copy_var
+from cloudferrylib.os.actions import is_end_iter
 from cloudferrylib.scheduler import task
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.actions import transport_compute_resources
+from cloudferrylib.os.actions import merge
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
@@ -92,9 +95,11 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_cleanup_images = cleanup_images.CleanupImages(self.src_cloud, self.dst_cloud)
         act_convert_c_to_v_attach = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
         act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.dst_cloud)
+        save_result = merge.Merge('info', 'info_result', 'info_result', 'compute', 'instances')
 
-
-        namespace_scheduler = namespace.Namespace()
+        namespace_scheduler = namespace.Namespace({'info_result': {
+            utl.COMPUTE_RESOURCE: {utl.INSTANCES_TYPE: {}}
+        }})
 
         task_ident_trans = act_identity_trans
 
@@ -107,16 +112,44 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         task_transport_volumes = task_convert_c_to_v_to_i >> act_copy_g2g_vols >> task_convert_i_to_v_to_c
         task_attaching_volumes = act_attaching
         task_get_inst_info = act_get_info_inst
+        init_iteration_instance = copy_var.CopyVar('info', 'info_backup', True) >>\
+                                  create_reference.CreateReference('info', 'info_iter')
+        get_next_instance = get_info_iter.GetInfoIter()
+        rename_info_iter = rename_info.RenameInfo('info_result', 'info')
+        is_instances = is_end_iter.IsEndIter()
+        act_start_vms = start_vm.StartVms(self.dst_cloud)
 
-        task_inst_trans = act_comp_res_trans >> act_conv_comp_img >> \
-                          act_copy_inst_images >> act_conv_image_comp >> \
-                          act_net_prep >> act_map_com_info >> act_deploy_instances
+        # transport_instances_and_dependency_resources = act_comp_res_trans >> act_conv_comp_img >> \
+        #                   act_copy_inst_images >> act_conv_image_comp >> \
+        #                   act_net_prep >> act_map_com_info >> act_deploy_instances
 
         task_cleanup_images = act_cleanup_images
 
-        process_migration = task_ident_trans >> tast_images_trans >> task_get_inst_info >> \
-                            task_stop_vms >> task_transport_volumes >> \
-                            task_inst_trans >> task_attaching_volumes >> task_cleanup_images
+        #process_migration = task_ident_trans >> tast_images_trans >> task_get_inst_info >> \
+        #                    task_stop_vms >> task_transport_volumes >> \
+        #                    task_inst_trans >> task_attaching_volumes >> task_cleanup_images
+        transport_image = act_conv_comp_img >> act_copy_inst_images >> act_conv_image_comp
+
+        trans_one_inst = act_stop_vms >>\
+                         transport_image >> \
+                         task_transport_volumes >> \
+                         act_net_prep >> act_map_com_info >> act_deploy_instances >>\
+                         task_attaching_volumes >> act_start_vms
+
+        transport_instances_and_dependency_resources = \
+            task_get_inst_info >> \
+            init_iteration_instance >> \
+            get_next_instance >> \
+            trans_one_inst >> \
+            save_result >> \
+            (is_instances | get_next_instance) >>\
+            rename_info_iter >> task_cleanup_images
+
+        process_migration = transport_instances_and_dependency_resources
+
+        # process_migration = task_ident_trans >> tast_images_trans >> task_get_inst_info >> \
+        #                     task_stop_vms >> task_transport_volumes >> \
+        #                     transport_instances_and_dependency_resources >> task_attaching_volumes
 
         process_migration = cursor.Cursor(process_migration)
         scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, cursor=process_migration)
