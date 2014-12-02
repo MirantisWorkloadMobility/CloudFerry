@@ -14,6 +14,7 @@
 
 from cloudferrylib.base import objstorage
 from swiftclient import client as swift_client
+from cloudferrylib.utils import utils as utl
 
 
 class SwiftStorage(objstorage.ObjStorage):
@@ -39,11 +40,11 @@ class SwiftStorage(objstorage.ObjStorage):
 
 
     def read_info(self, **kwargs):
-        info = {'objstorage':
-                    {'containers': {}}}
+        info = {utl.OBJSTORAGE_RESOURCE:
+                    {utl.CONTAINERS: {}}}
         account_info = self.get_account_info()
-        info['objstorage']['containers'] = account_info[1]
-        for container_info in info['objstorage']['containers']:
+        info[utl.OBJSTORAGE_RESOURCE][utl.CONTAINERS] = account_info[1]
+        for container_info in info[utl.OBJSTORAGE_RESOURCE][utl.CONTAINERS]:
             container_info['objects'] = self.get_container(container_info['name'])[1]
             for object_info in container_info['objects']:
                 resp, object_info['data'] = self.get_object(container_info['name'],
@@ -51,12 +52,14 @@ class SwiftStorage(objstorage.ObjStorage):
         return info
 
     def deploy(self, info, **kwargs):
-        for container_info in info['objstorage']['containers']:
+        for container_info in info[utl.OBJSTORAGE_RESOURCE][utl.CONTAINERS]:
             self.put_container(container_info['name'])
             for object_info in container_info['objects']:
                 self.put_object(container=container_info['name'],
                                 obj_name=object_info['name'],
-                                content=object_info['data'])
+                                content=object_info['data'],
+                                content_type=object_info['content_type'])
+        return info
 
     def get_account_info(self):
         return swift_client.get_account(self.storage_url, self.token)
@@ -67,8 +70,8 @@ class SwiftStorage(objstorage.ObjStorage):
     def get_object(self, container, obj_name, *args):
         return swift_client.get_object(self.storage_url, self.token, container, obj_name, *args)
 
-    def put_object(self, container, obj_name, content=None, *args):
-        return swift_client.put_object(self.storage_url, self.token, container, obj_name, content, *args)
+    def put_object(self, container, obj_name, content=None, content_type=None, *args):
+        return swift_client.put_object(self.storage_url, self.token, container, obj_name, content, content_type, *args)
 
     def put_container(self, container, *args):
         return swift_client.put_container(self.storage_url, self.token, container, *args)
