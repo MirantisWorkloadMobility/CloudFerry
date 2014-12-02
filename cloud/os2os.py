@@ -15,6 +15,7 @@
 
 import cloud
 import cloud_ferry
+from cloudferrylib.base.action import copy_var, rename_info, merge, is_end_iter, get_info_iter, create_reference
 from cloudferrylib.os.actions import identity_transporter
 from cloudferrylib.scheduler import scheduler
 from cloudferrylib.scheduler import namespace
@@ -24,9 +25,7 @@ from cloudferrylib.os.storage import cinder_storage
 from cloudferrylib.os.network import neutron
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.os.compute import nova_compute
-from cloudferrylib.os.actions import get_info_volumes
 from cloudferrylib.os.actions import get_info_images
-from cloudferrylib.os.actions import deploy_volumes
 from cloudferrylib.os.actions import transport_instance
 from cloudferrylib.os.actions import attach_used_volumes_via_compute
 from cloudferrylib.os.actions import cleanup_images
@@ -39,22 +38,16 @@ from cloudferrylib.os.actions import convert_volume_to_image
 from cloudferrylib.os.actions import convert_volume_to_compute
 from cloudferrylib.os.actions import attach_used_volumes
 from cloudferrylib.os.actions import networks_transporter
-from cloudferrylib.os.actions import create_reference
+from cloudferrylib.base.action import create_reference
 from cloudferrylib.os.actions import prepare_volumes_data_map
 from cloudferrylib.os.actions import transport_ceph_to_ceph_via_ssh
 from cloudferrylib.os.actions import get_info_instances
 from cloudferrylib.os.actions import prepare_networks
 from cloudferrylib.os.actions import map_compute_info
-from cloudferrylib.os.actions import get_info_iter
-from cloudferrylib.os.actions import rename_info
 from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import stop_vm
-from cloudferrylib.os.actions import copy_var
-from cloudferrylib.os.actions import is_end_iter
-from cloudferrylib.scheduler import task
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.actions import transport_compute_resources
-from cloudferrylib.os.actions import merge
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
@@ -70,24 +63,27 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)
         
     def migrate(self):
+        namespace_scheduler = namespace.Namespace({
+            'src_cloud': self.src_cloud,
+            'dst_cloud': self.dst_cloud,
+            'cfg': self.config,
+            'info_result': {
+                utl.COMPUTE_RESOURCE: {utl.INSTANCES_TYPE: {}}
+            }
+        })
 
         act_identity_trans = identity_transporter.IdentityTransporter(self.src_cloud, self.dst_cloud)
         act_comp_res_trans = transport_compute_resources.TransportComputeResources(self.src_cloud, self.dst_cloud)
-
         act_get_info_images = get_info_images.GetInfoImages(self.src_cloud)
         act_get_info_inst = get_info_instances.GetInfoInstances(self.src_cloud)
-
         act_conv_comp_img = convert_compute_to_image.ConvertComputeToImage(self.config, self.src_cloud)
         act_conv_image_comp = convert_image_to_compute.ConvertImageToCompute()
         act_map_com_info = map_compute_info.MapComputeInfo(self.src_cloud, self.dst_cloud)
         act_stop_vms = stop_vm.StopVms(self.src_cloud)
-
         act_deploy_images = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
         act_copy_inst_images = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
         act_net_prep = prepare_networks.PrepareNetworks(self.dst_cloud, self.config)
         act_deploy_instances = transport_instance.TransportInstance(self.config, self.src_cloud, self.dst_cloud)
-
-
         act_copy_g2g_vols = copy_g2g.CopyFromGlanceToGlance(self.src_cloud, self.dst_cloud)
         act_convert_c_to_v = convert_compute_to_volume.ConvertComputeToVolume(self.config, self.src_cloud)
         act_convert_v_to_i = convert_volume_to_image.ConvertVolumeToImage('qcow2', self.src_cloud)
@@ -105,6 +101,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         }})
 
         task_ident_trans = act_identity_trans
+        tast_images_trans = act_get_info_images >> act_deploy_images
         task_images_trans = act_get_info_images >> act_deploy_images
         task_compres_trans = act_comp_res_trans
 
@@ -136,11 +133,10 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         #                    task_stop_vms >> task_transport_volumes >> \
         #                    task_inst_trans >> task_attaching_volumes >> task_cleanup_images
         transport_image = act_conv_comp_img >> act_copy_inst_images >> act_conv_image_comp
+        transport_resource_inst = transport_image >> task_transport_volumes
+        transport_inst = act_net_prep >> act_map_com_info >> act_deploy_instances
 
-        trans_one_inst = act_stop_vms >>\
-                         transport_image >> \
-                         task_transport_volumes >> \
-                         act_net_prep >> act_map_com_info >> act_deploy_instances >>\
+        trans_one_inst = act_stop_vms >> transport_resource_inst >> transport_inst >>\
                          task_attaching_volumes >> act_start_vms
 
         transport_instances_and_dependency_resources = \

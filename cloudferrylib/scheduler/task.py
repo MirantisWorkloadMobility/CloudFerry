@@ -13,43 +13,49 @@
 # limitations under the License.
 
 __author__ = 'mirrorcoder'
-from cloudferrylib.scheduler.cursor import Cursor
 from cloudferrylib.scheduler.cursor import DEFAULT
 from cloudferrylib.scheduler.utils.equ_instance import EquInstance
+
+START = 0
+END = 0
 
 
 class Element(object):
     def __init__(self):
         self.prev_element = None
-        self.next_element = []
+        self.next_element = [None]
         self.parall_elem = []
         self.num_element = DEFAULT
 
     def set_next_path(self, num):
         self.num_element = num
 
-    def get_starting_element(self):
+    def go(self, delta):
+        if delta == START:
+            return self.go_start()
+        if delta == END:
+            return self.go_end()
+
+    def go_start(self):
         elem = self
         while elem.prev_element:
             elem = elem.prev_element
         return elem
 
-    def get_finite_element(self):
+    def go_end(self):
         elem = self
-        while self.next_element:
-            elem = self.next_element[-1]
+        while elem.next_element[0]:
+            elem = elem.next_element[0]
         return elem
 
 
 class ClassicSyntax(Element):
     def add_closure_link_with(self, other):
-        self.next_element.append(other)
+        self.next_element[0] = other
         return self
 
     def add_another_link_with(self, other):
-        #other = Cursor.forward_back(other)
         self.next_element.append(other)
-        # other.prev_element = self if not other.prev_element else other.prev_element
         return self
 
     def add_thread(self, other):
@@ -57,10 +63,10 @@ class ClassicSyntax(Element):
         return self
 
     def dual_link_with(self, other):
-        other_begin = other.get_starting_element()
-        self.next_element.insert(0, other_begin)
-        other_begin.prev_element = self if not other_begin.prev_element else other_begin.prev_element
-        return other
+        other = other.go_start()
+        self.next_element[0] = other
+        other.prev_element = self if not other.prev_element else other.prev_element
+        return other.go_end()
 
 
 class AltSyntax(ClassicSyntax):

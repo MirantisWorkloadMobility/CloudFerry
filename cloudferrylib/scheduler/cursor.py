@@ -32,7 +32,7 @@ class Cursor(object):
         else:
             if self.threads:
                 return self.threads.pop()
-            if self.next_iter.next_element:
+            if self.next_iter.next_element[0]:
                 if self.next_iter.num_element < len(self.next_iter.next_element):
                     self.__change_state_cursor(self.next_iter.num_element)
                 else:

@@ -15,7 +15,6 @@
 
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
-import copy
 
 
 class IsEndIter(action.Action):
