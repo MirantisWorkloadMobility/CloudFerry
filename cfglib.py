@@ -1,7 +1,7 @@
 from oslo.config import cfg
 import addons
 src = cfg.OptGroup(name='src',
-                   title='Credetionals and general config for source cloud')
+                   title='Credentials and general config for source cloud')
 
 src_opts = [
     cfg.StrOpt('type', default='os',
@@ -20,7 +20,7 @@ src_opts = [
 ]
 
 dst = cfg.OptGroup(name='dst',
-                   title='Credetionals and general '
+                   title='Credentials and general '
                          'config for destination cloud')
 
 dst_opts = [
@@ -55,9 +55,9 @@ migrate_opts = [
     cfg.StrOpt('speed_limit', default='10MB',
                help='speed limit for glance to glance'),
     cfg.StrOpt('instances', default='key_name-qwerty',
-               help='filter instance by parametrs'),
+               help='filter instance by parameters'),
     cfg.StrOpt('file_compression', default='dd',
-               help='gzip - use GZIP when file tranfering via ssh, '
+               help='gzip - use GZIP when file transferring via ssh, '
                     ' - no compression, directly via dd'),
     cfg.IntOpt('level_compression', default='7',
                help='level compression for gzip'),
@@ -168,6 +168,14 @@ src_network_opts = [
                     'auto - detect avaiable service')
 ]
 
+src_objstorage = cfg.OptGroup(name='src_objstorage',
+                              title='Config service for object storage')
+
+src_objstorage_opts = [
+    cfg.StrOpt('service', default='swift',
+               help='service name for object storage')
+]
+
 dst_mysql = cfg.OptGroup(name='dst_mysql',
                          title='Config mysql for destination cloud')
 
@@ -245,9 +253,17 @@ dst_network = cfg.OptGroup(name='dst_network',
 dst_network_opts = [
     cfg.StrOpt('service', default='auto',
                help='name service for network, '
-                    'auto - detect avaiable service'),
+                    'auto - detect available service'),
     cfg.ListOpt('interfaces_for_instance', default='net04',
                 help='list interfaces for connection to instance')
+]
+
+dst_objstorage = cfg.OptGroup(name='dst_objstorage',
+                              title='Config service for object storage')
+
+dst_objstorage_opts = [
+    cfg.StrOpt('service', default='swift',
+               help='service name for object storage')
 ]
 
 import_rules = cfg.OptGroup(name='import_rules',
@@ -270,12 +286,14 @@ cfg_for_reg = [
     (src_identity, src_identity_opts),
     (src_image, src_image_opts),
     (src_network, src_network_opts),
+    (src_objstorage, src_objstorage_opts),
     (dst_mysql, dst_mysql_opts),
     (dst_compute, dst_compute_opts),
     (dst_storage, dst_storage_opts),
     (dst_identity, dst_identity_opts),
     (dst_image, dst_image_opts),
     (dst_network, dst_network_opts),
+    (dst_objstorage, dst_objstorage_opts),
     (import_rules, import_rules_opts)
 ]
 

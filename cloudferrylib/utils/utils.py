@@ -60,7 +60,7 @@ VOLUMES_TYPE = 'volumes'
 VOLUME_BODY = 'volume'
 VOLUMES_DB = 'volumes_db'
 
-OBJSTORAGE_RESOURCE = 'obj_storage'
+OBJSTORAGE_RESOURCE = 'objstorage'
 
 COMPUTE_RESOURCE = 'compute'
 INSTANCES_TYPE = 'instances'

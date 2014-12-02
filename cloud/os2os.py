@@ -24,6 +24,7 @@ from cloudferrylib.os.image import glance_image
 from cloudferrylib.os.storage import cinder_storage
 from cloudferrylib.os.network import neutron
 from cloudferrylib.os.identity import keystone
+from cloudferrylib.os.object_storage import swift_storage
 from cloudferrylib.os.compute import nova_compute
 from cloudferrylib.os.actions import get_info_images
 from cloudferrylib.os.actions import transport_instance
@@ -48,6 +49,7 @@ from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import stop_vm
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.actions import transport_compute_resources
+from cloudferrylib.os.actions import merge
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
@@ -58,7 +60,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                      'image': glance_image.GlanceImage,
                      'storage': cinder_storage.CinderStorage,
                      'network': neutron.NeutronNetwork,
-                     'compute': nova_compute.NovaCompute}
+                     'compute': nova_compute.NovaCompute,
+                     'objstorage': swift_storage.SwiftStorage}
         self.src_cloud = cloud.Cloud(resources, cloud.SRC, config)
         self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)
         self.init = {

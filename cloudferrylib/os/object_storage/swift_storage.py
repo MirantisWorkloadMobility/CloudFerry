@@ -39,11 +39,11 @@ class SwiftStorage(objstorage.ObjStorage):
 
 
     def read_info(self, **kwargs):
-        info = {'obj_storage':
+        info = {'objstorage':
                     {'containers': {}}}
         account_info = self.get_account_info()
-        info['object_storage']['containers'] = account_info[1]
-        for container_info in info['object_storage']['containers']:
+        info['objstorage']['containers'] = account_info[1]
+        for container_info in info['objstorage']['containers']:
             container_info['objects'] = self.get_container(container_info['name'])[1]
             for object_info in container_info['objects']:
                 resp, object_info['data'] = self.get_object(container_info['name'],
@@ -51,7 +51,7 @@ class SwiftStorage(objstorage.ObjStorage):
         return info
 
     def deploy(self, info, **kwargs):
-        for container_info in info['object_storage']['containers']:
+        for container_info in info['objstorage']['containers']:
             self.put_container(container_info['name'])
             for object_info in container_info['objects']:
                 self.put_object(container=container_info['name'],
