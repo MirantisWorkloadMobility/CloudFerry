@@ -19,9 +19,6 @@ from cloudferrylib.utils import utils as utl
 
 
 class AttachVolumesCompute(action.Action):
-    def __init__(self, cloud):
-        self.cloud = cloud
-        super(AttachVolumesCompute, self).__init__()
 
     def run(self, info, **kwargs):
         info = copy.deepcopy(info)

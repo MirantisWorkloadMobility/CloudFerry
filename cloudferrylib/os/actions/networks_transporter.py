@@ -19,11 +19,6 @@ from cloudferrylib.utils import utils as utl
 
 class NetworkTransporter(transporter.Transporter):
 
-    def __init__(self, src_cloud, dst_cloud):
-        self.src_cloud = src_cloud
-        self.dst_cloud = dst_cloud
-        super(NetworkTransporter, self).__init__()
-
     def run(self, **kwargs):
         src_resource = self.src_cloud.resources[utl.NETWORK_RESOURCE]
         dst_resource = self.dst_cloud.resources[utl.NETWORK_RESOURCE]

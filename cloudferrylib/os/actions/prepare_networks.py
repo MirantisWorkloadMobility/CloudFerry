@@ -21,11 +21,6 @@ from cloudferrylib.utils import utils as utl
 
 class PrepareNetworks(action.Action):
 
-    def __init__(self, cloud, config):
-        self.cloud = cloud
-        self.config = config
-        super(PrepareNetworks, self).__init__()
-
     def run(self, info=None, **kwargs):
 
         info_compute = copy.deepcopy(info)
@@ -33,7 +28,7 @@ class PrepareNetworks(action.Action):
         network_resource = self.cloud.resources[utl.NETWORK_RESOURCE]
         identity_resource = self.cloud.resources[utl.IDENTITY_RESOURCE]
 
-        keep_ip = self.config.migrate.keep_ip
+        keep_ip = self.cfg.migrate.keep_ip
 
         instances = info_compute[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE]
         for (id_inst, inst) in instances.iteritems():

@@ -5,10 +5,6 @@ from cloudferrylib.utils import forward_agent
 
 class ConvertImageToFile(action.Action):
 
-    def __init__(self, cloud=None):
-        self.cloud = cloud
-        super(ConvertImageToFile, self).__init__()
-
     def run(self, image_id=None, base_filename=None, **kwargs):
         cfg = self.cloud.cloud_config.cloud
         with settings(host_string=cfg.host):

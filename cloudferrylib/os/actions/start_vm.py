@@ -16,9 +16,6 @@ from cloudferrylib.base.action import action
 
 
 class StartVms(action.Action):
-    def __init__(self, cloud):
-        self.cloud = cloud
-        super(StartVms, self).__init__()
 
     def run(self, info, **kwargs):
         compute_resource = self.cloud.resources['compute']

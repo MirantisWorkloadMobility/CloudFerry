@@ -20,8 +20,8 @@ from cloudferrylib.utils import utils as utl
 class TransportDbViaSsh(transporter.Transporter):
 
     def run(self, cfg=None,
-            cloud_src=None,
-            cloud_dst=None,
+            src_cloud=None,
+            dst_cloud=None,
             info_storage={},
             resource_type=utl.STORAGE_RESOURCE,
             resource_name=utl.VOLUMES_DB, **kwargs):
@@ -31,7 +31,7 @@ class TransportDbViaSsh(transporter.Transporter):
         for item in data_for_trans:
             path_src = data_for_trans[item]
             path_dst = data_for_trans[item]
-            utils.transfer_file_to_file(cloud_src, cloud_dst, host_src,
+            utils.transfer_file_to_file(src_cloud, dst_cloud, host_src,
                                         host_dst, path_src, path_dst,
                                         cfg.migrate)
         return {}

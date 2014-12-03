@@ -25,7 +25,7 @@ class IsEndIter(action.Action):
         self.iter_info_name = iter_info_name
         self.resource_type = resource_type
         self.resource_name = resource_name
-        super(IsEndIter, self).__init__()
+        super(IsEndIter, self).__init__({})
 
     def run(self, **kwargs):
         info = kwargs[self.iter_info_name]

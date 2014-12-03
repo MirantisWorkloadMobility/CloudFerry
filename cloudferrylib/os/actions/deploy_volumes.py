@@ -23,10 +23,6 @@ OLD_ID = 'old_id'
 
 class DeployVolumes(action.Action):
 
-    def __init__(self, cloud):
-        self.cloud = cloud
-        super(DeployVolumes, self).__init__()
-
     def run(self, storage_info=None, identity_info=None, **kwargs):
         storage_info = copy.deepcopy(storage_info)
         # identity_info = copy.deepcopy(identity_info)

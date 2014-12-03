@@ -23,7 +23,7 @@ class CopyVar(action.Action):
         self.original_info_name = original_info_name
         self.info_name = info_name
         self.deepcopy = deepcopy
-        super(CopyVar, self).__init__()
+        super(CopyVar, self).__init__({})
 
     def run(self, **kwargs):
         if not self.deepcopy:

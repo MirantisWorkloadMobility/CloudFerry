@@ -19,10 +19,6 @@ from cloudferrylib.utils import utils as utl
 
 class DetachVolumes(action.Action):
 
-    def __init__(self, cloud):
-        self.cloud = cloud
-        super(DetachVolumes, self).__init__()
-
     def run(self, storage_info={}, **kwargs):
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
         for (vol_id, vol_info) \

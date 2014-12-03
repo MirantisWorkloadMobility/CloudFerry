@@ -22,7 +22,7 @@ class CreateReference(action.Action):
     def __init__(self, original_info_name, info_name):
         self.original_info_name = original_info_name
         self.info_name = info_name
-        super(CreateReference, self).__init__()
+        super(CreateReference, self).__init__({})
 
     def run(self, **kwargs):
         return {

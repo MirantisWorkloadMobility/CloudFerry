@@ -68,7 +68,12 @@ migrate_opts = [
     cfg.BoolOpt('overwrite_user_passwords', default=False,
                 help='Overwrite password for exists users on destination'),
     cfg.BoolOpt('migrate_quotas', default=False,
-                help='Migrate tenant quotas')
+                help='Migrate tenant quotas'),
+    cfg.StrOpt('disk_format', default='qcow2',
+               help='format when covert volume to image'),
+    cfg.StrOpt('container_format', default='bare',
+               help='container format when covert volume to image'),
+
 ]
 
 mail = cfg.OptGroup(name='mail',

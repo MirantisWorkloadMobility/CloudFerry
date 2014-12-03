@@ -20,19 +20,27 @@ __author__ = 'mirrorcoder'
 
 class TransportFileToFileViaSsh(transporter.Transporter):
 
-    def run(self, cfg=None,
-            cloud_src=None,
-            cloud_dst=None,
-            info={},
-            resource_type=utl.STORAGE_RESOURCE,
-            resource_name=utl.VOLUMES_TYPE,
-            resource_root_name=utl.VOLUME_BODY, **kwargs):
-        data_for_trans = info[resource_type][resource_name]
+    def __init__(self, init,
+                 resource_type=utl.STORAGE_RESOURCE,
+                 resource_name=utl.VOLUMES_TYPE,
+                 resource_root_name=utl.VOLUME_BODY,
+                 input_info='info'):
+        super(TransportFileToFileViaSsh, self).__init__(init)
+        self.resource_type = resource_type
+        self.resource_name = resource_name
+        self.resource_root_name = resource_root_name
+        self.input_info = input_info
+
+    def run(self, **kwargs):
+        info = kwargs[self.input_info]
+        data_for_trans = info[self.resource_type][self.resource_name]
         for item in data_for_trans.itervalues():
-            i = item[resource_root_name]
+            i = item[self.resource_root_name]
             host_src = i['host_src']
             host_dst = i['host_dst']
             path_src = i['path_src']
             path_dst = i['path_dst']
-            utils.transfer_file_to_file(cloud_src, cloud_dst, host_src, host_dst, path_src, path_dst, cfg.migrate)
+            utils.transfer_file_to_file(self.src_cloud, self.dst_cloud,
+                                        host_src, host_dst, path_src,
+                                        path_dst, self.cfg.migrate)
         return {}

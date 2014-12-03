@@ -32,11 +32,9 @@ def get_image_id_from_volume(volume, storage):
 
 class ConvertComputeToImage(action.Action):
 
-    def __init__(self, cfg=None, cloud=None, target_output='images_info'):
-        self.cfg = cfg
-        self.cloud = cloud
+    def __init__(self, init, cloud=None, target_output='images_info'):
+        super(ConvertComputeToImage, self).__init__(init, cloud)
         self.target_output = target_output
-        super(ConvertComputeToImage, self).__init__()
 
     def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)

@@ -25,7 +25,7 @@ class GetInfoIter(action.Action):
         self.info_name = info_name
         self.resource_type = resource_type
         self.resource_name = resource_name
-        super(GetInfoIter, self).__init__()
+        super(GetInfoIter, self).__init__({})
 
     def run(self, **kwargs):
         info = kwargs[self.iter_info_name]

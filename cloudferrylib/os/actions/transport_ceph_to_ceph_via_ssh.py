@@ -20,21 +20,16 @@ __author__ = 'mirrorcoder'
 
 class TransportCephToCephViaSsh(transporter.Transporter):
 
-    def __init__(self, cfg,
-                 cloud_src,
-                 cloud_dst,
+    def __init__(self, init,
                  resource_type=utl.STORAGE_RESOURCE,
                  resource_name=utl.VOLUMES_TYPE,
                  resource_root_name=utl.VOLUME_BODY,
                  input_info='info'):
-        self.cfg = cfg
-        self.cloud_src = cloud_src
-        self.cloud_dst = cloud_dst
+        super(TransportCephToCephViaSsh, self).__init__(init)
         self.resource_type = resource_type
         self.resource_name = resource_name
         self.resource_root_name = resource_root_name
         self.input_info = input_info
-        super(TransportCephToCephViaSsh, self).__init__()
 
     def run(self, **kwargs):
         info = kwargs[self.input_info]
@@ -45,8 +40,8 @@ class TransportCephToCephViaSsh(transporter.Transporter):
             dst_host = i['dst_host']
             src_path = i['src_path']
             dst_path = i['dst_path']
-            utils.transfer_from_ceph_to_ceph(self.cloud_src,
-                                             self.cloud_dst,
+            utils.transfer_from_ceph_to_ceph(self.src_cloud,
+                                             self.dst_cloud,
                                              src_host,
                                              dst_host,
                                              src_path,

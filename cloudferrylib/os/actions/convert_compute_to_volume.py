@@ -21,11 +21,6 @@ from cloudferrylib.utils import utils as utl
 
 class ConvertComputeToVolume(action.Action):
 
-    def __init__(self, config, cloud):
-        self.config = config
-        self.cloud = cloud
-        super(ConvertComputeToVolume, self).__init__()
-
     def run(self, info=None, **kwargs):
         compute_info = copy.deepcopy(info)
         storage_info = {

@@ -5,10 +5,6 @@ from fabric.api import run, settings
 
 class ConvertFileToImage(action.Action):
 
-    def __init__(self, cloud=None):
-        self.cloud = cloud
-        super(ConvertFileToImage, self).__init__()
-
     def run(self, file_path=None, image_format=None, image_name=None, **kwargs):
         cfg = self.cloud.cloud_config.cloud
         with settings(host_string=cfg.host):

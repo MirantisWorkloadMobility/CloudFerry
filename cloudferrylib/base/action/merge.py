@@ -25,7 +25,7 @@ class Merge(action.Action):
         self.result = result
         self.resource_type = resource_type
         self.resources_name = resources_name
-        super(Merge, self).__init__()
+        super(Merge, self).__init__({})
 
     def run(self, **kwargs):
         data1 = copy.deepcopy(kwargs[self.data1])
