@@ -38,6 +38,7 @@ from cloudferrylib.os.actions import convert_compute_to_volume
 from cloudferrylib.os.actions import convert_volume_to_image
 from cloudferrylib.os.actions import convert_volume_to_compute
 from cloudferrylib.os.actions import attach_used_volumes
+from cloudferrylib.os.actions import networks_transporter
 from cloudferrylib.os.actions import create_reference
 from cloudferrylib.os.actions import prepare_volumes_data_map
 from cloudferrylib.os.actions import transport_ceph_to_ceph_via_ssh
@@ -97,15 +98,21 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.dst_cloud)
         save_result = merge.Merge('info', 'info_result', 'info_result', 'compute', 'instances')
 
+        act_network_trans = networks_transporter.NetworkTransporter(self.src_cloud, self.dst_cloud)
+
         namespace_scheduler = namespace.Namespace({'info_result': {
             utl.COMPUTE_RESOURCE: {utl.INSTANCES_TYPE: {}}
         }})
 
         task_ident_trans = act_identity_trans
-
-        tast_images_trans = act_get_info_images >> act_deploy_images
+        task_images_trans = act_get_info_images >> act_deploy_images
+        task_compres_trans = act_comp_res_trans
 
         task_stop_vms = act_stop_vms
+
+
+
+        task_resources_transporting = task_ident_trans >> task_images_trans >> act_network_trans >> task_compres_trans
 
         task_convert_c_to_v_to_i = act_convert_c_to_v >> act_convert_v_to_i
         task_convert_i_to_v_to_c = act_convert_i_to_v >> act_convert_v_to_c
@@ -145,7 +152,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             (is_instances | get_next_instance) >>\
             rename_info_iter >> task_cleanup_images
 
-        process_migration = transport_instances_and_dependency_resources
+        process_migration = task_resources_transporting >> transport_instances_and_dependency_resources
 
         # process_migration = task_ident_trans >> tast_images_trans >> task_get_inst_info >> \
         #                     task_stop_vms >> task_transport_volumes >> \
