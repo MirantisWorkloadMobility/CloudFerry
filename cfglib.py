@@ -140,7 +140,9 @@ src_image = cfg.OptGroup(name='src_image',
 
 src_image_opts = [
     cfg.StrOpt('service', default='glance',
-               help='name service for images')
+               help='name service for images'),
+    cfg.StrOpt('backend', default='file',
+               help='backend for images')
 ]
 
 src_identity = cfg.OptGroup(name='src_identity',
@@ -218,7 +220,9 @@ dst_image_opts = [
     cfg.StrOpt('service', default='glance',
                help='name service for images'),
     cfg.BoolOpt('convert_to_raw', default='True',
-                help='convert to raw images')
+                help='convert to raw images'),
+    cfg.StrOpt('backend', default='file',
+               help='backend for images')
 ]
 
 dst_identity = cfg.OptGroup(name='dst_identity',

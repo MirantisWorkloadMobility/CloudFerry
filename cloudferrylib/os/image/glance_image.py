@@ -37,7 +37,7 @@ class GlanceImage(image.Image):
         self.cloud = cloud
         self.identity_client = cloud.resources['identity']
         self.glance_client = self.get_glance_client()
-        super(GlanceImage, self).__init__()
+        super(GlanceImage, self).__init__(config)
 
     def get_glance_client(self):
 
