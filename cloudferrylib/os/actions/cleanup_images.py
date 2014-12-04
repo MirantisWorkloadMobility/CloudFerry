@@ -20,10 +20,6 @@ from cloudferrylib.utils import utils as utl
 
 
 class CleanupImages(action.Action):
-    def __init__(self, src_cloud, dst_cloud):
-        self.src_cloud = src_cloud
-        self.dst_cloud = dst_cloud
-        super(CleanupImages, self).__init__()
 
     def run(self, info, **kwargs):
         info = copy.deepcopy(info)

@@ -19,10 +19,6 @@ from cloudferrylib.utils import utils as utl
 
 class AttachVolumes(action.Action):
 
-    def __init__(self, cloud):
-        self.cloud = cloud
-        super(AttachVolumes, self).__init__()
-
     def run(self, storage_info={}, **kwargs):
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
         for vol in storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE].itervalues():

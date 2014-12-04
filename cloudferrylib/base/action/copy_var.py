@@ -17,22 +17,20 @@ from cloudferrylib.base.action import action
 import copy
 
 
-class Merge(action.Action):
+class CopyVar(action.Action):
 
-    def __init__(self, data1, data2, result, resource_type, resources_name):
-        self.data1 = data1
-        self.data2 = data2
-        self.result = result
-        self.resource_type = resource_type
-        self.resources_name = resources_name
-        super(Merge, self).__init__()
+    def __init__(self, original_info_name, info_name, deepcopy=False):
+        self.original_info_name = original_info_name
+        self.info_name = info_name
+        self.deepcopy = deepcopy
+        super(CopyVar, self).__init__({})
 
     def run(self, **kwargs):
-        data1 = copy.deepcopy(kwargs[self.data1])
-        data2 = copy.deepcopy(kwargs[self.data2])
-        data2[self.resource_type][self.resources_name].update(
-            data1[self.resource_type][self.resources_name])
+        if not self.deepcopy:
+            new_obj = copy.copy(kwargs[self.original_info_name])
+        else:
+            new_obj = copy.deepcopy(kwargs[self.original_info_name])
         return {
-            self.result: data2
+            self.info_name: new_obj
         }
 

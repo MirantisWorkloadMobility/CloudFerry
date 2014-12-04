@@ -27,10 +27,6 @@ AVAILABLE = 'available'
 
 class ConvertImageToVolume(converter.Converter):
 
-    def __init__(self, cloud):
-        self.cloud = cloud
-        super(ConvertImageToVolume, self).__init__()
-
     def run(self, images_info=None, **kwargs):
         images_info = copy.deepcopy(images_info)
         if not images_info:

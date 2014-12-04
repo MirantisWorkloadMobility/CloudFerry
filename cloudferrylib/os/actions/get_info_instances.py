@@ -18,10 +18,9 @@ from cloudferrylib.utils import utils as utl
 
 
 class GetInfoInstances(action.Action):
-    def __init__(self, cloud, search_opts=dict()):
-        self.cloud = cloud
+    def __init__(self, init, cloud=None, search_opts=dict()):
+        super(GetInfoInstances, self).__init__(init, cloud)
         self.search_opts = search_opts
-        super(GetInfoInstances, self).__init__()
 
     def run(self, **kwargs):
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]

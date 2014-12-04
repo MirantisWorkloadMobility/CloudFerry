@@ -20,10 +20,10 @@ import copy
 
 class PrepareVolumesDataMap(action.Action):
 
-    def __init__(self, src_vol_info_name, dst_vol_info_name):
+    def __init__(self, init, src_vol_info_name, dst_vol_info_name):
+        super(PrepareVolumesDataMap, self).__init__(init)
         self.src_vol_info_name = src_vol_info_name
         self.dst_vol_info_name = dst_vol_info_name
-        super(PrepareVolumesDataMap, self).__init__()
 
     def run(self, **kwargs):
         volumes_data_map = {}

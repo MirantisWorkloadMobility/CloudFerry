@@ -12,16 +12,4 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-
-from cloudferrylib.base.action import transporter
-from cloudferrylib.utils import utils as utl
-
-
-class IdentityTransporter(transporter.Transporter):
-
-    def run(self, **kwargs):
-        src_resource = self.src_cloud.resources[utl.IDENTITY_RESOURCE]
-        dst_resource = self.dst_cloud.resources[utl.IDENTITY_RESOURCE]
-        info = src_resource.read_info()
-        dst_resource.deploy(info)
-        return {'identity_info': info}
+__author__ = 'mirrorcoder'

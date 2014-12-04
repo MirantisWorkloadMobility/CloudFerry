@@ -26,10 +26,10 @@ ISCSI = 'iscsi'
 
 
 class DetectAlgorithmStorageTransfer(action.Action):
-    def run(self, cloud_src, cloud_dst, **kwargs):
-        backend_storage_src = cloud_src.resources[
+    def run(self, src_cloud, dst_cloud, **kwargs):
+        backend_storage_src = src_cloud.resources[
             utl.STORAGE_RESOURCE].get_backend()
-        backend_storage_dst = cloud_dst.resources[
+        backend_storage_dst = dst_cloud.resources[
             utl.STORAGE_RESOURCE].get_backend()
         res = 0
         if backend_storage_src == ISCSI:

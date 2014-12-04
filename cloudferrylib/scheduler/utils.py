@@ -12,16 +12,14 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+__author__ = 'mirrorcoder'
+from base import begin_task, end_task
 
-from cloudferrylib.base.action import transporter
-from cloudferrylib.utils import utils as utl
 
-
-class IdentityTransporter(transporter.Transporter):
-
-    def run(self, **kwargs):
-        src_resource = self.src_cloud.resources[utl.IDENTITY_RESOURCE]
-        dst_resource = self.dst_cloud.resources[utl.IDENTITY_RESOURCE]
-        info = src_resource.read_info()
-        dst_resource.deploy(info)
-        return {'identity_info': info}
+def chain(net=None):
+    b_t = begin_task.BeginTask()
+    e_t = end_task.EndTask()
+    if net:
+        net.go_end() >> e_t
+        b_t >> net.go_begin()
+    return b_t, e_t

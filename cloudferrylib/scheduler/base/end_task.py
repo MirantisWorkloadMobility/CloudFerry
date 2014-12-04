@@ -12,21 +12,12 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+__author__ = 'mirrorcoder'
 
-from cloudferrylib.base.action import action
-import copy
+from cloudferrylib.scheduler.task import Task
 
 
-class RenameInfo(action.Action):
-
-    def __init__(self, original_info_name, info_name):
-        self.original_info_name = original_info_name
-        self.info_name = info_name
-        super(RenameInfo, self).__init__()
-
-    def run(self, **kwargs):
-        return {
-            self.original_info_name: None,
-            self.info_name: kwargs[self.original_info_name]
-        }
-
+class EndTask(Task):
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+        super(EndTask, self).__init__()

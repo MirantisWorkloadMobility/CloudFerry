@@ -20,10 +20,6 @@ from cloudferrylib.utils import utils as utl
 
 
 class TransportComputeResources(action.Action):
-    def __init__(self, src_cloud, dst_cloud):
-        self.src_cloud = src_cloud
-        self.dst_cloud = dst_cloud
-        super(TransportComputeResources, self).__init__()
 
     def run(self, info=None, identity_info=None, **kwargs):
         info = copy.deepcopy(info)

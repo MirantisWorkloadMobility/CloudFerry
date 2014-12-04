@@ -19,16 +19,12 @@ from cloudferrylib.utils import utils as utl
 
 
 class CopyFromGlanceToGlance(transporter.Transporter):
-    def __init__(self, src_cloud, dst_cloud):
-        self.src_cloud = src_cloud
-        self.dst_cloud = dst_cloud
-        super(CopyFromGlanceToGlance, self).__init__()
 
     def run(self, images_info=None, **kwargs):
         dst_image = self.dst_cloud.resources[utl.IMAGE_RESOURCE]
 
         if not images_info:
-            action_get_im = get_info_images.GetInfoImages(self.src_cloud)
+            action_get_im = get_info_images.GetInfoImages(self.init, cloud='src_cloud')
             images_info = action_get_im.run()
 
         new_info = dst_image.deploy(images_info)

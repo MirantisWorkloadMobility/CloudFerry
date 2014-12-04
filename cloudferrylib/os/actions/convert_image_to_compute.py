@@ -17,9 +17,6 @@ import copy
 
 
 class ConvertImageToCompute(action.Action):
-    def __init__(self, cfg=None):
-        self.cfg = cfg
-        super(ConvertImageToCompute, self).__init__()
 
     def run(self, images_info=None, compute_ignored_images={}, **kwargs):
         images_info = copy.deepcopy(images_info)

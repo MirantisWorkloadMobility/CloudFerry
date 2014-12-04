@@ -16,13 +16,9 @@
 import copy
 
 from cloudferrylib.base.action import action
-from cloudferrylib.os.actions import get_info_instances
 
 
 class ConvertVolumeToCompute(action.Action):
-    def __init__(self, cloud):
-        self.cloud = cloud
-        super(ConvertVolumeToCompute, self).__init__()
 
     def run(self, storage_info, compute_ignored={}, **kwargs):
         volume_info = copy.deepcopy(storage_info)

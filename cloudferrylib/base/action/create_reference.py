@@ -13,15 +13,19 @@
 # limitations under the License.
 
 
-from cloudferrylib.base.action import transporter
-from cloudferrylib.utils import utils as utl
+from cloudferrylib.base.action import action
+import copy
 
 
-class IdentityTransporter(transporter.Transporter):
+class CreateReference(action.Action):
+
+    def __init__(self, original_info_name, info_name):
+        self.original_info_name = original_info_name
+        self.info_name = info_name
+        super(CreateReference, self).__init__({})
 
     def run(self, **kwargs):
-        src_resource = self.src_cloud.resources[utl.IDENTITY_RESOURCE]
-        dst_resource = self.dst_cloud.resources[utl.IDENTITY_RESOURCE]
-        info = src_resource.read_info()
-        dst_resource.deploy(info)
-        return {'identity_info': info}
+        return {
+            self.info_name: kwargs[self.original_info_name]
+        }
+

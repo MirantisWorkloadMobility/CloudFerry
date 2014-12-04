@@ -17,9 +17,6 @@ import copy
 
 
 class StopVms(action.Action):
-    def __init__(self, cloud):
-        self.cloud = cloud
-        super(StopVms, self).__init__()
 
     def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)

@@ -20,11 +20,6 @@ import copy
 
 class MapComputeInfo(action.Action):
 
-    def __init__(self, src_cloud, dst_cloud):
-        self.src_cloud = src_cloud
-        self.dst_cloud = dst_cloud
-        super(MapComputeInfo, self).__init__()
-
     def run(self, info=None, **kwargs):
 
         new_compute_info = copy.deepcopy(info)

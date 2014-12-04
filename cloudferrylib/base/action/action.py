@@ -18,7 +18,15 @@ from cloudferrylib.scheduler import task
 
 class Action(task.Task):
 
-    def __init__(self):
+    def __init__(self, init, cloud=None):
+        self.cloud = None
+        self.src_cloud = None
+        self.dst_cloud = None
+        self.cfg = None
+        self.__dict__.update(init)
+        self.init = init
+        if cloud:
+            self.cloud = init[cloud]
         super(Action, self).__init__()
 
     def run(self, **kwargs):

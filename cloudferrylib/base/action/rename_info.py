@@ -14,30 +14,19 @@
 
 
 from cloudferrylib.base.action import action
-from cloudferrylib.utils import utils as utl
 import copy
 
 
-class IsEndIter(action.Action):
+class RenameInfo(action.Action):
 
-    def __init__(self, iter_info_name='info_iter',
-                 resource_type=utl.COMPUTE_RESOURCE,
-                 resource_name=utl.INSTANCES_TYPE):
-        self.iter_info_name = iter_info_name
-        self.resource_type = resource_type
-        self.resource_name = resource_name
-        super(IsEndIter, self).__init__()
+    def __init__(self, original_info_name, info_name):
+        self.original_info_name = original_info_name
+        self.info_name = info_name
+        super(RenameInfo, self).__init__({})
 
     def run(self, **kwargs):
-        info = kwargs[self.iter_info_name]
-        objs = info[self.resource_type][self.resource_name]
-        if objs:
-            self.num_element = 1
-        else:
-            self.num_element = 0
-        return {}
-
-
-
-
+        return {
+            self.original_info_name: None,
+            self.info_name: kwargs[self.original_info_name]
+        }
 
