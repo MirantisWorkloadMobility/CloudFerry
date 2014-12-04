@@ -136,8 +136,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         return task_convert_c_to_v_to_i >> act_copy_g2g_vols >> task_convert_i_to_v_to_c
 
     def transport_resources(self):
-        task_images_trans = self.migration_images()
         act_identity_trans = identity_transporter.IdentityTransporter(self.init)
+        task_images_trans = self.migration_images()
         act_comp_res_trans = transport_compute_resources.TransportComputeResources(self.init)
         act_network_trans = networks_transporter.NetworkTransporter(self.init)
         return act_identity_trans >> task_images_trans >> act_network_trans >> act_comp_res_trans
