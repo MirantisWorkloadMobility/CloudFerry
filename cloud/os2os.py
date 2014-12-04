@@ -75,67 +75,91 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             }
         })
 
-        act_identity_trans = identity_transporter.IdentityTransporter(self.init)
-        act_comp_res_trans = transport_compute_resources.TransportComputeResources(self.init)
-        act_get_info_images = get_info_images.GetInfoImages(self.init, cloud='src_cloud')
-        act_get_info_inst = get_info_instances.GetInfoInstances(self.init, cloud='src_cloud')
-        act_conv_comp_img = convert_compute_to_image.ConvertComputeToImage(self.init, cloud='src_cloud')
-        act_conv_image_comp = convert_image_to_compute.ConvertImageToCompute(self.init)
-        act_map_com_info = map_compute_info.MapComputeInfo(self.init)
-        act_stop_vms = stop_vm.StopVms(self.init, cloud='src_cloud')
-        act_deploy_images = copy_g2g.CopyFromGlanceToGlance(self.init)
-        act_copy_inst_images = copy_g2g.CopyFromGlanceToGlance(self.init)
-        act_net_prep = prepare_networks.PrepareNetworks(self.init, cloud='dst_cloud')
-        act_deploy_instances = transport_instance.TransportInstance(self.init)
-        act_copy_g2g_vols = copy_g2g.CopyFromGlanceToGlance(self.init)
-        act_convert_c_to_v = convert_compute_to_volume.ConvertComputeToVolume(self.init, cloud='src_cloud')
-        act_convert_v_to_i = convert_volume_to_image.ConvertVolumeToImage(self.init, cloud='src_cloud')
-        act_convert_i_to_v = convert_image_to_volume.ConvertImageToVolume(self.init, cloud='dst_cloud')
-        act_convert_v_to_c = convert_volume_to_compute.ConvertVolumeToCompute(self.init, cloud='dst_cloud')
-        act_cleanup_images = cleanup_images.CleanupImages(self.init)
-        act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.init, cloud='dst_cloud')
-        save_result = merge.Merge('info', 'info_result', 'info_result', 'compute', 'instances')
-
-        act_network_trans = networks_transporter.NetworkTransporter(self.init)
-
-        task_ident_trans = act_identity_trans
-        task_images_trans = act_get_info_images >> act_deploy_images
-        task_compres_trans = act_comp_res_trans
-
-        task_resources_transporting = task_ident_trans >> task_images_trans >> act_network_trans >> task_compres_trans
-
-        task_convert_c_to_v_to_i = act_convert_c_to_v >> act_convert_v_to_i
-        task_convert_i_to_v_to_c = act_convert_i_to_v >> act_convert_v_to_c
-        task_transport_volumes = task_convert_c_to_v_to_i >> act_copy_g2g_vols >> task_convert_i_to_v_to_c
-        task_attaching_volumes = act_attaching
-        task_get_inst_info = act_get_info_inst
-        init_iteration_instance = copy_var.CopyVar('info', 'info_backup', True) >> \
-                                  create_reference.CreateReference('info', 'info_iter')
-        get_next_instance = get_info_iter.GetInfoIter()
-        rename_info_iter = rename_info.RenameInfo('info_result', 'info')
-        is_instances = is_end_iter.IsEndIter()
-        act_start_vms = start_vm.StartVms(self.init, cloud='dst_cloud')
-
-        task_cleanup_images = act_cleanup_images
-
-        transport_image = act_conv_comp_img >> act_copy_inst_images >> act_conv_image_comp
-        transport_resource_inst = transport_image >> task_transport_volumes
-        transport_inst = act_net_prep >> act_map_com_info >> act_deploy_instances
-
-        trans_one_inst = act_stop_vms >> transport_resource_inst >> transport_inst >> \
-                         task_attaching_volumes >> act_start_vms
-
-        transport_instances_and_dependency_resources = \
-            task_get_inst_info >> \
-            init_iteration_instance >> \
-            get_next_instance >> \
-            trans_one_inst >> \
-            save_result >> \
-            (is_instances | get_next_instance) >>\
-            rename_info_iter >> task_cleanup_images
+        task_resources_transporting = self.transport_resources()
+        transport_instances_and_dependency_resources = self.migrate_instances()
 
         process_migration = task_resources_transporting >> transport_instances_and_dependency_resources
 
         process_migration = cursor.Cursor(process_migration)
         scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, cursor=process_migration)
         scheduler_migr.start()
+
+    def migrate_instances(self):
+        name_data = 'info'
+        name_result = 'info_result'
+        name_backup = 'info_backup'
+        name_iter = 'info_iter'
+        save_result = self.save_result(name_data, name_result, name_result, 'compute', 'instances')
+        trans_one_inst = self.migrate_process_instance()
+        init_iteration_instance = self.init_iteration_instance(name_data, name_backup, name_iter)
+        act_get_info_inst = get_info_instances.GetInfoInstances(self.init, cloud='src_cloud')
+        act_cleanup_images = cleanup_images.CleanupImages(self.init)
+        get_next_instance = get_info_iter.GetInfoIter()
+        rename_info_iter = rename_info.RenameInfo(name_result, name_data)
+        is_instances = is_end_iter.IsEndIter()
+
+        transport_instances_and_dependency_resources = \
+            act_get_info_inst >> \
+            init_iteration_instance >> \
+            get_next_instance >> \
+            trans_one_inst >> \
+            save_result >> \
+            (is_instances | get_next_instance) >>\
+            rename_info_iter >> \
+            act_cleanup_images
+        return transport_instances_and_dependency_resources
+
+    def init_iteration_instance(self, data, name_backup, name_iter):
+        init_iteration_instance = copy_var.CopyVar(data, name_backup, True) >>\
+                                  create_reference.CreateReference(data, name_iter)
+        return init_iteration_instance
+
+    def migration_images(self):
+        act_get_info_images = get_info_images.GetInfoImages(self.init, cloud='src_cloud')
+        act_deploy_images = copy_g2g.CopyFromGlanceToGlance(self.init)
+        return act_get_info_images >> act_deploy_images
+
+    def save_result(self, data1, data2, result, resource_type, resources_name):
+        return merge.Merge(data1, data2, result, resource_type, resources_name)
+
+    def transport_volumes_by_instance(self):
+        act_copy_g2g_vols = copy_g2g.CopyFromGlanceToGlance(self.init)
+        act_convert_c_to_v = convert_compute_to_volume.ConvertComputeToVolume(self.init, cloud='src_cloud')
+        act_convert_v_to_i = convert_volume_to_image.ConvertVolumeToImage(self.init, cloud='src_cloud')
+        act_convert_i_to_v = convert_image_to_volume.ConvertImageToVolume(self.init, cloud='dst_cloud')
+        act_convert_v_to_c = convert_volume_to_compute.ConvertVolumeToCompute(self.init, cloud='dst_cloud')
+        task_convert_c_to_v_to_i = act_convert_c_to_v >> act_convert_v_to_i
+        task_convert_i_to_v_to_c = act_convert_i_to_v >> act_convert_v_to_c
+        return task_convert_c_to_v_to_i >> act_copy_g2g_vols >> task_convert_i_to_v_to_c
+
+    def transport_resources(self):
+        task_images_trans = self.migration_images()
+        act_identity_trans = identity_transporter.IdentityTransporter(self.init)
+        act_comp_res_trans = transport_compute_resources.TransportComputeResources(self.init)
+        act_network_trans = networks_transporter.NetworkTransporter(self.init)
+        return act_identity_trans >> task_images_trans >> act_network_trans >> act_comp_res_trans
+
+    def migrate_images_by_instances(self):
+        act_conv_comp_img = convert_compute_to_image.ConvertComputeToImage(self.init, cloud='src_cloud')
+        act_conv_image_comp = convert_image_to_compute.ConvertImageToCompute(self.init)
+        act_copy_inst_images = copy_g2g.CopyFromGlanceToGlance(self.init)
+        return act_conv_comp_img >> act_copy_inst_images >> act_conv_image_comp
+
+    def migrate_resources_by_instance(self):
+        transport_images = self.migrate_images_by_instances()
+        task_transport_volumes = self.transport_volumes_by_instance()
+        return transport_images >> task_transport_volumes
+
+    def migrate_instance(self):
+        act_map_com_info = map_compute_info.MapComputeInfo(self.init)
+        act_net_prep = prepare_networks.PrepareNetworks(self.init, cloud='dst_cloud')
+        act_deploy_instances = transport_instance.TransportInstance(self.init)
+        return act_net_prep >> act_map_com_info >> act_deploy_instances
+
+    def migrate_process_instance(self):
+        act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.init, cloud='dst_cloud')
+        act_stop_vms = stop_vm.StopVms(self.init, cloud='src_cloud')
+        act_start_vms = start_vm.StartVms(self.init, cloud='dst_cloud')
+        transport_resource_inst = self.migrate_resources_by_instance()
+        transport_inst = self.migrate_instance()
+        return act_stop_vms >> transport_resource_inst >> transport_inst >> act_attaching >> act_start_vms
