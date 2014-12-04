@@ -18,27 +18,15 @@ import time
 
 from utils import get_log
 
+LOG = get_log(__name__)
 
 # Maximum Bytes Per Packet
 CHUNK_SIZE = 512 * 1024  # B
 
 
-LOG = get_log(__name__)
-
-
-def callback_print_progress(size, length, obj_id, name):
-    LOG.info(
-        "Download {0} bytes of {1} ({2}%) - id = {3} name = {4}".format(
-            size,
-            length,
-            size * 100 / length,
-            obj_id,
-            name))
-
-
 class FileLikeProxy:
     def __init__(self, transfer_object, callback, speed_limit='1mb'):
-        self.__callback = callback
+        self.__callback = callback if callback else lambda size, length, obj_id, name: True
         self.resp = transfer_object['resource_src'].get_ref_image(
             transfer_object['id'])
         self.length = (

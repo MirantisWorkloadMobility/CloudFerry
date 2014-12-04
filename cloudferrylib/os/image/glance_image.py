@@ -150,7 +150,7 @@ class GlanceImage(image.Image):
 
         return info
 
-    def deploy(self, info):
+    def deploy(self, info, callback=None):
         info = copy.deepcopy(info)
         new_info = {'image': {'images': {}}}
         migrate_images_list = []
@@ -175,7 +175,7 @@ class GlanceImage(image.Image):
                     size=gl_image['image']['size'],
                     data=file_like_proxy.FileLikeProxy(
                         gl_image['image'],
-                        file_like_proxy.callback_print_progress,
+                        callback,
                         self.config['migrate']['speed_limit']))
                 migrate_images_list.append((migrate_image, meta))
             else:
