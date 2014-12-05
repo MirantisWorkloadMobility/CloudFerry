@@ -18,10 +18,10 @@ from utils import forward_agent
 
 
 class NovaNetwork(network.Network):
-    def __init__(self, config):
+    def __init__(self, config, cloud):
         super(NovaNetwork, self).__init__(config)
-        self.config = config
         self.nova_client = self.get_client()
+        self.cloud = cloud
 
     def get_client(self):
         return nova_client.Client(self.config["user"],

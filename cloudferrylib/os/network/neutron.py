@@ -29,12 +29,11 @@ class NeutronNetwork(network.Network):
     """
 
     def __init__(self, config, cloud):
-        self.config = config
+        super(NeutronNetwork, self).__init__(config)
         self.cloud = cloud
         self.identity_client = cloud.resources['identity']
         # TODO: implement switch to quantumclient if we have quantum-server
         self.neutron_client = self.get_client()
-        super(NeutronNetwork, self).__init__()
 
     def get_client(self):
         return neutron_client.Client(
@@ -48,16 +47,16 @@ class NeutronNetwork(network.Network):
         """Get info about neutron resources:
         :rtype: Dictionary with all necessary neutron info
         """
-        info = {'network': {'networks': self.get_networks(),
-                            'subnets': self.get_subnets(),
-                            'routers': self.get_routers(),
-                            'floating_ips': self.get_floatingips(),
-                            'security_groups': self.get_sec_gr_and_rules(),
-                            'meta': {}}}
+        info = {'networks': self.get_networks(),
+                'subnets': self.get_subnets(),
+                'routers': self.get_routers(),
+                'floating_ips': self.get_floatingips(),
+                'security_groups': self.get_sec_gr_and_rules(),
+                'meta': {}}
         return info
 
     def deploy(self, info):
-        deploy_info = info['network']
+        deploy_info = info
         self.upload_networks(deploy_info['networks'])
         self.upload_subnets(deploy_info['networks'],
                             deploy_info['subnets'])

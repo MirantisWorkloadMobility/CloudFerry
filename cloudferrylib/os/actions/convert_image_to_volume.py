@@ -33,24 +33,24 @@ class ConvertImageToVolume(converter.Converter):
             return {}
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
         resource_image = self.cloud.resources[utl.IMAGE_RESOURCE]
-        volumes_info = dict(resource=resource_image, storage=dict(volumes={}))
+        volumes_info = dict(resource=resource_image, volumes=dict())
         for img in images_info[utl.IMAGE_RESOURCE][
                 utl.IMAGES_TYPE].itervalues():
             img[utl.META_INFO][utl.IMAGE_BODY] = img[utl.IMAGE_BODY]
-            vol = dict(storage=dict(volumes={
+            vol = dict(volumes={
                 img[utl.META_INFO][utl.VOLUME_BODY]['id']: dict(
                     volume=img[utl.META_INFO][utl.VOLUME_BODY],
-                    meta=img[utl.META_INFO])}))
+                    meta=img[utl.META_INFO])})
 
             temp_instance_info = img[utl.META_INFO].pop(utl.INSTANCE_BODY)
             vol = resource_storage.deploy(vol)
             vol_new_id, vol_old_id = vol.keys()[0], vol.values()[0]
             img[utl.META_INFO][utl.INSTANCE_BODY] = temp_instance_info
             new_volume = (
-                resource_storage.read_info(id=vol_new_id)[utl.STORAGE_RESOURCE][
+                resource_storage.read_info(id=vol_new_id)[
                     utl.VOLUMES_TYPE][vol_new_id][utl.VOLUME_BODY])
             img[utl.META_INFO].pop('volume')
-            volumes_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][vol_new_id] = {
+            volumes_info[utl.VOLUMES_TYPE][vol_new_id] = {
                 'old_id': vol_old_id,
                 utl.VOLUME_BODY: new_volume,
                 utl.META_INFO: img[utl.META_INFO]

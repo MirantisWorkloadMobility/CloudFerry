@@ -56,16 +56,14 @@ class CinderStorage(storage.Storage):
             "http://%s:35357/v2.0/" % params.cloud.host)
 
     def read_info(self, **kwargs):
-        info = dict(storage={})
-        info[utl.STORAGE_RESOURCE] = {utl.VOLUMES_TYPE: {}}
+        info = {utl.VOLUMES_TYPE: {}}
         for vol in self.get_volumes_list(search_opts=kwargs):
             volume = self.convert(vol, self.config)
-            info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][vol.id] = {utl.VOLUME_BODY: volume,
-                                                                    utl.META_INFO: {
-                                                                        utl.META_INFO: None
-                                                                    }}
+            info[utl.VOLUMES_TYPE][vol.id] = {utl.VOLUME_BODY: volume,
+                                              utl.META_INFO: {
+                                              }}
         if self.config.migrate.keep_volume_storage:
-            info[utl.STORAGE_RESOURCE]['volumes_db'] = {utl.VOLUMES_TYPE: '/tmp/volumes'}
+            info['volumes_db'] = {utl.VOLUMES_TYPE: '/tmp/volumes'}
 
              #cleanup db
             rem_exec = remote_execution.RemoteExecution(
@@ -73,12 +71,12 @@ class CinderStorage(storage.Storage):
                 self.mysql_host)
             rem_exec.run('rm -rf /tmp/volumes')
 
-            for table_name, file_name in info[utl.STORAGE_RESOURCE]['volumes_db'].iteritems():
+            for table_name, file_name in info['volumes_db'].iteritems():
                 self.download_table_from_db_to_file(table_name, file_name)
         return info
 
     def deploy(self, info):
-        if info[utl.STORAGE_RESOURCE].get('volumes_db'):
+        if info.get('volumes_db'):
             return self.deploy_volumes_db(info)
         return self.deploy_volumes(info)
 
@@ -141,9 +139,9 @@ class CinderStorage(storage.Storage):
 
     def deploy_volumes(self, info):
         new_ids = {}
-        if info[utl.STORAGE_RESOURCE].get('volumes_db'):
-            return self.deploy_volumes_db(info)
-        for vol_id, vol in info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE].iteritems():
+        # if info.get('volumes_db'):
+        #     return self.deploy_volumes_db(info)
+        for vol_id, vol in info[utl.VOLUMES_TYPE].iteritems():
             vol_for_deploy = self.convert_to_params(vol)
             volume = self.create_volume(**vol_for_deploy)
             vol[utl.VOLUME_BODY]['id'] = volume.id
@@ -153,14 +151,14 @@ class CinderStorage(storage.Storage):
         return new_ids
 
     def deploy_volumes_db(self, info):
-        for table_name, file_name in info[utl.STORAGE_RESOURCE]['volumes_db'].iteritems():
+        for table_name, file_name in info['volumes_db'].iteritems():
             self.upload_table_to_db(table_name, file_name)
-        for tenant in info[utl.IDENTITY_RESOURCE]['tenants']:
+        for tenant in info['tenants']:
             self.update_column_with_condition('volumes',
                                               'project_id',
                                               tenant['tenant']['id'],
                                               tenant[utl.META_INFO]['new_id'])
-        for user in info[utl.IDENTITY_RESOURCE]['users']:
+        for user in info['users']:
             self.update_column_with_condition('volumes', 'user_id', user['user']['id'], user[utl.META_INFO]['new_id'])
         self.update_column_with_condition('volumes', 'attach_status', 'attached', 'detached')
         self.update_column_with_condition('volumes', 'status', 'in-use', 'available')
