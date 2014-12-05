@@ -33,7 +33,8 @@ class Cloud(object):
         self.init_resources(self.cloud_config)
 
     def getIpSsh(self):
-        return self.cloud_config.cloud.host
+        return self.cloud_config.cloud.ssh_host \
+            if self.cloud_config.cloud.ssh_host else self.cloud_config.cloud.host
 
     @staticmethod
     def make_cloud_config(config, position):

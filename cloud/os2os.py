@@ -49,7 +49,7 @@ from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import stop_vm
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.actions import transport_compute_resources
-from cloudferrylib.os.actions import merge
+from cloudferrylib.base.action import merge
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):

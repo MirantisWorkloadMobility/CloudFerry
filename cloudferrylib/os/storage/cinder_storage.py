@@ -38,6 +38,8 @@ class CinderStorage(storage.Storage):
     def __init__(self, config, cloud):
         self.config = config
         self.host = config.cloud.host
+        self.mysql_host = config.mysql.host \
+            if config.mysql.host else self.host
         self.cloud = cloud
         self.identity_client = cloud.resources[utl.IDENTITY_RESOURCE]
         self.cinder_client = self.get_cinder_client(self.config)
@@ -68,7 +70,7 @@ class CinderStorage(storage.Storage):
              #cleanup db
             rem_exec = remote_execution.RemoteExecution(
                 self.config.migrate,
-                self.host)
+                self.mysql_host)
             rem_exec.run('rm -rf /tmp/volumes')
 
             for table_name, file_name in info[utl.STORAGE_RESOURCE]['volumes_db'].iteritems():
@@ -215,7 +217,7 @@ class CinderStorage(storage.Storage):
         self.__cmd_mysql_on_dest_controller(cmd)
 
     def __cmd_mysql_on_dest_controller(self, cmd):
-        with settings(host_string=self.host):
+        with settings(host_string=self.mysql_host):
             run('mysql %s %s -e \'%s\'' % (
                 ("-u " + self.config['mysql']['user'])
                 if self.config['mysql']['user'] else "",
