@@ -43,8 +43,7 @@ class ConvertVolumeToImage(converter.Converter):
         if not require_methods(['upload_volume_to_image'], resource_storage):
             raise RuntimeError("No require methods")
         images_from_volumes = {}
-        for volume_id, volume in volumes_info[utl.STORAGE_RESOURCE][
-                utl.VOLUMES_TYPE].iteritems():
+        for volume_id, volume in volumes_info[utl.VOLUMES_TYPE].iteritems():
             vol = volume['volume']
             LOG.debug(
                 "| | uploading volume %s [%s] to image service bootable=%s" % (

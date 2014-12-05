@@ -23,10 +23,7 @@ class ConvertComputeToVolume(action.Action):
 
     def run(self, info=None, **kwargs):
         compute_info = copy.deepcopy(info)
-        storage_info = {
-            utl.STORAGE_RESOURCE:
-                            {utl.VOLUMES_TYPE: {}}
-        }
+        storage_info = {utl.VOLUMES_TYPE: {}}
         ignored = {}
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
         for instance_id, instance in compute_info[utl.COMPUTE_RESOURCE][
@@ -42,21 +39,21 @@ class ConvertComputeToVolume(action.Action):
                 ignored[instance_id] = instance
             for v in instance[utl.INSTANCE_BODY]['volumes']:
                 volume = resource_storage.read_info(id=v['id'])
-                volume[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']][
+                volume[utl.VOLUMES_TYPE][v['id']][
                     'num_device'] = v['num_device']
-                volume[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']][
+                volume[utl.VOLUMES_TYPE][v['id']][
                     utl.META_INFO]['instance'] = instance
-                storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE].update(
-                    volume[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE])
+                storage_info[utl.VOLUMES_TYPE].update(
+                    volume[utl.VOLUMES_TYPE])
 
             if 'volume' in instance['meta']:
                 for v in instance['meta']['volume'].itervalues():
                     v = v[utl.VOLUME_BODY]
-                    storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']] = {
+                    storage_info[utl.VOLUMES_TYPE][v['id']] = {
                         utl.META_INFO: {}, utl.VOLUME_BODY: {}}
-                    storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']][
+                    storage_info[utl.VOLUMES_TYPE][v['id']][
                         utl.META_INFO]['instance'] = instance
-                    storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][v['id']][
+                    storage_info[utl.VOLUMES_TYPE][v['id']][
                         utl.VOLUME_BODY] = v
         return {
             'storage_info': storage_info,

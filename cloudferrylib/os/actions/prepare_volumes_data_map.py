@@ -30,9 +30,9 @@ class PrepareVolumesDataMap(action.Action):
         src_vol_info = kwargs[self.src_vol_info_name]
         dst_vol_info = kwargs[self.dst_vol_info_name]
         src_storage_info = copy.deepcopy(src_vol_info)
-        src_volumes = src_storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE]
+        src_volumes = src_storage_info[utl.VOLUMES_TYPE]
         dst_storage_info = copy.deepcopy(dst_vol_info)
-        dst_volumes = dst_storage_info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE]
+        dst_volumes = dst_storage_info[utl.VOLUMES_TYPE]
 
         for dst_id, vol in dst_volumes.iteritems():
             src_id = vol[utl.OLD_ID]
@@ -50,9 +50,7 @@ class PrepareVolumesDataMap(action.Action):
             })
             volumes_data_map[dst_id][utl.META_INFO].update(src_volumes[src_id][utl.META_INFO])
         volumes = {
-            utl.STORAGE_RESOURCE: {
-                utl.VOLUMES_TYPE: volumes_data_map
-            }
+            utl.VOLUMES_TYPE: volumes_data_map
         }
 
         return {

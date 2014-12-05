@@ -22,6 +22,7 @@ class AttachVolumesCompute(action.Action):
 
     def run(self, info, **kwargs):
         info = copy.deepcopy(info)
+        # import pdb; pdb.set_trace()
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
         storage_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
         for instance in info[utl.COMPUTE_RESOURCE][

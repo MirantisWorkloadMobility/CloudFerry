@@ -29,11 +29,11 @@ class NeutronNetwork(network.Network):
     """
 
     def __init__(self, config, cloud):
+        super(NeutronNetwork, self).__init__(config)
         self.cloud = cloud
         self.identity_client = cloud.resources['identity']
         # TODO: implement switch to quantumclient if we have quantum-server
         self.neutron_client = self.get_client()
-        super(NeutronNetwork, self).__init__(config)
 
     def get_client(self):
         return neutron_client.Client(
