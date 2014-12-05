@@ -24,6 +24,7 @@ from cloudferrylib.os.image import glance_image
 from cloudferrylib.os.storage import cinder_storage
 from cloudferrylib.os.network import neutron
 from cloudferrylib.os.identity import keystone
+from cloudferrylib.os.object_storage import swift_storage
 from cloudferrylib.os.compute import nova_compute
 from cloudferrylib.os.actions import get_info_images
 from cloudferrylib.os.actions import transport_instance
@@ -48,6 +49,7 @@ from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import stop_vm
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.actions import transport_compute_resources
+from cloudferrylib.os.actions import merge
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
@@ -58,7 +60,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                      'image': glance_image.GlanceImage,
                      'storage': cinder_storage.CinderStorage,
                      'network': neutron.NeutronNetwork,
-                     'compute': nova_compute.NovaCompute}
+                     'compute': nova_compute.NovaCompute,
+                     'objstorage': swift_storage.SwiftStorage}
         self.src_cloud = cloud.Cloud(resources, cloud.SRC, config)
         self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)
         self.init = {
@@ -133,8 +136,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         return task_convert_c_to_v_to_i >> act_copy_g2g_vols >> task_convert_i_to_v_to_c
 
     def transport_resources(self):
-        task_images_trans = self.migration_images()
         act_identity_trans = identity_transporter.IdentityTransporter(self.init)
+        task_images_trans = self.migration_images()
         act_comp_res_trans = transport_compute_resources.TransportComputeResources(self.init)
         act_network_trans = networks_transporter.NetworkTransporter(self.init)
         return act_identity_trans >> task_images_trans >> act_network_trans >> act_comp_res_trans

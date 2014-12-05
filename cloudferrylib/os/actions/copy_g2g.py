@@ -16,15 +16,14 @@
 from cloudferrylib.base.action import transporter
 from cloudferrylib.os.actions import get_info_images
 from cloudferrylib.utils import utils as utl
-from utils import get_log
 
-LOG = get_log(__name__)
+LOG = utl.get_log(__name__)
 
 
 class CopyFromGlanceToGlance(transporter.Transporter):
     def __init__(self, init, callback=None):
         super(CopyFromGlanceToGlance, self).__init__(init)
-        self.callback = callback if self.callback else self.callback_print_progress
+        self.callback = callback if callback else self.callback_print_progress
 
     def run(self, images_info=None, **kwargs):
         dst_image = self.dst_cloud.resources[utl.IMAGE_RESOURCE]
