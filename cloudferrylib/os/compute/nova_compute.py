@@ -134,11 +134,11 @@ class NovaCompute(compute.Compute):
             is_ceph = self.config['compute']['backend'].lower() == 'ceph'
             host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
             if is_ceph:
-                host = self.config['cloud']['host']
+                host = self.config.storage.host
 
             instance_block_info = utl.get_libvirt_block_info(
                 getattr(instance, "OS-EXT-SRV-ATTR:instance_name"),
-                self.config['cloud']['host'],
+                self.cloud.getIpSsh(),
                 getattr(instance, 'OS-EXT-SRV-ATTR:host'))
 
             ephemeral_path = {
