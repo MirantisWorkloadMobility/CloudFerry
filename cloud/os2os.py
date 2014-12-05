@@ -49,7 +49,7 @@ from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import stop_vm
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.actions import transport_compute_resources
-from cloudferrylib.base.action import merge
+
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
@@ -60,8 +60,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                      'image': glance_image.GlanceImage,
                      'storage': cinder_storage.CinderStorage,
                      'network': neutron.NeutronNetwork,
-                     'compute': nova_compute.NovaCompute,
-                     'objstorage': swift_storage.SwiftStorage}
+                     'compute': nova_compute.NovaCompute}
         self.src_cloud = cloud.Cloud(resources, cloud.SRC, config)
         self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)
         self.init = {

@@ -38,7 +38,6 @@ class SwiftStorage(objstorage.ObjStorage):
                                        auth_version="2")
         return conn.get_auth()
 
-
     def read_info(self, **kwargs):
         info = {utl.OBJSTORAGE_RESOURCE:
                     {utl.CONTAINERS: {}}}
