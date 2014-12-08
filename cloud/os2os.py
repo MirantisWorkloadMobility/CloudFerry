@@ -45,6 +45,7 @@ from cloudferrylib.os.actions import transport_ceph_to_ceph_via_ssh
 from cloudferrylib.os.actions import get_info_instances
 from cloudferrylib.os.actions import prepare_networks
 from cloudferrylib.os.actions import map_compute_info
+from cloudferrylib.os.actions import deploy_volumes
 from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import stop_vm
 from cloudferrylib.utils import utils as utl
@@ -134,6 +135,26 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         task_convert_i_to_v_to_c = act_convert_i_to_v >> act_convert_v_to_c
         return task_convert_c_to_v_to_i >> act_copy_g2g_vols >> task_convert_i_to_v_to_c
 
+    def transport_volumes_by_instance_via_ssh(self):
+        act_convert_c_to_v = convert_compute_to_volume.ConvertComputeToVolume(self.init, cloud='src_cloud')
+        act_rename_inst_vol_src = create_reference.CreateReference('storage_info',
+                                                                   'src_storage_info')
+        act_convert_v_to_c = convert_volume_to_compute.ConvertVolumeToCompute(self.init, cloud='dst_cloud')
+        act_rename_inst_vol_dst = create_reference.CreateReference('storage_info',
+                                                                   'dst_storage_info')
+        act_inst_vol_data_map = prepare_volumes_data_map.PrepareVolumesDataMap(self.init,
+                                                                               'src_storage_info',
+                                                                               'dst_storage_info')
+        act_deploy_inst_volumes = deploy_volumes.DeployVolumes(self.init, cloud='dst_cloud')
+        act_inst_vol_transport_data = \
+            transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(self.init,
+                                                                     input_info='storage_info')
+        task_get_inst_vol_info = act_convert_c_to_v >> act_rename_inst_vol_src
+        task_deploy_inst_vol = act_deploy_inst_volumes >> act_rename_inst_vol_dst
+        task_transfer_inst_vol_data = act_inst_vol_data_map >> act_inst_vol_transport_data
+        return task_get_inst_vol_info \
+               >> task_deploy_inst_vol >> task_transfer_inst_vol_data >> act_convert_v_to_c
+
     def transport_resources(self):
         act_identity_trans = identity_transporter.IdentityTransporter(self.init)
         task_images_trans = self.migration_images()
@@ -152,6 +173,11 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         task_transport_volumes = self.transport_volumes_by_instance()
         return transport_images >> task_transport_volumes
 
+    def migrate_resources_by_instance_via_ssh(self):
+        transport_images = self.migrate_images_by_instances()
+        task_transport_volumes = self.transport_volumes_by_instance_via_ssh()
+        return transport_images >> task_transport_volumes
+
     def migrate_instance(self):
         act_map_com_info = map_compute_info.MapComputeInfo(self.init)
         act_net_prep = prepare_networks.PrepareNetworks(self.init, cloud='dst_cloud')
@@ -162,6 +188,6 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.init, cloud='dst_cloud')
         act_stop_vms = stop_vm.StopVms(self.init, cloud='src_cloud')
         act_start_vms = start_vm.StartVms(self.init, cloud='dst_cloud')
-        transport_resource_inst = self.migrate_resources_by_instance()
+        transport_resource_inst = self.migrate_resources_by_instance_via_ssh()
         transport_inst = self.migrate_instance()
         return act_stop_vms >> transport_resource_inst >> transport_inst >> act_attaching >> act_start_vms

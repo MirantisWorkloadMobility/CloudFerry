@@ -37,10 +37,11 @@ class CleanupImages(action.Action):
                 continue
 
             for vol in volumes:
-                image_checksum = vol[utl.META_INFO][utl.IMAGE_BODY]['checksum']
+                if utl.IMAGE_BODY in vol[utl.META_INFO]:
+                    image_checksum = vol[utl.META_INFO][utl.IMAGE_BODY]['checksum']
 
-                if image_checksum not in checksum_list:
-                    checksum_list.append(image_checksum)
+                    if image_checksum not in checksum_list:
+                        checksum_list.append(image_checksum)
 
         for chs in checksum_list:
             map(src_img.delete_image, src_img.get_img_id_list_by_checksum(chs))
