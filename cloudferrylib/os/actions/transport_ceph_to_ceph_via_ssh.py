@@ -15,25 +15,22 @@
 from cloudferrylib.base.action import transporter
 from cloudferrylib.os.actions import utils
 from cloudferrylib.utils import utils as utl
-__author__ = 'mirrorcoder'
 
 
 class TransportCephToCephViaSsh(transporter.Transporter):
 
     def __init__(self, init,
-                 resource_type=utl.STORAGE_RESOURCE,
+                 resource_info='storage_info',
                  resource_name=utl.VOLUMES_TYPE,
-                 resource_root_name=utl.VOLUME_BODY,
-                 input_info='info'):
+                 resource_root_name=utl.VOLUME_BODY):
         super(TransportCephToCephViaSsh, self).__init__(init)
-        self.resource_type = resource_type
+        self.resource_info = resource_info
         self.resource_name = resource_name
         self.resource_root_name = resource_root_name
-        self.input_info = input_info
 
     def run(self, **kwargs):
-        info = kwargs[self.input_info]
-        data_for_trans = info[self.resource_type][self.resource_name]
+        info = kwargs[self.resource_info]
+        data_for_trans = info[self.resource_name]
         for item in data_for_trans.itervalues():
             i = item[self.resource_root_name]
             src_host = i['src_host']

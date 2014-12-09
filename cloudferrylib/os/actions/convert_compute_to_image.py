@@ -24,8 +24,7 @@ def get_boot_volume(instance):
 
 
 def get_image_id_from_volume(volume, storage):
-    volumes = storage.read_info(id=volume['id'])[utl.STORAGE_RESOURCE][
-        utl.VOLUMES_TYPE]
+    volumes = storage.read_info(id=volume['id'])[utl.VOLUMES_TYPE]
     volume_details = volumes[volume['id']][utl.VOLUME_BODY]
     return volume_details['volume_image_metadata']['image_id']
 
