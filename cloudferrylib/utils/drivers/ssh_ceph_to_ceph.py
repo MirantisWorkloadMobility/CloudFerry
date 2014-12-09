@@ -14,12 +14,15 @@
 
 
 from fabric.api import env
-from fabric.api import run
 from fabric.api import settings
 
 from cloudferrylib.os.actions import utils as action_utils
+
+from cloudferrylib.utils import cmd_cfg
 from cloudferrylib.utils import driver_transporter
+from cloudferrylib.utils import rbd_util
 from cloudferrylib.utils import utils
+
 
 LOG = utils.get_log(__name__)
 
@@ -31,11 +34,16 @@ class SSHCephToCeph(driver_transporter.DriverTransporter):
         host_dst = (data.get('host_dst') if data.get('host_dst')
                     else self.dst_cloud.getIpSsh())
         action_utils.delete_file_from_rbd(host_dst, data['dst_path'])
-        with settings(host_string=host_src):
-            with utils.forward_agent(env.key_filename):
-                run(("rbd export %s - | " +
-                     "ssh -oStrictHostKeyChecking=no %s 'rbd import "
-                     "--image-format=2 - %s'") %
-                    (data['src_path'],
-                     host_dst,
-                     data['dst_path']))
+        with settings(host_string=host_src), utils.forward_agent(
+                env.key_filename):
+            rbd_import = rbd_util.RbdUtil.rbd_import_cmd
+            ssh_cmd = cmd_cfg.ssh_cmd
+            rbd_export = rbd_util.RbdUtil.rbd_export_cmd
+
+            ssh_rbd_import = ssh_cmd(host_dst, rbd_import)
+
+            process = rbd_export >> ssh_rbd_import
+            process = process(data['src_path'], '-', '2', '-',
+                              data['dst_path'])
+
+            self.src_cloud.ssh_util.execute(process)

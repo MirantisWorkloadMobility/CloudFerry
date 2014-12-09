@@ -18,6 +18,7 @@ from cloudferrylib.utils import utils
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import rbd_util
 from cloudferrylib.utils import qemu_img
+from cloudferrylib.utils import ssh_util
 
 SRC = "src"
 DST = "dst"
@@ -76,6 +77,7 @@ class Cloud(object):
         self.mysql_connector = mysql_connector.MysqlConnector(getattr(self.config, "%s_mysql" % self.position), 'cinder')
         self.rbd_util = rbd_util.RbdUtil(getattr(self.config, "%s" % self.position), self.config.migrate)
         self.qemu_img = qemu_img.QemuImg(getattr(self.config, "%s" % self.position), self.config.migrate)
+        self.ssh_util = ssh_util.SshUtil(getattr(self.config, "%s" % self.position), self.config.migrate)
 
         identity_conf = self.make_resource_config(self.config, self.position,
                                                   cloud_config, 'identity')

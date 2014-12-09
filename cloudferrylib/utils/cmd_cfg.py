@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+
 from console_cmd import BC
-__author__ = 'mirrorcoder'
+
 
 cd_cmd = BC("cd %s")
 qemu_img_cmd = BC("qemu-img %s")
@@ -23,3 +24,8 @@ grep_cmd = BC("grep %s")
 rbd_cmd = BC("rbd %s")
 base_ssh_cmd = BC("ssh %s")
 ssh_cmd = base_ssh_cmd("-oStrictHostKeyChecking=no %s '%s'")
+ssh_cmd_port = base_ssh_cmd("-oStrictHostKeyChecking=no -p %s %s '%s'")
+dd_cmd_of = BC("dd bs=%s of=%s")
+dd_cmd_if = BC("dd bs=%s if=%s")
+gunzip_cmd = BC("gunzip")
+gzip_cmd = BC("gzip -%s -c %s")

@@ -18,10 +18,10 @@ from cloudferrylib.base.action import action
 
 class TaskTransfer(action.Action):
     def __init__(self, init, driver):
+        super(TaskTransfer, self).__init__(init)
         self.driver = driver(self.src_cloud,
                              self.dst_cloud,
                              self.cfg)
-        super(TaskTransfer, self).__init__(init)
 
     def run(self, data, **kwargs):
         self.driver.transfer(data)

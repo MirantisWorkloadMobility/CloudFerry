@@ -13,11 +13,10 @@
 # limitations under the License.
 
 
-from fabric.api import run
-from fabric.api import settings
-
+from cloudferrylib.utils import cmd_cfg
 from cloudferrylib.utils import driver_transporter
 from cloudferrylib.utils import utils
+
 
 LOG = utils.get_log(__name__)
 
@@ -27,23 +26,39 @@ class SSHFileToFile(driver_transporter.DriverTransporter):
         LOG.debug("| | copy file")
         ssh_ip_src = self.src_cloud.getIpSsh()
         ssh_ip_dst = self.dst_cloud.getIpSsh()
-        with settings(host_string=ssh_ip_src):
-            with utils.forward_agent(self.cfg.key_filename):
-                with utils.up_ssh_tunnel(data['host_dst'], ssh_ip_dst) as port:
-                    if self.cfg.file_compression == "dd":
-                        run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M "
-                             "if=%s' | ssh -oStrictHostKeyChecking=no -p %s "
-                             "localhost 'dd bs=1M of=%s'") %
-                            (data['host_src'],
-                             data['path_src'],
-                             port,
-                             data['path_dst']))
-                    elif self.cfg.file_compression == "gzip":
-                        run(("ssh -oStrictHostKeyChecking=no %s 'gzip -%s -c "
-                             "%s' | ssh -oStrictHostKeyChecking=no -p %s "
-                             "localhost 'gunzip | dd bs=1M of=%s'") %
-                            (data['host_src'],
-                             self.cfg.level_compression,
-                             data['path_src'],
-                             port,
-                             data['path_dst']))
+        with utils.forward_agent(self.cfg.migrate.key_filename), \
+                utils.up_ssh_tunnel(data['host_dst'],
+                                    ssh_ip_dst,
+                                    ssh_ip_src) as port:
+            if self.cfg.migrate.file_compression == "dd":
+                dd_dst = cmd_cfg.dd_cmd_of
+                ssh_cmd_dst = cmd_cfg.ssh_cmd_port
+                ssh_dst = ssh_cmd_dst(port, 'localhost', dd_dst)
+
+                dd_src = cmd_cfg.dd_cmd_if
+                ssh_cmd_src = cmd_cfg.ssh_cmd
+                ssh_src = ssh_cmd_src(data['host_src'], dd_src)
+
+                process = ssh_src >> ssh_dst
+                process = process('1M',
+                                  data['path_src'],
+                                  '1M',
+                                  data['path_dst'])
+
+                self.src_cloud.ssh_util.execute(process)
+
+            elif self.cfg.migrate.file_compression == "gzip":
+                dd = cmd_cfg.dd_cmd_of
+                gunzip_dd = cmd_cfg.gunzip_cmd >> dd
+                ssh_cmd_dst = cmd_cfg.ssh_cmd_port
+                ssh_dst = ssh_cmd_dst(port, 'localhost', gunzip_dd)
+
+                gzip_cmd = cmd_cfg.gzip_cmd
+                ssh_cmd_src = cmd_cfg.ssh_cmd
+                ssh_src = ssh_cmd_src(data['host_src'], gzip_cmd)
+
+                process = ssh_src >> ssh_dst
+                process = process(self.cfg.migrate.level_compression,
+                                  data['path_src'], '1M', data['path_dst'])
+
+                self.src_cloud.ssh_util.execute(process)

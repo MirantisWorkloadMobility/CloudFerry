@@ -14,11 +14,12 @@
 
 
 from fabric.api import env
-from fabric.api import run
-from fabric.api import settings
 
+from cloudferrylib.utils import cmd_cfg
 from cloudferrylib.utils import driver_transporter
+from cloudferrylib.utils import rbd_util
 from cloudferrylib.utils import utils
+
 
 LOG = utils.get_log(__name__)
 
@@ -27,13 +28,16 @@ class SSHCephToFile(driver_transporter.DriverTransporter):
     def transfer(self, data):
         ssh_ip_src = self.src_cloud.getIpSsh()
         ssh_ip_dst = self.dst_cloud.getIpSsh()
-        with settings(host_string=ssh_ip_src):
-            with utils.forward_agent(env.key_filename):
-                with utils.up_ssh_tunnel(data['host_dst'], ssh_ip_dst) as port:
-                    run(("rbd export -p %s %s - | ssh "
-                         "-oStrictHostKeyChecking=no -p %s localhost 'dd "
-                         "bs=1M of=%s'") %
-                        (data['ceph_pool_src'],
-                         data['name_file_src'],
-                         port,
-                         data['path_dst']))
+        with utils.forward_agent(env.key_filename), utils.up_ssh_tunnel(
+                data['host_dst'], ssh_ip_dst, ssh_ip_src) as port:
+            dd = cmd_cfg.dd_cmd_of
+            ssh_cmd = cmd_cfg.ssh_cmd_port
+            rbd_export = rbd_util.RbdUtil.rbd_export_cmd
+
+            ssh_dd = ssh_cmd(port, 'localhost', dd)
+
+            process = rbd_export >> ssh_dd
+            process = process(data['name_file_src'], '-', '1M',
+                              data['path_dst'])
+
+            self.src_cloud.ssh_util.execute(process)
