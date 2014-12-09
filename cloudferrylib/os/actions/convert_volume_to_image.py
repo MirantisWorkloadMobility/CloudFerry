@@ -39,7 +39,7 @@ class ConvertVolumeToImage(converter.Converter):
         volumes_info = copy.deepcopy(storage_info)
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
         resource_image = self.cloud.resources[utl.IMAGE_RESOURCE]
-        images_info = {utl.IMAGE_RESOURCE: {utl.IGNORE: {}}}
+        images_info = {}
         if not require_methods(['upload_volume_to_image'], resource_storage):
             raise RuntimeError("No require methods")
         images_from_volumes = {}
@@ -58,14 +58,12 @@ class ConvertVolumeToImage(converter.Converter):
             image_vol = resource_image.read_info(image_id=image_id)
             img_new = {
                 utl.IMAGE_BODY: (
-                    image_vol[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE][image_id][
-                        utl.IMAGE_BODY]),
+                    image_vol[utl.IMAGES_TYPE][image_id][utl.IMAGE_BODY]),
                 utl.META_INFO: volume[utl.META_INFO]
             }
             img_new[utl.META_INFO][utl.VOLUME_BODY] = vol
             images_from_volumes[image_id] = img_new
-        images_info[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE] = images_from_volumes
-        images_info[utl.IMAGE_RESOURCE]['resource'] = resource_image
+        images_info[utl.IMAGES_TYPE] = images_from_volumes
         return {
             'images_info': images_info
         }

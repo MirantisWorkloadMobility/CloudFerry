@@ -102,8 +102,7 @@ class GlanceImage(image.Image):
         :rtype: Dictionary with all necessary images info
         """
 
-        info = {'image': {'resource': self,
-                          'images': {}}}
+        info = {'images': {}}
 
         if kwargs.get('image_id'):
             glance_image = self.get_image_by_id(kwargs['image_id'])
@@ -122,7 +121,7 @@ class GlanceImage(image.Image):
             for (im, meta) in kwargs['images_list_meta']:
                 glance_image = self.get_image(im)
                 info = self.make_image_info(glance_image, info)
-                info['image']['images'][glance_image.id]['meta'] = meta
+                info['images'][glance_image.id]['meta'] = meta
 
         else:
             for glance_image in self.get_image_list():
@@ -140,11 +139,12 @@ class GlanceImage(image.Image):
                 'container_format': glance_image.container_format,
                 'disk_format': glance_image.disk_format,
                 'is_public': glance_image.is_public,
-                'protected': glance_image.protected
+                'protected': glance_image.protected,
+                'resource': self
             }
-            info['image']['images'][glance_image.id] = {'image': gl_image,
-                                                        'meta': {},
-                                                        }
+            info['images'][glance_image.id] = {'image': gl_image,
+                                               'meta': {},
+                                               }
         else:
             print 'Image has not been found'
 
@@ -152,10 +152,10 @@ class GlanceImage(image.Image):
 
     def deploy(self, info, callback=None):
         info = copy.deepcopy(info)
-        new_info = {'image': {'images': {}}}
+        new_info = {'images': {}}
         migrate_images_list = []
         empty_image_list = {}
-        for image_id_src, gl_image in info['image']['images'].iteritems():
+        for image_id_src, gl_image in info['images'].iteritems():
             if gl_image['image']:
                 dst_img_checksums = {x.checksum: x for x in self.get_image_list()}
                 dst_img_names = [x.name for x in self.get_image_list()]
@@ -165,7 +165,6 @@ class GlanceImage(image.Image):
                 if checksum_current in dst_img_checksums and (name_current + 'Migrate') in dst_img_names:
                     migrate_images_list.append((dst_img_checksums[checksum_current], meta))
                     continue
-                gl_image['image']['resource_src'] = info['image']['resource']
                 migrate_image = self.create_image(
                     name=gl_image['image']['name'] + 'Migrate',
                     container_format=gl_image['image']['container_format'],
@@ -184,7 +183,7 @@ class GlanceImage(image.Image):
             im_name_list = [(im.name, meta) for (im, meta) in
                             migrate_images_list]
             new_info = self.read_info(images_list_meta=im_name_list)
-        new_info['image']['images'].update(empty_image_list)
+        new_info['images'].update(empty_image_list)
         return new_info
 
     def wait_for_status(self, id_res, status):

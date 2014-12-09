@@ -37,12 +37,11 @@ class ConvertComputeToImage(action.Action):
 
     def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)
-        image_info = {utl.IMAGE_RESOURCE: {utl.IMAGES_TYPE: {}}}
-        images_body = image_info[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE]
+        image_info = {utl.IMAGES_TYPE: {}}
+        images_body = image_info[utl.IMAGES_TYPE]
         image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
         storage_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
         compute_ignored_images = {}
-        image_info[utl.IMAGE_RESOURCE]['resource'] = image_resource
         for instance_id, instance in info[utl.COMPUTE_RESOURCE][
                 utl.INSTANCES_TYPE].iteritems():
             _instance = instance[utl.INSTANCE_BODY]
@@ -56,7 +55,7 @@ class ConvertComputeToImage(action.Action):
             # TODO: Case when image is None
             if image_id:
                 img = image_resource.read_info(image_id=image_id)
-                img = img[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE]
+                img = img[utl.IMAGES_TYPE]
                 if image_id in images_body:
                     images_body[image_id][utl.META_INFO][
                         utl.INSTANCE_BODY].append(instance)
