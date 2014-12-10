@@ -34,8 +34,7 @@ class ConvertImageToVolume(converter.Converter):
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
         resource_image = self.cloud.resources[utl.IMAGE_RESOURCE]
         volumes_info = dict(resource=resource_image, volumes=dict())
-        for img in images_info[utl.IMAGE_RESOURCE][
-                utl.IMAGES_TYPE].itervalues():
+        for img in images_info[utl.IMAGES_TYPE].itervalues():
             img[utl.META_INFO][utl.IMAGE_BODY] = img[utl.IMAGE_BODY]
             vol = dict(volumes={
                 img[utl.META_INFO][utl.VOLUME_BODY]['id']: dict(
