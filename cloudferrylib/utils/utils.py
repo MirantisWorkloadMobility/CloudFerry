@@ -339,9 +339,10 @@ class wrapper_singletone_ssh_tunnel:
             if port in self.busy_port:
                 self.busy_port.remove(port)
 
-    def __call__(self, address_dest_compute, address_dest_controller, **kwargs):
+    def __call__(self, address_dest_compute, address_dest_controller, host, **kwargs):
         return up_ssh_tunnel_class(address_dest_compute,
                                    address_dest_controller,
+                                   host,
                                    self.get_free_port,
                                    self.free_port)
 
@@ -352,22 +353,25 @@ class up_ssh_tunnel_class:
         Up ssh tunnel on dest controller node for transferring data
     """
 
-    def __init__(self, address_dest_compute, address_dest_controller, callback_get, callback_free):
+    def __init__(self, address_dest_compute, address_dest_controller, host, callback_get, callback_free):
         self.address_dest_compute = address_dest_compute
         self.address_dest_controller = address_dest_controller
         self.get_free_port = callback_get
         self.remove_port = callback_free
+        self.host = host
         self.cmd = "ssh -oStrictHostKeyChecking=no -L %s:%s:22 -R %s:localhost:%s %s -Nf"
 
     def __enter__(self):
         self.port = self.get_free_port()
-        run(self.cmd % (self.port, self.address_dest_compute, self.port, self.port,
-                        self.address_dest_controller) + " && sleep 2")
+        with settings(host_string=self.host):
+            run(self.cmd % (self.port, self.address_dest_compute, self.port, self.port,
+                            self.address_dest_controller) + " && sleep 2")
         return self.port
 
     def __exit__(self, type, value, traceback):
-        run(("pkill -f '"+self.cmd+"'") % (self.port, self.address_dest_compute, self.port, self.port,
-                                           self.address_dest_controller))
+        with settings(host_string=self.host):
+            run(("pkill -f '"+self.cmd+"'") % (self.port, self.address_dest_compute, self.port, self.port,
+                                               self.address_dest_controller))
         time.sleep(2)
         self.remove_port(self.port)
 

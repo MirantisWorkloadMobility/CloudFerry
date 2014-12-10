@@ -13,19 +13,16 @@
 # limitations under the License.
 
 
-from console_cmd import BC
+from cloudferrylib.base.action import action
 
 
-cd_cmd = BC("cd %s")
-qemu_img_cmd = BC("qemu-img %s")
-move_cmd = BC("mv -f %s %s")
-move_with_cd_cmd = cd_cmd & move_cmd
-grep_cmd = BC("grep %s")
-rbd_cmd = BC("rbd %s")
-base_ssh_cmd = BC("ssh %s")
-ssh_cmd = base_ssh_cmd("-oStrictHostKeyChecking=no %s '%s'")
-ssh_cmd_port = base_ssh_cmd("-oStrictHostKeyChecking=no -p %s %s '%s'")
-dd_cmd_of = BC("dd bs=%s of=%s")
-dd_cmd_if = BC("dd bs=%s if=%s")
-gunzip_cmd = BC("gunzip")
-gzip_cmd = BC("gzip -%s -c %s")
+class TaskTransfer(action.Action):
+    def __init__(self, init, driver):
+        super(TaskTransfer, self).__init__(init)
+        self.driver = driver(self.src_cloud,
+                             self.dst_cloud,
+                             self.cfg)
+
+    def run(self, data, **kwargs):
+        self.driver.transfer(data)
+        return {}

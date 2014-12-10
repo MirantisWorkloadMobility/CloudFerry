@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-__author__ = 'mirrorcoder'
-from fabric.api import run, settings
-from utils import forward_agent
+
+from fabric.api import run
+from fabric.api import settings
+
 import cmd_cfg
+from utils import forward_agent
 
 
 class SshUtil(object):
