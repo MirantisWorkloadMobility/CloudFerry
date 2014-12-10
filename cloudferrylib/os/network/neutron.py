@@ -530,6 +530,11 @@ class NeutronNetwork(network.Network):
             if floatingip['floating_ip_address'] not in src_floatingips:
                 self.neutron_client.delete_floatingip(floatingip['id'])
 
+    def update_floatingip(self, floatingip_id, port_id=None):
+        update_dict = {'floatingip': {'port_id': port_id}}
+        return self.neutron_client.update_floatingip(floatingip_id,
+                                                     update_dict)
+
     def get_res_by_hash(self, existing_resources, resource_hash):
         for resource in existing_resources:
             if resource['res_hash'] == resource_hash:
