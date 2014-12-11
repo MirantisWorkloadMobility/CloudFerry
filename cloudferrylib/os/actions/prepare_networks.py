@@ -55,6 +55,12 @@ class PrepareNetworks(action.Action):
                                                     tenant_id,
                                                     keep_ip,
                                                     sg_ids)
+                if src_net['floatingip']:
+                    dst_flotingips = network_resource.get_floatingips()
+                    dst_flotingips_map = \
+                        {fl_ip['floating_ip_address']: fl_ip['id'] for fl_ip in dst_flotingips}
+                    dst_floatingip_id = dst_flotingips_map[src_net['floatingip']]
+                    floating_ip = network_resource.update_floatingip(dst_floatingip_id, port['id'])
                 params.append({'net-id': dst_net['id'], 'port-id': port['id']})
             instances[id_inst][utl.INSTANCE_BODY]['nics'] = params
         info_compute[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE] = instances
