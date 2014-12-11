@@ -407,6 +407,12 @@ def get_libvirt_block_info(libvirt_name, init_host, compute_host):
     return libvirt_output
 
 
+def find_element_by_in(list_values, word):
+    for i in list_values:
+        if word in list_values:
+            return i
+
+
 def init_singletones(cfg):
     globals()['up_ssh_tunnel'] = wrapper_singletone_ssh_tunnel(cfg.migrate.ssh_transfer_port)
 
