@@ -28,7 +28,7 @@ def transfer_file_to_file(src_cloud, dst_cloud, host_src, host_dst, path_src, pa
     ssh_ip_dst = dst_cloud.getIpSsh()
     with settings(host_string=ssh_ip_src):
         with utils.forward_agent(cfg_migrate.key_filename):
-            with utils.up_ssh_tunnel(host_dst, ssh_ip_dst) as port:
+            with utils.up_ssh_tunnel(host_dst, ssh_ip_dst, ssh_ip_src) as port:
                 if cfg_migrate.file_compression == "dd":
                     run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
                          "| ssh -oStrictHostKeyChecking=no -p %s localhost 'dd bs=1M of=%s'") %
@@ -50,7 +50,7 @@ def transfer_from_ceph_to_iscsi(src_cloud,
     ssh_ip_dst = dst_cloud.getIpSsh()
     with settings(host_string=ssh_ip_src):
         with utils.forward_agent(env.key_filename):
-            with utils.up_ssh_tunnel(dst_host, ssh_ip_dst) as port:
+            with utils.up_ssh_tunnel(dst_host, ssh_ip_dst, ssh_ip_src) as port:
                 run(("rbd export -p %s %s - | ssh -oStrictHostKeyChecking=no -p %s localhost " +
                      "'dd bs=1M of=%s'") % (ceph_pool_src, name_file_src, port, dst_path))
 
