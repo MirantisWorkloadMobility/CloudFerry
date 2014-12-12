@@ -125,6 +125,7 @@ class TransportInstance(action.Action):
         for i in new_ids.iterkeys():
             dst_compute.change_status('shutoff', instance_id=i)
         for new_id, old_id in new_ids.iteritems():
+            new_info['compute']['instances'][new_id]['old_id'] = old_id
             new_info['compute']['instances'][new_id]['meta'] = info[
                 'compute']['instances'][old_id]['meta']
         info = self.prepare_ephemeral_drv(info, new_info, new_ids)
