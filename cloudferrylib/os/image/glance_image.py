@@ -142,6 +142,10 @@ class GlanceImage(image.Image):
                 'protected': glance_image.protected,
                 'resource': self
             }
+            if 'image_type' in glance_image.properties:
+                gl_image['properties'] = {'image_type': glance_image.properties['image_type']}
+            else:
+                gl_image['properties'] = glance_image.properties
             info['images'][glance_image.id] = {'image': gl_image,
                                                'meta': {},
                                                }
@@ -162,16 +166,17 @@ class GlanceImage(image.Image):
                 checksum_current = gl_image['image']['checksum']
                 name_current = gl_image['image']['name']
                 meta = gl_image['meta']
-                if checksum_current in dst_img_checksums and (name_current + 'Migrate') in dst_img_names:
+                if checksum_current in dst_img_checksums and (name_current) in dst_img_names:
                     migrate_images_list.append((dst_img_checksums[checksum_current], meta))
                     continue
                 migrate_image = self.create_image(
-                    name=gl_image['image']['name'] + 'Migrate',
+                    name=gl_image['image']['name'],
                     container_format=gl_image['image']['container_format'],
                     disk_format=gl_image['image']['disk_format'],
                     is_public=gl_image['image']['is_public'],
                     protected=gl_image['image']['protected'],
                     size=gl_image['image']['size'],
+                    properties=gl_image['image']['properties'],
                     data=file_like_proxy.FileLikeProxy(
                         gl_image['image'],
                         callback,
