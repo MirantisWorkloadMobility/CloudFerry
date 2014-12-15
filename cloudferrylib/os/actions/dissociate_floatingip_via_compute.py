@@ -22,18 +22,18 @@ from cloudferrylib.utils import utils as utl
 class DissociateFloatingip(action.Action):
 
     def run(self, info=None, **kwargs):
+        if self.cfg.migrate.keep_floatingip:
+            info_compute = copy.deepcopy(info)
+            compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
 
-        info_compute = copy.deepcopy(info)
-        compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
+            instances = info_compute[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE]
 
-        instances = info_compute[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE]
-
-        for instance in instances.values():
-            networks_info = instance[utl.INSTANCE_BODY][utl.INTERFACES]
-            old_id = instance[utl.OLD_ID]
-            for net in networks_info:
-                if net['floatingip']:
-                    compute_resource.dissociate_floatingip(old_id, net['floatingip'])
+            for instance in instances.values():
+                networks_info = instance[utl.INSTANCE_BODY][utl.INTERFACES]
+                old_id = instance[utl.OLD_ID]
+                for net in networks_info:
+                    if net['floatingip']:
+                        compute_resource.dissociate_floatingip(old_id, net['floatingip'])
         return {}
 
 
