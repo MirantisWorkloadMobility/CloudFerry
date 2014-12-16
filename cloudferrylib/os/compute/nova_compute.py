@@ -136,6 +136,14 @@ class NovaCompute(compute.Compute):
             if is_ceph:
                 host = self.config.storage.host
 
+            direct_transfer = self.config.migrate.direct_compute_transfer
+            if direct_transfer:
+                ext_cidr = self.config.cloud.ext_cidr
+                host = utl.get_ext_ip(ext_cidr,
+                                      self.cloud.getIpSsh(),
+                                      getattr(instance, 'OS-EXT-SRV-ATTR:host'))
+
+
             instance_block_info = utl.get_libvirt_block_info(
                 getattr(instance, "OS-EXT-SRV-ATTR:instance_name"),
                 self.cloud.getIpSsh(),

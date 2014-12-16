@@ -27,6 +27,7 @@ import os
 import inspect
 from multiprocessing import Lock
 from fabric.api import run, settings, local, env
+import ipaddr
 
 
 ISCSI = "iscsi"
@@ -425,3 +426,27 @@ def get_disk_path(instance, blk_list, is_ceph_ephemeral=False, disk=DISK):
             if ("compute/%s%s" % (instance.id, disk)) == i:
                 disk_path = i
     return disk_path
+
+def get_ips(init_host, compute_host):
+    with settings(host_string=init_host):
+        with forward_agent(env.key_filename):
+            cmd = "ifconfig | awk -F \"[: ]+\" \'/inet addr:/ " +\
+                  "{ if ($4 != \"127.0.0.1\") print $4 }\'"
+            out = run("ssh -oStrictHostKeyChecking=no %s %s" %
+                      (compute_host, cmd))
+            list_ips = []
+            for info in out.split():
+                try:
+                    ip = ipaddr.IPAddress(info)
+                except ValueError:
+                    continue
+                list_ips.append(info)
+    return list_ips
+
+def get_ext_ip(ext_cidr, init_host, compute_host):
+    list_ips = get_ips(init_host, compute_host)
+    for ip_str in list_ips:
+        ip_addr = ipaddr.IPAddress(ip_str)
+        if ipaddr.IPNetwork(ext_cidr).Contains(ip_addr):
+            return ip_str
+    return None

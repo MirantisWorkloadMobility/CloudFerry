@@ -10,6 +10,8 @@ src_opts = [
                help='ip-address controller for cloud'),
     cfg.StrOpt('ssh_host', default='',
                help='ip-address of cloud node for ssh connect'),
+    cfg.StrOpt('ext_cidr', default='',
+               help='external network CIDR'),
     cfg.StrOpt('user', default='-',
                help='user for access to API'),
     cfg.StrOpt('password', default='-',
@@ -32,6 +34,8 @@ dst_opts = [
                help='ip-address controller for cloud'),
     cfg.StrOpt('ssh_host', default='',
                help='ip-address of cloud node for ssh connect'),
+    cfg.StrOpt('ext_cidr', default='',
+               help='external network CIDR'),
     cfg.StrOpt('user', default='-',
                help='user for access to API'),
     cfg.StrOpt('password', default='-',
@@ -79,7 +83,8 @@ migrate_opts = [
                help='format when covert volume to image'),
     cfg.StrOpt('container_format', default='bare',
                help='container format when covert volume to image'),
-
+    cfg.BoolOpt('direct_compute_transfer', default=False,
+                help='Direct data transmission between compute nodes via external network')
 ]
 
 mail = cfg.OptGroup(name='mail',
@@ -121,8 +126,7 @@ src_compute_opts = [
     cfg.StrOpt('convert_diff_file', default='qcow2',
                help='convert diff file to'),
     cfg.StrOpt('convert_ephemeral_disk', default='qcow2',
-               help='convert ephemeral disk to'),
-
+               help='convert ephemeral disk to')
 ]
 
 
@@ -208,7 +212,6 @@ dst_compute_opts = [
                help='convert diff file to'),
     cfg.StrOpt('convert_ephemeral_disk', default='qcow2',
                help='convert ephemeral disk to'),
-
 ]
 
 

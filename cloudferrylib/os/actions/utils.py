@@ -19,8 +19,6 @@ from cloudferrylib.utils import utils as utl
 
 LOG = utils.get_log(__name__)
 
-__author__ = 'mirrorcoder'
-
 
 def transfer_file_to_file(src_cloud, dst_cloud, host_src, host_dst, path_src, path_dst, cfg_migrate):
     LOG.debug("| | copy file")
@@ -39,6 +37,19 @@ def transfer_file_to_file(src_cloud, dst_cloud, host_src, host_dst, path_src, pa
                         (host_src, cfg_migrate.level_compression,
                          path_src, port, path_dst))
 
+def direct_transfer_file_to_file(host_src, host_dst, path_src, path_dst, cfg_migrate):
+    LOG.debug("| | copy file")
+    with settings(host_string=host_src):
+        with utils.forward_agent(cfg_migrate.key_filename):
+            if cfg_migrate.file_compression == "dd":
+                run(("dd bs=1M if=%s " +
+                     "| ssh -oStrictHostKeyChecking=no %s 'dd bs=1M of=%s'") %
+                    (path_src, host_dst, path_dst))
+            elif cfg_migrate.file_compression == "gzip":
+                run(("gzip -%s -c %s " +
+                     "| ssh -oStrictHostKeyChecking=no %s 'gunzip | dd bs=1M of=%s'") %
+                    (cfg_migrate.level_compression,
+                     path_src, host_dst, path_dst))
 
 def transfer_from_ceph_to_iscsi(src_cloud,
                                 dst_cloud,
