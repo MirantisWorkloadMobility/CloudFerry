@@ -42,6 +42,7 @@ from cloudferrylib.os.actions import networks_transporter
 from cloudferrylib.base.action import create_reference
 from cloudferrylib.os.actions import prepare_volumes_data_map
 from cloudferrylib.os.actions import transport_ceph_to_ceph_via_ssh
+from cloudferrylib.os.actions import transport_file_to_file_via_ssh
 from cloudferrylib.os.actions import get_info_instances
 from cloudferrylib.os.actions import prepare_networks
 from cloudferrylib.os.actions import dissociate_floatingip_via_compute
@@ -75,9 +76,9 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         namespace_scheduler = namespace.Namespace({
             '__init_task__': self.init,
             'info_result': {
-                utl.COMPUTE_RESOURCE: {utl.INSTANCES_TYPE: {}}
+                utl.INSTANCES_TYPE: {}
             }
-        })
+            })
 
         task_resources_transporting = self.transport_resources()
         transport_instances_and_dependency_resources = self.migrate_instances()
@@ -93,7 +94,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         name_result = 'info_result'
         name_backup = 'info_backup'
         name_iter = 'info_iter'
-        save_result = self.save_result(name_data, name_result, name_result, 'compute', 'instances')
+        save_result = self.save_result(name_data, name_result, name_result, 'instances')
         trans_one_inst = self.migrate_process_instance()
         init_iteration_instance = self.init_iteration_instance(name_data, name_backup, name_iter)
         act_get_info_inst = get_info_instances.GetInfoInstances(self.init, cloud='src_cloud')
@@ -123,8 +124,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_deploy_images = copy_g2g.CopyFromGlanceToGlance(self.init)
         return act_get_info_images >> act_deploy_images
 
-    def save_result(self, data1, data2, result, resource_type, resources_name):
-        return merge.Merge(data1, data2, result, resource_type, resources_name)
+    def save_result(self, data1, data2, result, resources_name):
+        return merge.Merge(data1, data2, result, resources_name)
 
     def transport_volumes_by_instance(self):
         act_copy_g2g_vols = copy_g2g.CopyFromGlanceToGlance(self.init)
@@ -147,8 +148,10 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                                                                                'src_storage_info',
                                                                                'dst_storage_info')
         act_deploy_inst_volumes = deploy_volumes.DeployVolumes(self.init, cloud='dst_cloud')
+        # act_inst_vol_transport_data = \
+        #     transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(self.init)
         act_inst_vol_transport_data = \
-            transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(self.init)
+            transport_file_to_file_via_ssh.TransportFileToFileViaSsh(self.init, input_info='storage_info')
         task_get_inst_vol_info = act_convert_c_to_v >> act_rename_inst_vol_src
         task_deploy_inst_vol = act_deploy_inst_volumes >> act_rename_inst_vol_dst
         task_transfer_inst_vol_data = act_inst_vol_data_map >> act_inst_vol_transport_data

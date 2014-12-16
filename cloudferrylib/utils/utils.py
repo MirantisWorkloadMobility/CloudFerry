@@ -409,7 +409,7 @@ def get_libvirt_block_info(libvirt_name, init_host, compute_host):
 
 def find_element_by_in(list_values, word):
     for i in list_values:
-        if word in list_values:
+        if word in i:
             return i
 
 

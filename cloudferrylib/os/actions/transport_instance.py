@@ -121,9 +121,9 @@ class TransportInstance(action.Action):
         for i in new_ids.iterkeys():
             dst_compute.change_status('shutoff', instance_id=i)
         for new_id, old_id in new_ids.iteritems():
-            new_info['compute']['instances'][new_id]['old_id'] = old_id
-            new_info['compute']['instances'][new_id]['meta'] = info[
-                'compute']['instances'][old_id]['meta']
+            new_info['instances'][new_id]['old_id'] = old_id
+            new_info['instances'][new_id]['meta'] = \
+                info['instances'][old_id]['meta']
         info = self.prepare_ephemeral_drv(info, new_info, new_ids)
         return info
 
@@ -131,8 +131,8 @@ class TransportInstance(action.Action):
         info = copy.deepcopy(info)
         new_info = copy.deepcopy(new_info)
         for new_id, old_id in map_new_to_old_ids.iteritems():
-            instance_old = info[COMPUTE][INSTANCES][old_id]
-            instance_new = new_info[COMPUTE][INSTANCES][new_id]
+            instance_old = info[INSTANCES][old_id]
+            instance_new = new_info[INSTANCES][new_id]
 
             ephemeral_path_dst = instance_new[EPHEMERAL][PATH_SRC]
             instance_new[EPHEMERAL][PATH_DST] = ephemeral_path_dst            

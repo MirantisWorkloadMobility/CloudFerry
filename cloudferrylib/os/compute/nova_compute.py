@@ -56,19 +56,19 @@ class NovaCompute(compute.Compute):
         """
         Read info about compute resources except instances from the cloud.
         """
-        info = {'compute': {'keypairs': {},
-                            'flavors': {},
-                            'user_quotas': [],
-                            'project_quotas': []}}
+        info = {'keypairs': {},
+                'flavors': {},
+                'user_quotas': [],
+                'project_quotas': []}
 
         for keypair in self.get_keypair_list():
-            info['compute']['keypairs'][keypair.id] = {
+            info['keypairs'][keypair.id] = {
                 'keypair': {'name': keypair.name,
                             'public_key': keypair.public_key},
                 'meta': {}}
 
         for flavor in self.get_flavor_list():
-            info['compute']['flavors'][flavor.id] = {
+            info['flavors'][flavor.id] = {
                 'flavor': {'name': flavor.name,
                            'ram': flavor.ram,
                            'vcpus': flavor.vcpus,
@@ -84,7 +84,7 @@ class NovaCompute(compute.Compute):
                                "hard_limit FROM project_user_quotas WHERE "
                                "deleted = 0")
             for quota in self.mysql_connector.execute(user_quotas_cmd):
-                info['compute']['user_quotas'].append(
+                info['user_quotas'].append(
                     {'quota': {'user_id': quota[0],
                                'project_id': quota[1],
                                'resource': quota[2],
@@ -94,7 +94,7 @@ class NovaCompute(compute.Compute):
             project_quotas_cmd = ("SELECT project_id, resource, hard_limit "
                                   "FROM quotas WHERE deleted = 0")
             for quota in self.mysql_connector.execute(project_quotas_cmd):
-                info['compute']['project_quotas'].append(
+                info['project_quotas'].append(
                     {'quota': {'project_id': quota[0],
                                'resource': quota[1],
                                'hard_limit': quota[2]},
@@ -179,6 +179,7 @@ class NovaCompute(compute.Compute):
                     self.nova_client.volumes.get_server_volumes(instance.id))]
             info['instances'][instance.id] = {
                 'instance': {'name': instance.name,
+                             'instance_name': getattr(instance, "OS-EXT-SRV-ATTR:instance_name"),
                              'id': instance.id,
                              'tenant_id': instance.tenant_id,
                              'tenant_name': get_tenant_name(instance.tenant_id),

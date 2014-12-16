@@ -20,23 +20,21 @@ import copy
 
 class GetInfoIter(action.Action):
 
-    def __init__(self, iter_info_name='info_iter', info_name='info', resource_type=utl.COMPUTE_RESOURCE, resource_name=utl.INSTANCES_TYPE):
+    def __init__(self, iter_info_name='info_iter', info_name='info', resource_name=utl.INSTANCES_TYPE):
         self.iter_info_name = iter_info_name
         self.info_name = info_name
-        self.resource_type = resource_type
         self.resource_name = resource_name
         super(GetInfoIter, self).__init__({})
 
     def run(self, **kwargs):
         info = kwargs[self.iter_info_name]
-        objs = info[self.resource_type][self.resource_name]
+        objs = info[self.resource_name]
         obj_id = objs.keys()[0]
         obj = objs.pop(obj_id)
         new_info = {
-            self.resource_type: {
-                self.resource_name: {obj_id: obj}
-            }
+            self.resource_name: {obj_id: obj}
         }
+
         return {
             self.iter_info_name: info,
             self.info_name: new_info

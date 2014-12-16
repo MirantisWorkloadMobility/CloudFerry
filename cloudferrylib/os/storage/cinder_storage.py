@@ -195,10 +195,12 @@ class CinderStorage(storage.Storage):
             volume['host'] = cfg.storage.host if cfg.storage.host else cfg.cloud.host
         elif vol.attachments and (cfg.storage.backend == utl.ISCSI):
             instance = compute.read_info(search_opts={'id': vol.attachments[0]['server_id']})
-            instance = instance[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE]
-            instance = instance.values()[0]
-            volume['host'] = instance['host']
-            list_disk = utl.get_libvirt_block_info(instance['name'], cloud.host, instance['host'])
+            instance = instance[utl.INSTANCES_TYPE]
+            instance_info = instance.values()[0][utl.INSTANCE_BODY]
+            volume['host'] = instance_info['host']
+            list_disk = utl.get_libvirt_block_info(instance_info['instance_name'],
+                                                   cloud.getIpSsh(),
+                                                   instance_info['host'])
             volume['path'] = utl.find_element_by_in(list_disk, vol.id)
         return volume
 
