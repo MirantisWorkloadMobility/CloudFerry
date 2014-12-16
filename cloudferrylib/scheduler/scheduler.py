@@ -12,15 +12,19 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+
+import multiprocessing
 import traceback
-from multiprocessing import Process
 
-from task import BaseTask
 from cloudferrylib.scheduler.namespace import Namespace, CHILDREN
-from thread_tasks import WrapThreadTask
+from cloudferrylib.utils import utils
 from cursor import Cursor
+from task import BaseTask
+from thread_tasks import WrapThreadTask
 
-__author__ = 'mirrorcoder'
+
+LOG = utils.get_log(__name__)
+
 
 NO_ERROR = 0
 ERROR = 255
@@ -31,7 +35,9 @@ class BaseScheduler(object):
         self.namespace = namespace if namespace else Namespace()
         self.status_error = NO_ERROR
         self.cursor = cursor
-        self.map_func_task = dict() if not hasattr(self, 'map_func_task') else self.map_func_task
+        self.map_func_task = dict() if not hasattr(
+            self,
+            'map_func_task') else self.map_func_task
         self.map_func_task[BaseTask()] = self.task_run
 
     def event_start_task(self, task):
@@ -54,7 +60,10 @@ class BaseScheduler(object):
     def start(self):
         for task in self.cursor:
             try:
+                task_print = str(task).split('|')[1]
+                LOG.info('%s Start task: %s', '-' * 8, task_print)
                 self.run_task(task)
+                LOG.info('%s End task: %s', '-' * 8, task_print)
             except Exception as e:
                 self.status_error = ERROR
                 self.exception = e
@@ -70,7 +79,8 @@ class BaseScheduler(object):
 
 
 class SchedulerThread(BaseScheduler):
-    def __init__(self, namespace=None, thread_task=None, cursor=None, scheduler_parent=None):
+    def __init__(self, namespace=None, thread_task=None, cursor=None,
+                 scheduler_parent=None):
         super(SchedulerThread, self).__init__(namespace, cursor)
         self.map_func_task[WrapThreadTask()] = self.task_run_thread
         self.child_threads = dict()
@@ -100,7 +110,7 @@ class SchedulerThread(BaseScheduler):
             self.start_separate_thread()
 
     def start_separate_thread(self):
-        p = Process(target=self.start_current_thread)
+        p = multiprocessing.Process(target=self.start_current_thread)
         self.namespace.vars[CHILDREN][self.thread_task]['process'] = p
         p.start()
 
@@ -128,5 +138,7 @@ class SchedulerThread(BaseScheduler):
 
 
 class Scheduler(SchedulerThread):
-    def __init__(self, namespace=None, thread_task=False, cursor=None, scheduler_parent=None):
-        super(Scheduler, self).__init__(namespace, thread_task, cursor, scheduler_parent)
+    def __init__(self, namespace=None, thread_task=False, cursor=None,
+                 scheduler_parent=None):
+        super(Scheduler, self).__init__(namespace, thread_task, cursor,
+                                        scheduler_parent)
