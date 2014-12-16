@@ -44,6 +44,7 @@ from cloudferrylib.os.actions import prepare_volumes_data_map
 from cloudferrylib.os.actions import transport_ceph_to_ceph_via_ssh
 from cloudferrylib.os.actions import get_info_instances
 from cloudferrylib.os.actions import prepare_networks
+from cloudferrylib.os.actions import dissociate_floatingip_via_compute
 from cloudferrylib.os.actions import map_compute_info
 from cloudferrylib.os.actions import deploy_volumes
 from cloudferrylib.os.actions import start_vm
@@ -189,4 +190,6 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_start_vms = start_vm.StartVms(self.init, cloud='dst_cloud')
         transport_resource_inst = self.migrate_resources_by_instance_via_ssh()
         transport_inst = self.migrate_instance()
-        return act_stop_vms >> transport_resource_inst >> transport_inst >> act_attaching >> act_start_vms
+        act_dissociate_floatingip = dissociate_floatingip_via_compute.DissociateFloatingip(self.init, cloud='src_cloud')
+        return act_stop_vms >> transport_resource_inst >> transport_inst >> \
+               act_attaching >> act_dissociate_floatingip >> act_start_vms

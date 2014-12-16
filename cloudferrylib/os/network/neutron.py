@@ -63,8 +63,9 @@ class NeutronNetwork(network.Network):
         self.upload_routers(deploy_info['networks'],
                             deploy_info['subnets'],
                             deploy_info['routers'])
-        self.upload_floatingips(deploy_info['networks'],
-                                deploy_info['floating_ips'])
+        if self.config.migrate.keep_floatingip:
+            self.upload_floatingips(deploy_info['networks'],
+                                    deploy_info['floating_ips'])
         self.upload_neutron_security_groups(deploy_info['security_groups'])
         self.upload_sec_group_rules(deploy_info['security_groups'])
 
@@ -529,6 +530,11 @@ class NeutronNetwork(network.Network):
         for floatingip in existing_floatingips:
             if floatingip['floating_ip_address'] not in src_floatingips:
                 self.neutron_client.delete_floatingip(floatingip['id'])
+
+    def update_floatingip(self, floatingip_id, port_id=None):
+        update_dict = {'floatingip': {'port_id': port_id}}
+        return self.neutron_client.update_floatingip(floatingip_id,
+                                                     update_dict)
 
     def get_res_by_hash(self, existing_resources, resource_hash):
         for resource in existing_resources:

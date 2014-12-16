@@ -491,12 +491,11 @@ class NovaCompute(compute.Compute):
         networks = []
         func_mac_address = self.get_func_mac_address(instance)
         for network in instance.networks.items():
-            networks.append({
-                'name': network[0],
-                'ip': network[1][0],
-                'mac': func_mac_address(network[1][0])
-            })
-
+            networks_info = {'name': network[0],
+                             'ip': network[1][0],
+                             'mac': func_mac_address(network[1][0])}
+            networks_info['floatingip'] = network[1][1] if len(network[1]) > 1 else None
+            networks.append(networks_info)
         return networks
 
     def get_func_mac_address(self, instance):
@@ -515,4 +514,8 @@ class NovaCompute(compute.Compute):
             instance['instance']['id'],
             volume['volume']['id'],
             volume['volume']['device'])
+
+    def dissociate_floatingip(self, instance_id, floatingip):
+        self.nova_client.servers.remove_floating_ip(instance_id, floatingip)
+
 
