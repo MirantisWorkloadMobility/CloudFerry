@@ -213,9 +213,9 @@ class NovaCompute(compute.Compute):
         identity_info = kwargs.get('identity_info')
 
         tenant_map = {tenant['tenant']['id']: tenant['meta']['new_id'] for
-                      tenant in identity_info['identity']['tenants']}
+                      tenant in identity_info['tenants']}
         user_map = {user['user']['id']: user['meta']['new_id'] for user in
-                    identity_info['identity']['users']}
+                    identity_info['users']}
 
         self._deploy_keypair(info['compute']['keypairs'])
         self._deploy_flavors(info['compute']['flavors'])

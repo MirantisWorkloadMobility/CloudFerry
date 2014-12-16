@@ -38,12 +38,12 @@ class KeystoneIdentity(identity.Identity):
         self.generator = GeneratorPassword()
 
     def read_info(self, **kwargs):
-        info = {'identity': {'tenants': [],
-                             'users': [],
-                             'roles': []}}
+        info = {'tenants': [],
+                'users': [],
+                'roles': []}
 
         for tenant in self.get_tenants_list():
-            info['identity']['tenants'].append(
+            info['tenants'].append(
                 {'tenant': {'name': tenant.name,
                             'id': tenant.id,
                             'description': tenant.description},
@@ -51,7 +51,7 @@ class KeystoneIdentity(identity.Identity):
         overwirte_user_passwords = self.config['migrate'][
             'overwrite_user_passwords']
         for user in self.get_users_list():
-            info['identity']['users'].append(
+            info['users'].append(
                 {'user': {'name': user.name,
                           'id': user.id,
                           'email': user.email,
@@ -60,27 +60,27 @@ class KeystoneIdentity(identity.Identity):
                      'overwrite_password': overwirte_user_passwords}})
 
         for role in self.get_roles_list():
-            info['identity']['roles'].append(
+            info['roles'].append(
                 {'role': {'name': role.name,
                           'id': role},
                  'meta': {}})
 
-        info['identity']['user_tenants_roles'] = self._get_user_tenants_roles()
+        info['user_tenants_roles'] = self._get_user_tenants_roles()
         if self.config['migrate']['keep_user_passwords']:
-            info['identity']['user_passwords'] = self._get_user_passwords()
+            info['user_passwords'] = self._get_user_passwords()
         return info
 
     def deploy(self, info):
         print 'Deploy started'
-        tenants = info['identity']['tenants']
-        users = info['identity']['users']
-        roles = info['identity']['user_tenants_roles']
+        tenants = info['tenants']
+        users = info['users']
+        roles = info['user_tenants_roles']
 
         self._deploy_tenants(tenants)
-        self._deploy_roles(info['identity']['roles'])
+        self._deploy_roles(info['roles'])
         self._deploy_users(users, tenants)
         if self.config['migrate']['keep_user_passwords']:
-            passwords = info['identity']['user_passwords']
+            passwords = info['user_passwords']
             self._upload_user_passwords(users, passwords)
         self._upload_user_tenant_roles(roles, users, tenants)
         print 'Finished'
