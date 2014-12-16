@@ -15,7 +15,6 @@
 from cloudferrylib.base.action import transporter
 from cloudferrylib.os.actions import utils
 from cloudferrylib.utils import utils as utl
-__author__ = 'mirrorcoder'
 
 
 class TransportFileToFileViaSsh(transporter.Transporter):
@@ -40,7 +39,12 @@ class TransportFileToFileViaSsh(transporter.Transporter):
             host_dst = i['host_dst']
             path_src = i['path_src']
             path_dst = i['path_dst']
-            utils.transfer_file_to_file(self.src_cloud, self.dst_cloud,
-                                        host_src, host_dst, path_src,
-                                        path_dst, self.cfg.migrate)
+            if self.cfg.migrate.direct_compute_transfer:
+                utils.direct_transfer_file_to_file(host_src, host_dst,
+                                                   path_src, path_dst,
+                                                   self.cfg.migrate)
+            else:
+                utils.transfer_file_to_file(self.src_cloud, self.dst_cloud,
+                                            host_src, host_dst, path_src,
+                                            path_dst, self.cfg.migrate)
         return {}
