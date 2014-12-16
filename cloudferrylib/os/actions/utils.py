@@ -21,6 +21,7 @@ LOG = utils.get_log(__name__)
 
 
 def transfer_file_to_file(src_cloud, dst_cloud, host_src, host_dst, path_src, path_dst, cfg_migrate):
+    # TODO: Delete after transport_db_via_ssh action rewriting
     LOG.debug("| | copy file")
     ssh_ip_src = src_cloud.getIpSsh()
     ssh_ip_dst = dst_cloud.getIpSsh()
@@ -36,68 +37,6 @@ def transfer_file_to_file(src_cloud, dst_cloud, host_src, host_dst, path_src, pa
                          "| ssh -oStrictHostKeyChecking=no -p %s localhost 'gunzip | dd bs=1M of=%s'") %
                         (host_src, cfg_migrate.level_compression,
                          path_src, port, path_dst))
-
-def direct_transfer_file_to_file(host_src, host_dst, path_src, path_dst, cfg_migrate):
-    LOG.debug("| | copy file")
-    with settings(host_string=host_src):
-        with utils.forward_agent(cfg_migrate.key_filename):
-            if cfg_migrate.file_compression == "dd":
-                run(("dd bs=1M if=%s " +
-                     "| ssh -oStrictHostKeyChecking=no %s 'dd bs=1M of=%s'") %
-                    (path_src, host_dst, path_dst))
-            elif cfg_migrate.file_compression == "gzip":
-                run(("gzip -%s -c %s " +
-                     "| ssh -oStrictHostKeyChecking=no %s 'gunzip | dd bs=1M of=%s'") %
-                    (cfg_migrate.level_compression,
-                     path_src, host_dst, path_dst))
-
-def transfer_from_ceph_to_iscsi(src_cloud,
-                                dst_cloud,
-                                dst_host,
-                                dst_path,
-                                ceph_pool_src="volumes",
-                                name_file_src="volume-"):
-    ssh_ip_src = src_cloud.getIpSsh()
-    ssh_ip_dst = dst_cloud.getIpSsh()
-    with settings(host_string=ssh_ip_src):
-        with utils.forward_agent(env.key_filename):
-            with utils.up_ssh_tunnel(dst_host, ssh_ip_dst, ssh_ip_src) as port:
-                run(("rbd export -p %s %s - | ssh -oStrictHostKeyChecking=no -p %s localhost " +
-                     "'dd bs=1M of=%s'") % (ceph_pool_src, name_file_src, port, dst_path))
-
-
-def transfer_from_iscsi_to_ceph(src_cloud,
-                                dst_cloud,
-                                host_src,
-                                source_volume_path,
-                                ceph_pool_dst="volumes",
-                                name_file_dst="volume-"):
-    ssh_ip_src = src_cloud.getIpSsh()
-    ssh_ip_dst = dst_cloud.getIpSsh()
-    delete_file_from_rbd(ssh_ip_dst, ceph_pool_dst, name_file_dst)
-    with settings(host_string=ssh_ip_src):
-        with utils.forward_agent(env.key_filename):
-            run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' | " +
-                "ssh -oStrictHostKeyChecking=no %s 'rbd import --image-format=2 - %s/%s'") %
-                (host_src, source_volume_path, ssh_ip_dst, ceph_pool_dst, name_file_dst))
-
-
-def transfer_from_ceph_to_ceph(src_cloud,
-                               dst_cloud,
-                               host_src=None,
-                               host_dst=None,
-                               src_path="volumes",
-                               dst_path="volumes"):
-    if not host_src:
-        host_src = src_cloud.getIpSsh()
-    if not host_dst:
-        host_dst = dst_cloud.getIpSsh()
-    delete_file_from_rbd(host_dst, dst_path)
-    with settings(host_string=host_src):
-        with utils.forward_agent(env.key_filename):
-            run(("rbd export %s - | " +
-                 "ssh -oStrictHostKeyChecking=no %s 'rbd import --image-format=2 - %s'") %
-                (src_path, host_dst, dst_path))
 
 
 def delete_file_from_rbd(ssh_ip, file_path):

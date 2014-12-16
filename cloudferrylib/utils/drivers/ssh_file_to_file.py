@@ -13,6 +13,8 @@
 # limitations under the License.
 
 
+from fabric.api import settings
+
 from cloudferrylib.utils import cmd_cfg
 from cloudferrylib.utils import driver_transporter
 from cloudferrylib.utils import utils
@@ -23,6 +25,9 @@ LOG = utils.get_log(__name__)
 
 class SSHFileToFile(driver_transporter.DriverTransporter):
     def transfer(self, data):
+        if self.cfg.migrate.direct_compute_transfer:
+            return self.transfer_direct(data)
+
         LOG.debug("| | copy file")
         ssh_ip_src = self.src_cloud.getIpSsh()
         ssh_ip_dst = self.dst_cloud.getIpSsh()
@@ -62,3 +67,38 @@ class SSHFileToFile(driver_transporter.DriverTransporter):
                                   data['path_src'], '1M', data['path_dst'])
 
                 self.src_cloud.ssh_util.execute(process)
+
+    def transfer_direct(self, data):
+        LOG.debug("| | copy file")
+        with settings(host_string=data['host_src']), utils.forward_agent(
+                self.cfg.migrate.key_filename):
+            if self.cfg.migrate.file_compression == "dd":
+                dd_dst = cmd_cfg.dd_cmd_of
+                ssh_cmd_dst = cmd_cfg.ssh_cmd
+                ssh_dst = ssh_cmd_dst(data['host_dst'], dd_dst)
+
+                dd_src = cmd_cfg.dd_cmd_if
+
+                process = dd_src >> ssh_dst
+                process = process('1M',
+                                  data['path_src'],
+                                  '1M',
+                                  data['path_dst'])
+
+                self.src_cloud.ssh_util.execute(process,
+                                                host_exec=data['host_src'])
+
+            elif self.cfg.migrate.file_compression == "gzip":
+                dd = cmd_cfg.dd_cmd_of
+                gunzip_dd = cmd_cfg.gunzip_cmd >> dd
+                ssh_cmd_dst = cmd_cfg.ssh_cmd
+                ssh_dst = ssh_cmd_dst(data['host_dst'], gunzip_dd)
+
+                gzip_cmd = cmd_cfg.gzip_cmd
+
+                process = gzip_cmd >> ssh_dst
+                process = process(self.cfg.migrate.level_compression,
+                                  data['path_src'], '1M', data['path_dst'])
+
+                self.src_cloud.ssh_util.execute(process,
+                                                host_exec=data['host_src'])

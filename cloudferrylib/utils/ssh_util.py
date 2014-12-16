@@ -26,8 +26,9 @@ class SshUtil(object):
         self.host = cloud.host
         self.config_migrate = config_migrate
 
-    def execute(self, cmd, host_compute=None):
-        with settings(host_string=self.host):
+    def execute(self, cmd, host_compute=None, host_exec=None):
+        host = host_exec if host_exec else self.host
+        with settings(host_string=host):
             if host_compute:
                 return self.execute_on_compute(str(cmd), host_compute)
             else:
@@ -36,4 +37,3 @@ class SshUtil(object):
     def execute_on_compute(self, cmd, host):
         with forward_agent(self.config_migrate.key_filename):
             return run(str(cmd_cfg.ssh_cmd(host, str(cmd))))
-

@@ -41,8 +41,6 @@ from cloudferrylib.os.actions import attach_used_volumes
 from cloudferrylib.os.actions import networks_transporter
 from cloudferrylib.base.action import create_reference
 from cloudferrylib.os.actions import prepare_volumes_data_map
-from cloudferrylib.os.actions import transport_ceph_to_ceph_via_ssh
-from cloudferrylib.os.actions import transport_file_to_file_via_ssh
 from cloudferrylib.os.actions import get_info_instances
 from cloudferrylib.os.actions import prepare_networks
 from cloudferrylib.os.actions import dissociate_floatingip_via_compute
@@ -52,6 +50,8 @@ from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import stop_vm
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.actions import transport_compute_resources
+from cloudferrylib.os.actions import task_transfer
+from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
 from cloudferrylib.os.actions import get_filter
 
 
@@ -150,8 +150,11 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                                                                                'src_storage_info',
                                                                                'dst_storage_info')
         act_deploy_inst_volumes = deploy_volumes.DeployVolumes(self.init, cloud='dst_cloud')
-        act_inst_vol_transport_data = \
-            transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(self.init)
+
+        act_inst_vol_transport_data = task_transfer.TaskTransfer(self.init,
+                                                                 ssh_ceph_to_ceph.SSHCephToCeph,
+                                                                 input_info='storage_info')
+
         task_get_inst_vol_info = act_convert_c_to_v >> act_rename_inst_vol_src
         task_deploy_inst_vol = act_deploy_inst_volumes >> act_rename_inst_vol_dst
         task_transfer_inst_vol_data = act_inst_vol_data_map >> act_inst_vol_transport_data
@@ -191,7 +194,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.init, cloud='dst_cloud')
         act_stop_vms = stop_vm.StopVms(self.init, cloud='src_cloud')
         act_start_vms = start_vm.StartVms(self.init, cloud='dst_cloud')
-        transport_resource_inst = self.migrate_resources_by_instance_via_ssh()
+        #transport_resource_inst = self.migrate_resources_by_instance_via_ssh()
+        transport_resource_inst = self.migrate_resources_by_instance()
         transport_inst = self.migrate_instance()
         act_dissociate_floatingip = dissociate_floatingip_via_compute.DissociateFloatingip(self.init, cloud='src_cloud')
         return act_stop_vms >> transport_resource_inst >> transport_inst >> \

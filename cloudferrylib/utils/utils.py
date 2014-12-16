@@ -52,10 +52,10 @@ DISK = "disk"
 DISK_EPHEM = "disk.local"
 LEN_UUID_INSTANCE = 36
 
-SRC_HOST = 'src_host'
-DST_HOST = 'dst_host'
-SRC_PATH = 'src_path'
-DST_PATH = 'dst_path'
+HOST_SRC = 'host_src'
+HOST_DST = 'host_dst'
+PATH_SRC = 'path_src'
+PATH_DST = 'path_dst'
 
 STORAGE_RESOURCE = 'storage'
 VOLUMES_TYPE = 'volumes'

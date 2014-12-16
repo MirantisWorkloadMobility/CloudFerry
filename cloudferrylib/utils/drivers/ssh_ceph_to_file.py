@@ -37,7 +37,7 @@ class SSHCephToFile(driver_transporter.DriverTransporter):
             ssh_dd = ssh_cmd(port, 'localhost', dd)
 
             process = rbd_export >> ssh_dd
-            process = process(data['name_file_src'], '-', '1M',
+            process = process(data['path_src'], '-', '1M',
                               data['path_dst'])
 
             self.src_cloud.ssh_util.execute(process)
