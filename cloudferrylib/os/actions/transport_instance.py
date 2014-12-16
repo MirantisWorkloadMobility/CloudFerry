@@ -73,21 +73,17 @@ class TransportInstance(action.Action):
         backend_ephem_drv_dst = dst_compute.config.compute.backend
         backend_storage_dst = dst_storage.config.storage.backend
         new_info = {
-            utl.COMPUTE_RESOURCE: {
-                utl.INSTANCES_TYPE: {
-                }
+            utl.INSTANCES_TYPE: {
             }
         }
 
         #Get next one instance
-        for instance_id, instance in info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE].iteritems():
+        for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             instance_boot = instance[utl.INSTANCE_BODY]['boot_mode']
             is_ephemeral = instance[utl.INSTANCE_BODY]['is_ephemeral']
             one_instance = {
-                utl.COMPUTE_RESOURCE: {
-                    utl.INSTANCES_TYPE: {
-                        instance_id: instance
-                    }
+                utl.INSTANCES_TYPE: {
+                    instance_id: instance
                 }
             }
 
@@ -107,8 +103,8 @@ class TransportInstance(action.Action):
 
             if is_ephemeral:
                 self.copy_ephemeral(self.src_cloud, self.dst_cloud, one_instance)
-            new_info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE].update(
-                one_instance[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE])
+            new_info[utl.INSTANCES_TYPE].update(
+                one_instance[utl.INSTANCES_TYPE])
 
         return {
             'info': new_info
@@ -173,7 +169,7 @@ class TransportInstance(action.Action):
 
     def transport_boot_volume_src_to_dst(self, src_cloud, dst_cloud, info, instance_id):
         info = copy.deepcopy(info)
-        instance = info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE][instance_id]
+        instance = info[utl.INSTANCES_TYPE][instance_id]
 
         src_storage = src_cloud.resources[utl.STORAGE_RESOURCE]
         volume = src_storage.read_info(id=instance[INSTANCE_BODY]['volumes'][0]['id'])
@@ -193,7 +189,6 @@ class TransportInstance(action.Action):
         src_backend = src_compute.config.compute.backend
         dst_backend = dst_storage.config.compute.backend
         transporter = TRANSPORTER_MAP[src_backend][dst_backend](self.init,
-                                                                resource_type=resources,
                                                                 resource_name=types,
                                                                 resource_root_name=body)
         transporter.run(info=info)
@@ -224,13 +219,12 @@ class TransportInstance(action.Action):
                                    utl.INSTANCES_TYPE)
 
     def copy_ephemeral_ceph_to_iscsi(self, src_cloud, dst_cloud, info):
-        instances = info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE]
+        instances = info[utl.INSTANCES_TYPE]
         qemu_img_dst = dst_cloud.qemu_img
         qemu_img_src = src_cloud.qemu_img
         temp_src = src_cloud.cloud_config.cloud.temp
         host_dst = dst_cloud.getIpSsh()
         transporter = TRANSPORTER_MAP[ISCSI][ISCSI](self.init,
-                                                    resource_type=utl.COMPUTE_RESOURCE,
                                                     resource_name=utl.INSTANCES_TYPE,
                                                     resource_root_name=utl.EPHEMERAL_BODY)
         temp_path_src = temp_src+"/%s"+utl.DISK_EPHEM
@@ -245,10 +239,9 @@ class TransportInstance(action.Action):
             qemu_img_dst.diff_rebase(backing_file, inst[EPHEMERAL][PATH_DST], host_compute_dst)
 
     def copy_ephemeral_iscsi_to_ceph(self, src_cloud, info):
-        instances = info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE]
+        instances = info[utl.INSTANCES_TYPE]
         qemu_img_src = src_cloud.qemu_img
         transporter = TRANSPORTER_MAP[ISCSI][CEPH](self.init,
-                                                   resource_type=utl.COMPUTE_RESOURCE,
                                                    resource_name=utl.INSTANCES_TYPE,
                                                    resource_root_name=utl.EPHEMERAL_BODY)
         for inst_id, inst in instances.iteritems():
@@ -262,13 +255,12 @@ class TransportInstance(action.Action):
 
     def transport_from_src_to_dst(self, info):
         transporter = transport_file_to_file_via_ssh.TransportFileToFileViaSsh(self.init,
-                                                                               resource_type=utl.COMPUTE_RESOURCE,
                                                                                resource_name=utl.INSTANCES_TYPE,
                                                                                resource_root_name=utl.DIFF_BODY)
         transporter.run(info=info)
 
     def transport_diff_and_merge(self, dst_cloud, info, instance_id):
-        image_id = info[COMPUTE][INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id']
+        image_id = info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id']
         cloud_cfg_dst = dst_cloud.cloud_config.cloud
         temp_dir_dst = cloud_cfg_dst.temp
         host_dst = cloud_cfg_dst.host
@@ -276,8 +268,8 @@ class TransportInstance(action.Action):
         base_file = "%s/%s" % (temp_dir_dst, "temp%s_base" % instance_id)
         diff_file = "%s/%s" % (temp_dir_dst, "temp%s" % instance_id)
 
-        info[COMPUTE][INSTANCES][instance_id][DIFF][PATH_DST] = diff_file
-        info[COMPUTE][INSTANCES][instance_id][DIFF][HOST_DST] = dst_cloud.getIpSsh()
+        info[INSTANCES][instance_id][DIFF][PATH_DST] = diff_file
+        info[INSTANCES][instance_id][DIFF][HOST_DST] = dst_cloud.getIpSsh()
 
         image_res = dst_cloud.resources[utl.IMAGE_RESOURCE]
 
@@ -297,7 +289,7 @@ class TransportInstance(action.Action):
 
         dst_image_id = self.convert_file_to_image('dst_cloud', base_file, disk_format, instance_id)
 
-        info[COMPUTE][INSTANCES][instance_id][INSTANCE_BODY]['image_id'] = dst_image_id
+        info[INSTANCES][instance_id][INSTANCE_BODY]['image_id'] = dst_image_id
 
     def convert_file_to_image(self, dst_cloud, base_file, disk_format, instance_id):
         converter = convert_file_to_image.ConvertFileToImage(self.init, cloud=dst_cloud)
@@ -320,18 +312,17 @@ class TransportInstance(action.Action):
         cloud_cfg_dst = dst_cloud.cloud_config.cloud
         temp_dir_dst = cloud_cfg_dst.temp
         transporter = transport_ceph_to_file_via_ssh.TransportCephToFileViaSsh(self.init,
-                                                                               resource_type=utl.COMPUTE_RESOURCE,
                                                                                resource_name=utl.INSTANCES_TYPE,
                                                                                resource_root_name=utl.DIFF_BODY)
         path_dst = "%s/%s" % (temp_dir_dst, "temp%s" % instance_id)
-        info[COMPUTE][INSTANCES][instance_id][DIFF][PATH_DST] = path_dst
-        info[COMPUTE][INSTANCES][instance_id][DIFF][HOST_DST] = dst_cloud.getIpSsh()
+        info[INSTANCES][instance_id][DIFF][PATH_DST] = path_dst
+        info[INSTANCES][instance_id][DIFF][HOST_DST] = dst_cloud.getIpSsh()
         transporter.run(info=info)
         converter = convert_file_to_image.ConvertFileToImage(dst_cloud)
         dst_image_id = converter.run(file_path=path_dst,
                                      image_format='raw',
                                      image_name="%s-image" % instance_id)
-        info[COMPUTE][INSTANCES][instance_id][INSTANCE_BODY]['image_id'] = dst_image_id
+        info[INSTANCES][instance_id][INSTANCE_BODY]['image_id'] = dst_image_id
 
     def convert_file_to_raw(self, host, disk_format, filepath):
         with settings(host_string=host):

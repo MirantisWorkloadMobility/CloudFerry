@@ -23,9 +23,8 @@ class TransportDbViaSsh(transporter.Transporter):
             src_cloud=None,
             dst_cloud=None,
             info_storage={},
-            resource_type=utl.STORAGE_RESOURCE,
             resource_name=utl.VOLUMES_DB, **kwargs):
-        data_for_trans = info_storage[resource_type][resource_name]
+        data_for_trans = info_storage[resource_name]
         host_src = cfg.src_mysql.host
         host_dst = cfg.dst_mysql.host
         for item in data_for_trans:

@@ -117,8 +117,7 @@ class NovaCompute(compute.Compute):
             raise ValueError('Only "resources" or "instances" values allowed')
 
         search_opts = kwargs.get('search_opts', None)
-        info = {'compute': {'instances': {},
-                            }}
+        info = {'instances': {}}
         get_tenant_name = self.identity.get_tenants_func()
 
         for instance in self.get_instances_list(search_opts=search_opts):
@@ -178,7 +177,7 @@ class NovaCompute(compute.Compute):
                         'device': v.device}
                        for i, v in enumerate(
                     self.nova_client.volumes.get_server_volumes(instance.id))]
-            info['compute']['instances'][instance.id] = {
+            info['instances'][instance.id] = {
                 'instance': {'name': instance.name,
                              'id': instance.id,
                              'tenant_id': instance.tenant_id,
@@ -217,12 +216,12 @@ class NovaCompute(compute.Compute):
         user_map = {user['user']['id']: user['meta']['new_id'] for user in
                     identity_info['users']}
 
-        self._deploy_keypair(info['compute']['keypairs'])
-        self._deploy_flavors(info['compute']['flavors'])
+        self._deploy_keypair(info['keypairs'])
+        self._deploy_flavors(info['flavors'])
         if self.config['migrate']['migrate_quotas']:
-            self._deploy_project_quotas(info['compute']['project_quotas'],
+            self._deploy_project_quotas(info['project_quotas'],
                                         tenant_map)
-            self._deploy_user_quotas(info['compute']['user_quotas'],
+            self._deploy_user_quotas(info['user_quotas'],
                                      tenant_map, user_map)
 
         new_info = self.read_info(target='resources')
@@ -243,7 +242,7 @@ class NovaCompute(compute.Compute):
         if target == 'resources':
             info = self._deploy_resources(info, **kwargs)
         elif target == 'instances':
-            info = self._deploy_instances(info['compute'])
+            info = self._deploy_instances(info)
         else:
             raise ValueError('Only "resources" or "instances" values allowed')
 

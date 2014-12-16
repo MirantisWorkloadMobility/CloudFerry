@@ -23,7 +23,7 @@ class ConvertVolumeToCompute(action.Action):
     def run(self, storage_info, compute_ignored={}, **kwargs):
         volume_info = copy.deepcopy(storage_info)
         instances = copy.deepcopy(compute_ignored)
-        new_instance_info = {'compute': {'instances': instances}}
+        new_instance_info = {'instances': instances}
         volumes_old = volume_info['volumes']
         for volume in volumes_old.itervalues():
             instance_id = volume['meta']['instance']['instance']['id']

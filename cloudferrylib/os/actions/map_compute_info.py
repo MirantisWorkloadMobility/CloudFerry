@@ -33,7 +33,7 @@ class MapComputeInfo(action.Action):
         dst_flavors_dict = \
             {flavor.name: flavor.id for flavor in dst_compute.get_flavor_list()}
 
-        for instance in new_compute_info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE].values():
+        for instance in new_compute_info[utl.INSTANCES_TYPE].values():
             _instance = instance['instance']
             flavor_name = src_flavors_dict[_instance['flavor_id']]
             _instance['flavor_id'] = dst_flavors_dict[flavor_name]

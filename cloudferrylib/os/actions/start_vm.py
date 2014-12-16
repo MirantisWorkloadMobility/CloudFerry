@@ -20,5 +20,5 @@ class StartVms(action.Action):
     def run(self, info, **kwargs):
         compute_resource = self.cloud.resources['compute']
 
-        for instance in info['compute']['instances']:
+        for instance in info['instances']:
             compute_resource.change_status('active', instance_id=instance)
