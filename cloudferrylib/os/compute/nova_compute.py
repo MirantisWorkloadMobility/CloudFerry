@@ -56,19 +56,19 @@ class NovaCompute(compute.Compute):
         """
         Read info about compute resources except instances from the cloud.
         """
-        info = {'compute': {'keypairs': {},
-                            'flavors': {},
-                            'user_quotas': [],
-                            'project_quotas': []}}
+        info = {'keypairs': {},
+                'flavors': {},
+                'user_quotas': [],
+                'project_quotas': []}
 
         for keypair in self.get_keypair_list():
-            info['compute']['keypairs'][keypair.id] = {
+            info['keypairs'][keypair.id] = {
                 'keypair': {'name': keypair.name,
                             'public_key': keypair.public_key},
                 'meta': {}}
 
         for flavor in self.get_flavor_list():
-            info['compute']['flavors'][flavor.id] = {
+            info['flavors'][flavor.id] = {
                 'flavor': {'name': flavor.name,
                            'ram': flavor.ram,
                            'vcpus': flavor.vcpus,
@@ -84,7 +84,7 @@ class NovaCompute(compute.Compute):
                                "hard_limit FROM project_user_quotas WHERE "
                                "deleted = 0")
             for quota in self.mysql_connector.execute(user_quotas_cmd):
-                info['compute']['user_quotas'].append(
+                info['user_quotas'].append(
                     {'quota': {'user_id': quota[0],
                                'project_id': quota[1],
                                'resource': quota[2],
@@ -94,7 +94,7 @@ class NovaCompute(compute.Compute):
             project_quotas_cmd = ("SELECT project_id, resource, hard_limit "
                                   "FROM quotas WHERE deleted = 0")
             for quota in self.mysql_connector.execute(project_quotas_cmd):
-                info['compute']['project_quotas'].append(
+                info['project_quotas'].append(
                     {'quota': {'project_id': quota[0],
                                'resource': quota[1],
                                'hard_limit': quota[2]},
@@ -117,8 +117,7 @@ class NovaCompute(compute.Compute):
             raise ValueError('Only "resources" or "instances" values allowed')
 
         search_opts = kwargs.get('search_opts', None)
-        info = {'compute': {'instances': {},
-                            }}
+        info = {'instances': {}}
         get_tenant_name = self.identity.get_tenants_func()
 
         for instance in self.get_instances_list(search_opts=search_opts):
@@ -178,8 +177,9 @@ class NovaCompute(compute.Compute):
                         'device': v.device}
                        for i, v in enumerate(
                     self.nova_client.volumes.get_server_volumes(instance.id))]
-            info['compute']['instances'][instance.id] = {
+            info['instances'][instance.id] = {
                 'instance': {'name': instance.name,
+                             'instance_name': getattr(instance, "OS-EXT-SRV-ATTR:instance_name"),
                              'id': instance.id,
                              'tenant_id': instance.tenant_id,
                              'tenant_name': get_tenant_name(instance.tenant_id),
@@ -213,16 +213,16 @@ class NovaCompute(compute.Compute):
         identity_info = kwargs.get('identity_info')
 
         tenant_map = {tenant['tenant']['id']: tenant['meta']['new_id'] for
-                      tenant in identity_info['identity']['tenants']}
+                      tenant in identity_info['tenants']}
         user_map = {user['user']['id']: user['meta']['new_id'] for user in
-                    identity_info['identity']['users']}
+                    identity_info['users']}
 
-        self._deploy_keypair(info['compute']['keypairs'])
-        self._deploy_flavors(info['compute']['flavors'])
+        self._deploy_keypair(info['keypairs'])
+        self._deploy_flavors(info['flavors'])
         if self.config['migrate']['migrate_quotas']:
-            self._deploy_project_quotas(info['compute']['project_quotas'],
+            self._deploy_project_quotas(info['project_quotas'],
                                         tenant_map)
-            self._deploy_user_quotas(info['compute']['user_quotas'],
+            self._deploy_user_quotas(info['user_quotas'],
                                      tenant_map, user_map)
 
         new_info = self.read_info(target='resources')
@@ -243,7 +243,7 @@ class NovaCompute(compute.Compute):
         if target == 'resources':
             info = self._deploy_resources(info, **kwargs)
         elif target == 'instances':
-            info = self._deploy_instances(info['compute'])
+            info = self._deploy_instances(info)
         else:
             raise ValueError('Only "resources" or "instances" values allowed')
 

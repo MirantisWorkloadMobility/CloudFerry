@@ -20,16 +20,14 @@ from cloudferrylib.utils import utils as utl
 class IsEndIter(action.Action):
 
     def __init__(self, iter_info_name='info_iter',
-                 resource_type=utl.COMPUTE_RESOURCE,
                  resource_name=utl.INSTANCES_TYPE):
         self.iter_info_name = iter_info_name
-        self.resource_type = resource_type
         self.resource_name = resource_name
         super(IsEndIter, self).__init__({})
 
     def run(self, **kwargs):
         info = kwargs[self.iter_info_name]
-        objs = info[self.resource_type][self.resource_name]
+        objs = info[self.resource_name]
         if objs:
             self.num_element = 1
         else:

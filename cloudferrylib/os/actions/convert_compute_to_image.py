@@ -42,8 +42,7 @@ class ConvertComputeToImage(action.Action):
         image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
         storage_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
         compute_ignored_images = {}
-        for instance_id, instance in info[utl.COMPUTE_RESOURCE][
-                utl.INSTANCES_TYPE].iteritems():
+        for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             _instance = instance[utl.INSTANCE_BODY]
             if _instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
                 if _instance['volumes']:

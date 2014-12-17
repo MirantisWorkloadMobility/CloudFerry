@@ -26,7 +26,7 @@ class DissociateFloatingip(action.Action):
             info_compute = copy.deepcopy(info)
             compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
 
-            instances = info_compute[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE]
+            instances = info_compute[utl.INSTANCES_TYPE]
 
             for instance in instances.values():
                 networks_info = instance[utl.INSTANCE_BODY][utl.INTERFACES]

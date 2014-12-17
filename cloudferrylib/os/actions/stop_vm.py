@@ -22,7 +22,7 @@ class StopVms(action.Action):
         info = copy.deepcopy(info)
         compute_resource = self.cloud.resources['compute']
 
-        for instance in info['compute']['instances']:
+        for instance in info['instances']:
             compute_resource.change_status('shutoff', instance_id=instance)
 
         return {}

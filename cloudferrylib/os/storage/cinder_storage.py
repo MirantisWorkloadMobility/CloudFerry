@@ -58,7 +58,7 @@ class CinderStorage(storage.Storage):
     def read_info(self, **kwargs):
         info = {utl.VOLUMES_TYPE: {}}
         for vol in self.get_volumes_list(search_opts=kwargs):
-            volume = self.convert(vol, self.config)
+            volume = self.convert(vol, self.config, self.cloud)
             info[utl.VOLUMES_TYPE][vol.id] = {utl.VOLUME_BODY: volume,
                                               utl.META_INFO: {
                                               }}
@@ -166,7 +166,8 @@ class CinderStorage(storage.Storage):
         return {}
 
     @staticmethod
-    def convert(vol, cfg):
+    def convert(vol, cfg, cloud):
+        compute = cloud.resources[utl.COMPUTE_RESOURCE]
         volume = {
             'id': vol.id,
             'size': vol.size,
@@ -178,7 +179,9 @@ class CinderStorage(storage.Storage):
             'device': vol.attachments[0][
                 'device'] if vol.attachments else None,
             'bootable': False,
-            'volume_image_metadata': {}
+            'volume_image_metadata': {},
+            'host': None,
+            'path': None
         }
         if 'bootable' in vol.__dict__:
             volume['bootable'] = True if vol.bootable.lower() == 'true' else False
@@ -188,11 +191,17 @@ class CinderStorage(storage.Storage):
                 'checksum': vol.volume_image_metadata['checksum']
             }
         if cfg.storage.backend == utl.CEPH:
-            rbd_pool = cfg.storage.rbd_pool
-            vol_prefix = cfg.storage.volume_name_template
-            volume['path'] = rbd_pool + "/" + vol_prefix + vol.id
-            if cfg.storage.host:
-                volume['host'] = cfg.storage.host
+            volume['path'] = "%s/%s%s" % (cfg.storage.rbd_pool, cfg.storage.volume_name_template, vol.id)
+            volume['host'] = cfg.storage.host if cfg.storage.host else cfg.cloud.host
+        elif vol.attachments and (cfg.storage.backend == utl.ISCSI):
+            instance = compute.read_info(search_opts={'id': vol.attachments[0]['server_id']})
+            instance = instance[utl.INSTANCES_TYPE]
+            instance_info = instance.values()[0][utl.INSTANCE_BODY]
+            volume['host'] = instance_info['host']
+            list_disk = utl.get_libvirt_block_info(instance_info['instance_name'],
+                                                   cloud.getIpSsh(),
+                                                   instance_info['host'])
+            volume['path'] = utl.find_element_by_in(list_disk, vol.id)
         return volume
 
     @staticmethod

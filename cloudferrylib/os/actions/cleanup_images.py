@@ -29,8 +29,7 @@ class CleanupImages(action.Action):
 
         checksum_list = []
 
-        for instance in info[utl.COMPUTE_RESOURCE][
-                utl.INSTANCES_TYPE].itervalues():
+        for instance in info[utl.INSTANCES_TYPE].itervalues():
             volumes = instance[utl.META_INFO].get(utl.VOLUME_BODY)
 
             if not volumes:

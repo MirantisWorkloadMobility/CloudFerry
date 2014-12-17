@@ -33,8 +33,7 @@ class TransportComputeResources(action.Action):
                                       identity_info=identity_info)
 
         if info:
-            new_info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE] = \
-                info[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE]
+            new_info[utl.INSTANCES_TYPE] = info[utl.INSTANCES_TYPE]
 
         return {
             'info': new_info

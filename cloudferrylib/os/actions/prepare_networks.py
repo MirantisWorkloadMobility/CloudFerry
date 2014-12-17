@@ -30,7 +30,7 @@ class PrepareNetworks(action.Action):
 
         keep_ip = self.cfg.migrate.keep_ip
 
-        instances = info_compute[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE]
+        instances = info_compute[utl.INSTANCES_TYPE]
         for (id_inst, inst) in instances.iteritems():
             params = []
             networks_info = inst[utl.INSTANCE_BODY][utl.INTERFACES]
@@ -64,7 +64,7 @@ class PrepareNetworks(action.Action):
                         floating_ip = network_resource.update_floatingip(dst_floatingip_id, port['id'])
                 params.append({'net-id': dst_net['id'], 'port-id': port['id']})
             instances[id_inst][utl.INSTANCE_BODY]['nics'] = params
-        info_compute[utl.COMPUTE_RESOURCE][utl.INSTANCES_TYPE] = instances
+        info_compute[utl.INSTANCES_TYPE] = instances
         return {
             'info': info_compute
         }

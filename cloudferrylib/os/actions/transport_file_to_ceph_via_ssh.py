@@ -21,19 +21,17 @@ __author__ = 'mirrorcoder'
 class TransportFileToCephViaSsh(transporter.Transporter):
 
     def __init__(self, init,
-                 resource_type=utl.STORAGE_RESOURCE,
                  resource_name=utl.VOLUMES_TYPE,
                  resource_root_name=utl.VOLUME_BODY,
                  input_info='info'):
         super(TransportFileToCephViaSsh, self).__init__(init)
-        self.resource_type = resource_type
         self.resource_name = resource_name
         self.resource_root_name = resource_root_name
         self.input_info = input_info
 
     def run(self, **kwargs):
         info = kwargs[self.input_info]
-        data_for_trans = info[self.resource_type][self.resource_name]
+        data_for_trans = info[self.resource_name]
         for item in data_for_trans.itervalues():
             i = item[self.resource_root_name]
             host_src = i['host_src']

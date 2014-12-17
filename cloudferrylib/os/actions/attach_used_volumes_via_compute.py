@@ -25,8 +25,7 @@ class AttachVolumesCompute(action.Action):
         # import pdb; pdb.set_trace()
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
         storage_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
-        for instance in info[utl.COMPUTE_RESOURCE][
-                utl.INSTANCES_TYPE].itervalues():
+        for instance in info[utl.INSTANCES_TYPE].itervalues():
             if not instance[utl.META_INFO].get(utl.VOLUME_BODY):
                 continue
             for vol in instance[utl.META_INFO][utl.VOLUME_BODY]:
