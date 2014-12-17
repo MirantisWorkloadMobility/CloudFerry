@@ -18,13 +18,13 @@ from cloudferrylib.utils import utils as utl
 
 
 class GetInfoInstances(action.Action):
-    def __init__(self, init, cloud=None, search_opts=dict()):
+    def __init__(self, init, cloud=None):
         super(GetInfoInstances, self).__init__(init, cloud)
-        self.search_opts = search_opts
 
     def run(self, **kwargs):
+        search_opts = kwargs.get('search_opts', None)
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
-        info = compute_resource.read_info(**self.search_opts)
+        info = compute_resource.read_info(search_opts=search_opts)
         return {
             'info': info
         }

@@ -52,6 +52,7 @@ from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import stop_vm
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.actions import transport_compute_resources
+from cloudferrylib.os.actions import get_filter
 
 
 
@@ -97,6 +98,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         save_result = self.save_result(name_data, name_result, name_result, 'instances')
         trans_one_inst = self.migrate_process_instance()
         init_iteration_instance = self.init_iteration_instance(name_data, name_backup, name_iter)
+        act_get_filter = get_filter.GetFilter(self.init)
         act_get_info_inst = get_info_instances.GetInfoInstances(self.init, cloud='src_cloud')
         act_cleanup_images = cleanup_images.CleanupImages(self.init)
         get_next_instance = get_info_iter.GetInfoIter()
@@ -104,6 +106,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         is_instances = is_end_iter.IsEndIter()
 
         transport_instances_and_dependency_resources = \
+            act_get_filter >> \
             act_get_info_inst >> \
             init_iteration_instance >> \
             get_next_instance >> \

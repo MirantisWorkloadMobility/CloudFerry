@@ -28,6 +28,7 @@ import inspect
 from multiprocessing import Lock
 from fabric.api import run, settings, local, env
 import ipaddr
+import yaml
 
 
 ISCSI = "iscsi"
@@ -86,6 +87,8 @@ IGNORE = 'ignore'
 
 META_INFO = 'meta'
 OLD_ID = 'old_id'
+
+FILTER_PATH = 'configs/filter.yaml'
 
 up_ssh_tunnel = None
 
@@ -456,3 +459,13 @@ def get_ext_ip(ext_cidr, init_host, compute_host):
         if ipaddr.IPNetwork(ext_cidr).Contains(ip_addr):
             return ip_str
     return None
+
+def check_file(file_path):
+    return os.path.isfile(file_path)
+
+def get_filter_config(file_path):
+    if check_file(file_path):
+        return yaml.load(open(file_path, 'r'))
+    else:
+        return None
+
