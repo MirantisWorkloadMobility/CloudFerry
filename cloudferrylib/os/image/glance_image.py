@@ -36,10 +36,10 @@ class GlanceImage(image.Image):
         self.host = config.cloud.host
         self.cloud = cloud
         self.identity_client = cloud.resources['identity']
-        self.glance_client = self.get_glance_client()
+        self.glance_client = self.proxy(self.get_client(), config)
         super(GlanceImage, self).__init__(config)
 
-    def get_glance_client(self):
+    def get_client(self):
 
         """ Getting glance client """
 

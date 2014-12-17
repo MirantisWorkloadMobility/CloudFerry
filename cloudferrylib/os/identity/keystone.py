@@ -25,7 +25,7 @@ class KeystoneIdentity(identity.Identity):
     def __init__(self, config, cloud):
         super(KeystoneIdentity, self).__init__()
         self.config = config
-        self.keystone_client = self.get_client()
+        self.keystone_client = self.proxy(self.get_client(), config)
         self.mysql_connector = cloud.mysql_connector
         self.cloud = cloud
         self.postman = None

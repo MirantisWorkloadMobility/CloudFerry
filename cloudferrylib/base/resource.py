@@ -12,10 +12,17 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+from cloudferrylib.utils import proxy_client
+
 
 class Resource(object):
     def __init__(self):
         pass
+
+    def proxy(self, client, cfg):
+        retry = cfg.migrate.retry
+        time_wait = cfg.migrate.time_wait
+        return proxy_client.Proxy(client, retry, time_wait)
 
     def read_info(self, opts={}):
         pass
