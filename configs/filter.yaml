@@ -1,2 +1,4 @@
-workloads:
-    name: test_vm1
+instances:
+    id:
+        - <server_id1>
+        - <server_id2>
