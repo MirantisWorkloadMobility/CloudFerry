@@ -20,9 +20,14 @@ import time
 from fabric.api import run
 from fabric.api import settings
 
+from glanceclient.v1 import client as glance_client
+
 from cloudferrylib.base import image
 from cloudferrylib.utils import file_like_proxy
-from glanceclient.v1 import client as glance_client
+from cloudferrylib.utils import utils as utl
+
+
+LOG = utl.get_log(__name__)
 
 
 class GlanceImage(image.Image):
@@ -91,6 +96,33 @@ class GlanceImage(image.Image):
     def get_image_checksum(self, image_id):
         return self.get_image_by_id(image_id).checksum
 
+    @staticmethod
+    def convert(glance_image, cloud):
+        """Convert OpenStack Glance image object to CloudFerry object.
+
+        :param glance_image:    Direct OS Glance image object to convert,
+        :param cloud:           Cloud object.
+        """
+
+        resource = cloud.resources[utl.IMAGE_RESOURCE]
+        gl_image = {
+            'id': glance_image.id,
+            'size': glance_image.size,
+            'name': glance_image.name,
+            'checksum': glance_image.checksum,
+            'container_format': glance_image.container_format,
+            'disk_format': glance_image.disk_format,
+            'is_public': glance_image.is_public,
+            'protected': glance_image.protected,
+            'resource': resource,
+            'properties': ({
+                'image_type': glance_image.properties['image_type']}
+                if 'image_type' in glance_image.properties
+                else glance_image.properties)
+        }
+
+        return gl_image
+
     def read_info(self, **kwargs):
         """Get info about images or specified image.
 
@@ -131,26 +163,13 @@ class GlanceImage(image.Image):
 
     def make_image_info(self, glance_image, info):
         if glance_image:
-            gl_image = {
-                'id': glance_image.id,
-                'size': glance_image.size,
-                'name': glance_image.name,
-                'checksum': glance_image.checksum,
-                'container_format': glance_image.container_format,
-                'disk_format': glance_image.disk_format,
-                'is_public': glance_image.is_public,
-                'protected': glance_image.protected,
-                'resource': self
-            }
-            if 'image_type' in glance_image.properties:
-                gl_image['properties'] = {'image_type': glance_image.properties['image_type']}
-            else:
-                gl_image['properties'] = glance_image.properties
+            gl_image = self.convert(glance_image, self.cloud)
+
             info['images'][glance_image.id] = {'image': gl_image,
                                                'meta': {},
                                                }
         else:
-            print 'Image has not been found'
+            LOG.error('Image has not been found')
 
         return info
 
@@ -161,13 +180,16 @@ class GlanceImage(image.Image):
         empty_image_list = {}
         for image_id_src, gl_image in info['images'].iteritems():
             if gl_image['image']:
-                dst_img_checksums = {x.checksum: x for x in self.get_image_list()}
+                dst_img_checksums = {x.checksum: x for x in
+                                     self.get_image_list()}
                 dst_img_names = [x.name for x in self.get_image_list()]
                 checksum_current = gl_image['image']['checksum']
                 name_current = gl_image['image']['name']
                 meta = gl_image['meta']
-                if checksum_current in dst_img_checksums and (name_current) in dst_img_names:
-                    migrate_images_list.append((dst_img_checksums[checksum_current], meta))
+                if checksum_current in dst_img_checksums and (
+                        name_current) in dst_img_names:
+                    migrate_images_list.append(
+                        (dst_img_checksums[checksum_current], meta))
                     continue
                 migrate_image = self.create_image(
                     name=gl_image['image']['name'],
