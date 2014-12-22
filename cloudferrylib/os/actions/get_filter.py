@@ -12,19 +12,19 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
 
 
-class GetInfoInstances(action.Action):
-    def __init__(self, init, cloud=None):
-        super(GetInfoInstances, self).__init__(init, cloud)
+class GetFilter(action.Action):
 
     def run(self, **kwargs):
-        search_opts = kwargs.get('search_opts', None)
-        compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
-        info = compute_resource.read_info(search_opts=search_opts)
+        search_opts = None
+        filter_path = self.cfg.migrate.filter_path
+        if utl.get_filter_config(filter_path):
+            filter_config = utl.get_filter_config(filter_path)
+            if utl.INSTANCES_TYPE in filter_config:
+                search_opts = filter_config[utl.INSTANCES_TYPE]
         return {
-            'info': info
+            'search_opts': search_opts
         }

@@ -52,6 +52,7 @@ from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import stop_vm
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.actions import transport_compute_resources
+from cloudferrylib.os.actions import get_filter
 
 
 
@@ -97,6 +98,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         save_result = self.save_result(name_data, name_result, name_result, 'instances')
         trans_one_inst = self.migrate_process_instance()
         init_iteration_instance = self.init_iteration_instance(name_data, name_backup, name_iter)
+        act_get_filter = get_filter.GetFilter(self.init)
         act_get_info_inst = get_info_instances.GetInfoInstances(self.init, cloud='src_cloud')
         act_cleanup_images = cleanup_images.CleanupImages(self.init)
         get_next_instance = get_info_iter.GetInfoIter()
@@ -104,6 +106,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         is_instances = is_end_iter.IsEndIter()
 
         transport_instances_and_dependency_resources = \
+            act_get_filter >> \
             act_get_info_inst >> \
             init_iteration_instance >> \
             get_next_instance >> \
@@ -148,10 +151,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                                                                                'src_storage_info',
                                                                                'dst_storage_info')
         act_deploy_inst_volumes = deploy_volumes.DeployVolumes(self.init, cloud='dst_cloud')
-        # act_inst_vol_transport_data = \
-        #     transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(self.init)
         act_inst_vol_transport_data = \
-            transport_file_to_file_via_ssh.TransportFileToFileViaSsh(self.init, input_info='storage_info')
+            transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh(self.init)
         task_get_inst_vol_info = act_convert_c_to_v >> act_rename_inst_vol_src
         task_deploy_inst_vol = act_deploy_inst_volumes >> act_rename_inst_vol_dst
         task_transfer_inst_vol_data = act_inst_vol_data_map >> act_inst_vol_transport_data
