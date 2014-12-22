@@ -24,7 +24,6 @@ from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils as utl
 
-
 DISK = "disk"
 LOCAL = ".local"
 LEN_UUID_INSTANCE = 36
@@ -41,9 +40,9 @@ class NovaCompute(compute.Compute):
         self.identity = cloud.resources['identity']
         self.mysql_connector = mysql_connector.MysqlConnector(config.mysql,
                                                               'nova')
-        self.nova_client = self.get_nova_client()
+        self.nova_client = self.proxy(self.get_client(), config)
 
-    def get_nova_client(self, params=None):
+    def get_client(self, params=None):
         """Getting nova client. """
         if params is None:
             params = self.config['cloud']

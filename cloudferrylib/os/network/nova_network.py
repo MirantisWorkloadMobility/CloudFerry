@@ -20,7 +20,7 @@ from utils import forward_agent
 class NovaNetwork(network.Network):
     def __init__(self, config, cloud):
         super(NovaNetwork, self).__init__(config)
-        self.nova_client = self.get_client()
+        self.nova_client = self.proxy(self.get_client(), config)
         self.cloud = cloud
 
     def get_client(self):

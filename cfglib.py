@@ -84,7 +84,11 @@ migrate_opts = [
     cfg.StrOpt('container_format', default='bare',
                help='container format when covert volume to image'),
     cfg.BoolOpt('direct_compute_transfer', default=False,
-                help='Direct data transmission between compute nodes via external network')
+                help='Direct data transmission between compute nodes via external network'),
+    cfg.IntOpt('retry', default='7',
+               help='Number retry if except Perfoming error'),
+    cfg.IntOpt('time_wait', default='5',
+               help='Time wait if except Perfoming error'),
 ]
 
 mail = cfg.OptGroup(name='mail',
