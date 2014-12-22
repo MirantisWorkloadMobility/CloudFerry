@@ -86,11 +86,11 @@ migrate_opts = [
     cfg.BoolOpt('direct_compute_transfer', default=False,
                 help='Direct data transmission between compute nodes via external network'),
     cfg.StrOpt('filter_path', default='configs/filter.yaml',
-               help='path to the filter yaml file with options for search resources')
+               help='path to the filter yaml file with options for search resources'),
     cfg.IntOpt('retry', default='7',
-               help='Number retry if except Perfoming error'),
+               help='Number retry if except Performing error'),
     cfg.IntOpt('time_wait', default='5',
-               help='Time wait if except Perfoming error'),
+               help='Time wait if except Performing error'),
 ]
 
 mail = cfg.OptGroup(name='mail',
