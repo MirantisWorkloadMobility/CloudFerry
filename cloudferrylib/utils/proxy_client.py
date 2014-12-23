@@ -13,7 +13,44 @@
 # limitations under the License.
 import time
 import inspect
-__author__ = 'mirrorcoder'
+method_wrapper = type(object().__str__)
+
+base_types = [inspect.types.BooleanType,
+              inspect.types.BufferType,
+              inspect.types.CodeType,
+              inspect.types.ComplexType,
+              inspect.types.DictProxyType,
+              inspect.types.DictType,
+              inspect.types.DictionaryType,
+              inspect.types.EllipsisType,
+              inspect.types.FileType,
+              inspect.types.FloatType,
+              inspect.types.FrameType,
+              inspect.types.GeneratorType,
+              inspect.types.GetSetDescriptorType,
+              inspect.types.IntType,
+              inspect.types.ListType,
+              inspect.types.LongType,
+              inspect.types.MemberDescriptorType,
+              inspect.types.ModuleType,
+              inspect.types.NoneType,
+              inspect.types.NotImplementedType,
+              inspect.types.SliceType,
+              inspect.types.StringType,
+              inspect.types.StringTypes,
+              inspect.types.TracebackType,
+              inspect.types.TupleType,
+              inspect.types.TypeType,
+              inspect.types.UnicodeType,
+              inspect.types.XRangeType]
+
+
+def is_wrapping(x):
+    x = type(x)
+    for t in base_types:
+        if x is t:
+            return False
+    return True
 
 
 class Proxy:
@@ -25,26 +62,24 @@ class Proxy:
     def wait(self):
         time.sleep(self.wait_time)
 
+    def __call__(self, *args, **kwargs):
+        c = 0
+        result = None
+        is_retry = True
+        while is_retry:
+            try:
+                result = self.client(*args, **kwargs)
+                is_retry = False
+            except Exception as e:
+                if c < self.retry:
+                    c += 1
+                    self.wait()
+                else:
+                    raise e
+        return result
+
     def __getattr__(self, name):
         attr = getattr(self.client, name)
-
-        def wrapper(*args, **kwargs):
-            c = 0
-            result = None
-            is_retry = True
-            while is_retry:
-                try:
-                    result = attr(*args, **kwargs)
-                    is_retry = False
-                except Exception as e:
-                    if c < self.retry:
-                        c += 1
-                        self.wait()
-                    else:
-                        raise e
-            return result
-        if inspect.ismethod(attr):
-            return wrapper
-        elif '__class__' in dir(attr):
+        if inspect.ismethod(attr) or (type(attr) is method_wrapper) or is_wrapping(attr):
             return Proxy(attr, self.retry, self.wait_time)
         return attr

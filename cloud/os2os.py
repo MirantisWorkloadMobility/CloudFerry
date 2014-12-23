@@ -54,7 +54,6 @@ from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.actions import transport_compute_resources
 
 
-
 class OS2OSFerry(cloud_ferry.CloudFerry):
 
     def __init__(self, config):
