@@ -55,7 +55,6 @@ from cloudferrylib.os.actions import transport_compute_resources
 from cloudferrylib.os.actions import get_filter
 
 
-
 class OS2OSFerry(cloud_ferry.CloudFerry):
 
     def __init__(self, config):
