@@ -12,9 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from cloudferrylib.base import identity
+
 from keystoneclient.v2_0 import client as keystone_client
-from cloudferrylib.utils import Postman, Templater, GeneratorPassword
+
+from cloudferrylib.base import identity
+from cloudferrylib.utils import GeneratorPassword
+from cloudferrylib.utils import Postman
+from cloudferrylib.utils import Templater
+from cloudferrylib.utils import utils as utl
+
+
+LOG = utl.get_log(__name__)
 
 NOVA_SERVICE = 'nova'
 
@@ -37,33 +45,55 @@ class KeystoneIdentity(identity.Identity):
         self.templater = Templater()
         self.generator = GeneratorPassword()
 
+    @staticmethod
+    def convert(identity_obj, cfg):
+        """Convert OpenStack Keystone object to CloudFerry object.
+
+        :param identity_obj:    Direct OpenStack Keystone object to convert,
+                                supported objects: tenants, users and roles;
+        :param cfg:             Cloud config.
+        """
+
+        if isinstance(identity_obj, keystone_client.tenants.Tenant):
+            return {'tenant': {'name': identity_obj.name,
+                               'id': identity_obj.id,
+                               'description': identity_obj.description},
+                    'meta': {}}
+
+        elif isinstance(identity_obj, keystone_client.users.User):
+            overwirte_user_passwords = cfg.migrate.overwrite_user_passwords
+            return {'user': {'name': identity_obj.name,
+                             'id': identity_obj.id,
+                             'email': identity_obj.email,
+                             'tenantId': identity_obj.tenantId},
+                    'meta': {
+                        'overwrite_password': overwirte_user_passwords}}
+
+        elif isinstance(identity_obj, keystone_client.roles.Role):
+            return {'role': {'name': identity_obj.name,
+                             'id': identity_obj},
+                    'meta': {}}
+
+        LOG.error('KeystoneIdentity converter has received incorrect value. '
+                  'Please pass to it only tenants, users or role objects.')
+        return None
+
     def read_info(self, **kwargs):
         info = {'tenants': [],
                 'users': [],
                 'roles': []}
 
         for tenant in self.get_tenants_list():
-            info['tenants'].append(
-                {'tenant': {'name': tenant.name,
-                            'id': tenant.id,
-                            'description': tenant.description},
-                 'meta': {}})
-        overwirte_user_passwords = self.config['migrate'][
-            'overwrite_user_passwords']
+            tnt = self.convert(tenant, self.config)
+            info['tenants'].append(tnt)
+
         for user in self.get_users_list():
-            info['users'].append(
-                {'user': {'name': user.name,
-                          'id': user.id,
-                          'email': user.email,
-                          'tenantId': user.tenantId},
-                 'meta': {
-                     'overwrite_password': overwirte_user_passwords}})
+            usr = self.convert(user, self.config)
+            info['users'].append(usr)
 
         for role in self.get_roles_list():
-            info['roles'].append(
-                {'role': {'name': role.name,
-                          'id': role},
-                 'meta': {}})
+            rl = self.convert(role, self.config)
+            info['roles'].append(rl)
 
         info['user_tenants_roles'] = self._get_user_tenants_roles()
         if self.config['migrate']['keep_user_passwords']:
@@ -127,7 +157,8 @@ class KeystoneIdentity(identity.Identity):
         return self.get_public_endpoint_service_by_id(service_id)
 
     def get_tenants_func(self):
-        tenants = {tenant.id: tenant.name for tenant in self.get_tenants_list()}
+        tenants = {tenant.id: tenant.name for tenant in
+                   self.get_tenants_list()}
 
         def func(tenant_id):
             return getattr(tenants, tenant_id, 'admin')
@@ -225,9 +256,9 @@ class KeystoneIdentity(identity.Identity):
         for _tenant in tenants:
             tenant = _tenant['tenant']
             if tenant['name'] not in dst_tenants:
-                _tenant['meta']['new_id'] = self.create_tenant(tenant['name'],
-                                                               tenant[
-                                                                   'description']).id
+                _tenant['meta']['new_id'] = self.create_tenant(
+                    tenant['name'],
+                    tenant['description']).id
             else:
                 _tenant['meta']['new_id'] = dst_tenants[tenant['name']]
 
@@ -245,7 +276,8 @@ class KeystoneIdentity(identity.Identity):
             if user['name'] in dst_users:
                 _user['meta']['new_id'] = dst_users[user['name']]
                 if overwrite_passwd and not keep_passwd:
-                    self.update_user(_user['meta']['new_id'], password=password)
+                    self.update_user(_user['meta']['new_id'],
+                                     password=password)
                     self._passwd_notification(user['email'], user['name'],
                                               password)
                 continue
@@ -257,7 +289,8 @@ class KeystoneIdentity(identity.Identity):
             if self.config['migrate']['keep_user_passwords']:
                 _user['meta']['overwrite_password'] = True
             else:
-                self._passwd_notification(user['email'], user['name'], password)
+                self._passwd_notification(user['email'], user['name'],
+                                          password)
 
     def _passwd_notification(self, email, name, password):
         if not self.postman:
