@@ -18,6 +18,7 @@ from cloudferrylib.utils import utils as utl
 
 
 class TransportDbViaSsh(transporter.Transporter):
+    # TODO: Use it with TaskTransfer, when is real usage example
 
     def run(self, cfg=None,
             src_cloud=None,

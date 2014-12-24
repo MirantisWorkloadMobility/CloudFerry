@@ -24,12 +24,13 @@ from cloudferrylib.os.actions import convert_file_to_image
 from cloudferrylib.os.actions import convert_image_to_file
 from cloudferrylib.os.actions import convert_volume_to_image
 from cloudferrylib.os.actions import copy_g2g
+from cloudferrylib.os.actions import task_transfer
 from cloudferrylib.utils import utils as utl, forward_agent
 
-from cloudferrylib.os.actions import transport_ceph_to_ceph_via_ssh
-from cloudferrylib.os.actions import transport_ceph_to_file_via_ssh
-from cloudferrylib.os.actions import transport_file_to_ceph_via_ssh
-from cloudferrylib.os.actions import transport_file_to_file_via_ssh
+from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
+from cloudferrylib.utils.drivers import ssh_ceph_to_file
+from cloudferrylib.utils.drivers import ssh_file_to_file
+from cloudferrylib.utils.drivers import ssh_file_to_ceph
 
 
 CLOUD = 'cloud'
@@ -54,10 +55,10 @@ TEMP = 'temp'
 FLAVORS = 'flavors'
 
 
-TRANSPORTER_MAP = {CEPH: {CEPH: transport_ceph_to_ceph_via_ssh.TransportCephToCephViaSsh,
-                          ISCSI: transport_ceph_to_file_via_ssh.TransportCephToFileViaSsh},
-                   ISCSI: {CEPH: transport_file_to_ceph_via_ssh.TransportFileToCephViaSsh,
-                           ISCSI: transport_file_to_file_via_ssh.TransportFileToFileViaSsh}}
+TRANSPORTER_MAP = {CEPH: {CEPH: ssh_ceph_to_ceph.SSHCephToCeph,
+                          ISCSI: ssh_ceph_to_file.SSHCephToFile},
+                   ISCSI: {CEPH: ssh_file_to_ceph.SSHFileToCeph,
+                           ISCSI: ssh_file_to_file.SSHFileToFile}}
 
 
 class TransportInstance(action.Action):
@@ -188,9 +189,11 @@ class TransportInstance(action.Action):
         src_compute = src_cloud.resources[resources]
         src_backend = src_compute.config.compute.backend
         dst_backend = dst_storage.config.compute.backend
-        transporter = TRANSPORTER_MAP[src_backend][dst_backend](self.init,
-                                                                resource_name=types,
-                                                                resource_root_name=body)
+        transporter = task_transfer.TaskTransfer(
+            self.init,
+            TRANSPORTER_MAP[src_backend][dst_backend],
+            resource_name=types,
+            resource_root_name=body)
         transporter.run(info=info)
 
     def copy_diff_file(self, src_cloud, dst_cloud, info):
@@ -224,9 +227,12 @@ class TransportInstance(action.Action):
         qemu_img_src = src_cloud.qemu_img
         temp_src = src_cloud.cloud_config.cloud.temp
         host_dst = dst_cloud.getIpSsh()
-        transporter = TRANSPORTER_MAP[ISCSI][ISCSI](self.init,
-                                                    resource_name=utl.INSTANCES_TYPE,
-                                                    resource_root_name=utl.EPHEMERAL_BODY)
+        transporter = task_transfer.TaskTransfer(
+            self.init,
+            TRANSPORTER_MAP[ISCSI][ISCSI],
+            resource_name=utl.INSTANCES_TYPE,
+            resource_root_name=utl.EPHEMERAL_BODY)
+
         temp_path_src = temp_src+"/%s"+utl.DISK_EPHEM
         for inst_id, inst in instances.iteritems():
             path_src_id_temp = temp_path_src % inst_id
@@ -241,9 +247,12 @@ class TransportInstance(action.Action):
     def copy_ephemeral_iscsi_to_ceph(self, src_cloud, info):
         instances = info[utl.INSTANCES_TYPE]
         qemu_img_src = src_cloud.qemu_img
-        transporter = TRANSPORTER_MAP[ISCSI][CEPH](self.init,
-                                                   resource_name=utl.INSTANCES_TYPE,
-                                                   resource_root_name=utl.EPHEMERAL_BODY)
+        transporter = task_transfer.TaskTransfer(
+            self.init,
+            TRANSPORTER_MAP[ISCSI][CEPH],
+            resource_name=utl.INSTANCES_TYPE,
+            resource_root_name=utl.EPHEMERAL_BODY)
+
         for inst_id, inst in instances.iteritems():
             path_src = inst[EPHEMERAL][PATH_SRC]
             path_src_temp_raw = path_src + "." + utl.RAW
@@ -254,9 +263,12 @@ class TransportInstance(action.Action):
             transporter.run(info=info)
 
     def transport_from_src_to_dst(self, info):
-        transporter = transport_file_to_file_via_ssh.TransportFileToFileViaSsh(self.init,
-                                                                               resource_name=utl.INSTANCES_TYPE,
-                                                                               resource_root_name=utl.DIFF_BODY)
+        transporter = task_transfer.TaskTransfer(
+            self.init,
+            TRANSPORTER_MAP[ISCSI][ISCSI],
+            resource_name=utl.INSTANCES_TYPE,
+            resource_root_name=utl.DIFF_BODY)
+
         transporter.run(info=info)
 
     def transport_diff_and_merge(self, dst_cloud, info, instance_id):
@@ -311,9 +323,12 @@ class TransportInstance(action.Action):
     def transport_image(self, dst_cloud, info, instance_id):
         cloud_cfg_dst = dst_cloud.cloud_config.cloud
         temp_dir_dst = cloud_cfg_dst.temp
-        transporter = transport_ceph_to_file_via_ssh.TransportCephToFileViaSsh(self.init,
-                                                                               resource_name=utl.INSTANCES_TYPE,
-                                                                               resource_root_name=utl.DIFF_BODY)
+        transporter = task_transfer.TaskTransfer(
+            self.init,
+            TRANSPORTER_MAP[CEPH][ISCSI],
+            resource_name=utl.INSTANCES_TYPE,
+            resource_root_name=utl.DIFF_BODY)
+
         path_dst = "%s/%s" % (temp_dir_dst, "temp%s" % instance_id)
         info[INSTANCES][instance_id][DIFF][PATH_DST] = path_dst
         info[INSTANCES][instance_id][DIFF][HOST_DST] = dst_cloud.getIpSsh()
