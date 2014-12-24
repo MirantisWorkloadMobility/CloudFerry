@@ -24,6 +24,10 @@ from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils as utl
 
+
+LOG = utl.get_log(__name__)
+
+
 DISK = "disk"
 LOCAL = ".local"
 LEN_UUID_INSTANCE = 36
@@ -51,6 +55,27 @@ class NovaCompute(compute.Compute):
                                   params['tenant'],
                                   "http://%s:35357/v2.0/" % params['host'])
 
+    def _read_info_quotas(self, info):
+        user_quotas_cmd = ("SELECT user_id, project_id, resource, "
+                           "hard_limit FROM project_user_quotas WHERE "
+                           "deleted = 0")
+        for quota in self.mysql_connector.execute(user_quotas_cmd):
+            info['user_quotas'].append(
+                {'quota': {'user_id': quota[0],
+                           'project_id': quota[1],
+                           'resource': quota[2],
+                           'hard_limit': quota[3]},
+                 'meta': {}})
+
+        project_quotas_cmd = ("SELECT project_id, resource, hard_limit "
+                              "FROM quotas WHERE deleted = 0")
+        for quota in self.mysql_connector.execute(project_quotas_cmd):
+            info['project_quotas'].append(
+                {'quota': {'project_id': quota[0],
+                           'resource': quota[1],
+                           'hard_limit': quota[2]},
+                 'meta': {}})
+
     def _read_info_resources(self, **kwargs):
         """
         Read info about compute resources except instances from the cloud.
@@ -61,43 +86,14 @@ class NovaCompute(compute.Compute):
                 'project_quotas': []}
 
         for keypair in self.get_keypair_list():
-            info['keypairs'][keypair.id] = {
-                'keypair': {'name': keypair.name,
-                            'public_key': keypair.public_key},
-                'meta': {}}
+            info['keypairs'][keypair.id] = self.convert(keypair)
 
         for flavor in self.get_flavor_list():
-            info['flavors'][flavor.id] = {
-                'flavor': {'name': flavor.name,
-                           'ram': flavor.ram,
-                           'vcpus': flavor.vcpus,
-                           'disk': flavor.disk,
-                           'ephemeral': flavor.ephemeral,
-                           'swap': flavor.swap,
-                           'rxtx_factor': flavor.rxtx_factor,
-                           'is_public': flavor.is_public},
-                'meta': {}}
+            info['flavors'][flavor.id] = self.convert(flavor)
 
-        if self.config['migrate']['migrate_quotas']:
-            user_quotas_cmd = ("SELECT user_id, project_id, resource, "
-                               "hard_limit FROM project_user_quotas WHERE "
-                               "deleted = 0")
-            for quota in self.mysql_connector.execute(user_quotas_cmd):
-                info['user_quotas'].append(
-                    {'quota': {'user_id': quota[0],
-                               'project_id': quota[1],
-                               'resource': quota[2],
-                               'hard_limit': quota[3]},
-                     'meta': {}})
+        if self.config.migrate.migrate_quotas:
+            self._read_info_quotas(info)
 
-            project_quotas_cmd = ("SELECT project_id, resource, hard_limit "
-                                  "FROM quotas WHERE deleted = 0")
-            for quota in self.mysql_connector.execute(project_quotas_cmd):
-                info['project_quotas'].append(
-                    {'quota': {'project_id': quota[0],
-                               'resource': quota[1],
-                               'hard_limit': quota[2]},
-                     'meta': {}})
         return info
 
     def read_info(self, target='instances', **kwargs):
@@ -115,91 +111,148 @@ class NovaCompute(compute.Compute):
         if target != 'instances':
             raise ValueError('Only "resources" or "instances" values allowed')
 
-        search_opts = kwargs.get('search_opts', None)
+        search_opts = kwargs.get('search_opts')
         info = {'instances': {}}
-        get_tenant_name = self.identity.get_tenants_func()
 
         for instance in self.get_instances_list(search_opts=search_opts):
-            security_groups = []
-            interfaces = []
+            info['instances'][instance.id] = self.convert(instance,
+                                                          self.config,
+                                                          self.cloud)
 
-            for security_group in instance.security_groups:
-                security_groups.append(security_group['name'])
+        return info
 
-            interfaces = self.get_networks(instance)
+    @staticmethod
+    def convert_instance(instance, cfg, cloud):
+        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
+        compute_res = cloud.resources[utl.COMPUTE_RESOURCE]
 
-            is_ephemeral = self.get_flavor_from_id(instance.flavor['id']).ephemeral > 0
-            is_ceph = self.config['compute']['backend'].lower() == 'ceph'
-            host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
-            if is_ceph:
-                host = self.config.storage.host
+        instance_name = getattr(instance, "OS-EXT-SRV-ATTR:instance_name")
+        instance_host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
 
-            direct_transfer = self.config.migrate.direct_compute_transfer
-            if direct_transfer:
-                ext_cidr = self.config.cloud.ext_cidr
-                host = utl.get_ext_ip(ext_cidr,
-                                      self.cloud.getIpSsh(),
-                                      getattr(instance, 'OS-EXT-SRV-ATTR:host'))
+        get_tenant_name = identity_res.get_tenants_func()
 
+        security_groups = []
+        for security_group in instance.security_groups:
+            security_groups.append(security_group['name'])
 
-            instance_block_info = utl.get_libvirt_block_info(
-                getattr(instance, "OS-EXT-SRV-ATTR:instance_name"),
-                self.cloud.getIpSsh(),
-                getattr(instance, 'OS-EXT-SRV-ATTR:host'))
+        interfaces = compute_res.get_networks(instance)
 
-            ephemeral_path = {
-                'path_src': None,
-                'path_dst': None,
-                'host_src': host,
-                'host_dst': None}
+        volumes = [{'id': v.id,
+                    'num_device': i,
+                    'device': v.device} for i, v in enumerate(
+                        compute_res.nova_client.volumes.get_server_volumes(
+                            instance.id))]
 
-            if is_ephemeral:
-                ephemeral_path['path_src'] = utl.get_disk_path(
-                    instance,
-                    instance_block_info,
-                    is_ceph_ephemeral=is_ceph,
-                    disk=DISK+LOCAL)
+        is_ephemeral = compute_res.get_flavor_from_id(
+            instance.flavor['id']).ephemeral > 0
 
-            diff = {
-                'path_src': None,
-                'path_dst': None,
-                'host_src': host,
-                'host_dst': None
-            }
-            if instance.image:
-                diff['path_src'] = utl.get_disk_path(
-                    instance,
-                    instance_block_info,
-                    is_ceph_ephemeral=is_ceph)
-            volumes = [{'id': v.id,
-                        'num_device': i,
-                        'device': v.device}
-                       for i, v in enumerate(
-                    self.nova_client.volumes.get_server_volumes(instance.id))]
-            info['instances'][instance.id] = {
-                'instance': {'name': instance.name,
-                             'instance_name': getattr(instance, "OS-EXT-SRV-ATTR:instance_name"),
+        is_ceph = cfg.compute.backend.lower() == utl.CEPH
+        direct_transfer = cfg.migrate.direct_compute_transfer
+
+        if direct_transfer:
+            ext_cidr = cfg.cloud.ext_cidr
+            host = utl.get_ext_ip(ext_cidr,
+                                  cloud.getIpSsh(),
+                                  instance_host)
+        elif is_ceph:
+            host = cfg.storage.host
+        else:
+            host = instance_host
+
+        instance_block_info = utl.get_libvirt_block_info(
+            instance_name,
+            cloud.getIpSsh(),
+            instance_host)
+
+        ephemeral_path = {
+            'path_src': None,
+            'path_dst': None,
+            'host_src': host,
+            'host_dst': None
+        }
+
+        if is_ephemeral:
+            ephemeral_path['path_src'] = utl.get_disk_path(
+                instance,
+                instance_block_info,
+                is_ceph_ephemeral=is_ceph,
+                disk=DISK+LOCAL)
+
+        diff = {
+            'path_src': None,
+            'path_dst': None,
+            'host_src': host,
+            'host_dst': None
+        }
+
+        if instance.image:
+            diff['path_src'] = utl.get_disk_path(
+                instance,
+                instance_block_info,
+                is_ceph_ephemeral=is_ceph)
+
+        inst = {'instance': {'name': instance.name,
+                             'instance_name': instance_name,
                              'id': instance.id,
                              'tenant_id': instance.tenant_id,
-                             'tenant_name': get_tenant_name(instance.tenant_id),
+                             'tenant_name': get_tenant_name(
+                                 instance.tenant_id),
                              'status': instance.status,
                              'flavor_id': instance.flavor['id'],
-                             'image_id': instance.image['id'] if instance.image else None,
-                             'boot_mode': utl.BOOT_FROM_IMAGE if instance.image else utl.BOOT_FROM_VOLUME,
+                             'image_id': instance.image[
+                                 'id'] if instance.image else None,
+                             'boot_mode': (utl.BOOT_FROM_IMAGE
+                                           if instance.image
+                                           else utl.BOOT_FROM_VOLUME),
                              'key_name': instance.key_name,
-                             'availability_zone': getattr(instance, 'OS-EXT-AZ:availability_zone'),
+                             'availability_zone': getattr(
+                                 instance,
+                                 'OS-EXT-AZ:availability_zone'),
                              'security_groups': security_groups,
-                             'boot_volume': copy.deepcopy(volumes[0]) if volumes else None,
+                             'boot_volume': copy.deepcopy(
+                                 volumes[0]) if volumes else None,
                              'interfaces': interfaces,
-                             'host': getattr(instance, 'OS-EXT-SRV-ATTR:host'),
+                             'host': instance_host,
                              'is_ephemeral': is_ephemeral,
                              'volumes': volumes
                              },
                 'ephemeral': ephemeral_path,
                 'diff': diff,
-                'meta': {}}
+                'meta': {},
+                }
 
-        return info
+        return inst
+
+    @staticmethod
+    def convert_resources(compute_obj):
+        if isinstance(compute_obj, nova_client.keypairs.Keypair):
+            return {'keypair': {'name': compute_obj.name,
+                                'public_key': compute_obj.public_key},
+                    'meta': {}}
+
+        elif isinstance(compute_obj, nova_client.flavors.Flavor):
+            return {'flavor': {'name': compute_obj.name,
+                               'ram': compute_obj.ram,
+                               'vcpus': compute_obj.vcpus,
+                               'disk': compute_obj.disk,
+                               'ephemeral': compute_obj.ephemeral,
+                               'swap': compute_obj.swap,
+                               'rxtx_factor': compute_obj.rxtx_factor,
+                               'is_public': compute_obj.is_public},
+                    'meta': {}}
+
+    @staticmethod
+    def convert(obj, cfg=None, cloud=None):
+        res_tuple = (nova_client.keypairs.Keypair, nova_client.flavors.Flavor)
+
+        if isinstance(obj, nova_client.servers.Server):
+            return NovaCompute.convert_instance(obj, cfg, cloud)
+        elif isinstance(obj, res_tuple):
+            return NovaCompute.convert_resources(obj)
+
+        LOG.error('NovaCompute converter has received incorrect value. Please '
+                  'pass to it only instance, keypair or flavor objects.')
+        return None
 
     def _deploy_resources(self, info, **kwargs):
         """
@@ -342,7 +395,8 @@ class NovaCompute(compute.Compute):
             tenant_name = _instance['instance']['tenant_name']
             if tenant_name not in nova_tenants_clients:
                 params['tenant'] = tenant_name
-                nova_tenants_clients[tenant_name] = self.get_nova_client(params)
+                nova_tenants_clients[tenant_name] = self.get_nova_client(
+                    params)
 
         for _instance in info_compute['instances'].itervalues():
             instance = _instance['instance']
@@ -351,7 +405,8 @@ class NovaCompute(compute.Compute):
             create_params = {'name': instance['name'],
                              'flavor': instance['flavor_id'],
                              'key_name': instance['key_name'],
-                             'availability_zone': instance['availability_zone'],
+                             'availability_zone': instance[
+                                 'availability_zone'],
                              'nics': instance['nics'],
                              'image': instance['image_id']}
             if instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
@@ -401,8 +456,9 @@ class NovaCompute(compute.Compute):
             'paused': lambda instance: instance.pause(),
             'unpaused': lambda instance: instance.unpause(),
             'suspend': lambda instance: instance.suspend(),
-            'status': lambda status: lambda instance: self.wait_for_status(instance_id,
-                                                                           status)
+            'status': lambda status: lambda instance: self.wait_for_status(
+                instance_id,
+                status)
         }
         map_status = {
             'paused': {
@@ -448,7 +504,8 @@ class NovaCompute(compute.Compute):
         }
         if curr != will:
             try:
-                reduce(lambda res, f: f(instance), map_status[curr][will], None)
+                reduce(lambda res, f: f(instance), map_status[curr][will],
+                       None)
             except timeout_exception.TimeoutException as e:
                 return e
         else:
@@ -461,7 +518,8 @@ class NovaCompute(compute.Compute):
             time.sleep(2)
             count += 1
             if count > limit_retry:
-                raise timeout_exception.TimeoutException(getter.get(id_obj).status.lower(), status, "Timeout exp")
+                raise timeout_exception.TimeoutException(
+                    getter.get(id_obj).status.lower(), status, "Timeout exp")
 
     def get_flavor_from_id(self, flavor_id):
         return self.nova_client.flavors.get(flavor_id)
@@ -498,10 +556,11 @@ class NovaCompute(compute.Compute):
         networks = []
         func_mac_address = self.get_func_mac_address(instance)
         for network in instance.networks.items():
-            networks_info = {'name': network[0],
-                             'ip': network[1][0],
-                             'mac': func_mac_address(network[1][0])}
-            networks_info['floatingip'] = network[1][1] if len(network[1]) > 1 else None
+            networks_info = dict(name=network[0],
+                                 ip=network[1][0],
+                                 mac=func_mac_address(network[1][0]))
+            networks_info['floatingip'] = network[1][1] if len(
+                network[1]) > 1 else None
             networks.append(networks_info)
         return networks
 
@@ -514,7 +573,8 @@ class NovaCompute(compute.Compute):
         return self.default_detect_mac(instance)
 
     def default_detect_mac(self, arg):
-        raise NotImplemented("Not implemented yet function for detect mac address")
+        raise NotImplemented(
+            "Not implemented yet function for detect mac address")
 
     def attach_volume_to_instance(self, instance, volume):
         self.nova_client.volumes.create_server_volume(
@@ -524,5 +584,3 @@ class NovaCompute(compute.Compute):
 
     def dissociate_floatingip(self, instance_id, floatingip):
         self.nova_client.servers.remove_floating_ip(instance_id, floatingip)
-
-
