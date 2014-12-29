@@ -11,16 +11,26 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
+
+
 import mock
-from oslotest import mockpatch
+
 from novaclient.v1_1 import client as nova_client
+from oslotest import mockpatch
+
 from cloudferrylib.os.network.nova_network import NovaNetwork
+from cloudferrylib.utils import utils
 from tests import test
 
-FAKE_CONFIG = {'user': 'fake_user',
-               'password': 'fake_password',
-               'tenant': 'fake_tenant',
-               'host': 'fake_host'}
+
+FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
+                                                   'password': 'fake_password',
+                                                   'tenant': 'fake_tenant',
+                                                   'host': '1.1.1.1',
+                                                   }),
+                             migrate=utils.ext_dict({'speed_limit': '10MB',
+                                                     'retry': '7',
+                                                     'time_wait': '5'}))
 
 
 class TestNovaNetwork(test.TestCase):
@@ -29,12 +39,15 @@ class TestNovaNetwork(test.TestCase):
 
         self.nova_mock_client = mock.MagicMock()
 
-        self.nova_client_patch = mockpatch.PatchObject(nova_client,
-                                                       'Client',
-                                                       new=self.nova_mock_client)
+        self.nova_client_patch = mockpatch.PatchObject(
+            nova_client,
+            'Client',
+            new=self.nova_mock_client)
+
+        self.fake_cloud = mock.Mock()
 
         self.useFixture(self.nova_client_patch)
-        self.nova_network_client = NovaNetwork(FAKE_CONFIG)
+        self.nova_network_client = NovaNetwork(FAKE_CONFIG, self.fake_cloud)
 
         self.sg1 = mock.Mock()
         self.sg1.name = 'fake_name_1'
@@ -47,13 +60,12 @@ class TestNovaNetwork(test.TestCase):
 
         self.fake_instance = mock.Mock()
 
-
     def test_get_client(self):
         self.nova_mock_client.reset_mock()
-        args = (FAKE_CONFIG['user'],
-                FAKE_CONFIG['password'],
-                FAKE_CONFIG['tenant'],
-                "http://" + FAKE_CONFIG['host'] + ":35357/v2.0/")
+        args = (FAKE_CONFIG.cloud.user,
+                FAKE_CONFIG.cloud.password,
+                FAKE_CONFIG.cloud.tenant,
+                "http://%s:35357/v2.0/" % FAKE_CONFIG.cloud.host)
         client = self.nova_network_client.get_client()
         self.nova_mock_client.assert_called_once_with(*args)
 
@@ -61,29 +73,25 @@ class TestNovaNetwork(test.TestCase):
 
     def test_get_security_groups(self):
         fake_security_groups = [self.sg1, self.sg2]
-        self.nova_mock_client().security_groups.list.return_value = fake_security_groups
+        self.nova_mock_client().security_groups.list.return_value = (
+            fake_security_groups)
         security_groups = self.nova_network_client.get_security_groups()
 
-        self.assertEquals(fake_security_groups, security_groups)
-    
-    def test_get_networks(self):
-        fake_networks = [{'name': 'fake_name', 'ip': 'fake_ip', 'mac': 'fake_mac'},]
+        result = [x.__dict__ for x in fake_security_groups]
 
-        self.fake_instance.networks.items.return_value = ([ 'fake_name', ['fake_ip',] ],)
-        self.nova_network_client.get_mac_addresses = lambda x: iter(('fake_mac',))
-        
-        networks = self.nova_network_client.get_networks(self.fake_instance)
+        self.assertEquals(result, security_groups)
 
-        self.assertEquals(fake_networks, networks)
-   
-    def test_upload_security_groups(self):
+    @mock.patch('cloudferrylib.os.network.nova_network.NovaNetwork.'
+                'get_security_groups')
+    def test_upload_security_groups(self, mock_get):
         fake_existing_groups = [self.sg1]
         fake_security_groups = [self.sg1, self.sg2]
-        self.nova_mock_client().security_groups.list.return_value = fake_existing_groups
-        
+        mock_get.return_value = fake_existing_groups
+
         self.nova_network_client.upload_security_groups(fake_security_groups)
-        
+
         kwargs = {'name': 'fake_name_2',
                   'description': 'fake_description_2'}
 
-        self.nova_mock_client().security_groups.create.assert_called_once_with(**kwargs)
+        self.nova_mock_client().security_groups.create.assert_called_once_with(
+            **kwargs)
