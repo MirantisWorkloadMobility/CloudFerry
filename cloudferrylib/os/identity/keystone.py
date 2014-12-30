@@ -37,7 +37,7 @@ class KeystoneIdentity(identity.Identity):
         self.mysql_connector = cloud.mysql_connector
         self.cloud = cloud
         self.postman = None
-        if self.config['mail']['server'] != "-":
+        if self.config.mail.server != "-":
             self.postman = Postman(self.config['mail']['username'],
                                    self.config['mail']['password'],
                                    self.config['mail']['from_addr'],
@@ -119,14 +119,14 @@ class KeystoneIdentity(identity.Identity):
         """ Getting keystone client """
 
         ks_client_for_token = keystone_client.Client(
-            username=self.config['cloud']['user'],
-            password=self.config['cloud']['password'],
-            tenant_name=self.config['cloud']['tenant'],
-            auth_url="http://" + self.config['cloud']['host'] + ":35357/v2.0/")
+            username=self.config.cloud.user,
+            password=self.config.cloud.password,
+            tenant_name=self.config.cloud.tenant,
+            auth_url="http://%s:35357/v2.0/" % self.config.cloud.host)
 
         return keystone_client.Client(
             token=ks_client_for_token.auth_ref['token']['id'],
-            endpoint="http://" + self.config['cloud']['host'] + ":35357/v2.0/")
+            endpoint="http://%s:35357/v2.0/" % self.config.cloud.host)
 
     def get_service_name_by_type(self, service_type):
         """Getting service_name from keystone. """
