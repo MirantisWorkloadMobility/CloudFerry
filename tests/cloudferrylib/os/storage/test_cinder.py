@@ -15,16 +15,28 @@
 
 import mock
 
-from cloudferrylib.os.storage import cinder_storage
-from tests import test
-from oslotest import mockpatch
 from cinderclient.v1 import client as cinder_client
-from cloudferrylib.utils import utils
+from oslotest import mockpatch
 
-FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
-                                                   'password': 'fake_password',
-                                                   'tenant': 'fake_tenant',
-                                                   'host': '1.1.1.1'}))
+from cloudferrylib.os.storage import cinder_storage
+from cloudferrylib.utils import utils
+from tests import test
+
+
+FAKE_CONFIG = utils.ext_dict(
+    cloud=utils.ext_dict({'user': 'fake_user',
+                          'password': 'fake_password',
+                          'tenant': 'fake_tenant',
+                          'host': '1.1.1.1'}),
+    migrate=utils.ext_dict({'speed_limit': '10MB',
+                            'retry': '7',
+                            'time_wait': '5',
+                            'keep_volume_storage': False}),
+    mysql=utils.ext_dict({'host': '1.1.1.1'}),
+    storage=utils.ext_dict({'backend': 'ceph',
+                            'rbd_pool': 'volumes',
+                            'volume_name_template': 'volume-',
+                            'host': '1.1.1.1'}))
 
 
 class CinderStorageTestCase(test.TestCase):
@@ -36,13 +48,16 @@ class CinderStorageTestCase(test.TestCase):
         self.useFixture(self.cs_patch)
 
         self.identity_mock = mock.Mock()
+        self.compute_mock = mock.Mock()
 
         self.fake_cloud = mock.Mock()
         self.fake_cloud.mysql_connector = mock.Mock()
 
-        self.fake_cloud.resources = dict(identity=self.identity_mock)
+        self.fake_cloud.resources = dict(identity=self.identity_mock,
+                                         compute=self.compute_mock)
 
-        self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG, self.fake_cloud)
+        self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG,
+                                                          self.fake_cloud)
 
         self.fake_volume_0 = mock.Mock()
         self.fake_volume_1 = mock.Mock()
@@ -53,7 +68,7 @@ class CinderStorageTestCase(test.TestCase):
         # To check self.mock_client call only from this test method
         self.mock_client.reset_mock()
 
-        client = self.cinder_client.get_cinder_client(FAKE_CONFIG)
+        client = self.cinder_client.get_client(FAKE_CONFIG)
 
         self.mock_client.assert_called_once_with('fake_user', 'fake_password',
                                                  'fake_tenant',
@@ -78,8 +93,8 @@ class CinderStorageTestCase(test.TestCase):
                                                                   name='fake')
         self.assertEqual(self.fake_volume_0, volume)
 
-    def test___get_volume_by_id(self):
-        volume = self.cinder_client._CinderStorage__get_volume_by_id('fake_id')
+    def test_get_volume_by_id(self):
+        volume = self.cinder_client.get_volume_by_id('fake_id')
 
         self.mock_client().volumes.get.assert_called_once_with('fake_id')
         self.assertEqual(self.fake_volume_0, volume)
@@ -144,33 +159,6 @@ class CinderStorageTestCase(test.TestCase):
             **test_args)
         self.assertEqual(('fake_response', 'fake_body'), (response, body))
 
-    def test_deploy(self):
-        vol = {'volume': {
-            'size': 'size1',
-            'display_name': 'display_name1',
-            'display_description': 'display_description1',
-            'volume_type': 'volume_type1',
-            'availability_zone': 'availability_zone1'
-        },
-               'meta': {
-                   'image': {
-                       'id': 'image_id1'
-                   }
-               }}
-        info = {'storage': {'volumes': [vol]}}
-        create_volume = mock.Mock()
-        vol_return = mock.Mock(id="id2")
-        create_volume.return_value = vol_return
-        wait_for_status = mock.Mock()
-        finish = mock.Mock()
-        attach_volume_to_instance = mock.Mock()
-        self.cinder_client.create_volume = create_volume
-        self.cinder_client.wait_for_status = wait_for_status
-        self.cinder_client.finish = finish
-        self.cinder_client.attach_volume_to_instance = attach_volume_to_instance
-        res = self.cinder_client.deploy(info)
-        self.assertIn(vol_return, res)
-
     def test_read_info(self):
         temp = self.cinder_client.get_volumes_list
         self.cinder_client.get_volumes_list = mock.Mock()
@@ -184,10 +172,28 @@ class CinderStorageTestCase(test.TestCase):
                          bootable='bootable')
         self.cinder_client.get_volumes_list.return_value = [vol1]
         res = self.cinder_client.read_info(id="id1")
-        self.assertIn('storage', res)
-        self.assertIn('volumes', res['storage'])
-        self.assertEqual(1, len(res['storage']['volumes']))
-        self.assertEqual(vol1.id, res['storage']['volumes'][0]['volume']['id'])
-        self.assertIn('image', res['storage']['volumes'][0]['meta'])
+        self.assertIn('volumes', res)
+        self.assertEqual(1, len(res['volumes']))
+        self.assertEqual(vol1.id, res['volumes']['id1']['volume']['id'])
         self.cinder_client.get_volumes_list = temp
 
+    def test_deploy(self):
+        vol = {'volume': {'size': 'size1',
+                          'display_name': 'display_name1',
+                          'display_description': 'display_description1',
+                          'volume_type': 'volume_type1',
+                          'availability_zone': 'availability_zone1'},
+               'meta': {'image': {'id': 'image_id1'}}}
+        info = {'volumes': {'id1': vol}}
+        create_volume = mock.Mock()
+        vol_return = mock.Mock(id="id2")
+        create_volume.return_value = vol_return
+        wait_for_status = mock.Mock()
+        finish = mock.Mock()
+        attach_vol_to_instance = mock.Mock()
+        self.cinder_client.create_volume = create_volume
+        self.cinder_client.wait_for_status = wait_for_status
+        self.cinder_client.finish = finish
+        self.cinder_client.attach_volume_to_instance = attach_vol_to_instance
+        res = self.cinder_client.deploy(info)
+        self.assertIn(vol_return.id, res)
