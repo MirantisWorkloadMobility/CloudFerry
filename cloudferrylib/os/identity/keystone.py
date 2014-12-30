@@ -161,7 +161,7 @@ class KeystoneIdentity(identity.Identity):
                    self.get_tenants_list()}
 
         def func(tenant_id):
-            return getattr(tenants, tenant_id, 'admin')
+            return tenants.get(tenant_id, 'admin')
 
         return func
 
