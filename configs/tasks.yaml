@@ -1,0 +1,7 @@
+paths: ['cloudferrylib.os.base.action', 'cloudferrylib.os.actions']
+tasks:
+  save_result: ('Merge', 'info', 'info_result', 'info_backup', 'instances')
+  act_get_info_inst: ('GetInfoInstances', 'src_cloud')
+  act_get_info_images: ('GetInfoImages', 'src_cloud')
+  act_transfer_images: ('CopyFromGlanceToGlance')
+

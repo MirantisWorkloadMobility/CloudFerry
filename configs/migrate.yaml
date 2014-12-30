@@ -1,0 +1,18 @@
+namespace:
+  info_result:
+      instances: dict()
+
+process:
+  pre_test:
+    is_avaiable_networks: True
+    is_avaiable_nodes: True
+  migration:
+    task_resources_transporting:
+      act_identity_trans: True
+      task_images_trans:
+        act_get_info_images: True
+        act_transfer_images: True
+      act_comp_res_trans: True
+      act_network_trans: True
+   post_test:
+    is_avaiable_instances: True
