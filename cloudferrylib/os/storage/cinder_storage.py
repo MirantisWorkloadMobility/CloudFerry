@@ -49,7 +49,7 @@ class CinderStorage(storage.Storage):
 
         """ Getting cinder client """
 
-        params = self.config.cloud if not params else params
+        params = self.config if not params else params
 
         return cinder_client.Client(
             params.cloud.user,
