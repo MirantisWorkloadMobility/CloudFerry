@@ -24,18 +24,27 @@ class GetInfoImagesTestCase(test.TestCase):
     def setUp(self):
         super(GetInfoImagesTestCase, self).setUp()
 
-        self.fake_info = {
-            'image': {'images': [{'image': 'image_body', 'meta': {}}]}}
+        self.fake_info = {'images': {'fake_image_id': {'image': 'image_body',
+                                                       'meta': {}}}}
         self.fake_image = mock.Mock()
         self.fake_image.read_info.return_value = self.fake_info
-        self.fake_cloud = mock.Mock()
-        self.fake_cloud.resources = {'image': self.fake_image}
+        self.fake_src_cloud = mock.Mock()
+        self.fake_dst_cloud = mock.Mock()
+        self.fake_config = {}
+        self.fake_src_cloud.resources = {'image': self.fake_image}
+
+        self.fake_init = {
+            'src_cloud': self.fake_src_cloud,
+            'dst_cloud': self.fake_dst_cloud,
+            'cfg': self.fake_config
+        }
 
     def test_run(self):
-        expected_result = {'image_data': self.fake_info}
+        expected_result = {'images_info': self.fake_info}
 
-        fake_action = get_info_images.GetInfoImages(self.fake_cloud)
-        image_info = fake_action.run(fake_arg='fake')
+        fake_action = get_info_images.GetInfoImages(self.fake_init,
+                                                    'src_cloud')
+        image_info = fake_action.run()
 
         self.assertEqual(expected_result, image_info)
-        self.fake_image.read_info.assert_called_once_with(fake_arg='fake')
+        self.fake_image.read_info.assert_called_once_with()

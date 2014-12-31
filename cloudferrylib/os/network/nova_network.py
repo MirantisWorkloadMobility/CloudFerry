@@ -20,7 +20,7 @@ from fabric.api import settings
 from novaclient.v1_1 import client as nova_client
 
 from cloudferrylib.base import network
-from utils import forward_agent
+from cloudferrylib.utils.utils import forward_agent
 
 
 class NovaNetwork(network.Network):
