@@ -11,10 +11,16 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
-from cloudferrylib.base import network
+
+
+from fabric.api import env
+from fabric.api import run
+from fabric.api import settings
+
 from novaclient.v1_1 import client as nova_client
-from fabric.api import run, settings, env
-from utils import forward_agent
+
+from cloudferrylib.base import network
+from cloudferrylib.utils.utils import forward_agent
 
 
 class NovaNetwork(network.Network):
@@ -24,10 +30,11 @@ class NovaNetwork(network.Network):
         self.cloud = cloud
 
     def get_client(self):
-        return nova_client.Client(self.config["user"],
-                                  self.config["password"],
-                                  self.config["tenant"],
-                                  "http://" + self.config["host"] + ":35357/v2.0/")
+        return nova_client.Client(
+            self.config.cloud.user,
+            self.config.cloud.password,
+            self.config.cloud.tenant,
+            "http://%s:35357/v2.0/" % self.config.cloud.host)
 
     def read_info(self, opts=None):
         opts = {} if not opts else opts
@@ -40,10 +47,13 @@ class NovaNetwork(network.Network):
 
     def get_security_groups(self, instance=None):
         if instance is None:
-            return self.convert_to_dict_sc_grs(self.nova_client.security_groups.list())
-        return self.convert_to_dict_sc_grs(self.nova_client.security_groups.list(instance))
+            return self.convert_to_dict_sc_grs(
+                self.nova_client.security_groups.list())
+        return self.convert_to_dict_sc_grs(
+            self.nova_client.security_groups.list(instance))
 
-    def convert_to_dict_sc_grs(self, sc_grs):
+    @staticmethod
+    def convert_to_dict_sc_grs(sc_grs):
         # TODO: Refactor this code. Mapping params to dict.
         return [x.__dict__ for x in sc_grs]
 
@@ -51,14 +61,16 @@ class NovaNetwork(network.Network):
         existing = {sg.name for sg in self.get_security_groups()}
         for security_group in security_groups:
             if security_group.name not in existing:
-                sg = self.nova_client.security_groups.create(name=security_group.name,
-                                                             description=security_group.description)
+                sg = self.nova_client.security_groups.create(
+                    name=security_group.name,
+                    description=security_group.description)
                 for rule in security_group.rules:
-                    self.nova_client.security_group_rules.create(parent_group_id=sg.id,
-                                                                 ip_protocol=rule['ip_protocol'],
-                                                                 from_port=rule['from_port'],
-                                                                 to_port=rule['to_port'],
-                                                                 cidr=rule['ip_range']['cidr'])
+                    self.nova_client.security_group_rules.create(
+                        parent_group_id=sg.id,
+                        ip_protocol=rule['ip_protocol'],
+                        from_port=rule['from_port'],
+                        to_port=rule['to_port'],
+                        cidr=rule['ip_range']['cidr'])
 
     def get_func_mac_address(self, instance):
         list_mac = self.get_mac_addresses(instance)
@@ -77,4 +89,3 @@ class NovaNetwork(network.Network):
                 mac_addresses = out.split()
         mac_iter = iter(mac_addresses)
         return mac_iter
-

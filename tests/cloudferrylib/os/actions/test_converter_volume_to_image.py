@@ -17,13 +17,14 @@
 import mock
 
 from cloudferrylib.os.actions import convert_volume_to_image
+from cloudferrylib.utils import utils
 from tests import test
 
 
 class ConverterVolumeToImageTest(test.TestCase):
     def setUp(self):
         super(ConverterVolumeToImageTest, self).setUp()
-        self.fake_cloud = mock.Mock()
+        self.fake_src_cloud = mock.Mock()
         self.fake_storage = mock.Mock()
         self.fake_storage.deploy = mock.Mock()
         self.fake_storage.upload_volume_to_image.return_value = (
@@ -33,32 +34,45 @@ class ConverterVolumeToImageTest(test.TestCase):
         self.fake_image.wait_for_status = mock.Mock()
         self.fake_image.read_info = mock.Mock()
         self.fake_image.read_info.return_value = {
-            'image': {'images': [{'image': 'image_body', 'meta': {}}]}}
+            'images': {
+                'image_id': {'image': 'image_body', 'meta': {}}}}
         self.fake_image.patch_image = mock.Mock()
-        self.fake_cloud.resources = {'storage': self.fake_storage,
-                                     'image': self.fake_image}
+        self.fake_src_cloud.resources = {'storage': self.fake_storage,
+                                         'image': self.fake_image}
         self.fake_volumes_info = {
-            'storage': {
-                'volumes': [{
+            'volumes': {
+                'id1': {
                     'volume': {
                         'id': 'id1',
                         'display_name': 'dis1',
 
                     },
                     'meta': {
-                        'image': 'image'
-                    }
-                }]
-            }
+                        'image': 'image',
+                    },
+                }},
+        }
+
+        self.fake_dst_cloud = mock.Mock()
+        self.fake_config = utils.ext_dict(migrate=utils.ext_dict(
+            {'disk_format': 'qcow',
+             'container_format': 'bare'}))
+
+        self.fake_init = {
+            'src_cloud': self.fake_src_cloud,
+            'dst_cloud': self.fake_dst_cloud,
+            'cfg': self.fake_config
         }
 
     def test_action(self):
-        fake_action = convert_volume_to_image.ConverterVolumeToImage(
-            "QCOW2",
-            self.fake_cloud)
+        fake_action = convert_volume_to_image.ConvertVolumeToImage(
+            self.fake_init,
+            cloud='src_cloud')
         res = fake_action.run(self.fake_volumes_info)
+
         self.assertEqual('image_body',
-                         res['images_info']['image']['images'][0]['image'])
+                         res['images_info']['images']['image_id']['image'])
+
         self.assertEqual('dis1',
-                         res['images_info']['image']['images'][0]['meta'][
+                         res['images_info']['images']['image_id']['meta'][
                              'volume']['display_name'])

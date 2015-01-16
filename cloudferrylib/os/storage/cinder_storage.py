@@ -21,9 +21,9 @@ from fabric.api import settings
 from cinderclient.v1 import client as cinder_client
 
 from cloudferrylib.base import storage
-from cloudferrylib.os.actions import remote_execution # move it to utils
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import utils as utl
+
 
 AVAILABLE = 'available'
 IN_USE = "in-use"
@@ -45,9 +45,11 @@ class CinderStorage(storage.Storage):
         self.cinder_client = self.proxy(self.get_client(config), config)
         super(CinderStorage, self).__init__(config)
 
-    def get_client(self, params):
+    def get_client(self, params=None):
 
         """ Getting cinder client """
+
+        params = self.config if not params else params
 
         return cinder_client.Client(
             params.cloud.user,
@@ -66,10 +68,8 @@ class CinderStorage(storage.Storage):
             info['volumes_db'] = {utl.VOLUMES_TYPE: '/tmp/volumes'}
 
              #cleanup db
-            rem_exec = remote_execution.RemoteExecution(
-                self.config.migrate,
-                self.mysql_host)
-            rem_exec.run('rm -rf /tmp/volumes')
+            self.cloud.ssh_util.execute('rm -rf /tmp/volumes',
+                                        host_exec=self.mysql_host)
 
             for table_name, file_name in info['volumes_db'].iteritems():
                 self.download_table_from_db_to_file(table_name, file_name)
@@ -83,10 +83,10 @@ class CinderStorage(storage.Storage):
     def attach_volume_to_instance(self, volume_info):
         if 'instance' in volume_info[utl.META_INFO]:
             if volume_info[utl.META_INFO]['instance']:
-                self.attach_volume(volume_info[utl.VOLUME_BODY]['id'],
-                                   volume_info[utl.META_INFO]['instance']['instance'][
-                                       'id'],
-                                   volume_info[utl.VOLUME_BODY]['device'])
+                self.attach_volume(
+                    volume_info[utl.VOLUME_BODY]['id'],
+                    volume_info[utl.META_INFO]['instance']['instance']['id'],
+                    volume_info[utl.VOLUME_BODY]['device'])
 
     def get_volumes_list(self, detailed=True, search_opts=None):
         return self.cinder_client.volumes.list(detailed, search_opts)
@@ -116,8 +116,9 @@ class CinderStorage(storage.Storage):
         return self.cinder_client.volumes.detach(volume_id)
 
     def finish(self, vol):
-        self.__patch_option_bootable_of_volume(vol[utl.VOLUME_BODY]['id'],
-                                               vol[utl.VOLUME_BODY]['bootable'])
+        self.__patch_option_bootable_of_volume(
+            vol[utl.VOLUME_BODY]['id'],
+            vol[utl.VOLUME_BODY]['bootable'])
 
     def upload_volume_to_image(self, volume_id, force, image_name,
                                container_format, disk_format):
@@ -159,9 +160,13 @@ class CinderStorage(storage.Storage):
                                               tenant['tenant']['id'],
                                               tenant[utl.META_INFO]['new_id'])
         for user in info['users']:
-            self.update_column_with_condition('volumes', 'user_id', user['user']['id'], user[utl.META_INFO]['new_id'])
-        self.update_column_with_condition('volumes', 'attach_status', 'attached', 'detached')
-        self.update_column_with_condition('volumes', 'status', 'in-use', 'available')
+            self.update_column_with_condition('volumes', 'user_id',
+                                              user['user']['id'],
+                                              user[utl.META_INFO]['new_id'])
+        self.update_column_with_condition('volumes', 'attach_status',
+                                          'attached', 'detached')
+        self.update_column_with_condition('volumes', 'status', 'in-use',
+                                          'available')
         self.update_column('volumes', 'instance_uuid', 'NULL')
         return {}
 
@@ -184,23 +189,29 @@ class CinderStorage(storage.Storage):
             'path': None
         }
         if 'bootable' in vol.__dict__:
-            volume['bootable'] = True if vol.bootable.lower() == 'true' else False
+            volume[
+                'bootable'] = True if vol.bootable.lower() == 'true' else False
         if 'volume_image_metadata' in vol.__dict__:
             volume['volume_image_metadata'] = {
                 'image_id': vol.volume_image_metadata['image_id'],
                 'checksum': vol.volume_image_metadata['checksum']
             }
         if cfg.storage.backend == utl.CEPH:
-            volume['path'] = "%s/%s%s" % (cfg.storage.rbd_pool, cfg.storage.volume_name_template, vol.id)
-            volume['host'] = cfg.storage.host if cfg.storage.host else cfg.cloud.host
+            volume['path'] = "%s/%s%s" % (
+                cfg.storage.rbd_pool, cfg.storage.volume_name_template, vol.id)
+            volume['host'] = (cfg.storage.host
+                              if cfg.storage.host
+                              else cfg.cloud.host)
         elif vol.attachments and (cfg.storage.backend == utl.ISCSI):
-            instance = compute.read_info(search_opts={'id': vol.attachments[0]['server_id']})
+            instance = compute.read_info(
+                search_opts={'id': vol.attachments[0]['server_id']})
             instance = instance[utl.INSTANCES_TYPE]
             instance_info = instance.values()[0][utl.INSTANCE_BODY]
             volume['host'] = instance_info['host']
-            list_disk = utl.get_libvirt_block_info(instance_info['instance_name'],
-                                                   cloud.getIpSsh(),
-                                                   instance_info['host'])
+            list_disk = utl.get_libvirt_block_info(
+                instance_info['instance_name'],
+                cloud.getIpSsh(),
+                instance_info['host'])
             volume['path'] = utl.find_element_by_in(list_disk, vol.id)
         return volume
 
@@ -234,19 +245,22 @@ class CinderStorage(storage.Storage):
 
     def download_table_from_db_to_file(self, table_name, file_name):
         connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
-        connector.execute("SELECT * FROM %s INTO OUTFILE '%s';" % (table_name, file_name))
+        connector.execute("SELECT * FROM %s INTO OUTFILE '%s';" % (table_name,
+                                                                   file_name))
 
     def upload_table_to_db(self, table_name, file_name):
         connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
-        connector.execute(("LOAD DATA INFILE '%s' INTO TABLE %s") % (file_name, table_name))
+        connector.execute("LOAD DATA INFILE '%s' INTO TABLE %s" % (file_name,
+                                                                   table_name))
 
     def update_column_with_condition(self, table_name, column,
                                      old_value, new_value):
 
         connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
-        connector.execute(("UPDATE %s SET %s='%s' WHERE %s='%s'") %
+        connector.execute("UPDATE %s SET %s='%s' WHERE %s='%s'" %
                           (table_name, column, new_value, column, old_value))
 
     def update_column(self, table_name, column_name, new_value):
         connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
-        connector.execute(("UPDATE %s SET %s='%s'") % (table_name, column_name, new_value))
+        connector.execute("UPDATE %s SET %s='%s'" % (table_name, column_name,
+                                                     new_value))

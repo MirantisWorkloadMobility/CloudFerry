@@ -48,12 +48,13 @@ class NovaCompute(compute.Compute):
 
     def get_client(self, params=None):
         """Getting nova client. """
-        if params is None:
-            params = self.config['cloud']
 
-        return nova_client.Client(params['user'], params['password'],
-                                  params['tenant'],
-                                  "http://%s:35357/v2.0/" % params['host'])
+        params = self.config if not params else params
+
+        return nova_client.Client(params.cloud.user,
+                                  params.cloud.password,
+                                  params.cloud.tenant,
+                                  "http://%s:35357/v2.0/" % params.cloud.host)
 
     def _read_info_quotas(self, info):
         user_quotas_cmd = ("SELECT user_id, project_id, resource, "

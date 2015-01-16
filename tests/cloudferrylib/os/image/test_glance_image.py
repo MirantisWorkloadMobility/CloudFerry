@@ -12,14 +12,13 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import copy
+
 import mock
 
 from glanceclient.v1 import client as glance_client
 from oslotest import mockpatch
 
 from cloudferrylib.os.image.glance_image import GlanceImage
-from cloudferrylib.utils import file_like_proxy
 from cloudferrylib.utils import utils
 from tests import test
 
@@ -29,7 +28,9 @@ FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
                                                    'tenant': 'fake_tenant',
                                                    'host': '1.1.1.1',
                                                    }),
-                             migrate=utils.ext_dict({'speed_limit': '10MB'}))
+                             migrate=utils.ext_dict({'speed_limit': '10MB',
+                                                     'retry': '7',
+                                                     'time_wait': '5'}))
 
 
 class GlanceImageTestCase(test.TestCase):
@@ -45,11 +46,13 @@ class GlanceImageTestCase(test.TestCase):
             new=self.glance_mock_client)
         self.useFixture(self.glance_client_patch)
         self.identity_mock = mock.Mock()
+        self.image_mock = mock.Mock()
 
         self.fake_cloud = mock.Mock()
         self.fake_cloud.mysql_connector = mock.Mock()
 
-        self.fake_cloud.resources = dict(identity=self.identity_mock)
+        self.fake_cloud.resources = dict(identity=self.identity_mock,
+                                         image=self.image_mock)
         self.glance_image = GlanceImage(FAKE_CONFIG, self.fake_cloud)
 
         self.fake_image_1 = mock.Mock()
@@ -62,15 +65,14 @@ class GlanceImageTestCase(test.TestCase):
         self.fake_image_1.is_public = True
         self.fake_image_1.protected = False
         self.fake_image_1.size = 1024
+        self.fake_image_1.properties = 'fake_properties'
 
         self.fake_image_2 = mock.Mock()
         self.fake_image_2.name = 'fake_image_name_2'
 
-        self.fake_input_info = {'image': {'resource': self.glance_image,
-                                          'images': {}}
-                                }
+        self.fake_input_info = {'images': {}}
 
-        self.fake_result_info = {'image': {
+        self.fake_result_info = {
             'images': {
                 'fake_image_id_1': {'image': {'checksum': 'fake_shecksum_1',
                                               'container_format': 'bare',
@@ -79,9 +81,11 @@ class GlanceImageTestCase(test.TestCase):
                                               'is_public': True,
                                               'name': 'fake_image_name_1',
                                               'protected': False,
-                                              'size': 1024},
+                                              'size': 1024,
+                                              'resource': self.image_mock,
+                                              'properties': 'fake_properties'},
                                     'meta': {}}},
-            'resource': self.glance_image}}
+        }
 
     def test_get_glance_client(self):
         fake_endpoint = 'fake_endpoint'
@@ -91,7 +95,7 @@ class GlanceImageTestCase(test.TestCase):
         self.identity_mock.get_auth_token_from_user.return_value = (
             fake_auth_token)
 
-        gl_client = self.glance_image.get_glance_client()
+        gl_client = self.glance_image.get_client()
         mock_calls = [mock.call(endpoint=fake_endpoint, token=fake_auth_token)]
 
         self.glance_mock_client.assert_has_calls(mock_calls)
@@ -207,22 +211,25 @@ class GlanceImageTestCase(test.TestCase):
         info = self.glance_image.read_info()
         self.assertEqual(self.fake_result_info, info)
 
+    @mock.patch('cloudferrylib.os.image.glance_image.copy.deepcopy')
     @mock.patch('cloudferrylib.utils.file_like_proxy.FileLikeProxy')
-    def test_deploy(self, mock_proxy):
-        info = copy.deepcopy(self.fake_result_info)
+    def test_deploy(self, mock_proxy, mock_copy):
+        mock_copy.return_value = self.fake_result_info
         self.glance_mock_client().images.create.return_value = (
             self.fake_image_1)
 
         fake_images1 = [self.fake_image_2, mock.Mock()]
         fake_images2 = [self.fake_image_1, self.fake_image_2]
+        fake_images3 = [self.fake_image_1]
 
         self.glance_mock_client().images.list.side_effect = (fake_images1,
-                                                             fake_images2)
+                                                             fake_images2,
+                                                             fake_images3)
 
-        new_info = self.glance_image.deploy(info)
+        new_info = self.glance_image.deploy(self.fake_result_info)
 
         self.assertEqual(self.fake_result_info, new_info)
         mock_proxy.assert_called_once_with(
-            info['image']['images']['fake_image_id_1']['image'],
-            file_like_proxy.callback_print_progress,
+            self.fake_result_info['images']['fake_image_id_1']['image'],
+            None,
             '10MB')

@@ -16,17 +16,22 @@
 
 import mock
 
+from novaclient.v1_1 import client as nova_client
 from oslotest import mockpatch
 
 from cloudferrylib.os.compute import nova_compute
-from novaclient.v1_1 import client as nova_client
+from cloudferrylib.utils import utils
 from tests import test
 
 
-FAKE_CONFIG = {'user': 'fake_user',
-               'password': 'fake_password',
-               'tenant': 'fake_tenant',
-               'host': '1.1.1.1'}
+FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
+                                                   'password': 'fake_password',
+                                                   'tenant': 'fake_tenant',
+                                                   'host': '1.1.1.1'}),
+                             mysql=utils.ext_dict({'host': '1.1.1.1'}),
+                             migrate=utils.ext_dict({'speed_limit': '10MB',
+                                                     'retry': '7',
+                                                     'time_wait': '5'}))
 
 
 class NovaComputeTestCase(test.TestCase):
@@ -37,7 +42,16 @@ class NovaComputeTestCase(test.TestCase):
         self.nc_patch = mockpatch.PatchObject(nova_client, 'Client',
                                               new=self.mock_client)
         self.useFixture(self.nc_patch)
-        self.nova_client = nova_compute.NovaCompute(FAKE_CONFIG)
+
+        self.identity_mock = mock.Mock()
+
+        self.fake_cloud = mock.Mock()
+        self.fake_cloud.resources = dict(identity=self.identity_mock)
+
+        with mock.patch(
+                'cloudferrylib.os.compute.nova_compute.mysql_connector'):
+            self.nova_client = nova_compute.NovaCompute(FAKE_CONFIG,
+                                                        self.fake_cloud)
 
         self.fake_instance_0 = mock.Mock()
         self.fake_instance_1 = mock.Mock()
@@ -52,7 +66,7 @@ class NovaComputeTestCase(test.TestCase):
         # To check self.mock_client call only from this test method
         self.mock_client.reset_mock()
 
-        client = self.nova_client.get_nova_client(FAKE_CONFIG)
+        client = self.nova_client.get_client()
 
         self.mock_client.assert_called_once_with('fake_user', 'fake_password',
                                                  'fake_tenant',
@@ -88,49 +102,62 @@ class NovaComputeTestCase(test.TestCase):
 
         self.assertEqual('start', status)
 
-    def test_change_status_start(self):
-        self.nova_client.change_status('start', instance=self.fake_instance_0)
+    @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
+    @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
+    def test_change_status_active(self, mock_get, mock_sleep):
+        mock_get.return_value = 'shutoff'
+        self.nova_client.change_status('active', instance=self.fake_instance_0)
         self.fake_instance_0.start.assert_called_once_with()
+        mock_sleep.assert_called_with(2)
 
-    def test_change_status_stop(self):
-        self.nova_client.change_status('stop', instance=self.fake_instance_0)
+    @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
+    @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
+    def test_change_status_shutoff(self, mock_get, mock_sleep):
+        mock_get.return_value = 'active'
+        self.nova_client.change_status('shutoff',
+                                       instance=self.fake_instance_0)
         self.fake_instance_0.stop.assert_called_once_with()
+        mock_sleep.assert_called_with(2)
 
-    def test_change_status_resume(self):
-        self.nova_client.change_status('resume', instance=self.fake_instance_0)
+    @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
+    @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
+    def test_change_status_resume(self, mock_get, mock_sleep):
+        mock_get.return_value = 'suspend'
+        self.nova_client.change_status('active', instance=self.fake_instance_0)
         self.fake_instance_0.resume.assert_called_once_with()
+        mock_sleep.assert_called_with(2)
 
-    def test_change_status_paused(self):
+    @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
+    @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
+    def test_change_status_paused(self, mock_get, mock_sleep):
+        mock_get.return_value = 'active'
         self.nova_client.change_status('paused', instance=self.fake_instance_0)
         self.fake_instance_0.pause.assert_called_once_with()
+        mock_sleep.assert_called_with(2)
 
-    def test_change_status_unpaused(self):
-        self.nova_client.change_status('unpaused',
+    @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
+    @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
+    def test_change_status_unpaused(self, mock_get, mock_sleep):
+        mock_get.return_value = 'paused'
+        self.nova_client.change_status('active',
                                        instance=self.fake_instance_0)
         self.fake_instance_0.unpause.assert_called_once_with()
+        mock_sleep.assert_called_with(2)
 
-    def test_change_status_suspend(self):
+    @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
+    @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
+    def test_change_status_suspend(self, mock_get, mock_sleep):
+        mock_get.return_value = 'active'
         self.nova_client.change_status('suspend',
                                        instance=self.fake_instance_0)
         self.fake_instance_0.suspend.assert_called_once_with()
+        mock_sleep.assert_called_with(2)
 
     def test_change_status_same(self):
         self.mock_client().servers.get('fake_instance_id').status = 'stop'
 
         self.nova_client.change_status('stop', instance=self.fake_instance_0)
         self.assertFalse(self.fake_instance_0.stop.called)
-
-    def test___get_disk_path_ephemeral(self):
-        fake_instance_inf = {'id': 'fake_id'}
-        fake_blk_list = [
-            "compute/%s%s" % (fake_instance_inf['id'], '_fake_disk')]
-        disk_path = self.nova_client._NovaCompute__get_disk_path(
-            'fake_disk',
-            fake_blk_list,
-            fake_instance_inf,
-            is_ceph_ephemeral=True)
-
-        self.assertEqual('compute/fake_id_fake_disk', disk_path)
 
     def test_get_flavor_from_id(self):
         self.mock_client().flavors.get.return_value = self.fake_flavor_0

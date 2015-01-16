@@ -13,20 +13,26 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+
+import copy
 import mock
 
-from cloudferrylib.os.network import neutron
-from tests import test
-from oslotest import mockpatch
-import copy
-
 from neutronclient.v2_0 import client as neutron_client
+from oslotest import mockpatch
+
+from cloudferrylib.os.network import neutron
+from cloudferrylib.utils import utils
+from tests import test
 
 
-FAKE_CONFIG = {'cloud': {'user': 'fake_user',
-                         'password': 'fake_password',
-                         'tenant': 'fake_tenant',
-                         'host': '1.1.1.1'}}
+FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
+                                                   'password': 'fake_password',
+                                                   'tenant': 'fake_tenant',
+                                                   'host': '1.1.1.1',
+                                                   }),
+                             migrate=utils.ext_dict({'speed_limit': '10MB',
+                                                     'retry': '7',
+                                                     'time_wait': '5'}))
 
 
 class NeutronTestCase(test.TestCase):
@@ -167,9 +173,10 @@ class NeutronTestCase(test.TestCase):
                          'enable_dhcp': True,
                          'network_id': 'fake_network_id_1',
                          'tenant_id': 'fake_tenant_id_1',
-                         'allocation_pools':
-                             [{'start': 'fake_start_ip_1',
-                               'end': 'fake_end_ip_1'}],
+                         'allocation_pools': [
+                             {'start': 'fake_start_ip_1',
+                              'end': 'fake_end_ip_1'}
+                         ],
                          'host_routes': [],
                          'ip_version': 4,
                          'gateway_ip': 'fake_gateway_ip_1',
@@ -191,9 +198,10 @@ class NeutronTestCase(test.TestCase):
 
         fake_routers_list = {
             'routers': [{'status': 'ACTIVE',
-                         'external_gateway_info':
-                             {'network_id': 'fake_network_id_1',
-                              'enable_snat': True},
+                         'external_gateway_info': {
+                             'network_id': 'fake_network_id_1',
+                             'enable_snat': True
+                         },
                          'name': 'fake_router_name_1',
                          'admin_state_up': True,
                          'tenant_id': 'fake_tenant_id_1',
@@ -219,9 +227,10 @@ class NeutronTestCase(test.TestCase):
                          'id': 'fake_router_id_1',
                          'admin_state_up': True,
                          'routes': [],
-                         'external_gateway_info':
-                             {'network_id': 'fake_network_id_1',
-                              'enable_snat': True},
+                         'external_gateway_info': {
+                             'network_id': 'fake_network_id_1',
+                             'enable_snat': True
+                         },
                          'ext_net_name': 'fake_network_name_1',
                          'ext_net_tenant_name': 'fake_tenant_name_1',
                          'ext_net_id': 'fake_network_id_1',
@@ -267,22 +276,25 @@ class NeutronTestCase(test.TestCase):
     def test_get_security_groups(self):
 
         fake_secgroups_list = {
-            'security_groups':
-                [{'id': 'fake_secgr_id_1',
-                  'tenant_id': 'fake_tenant_id_1',
-                  'name': 'fake_secgr_name_1',
-                  'security_group_rules':
-                      [{'remote_group_id': None,
-                        'direction': 'egress',
-                        'remote_ip_prefix': None,
-                        'protocol': 'fake_protocol',
-                        'tenant_id': 'fake_tenant_id_1',
-                        'port_range_max': 22,
-                        'security_group_id': 'fake_secgr_id_1',
-                        'port_range_min': 22,
-                        'ethertype': 'IPv4',
-                        'id': 'fake_secgr_rule_id_1'}],
-                  'description': 'fake_secgr_1_description'}]}
+            'security_groups': [
+                {'id': 'fake_secgr_id_1',
+                 'tenant_id': 'fake_tenant_id_1',
+                 'name': 'fake_secgr_name_1',
+                 'security_group_rules': [
+                     {'remote_group_id': None,
+                      'direction': 'egress',
+                      'remote_ip_prefix': None,
+                      'protocol': 'fake_protocol',
+                      'tenant_id': 'fake_tenant_id_1',
+                      'port_range_max': 22,
+                      'security_group_id': 'fake_secgr_id_1',
+                      'port_range_min': 22,
+                      'ethertype': 'IPv4',
+                      'id': 'fake_secgr_rule_id_1'}
+                 ],
+                 'description': 'fake_secgr_1_description'}
+            ]
+        }
 
         self.neutron_mock_client().list_security_groups.return_value = \
             fake_secgroups_list
@@ -393,16 +405,17 @@ class NeutronTestCase(test.TestCase):
             'tenant_name': 'fake_tenant_name_1',
             'id': 'fake_existing_secgr_id_2',
             'description': 'fake_secgr_2_description',
-            'security_group_rules':
-                [{'remote_group_id': None,
-                  'direction': 'egress',
-                  'remote_ip_prefix': None,
-                  'protocol': None,
-                  'port_range_min': None,
-                  'port_range_max': None,
-                  'ethertype': 'IPv4',
-                  'security_group_id': 'fake_existing_secgr_id_2',
-                  'rule_hash': 'fake_rule_2.1_hash'}],
+            'security_group_rules': [
+                {'remote_group_id': None,
+                 'direction': 'egress',
+                 'remote_ip_prefix': None,
+                 'protocol': None,
+                 'port_range_min': None,
+                 'port_range_max': None,
+                 'ethertype': 'IPv4',
+                 'security_group_id': 'fake_existing_secgr_id_2',
+                 'rule_hash': 'fake_rule_2.1_hash'}
+            ],
             'res_hash': 'fake_secgr_2_hash'}
 
         fake_existing_secgroups = [sg1_info, existing_sg2_info]
@@ -414,15 +427,16 @@ class NeutronTestCase(test.TestCase):
                                                             sg2_info])
 
         rule_info = {
-            'security_group_rule':
-                {'direction': 'egress',
-                 'protocol': 'tcp',
-                 'port_range_min': 80,
-                 'port_range_max': 80,
-                 'ethertype': 'IPv4',
-                 'remote_ip_prefix': None,
-                 'security_group_id': 'fake_existing_secgr_id_2',
-                 'tenant_id': 'fake_existing_tenant_id'}}
+            'security_group_rule': {
+                'direction': 'egress',
+                'protocol': 'tcp',
+                'port_range_min': 80,
+                'port_range_max': 80,
+                'ethertype': 'IPv4',
+                'remote_ip_prefix': None,
+                'security_group_id': 'fake_existing_secgr_id_2',
+                'tenant_id': 'fake_existing_tenant_id'}
+        }
 
         self.neutron_mock_client().create_security_group_rule.\
             assert_called_once_with(rule_info)
@@ -534,8 +548,9 @@ class NeutronTestCase(test.TestCase):
         router_info = {
             'router': {'name': 'fake_router_name_2',
                        'tenant_id': 'fake_tenant_id_2',
-                       'external_gateway_info':
-                           {'network_id': 'fake_network_id_2'}}}
+                       'external_gateway_info': {
+                           'network_id': 'fake_network_id_2'
+                       }}}
 
         self.neutron_network_client.upload_routers(src_nets_info,
                                                    src_subnets_info,
