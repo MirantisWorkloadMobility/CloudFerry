@@ -194,8 +194,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.init, cloud='dst_cloud')
         act_stop_vms = stop_vm.StopVms(self.init, cloud='src_cloud')
         act_start_vms = start_vm.StartVms(self.init, cloud='dst_cloud')
-        #transport_resource_inst = self.migrate_resources_by_instance_via_ssh()
-        transport_resource_inst = self.migrate_resources_by_instance()
+        transport_resource_inst = self.migrate_resources_by_instance_via_ssh()
+        # transport_resource_inst = self.migrate_resources_by_instance()
         transport_inst = self.migrate_instance()
         act_dissociate_floatingip = dissociate_floatingip_via_compute.DissociateFloatingip(self.init, cloud='src_cloud')
         return act_stop_vms >> transport_resource_inst >> transport_inst >> \
