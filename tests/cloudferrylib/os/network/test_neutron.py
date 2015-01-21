@@ -48,9 +48,12 @@ class NeutronTestCase(test.TestCase):
                                   new=self.neutron_mock_client)
         self.useFixture(self.neutron_client_patch)
         self.identity_mock = mock.Mock()
+        self.network_mock = mock.Mock()
+        self.network_mock.neutron_client = self.neutron_mock_client
         self.fake_cloud = mock.Mock()
         self.fake_cloud.mysql_connector = mock.Mock()
-        self.fake_cloud.resources = dict(identity=self.identity_mock)
+        self.fake_cloud.resources = dict(identity=self.identity_mock,
+                                         network=self.network_mock)
 
         self.neutron_network_client = \
             neutron.NeutronNetwork(FAKE_CONFIG, self.fake_cloud)
@@ -157,9 +160,9 @@ class NeutronTestCase(test.TestCase):
 
         self.neutron_mock_client().list_networks.return_value = \
             fake_networks_list
-        self.neutron_mock_client().show_subnet.return_value = \
+        self.neutron_mock_client.show_subnet.return_value = \
             {'subnet': {'name': 'fake_subnet_name_1'}}
-        self.neutron_network_client.get_resource_hash = \
+        self.network_mock.get_resource_hash = \
             mock.Mock(return_value='fake_net_hash_1')
 
         networks_info = [self.net_1_info]
@@ -185,9 +188,9 @@ class NeutronTestCase(test.TestCase):
 
         self.neutron_mock_client().list_subnets.return_value = \
             fake_subnets_list
-        self.neutron_mock_client().show_network.return_value = \
+        self.neutron_mock_client.show_network.return_value = \
             {'network': {'name': 'fake_network_name_1'}}
-        self.neutron_network_client.get_resource_hash = \
+        self.network_mock.get_resource_hash = \
             mock.Mock(return_value='fake_subnet_hash_1')
 
         subnets_info = [self.subnet_1_info]
@@ -210,7 +213,7 @@ class NeutronTestCase(test.TestCase):
 
         self.neutron_mock_client().list_routers.return_value = \
             fake_routers_list
-        self.neutron_mock_client().show_network.return_value = \
+        self.neutron_mock_client.show_network.return_value = \
             {'network': {'name': 'fake_network_name_1',
                          'tenant_id': 'fake_tenant_id_1'}}
 
@@ -219,8 +222,8 @@ class NeutronTestCase(test.TestCase):
                                       'ip_address': 'fake_ipaddr_1'}],
                        'device_id': 'fake_router_id_1'}]}
 
-        self.neutron_mock_client().list_ports.return_value = fake_ports_list
-        self.neutron_network_client.get_resource_hash = \
+        self.neutron_mock_client.list_ports.return_value = fake_ports_list
+        self.network_mock.get_resource_hash = \
             mock.Mock(return_value='fake_router_hash')
 
         routers_info = [{'name': 'fake_router_name_1',
@@ -256,7 +259,7 @@ class NeutronTestCase(test.TestCase):
 
         self.neutron_mock_client().list_floatingips.return_value = \
             fake_floatingips_list
-        self.neutron_mock_client().show_network.return_value = \
+        self.neutron_mock_client.show_network.return_value = \
             {'network': {'name': 'fake_network_name_1',
                          'tenant_id': 'fake_tenant_id_1'}}
 
@@ -332,6 +335,11 @@ class NeutronTestCase(test.TestCase):
                                                           'tenant_name',
                                                           'description')
         secgroups_info = [secgr_info]
+
+        self.network_mock.get_resource_hash.side_effect = [
+            rule_info['rule_hash'],
+            secgr_info['res_hash']
+        ]
 
         secgr_info_result = self.neutron_network_client.get_sec_gr_and_rules()
         self.assertEquals(secgroups_info, secgr_info_result)
