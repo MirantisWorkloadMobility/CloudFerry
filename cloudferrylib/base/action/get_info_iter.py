@@ -20,11 +20,11 @@ import copy
 
 class GetInfoIter(action.Action):
 
-    def __init__(self, iter_info_name='info_iter', info_name='info', resource_name=utl.INSTANCES_TYPE):
+    def __init__(self, init, iter_info_name='info_iter', info_name='info', resource_name=utl.INSTANCES_TYPE):
         self.iter_info_name = iter_info_name
         self.info_name = info_name
         self.resource_name = resource_name
-        super(GetInfoIter, self).__init__({})
+        super(GetInfoIter, self).__init__(init)
 
     def run(self, **kwargs):
         info = kwargs[self.iter_info_name]

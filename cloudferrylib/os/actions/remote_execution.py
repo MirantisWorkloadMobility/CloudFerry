@@ -19,11 +19,11 @@ from cloudferrylib.utils.ssh_util import SshUtil
 
 class RemoteExecution(action.Action):
 
-    def __init__(self, config_migrate, host):
+    def __init__(self, init, config_migrate, host):
         self.config_migrate = config_migrate
         self.host = host
         self.remote_exec_obj = SshUtil(self.host, self.config_migrate)
-        super(RemoteExecution, self).__init__({})
+        super(RemoteExecution, self).__init__(init)
 
     def run(self, command, **kwargs):
         self.remote_exec_obj.execute(command)

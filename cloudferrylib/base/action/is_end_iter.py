@@ -19,11 +19,11 @@ from cloudferrylib.utils import utils as utl
 
 class IsEndIter(action.Action):
 
-    def __init__(self, iter_info_name='info_iter',
+    def __init__(self, init, iter_info_name='info_iter',
                  resource_name=utl.INSTANCES_TYPE):
         self.iter_info_name = iter_info_name
         self.resource_name = resource_name
-        super(IsEndIter, self).__init__({})
+        super(IsEndIter, self).__init__(init)
 
     def run(self, **kwargs):
         info = kwargs[self.iter_info_name]

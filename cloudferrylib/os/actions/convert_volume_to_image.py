@@ -16,7 +16,7 @@
 from cloudferrylib.base.action import converter
 from cloudferrylib.utils import utils as utl
 
-from utils import utils
+from cloudferrylib.utils import utils
 import copy
 LOG = utils.get_log(__name__)
 CEPH = 'ceph'

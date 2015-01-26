@@ -18,9 +18,9 @@ from cloudferrylib.utils import utils as utl
 
 
 class GetInfoObjects(action.Action):
-    def __init__(self, cloud,):
+    def __init__(self, init, cloud,):
         self.cloud = cloud
-        super(GetInfoObjects, self).__init__()
+        super(GetInfoObjects, self).__init__(init)
 
     def run(self, **kwargs):
         """Get info about objects from cloud object storage."""

@@ -19,12 +19,12 @@ import copy
 
 class Merge(action.Action):
 
-    def __init__(self, data1, data2, result, resources_name):
+    def __init__(self, init, data1, data2, result, resources_name):
         self.data1 = data1
         self.data2 = data2
         self.result = result
         self.resources_name = resources_name
-        super(Merge, self).__init__({})
+        super(Merge, self).__init__(init)
 
     def run(self, **kwargs):
         data1 = copy.deepcopy(kwargs[self.data1])
