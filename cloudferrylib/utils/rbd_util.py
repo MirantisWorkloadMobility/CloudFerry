@@ -20,7 +20,9 @@ from cloudferrylib.utils import ssh_util
 class RbdUtil(ssh_util.SshUtil):
     rbd_rm_cmd = cmd_cfg.rbd_cmd("rm -p %s %s")
     rbd_import_cmd = cmd_cfg.rbd_cmd("import --image-format=%s %s %s")
+    rbd_import_diff_cmd = cmd_cfg.rbd_cmd("import-diff %s %s")
     rbd_export_cmd = cmd_cfg.rbd_cmd("export %s %s")
+    rbd_export_diff_cmd = cmd_cfg.rbd_cmd("export-diff %s %s")
     rbd_info_cmd = cmd_cfg.rbd_cmd("-p %s info %s --format %s")
 
     #exmaple pool=compute filename = %s_disk.local % instance_id
@@ -33,9 +35,19 @@ class RbdUtil(ssh_util.SshUtil):
         cmd = self.rbd_import_cmd(image_format, output, filename)
         return self.execute(cmd, host_compute)
 
+    #example output="-" ceph_path=%s_disk.local
+    def rbd_import_diff(self, output, ceph_path, host_compute=None):
+        cmd = self.rbd_import_cmd(output, ceph_path)
+        return self.execute(cmd, host_compute)
+
     #example filename=volume-id1 output=-
     def rbd_export(self, filename, output, host_compute=None):
         cmd = self.rbd_export_cmd(filename, output)
+        return self.execute(cmd, host_compute)
+
+    #example ceph_path=volume-id1 output=-
+    def rbd_export_diff(self, ceph_path, output, host_compute=None):
+        cmd = self.rbd_export_cmd(ceph_path, output)
         return self.execute(cmd, host_compute)
 
     #pool=images filename=image_id format=json

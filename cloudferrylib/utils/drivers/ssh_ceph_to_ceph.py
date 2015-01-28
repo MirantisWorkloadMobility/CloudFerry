@@ -33,17 +33,16 @@ class SSHCephToCeph(driver_transporter.DriverTransporter):
                     else self.src_cloud.getIpSsh())
         host_dst = (data.get('host_dst') if data.get('host_dst')
                     else self.dst_cloud.getIpSsh())
-        action_utils.delete_file_from_rbd(host_dst, data['path_dst'])
         with settings(host_string=host_src), utils.forward_agent(
                 env.key_filename):
-            rbd_import = rbd_util.RbdUtil.rbd_import_cmd
+            rbd_import_diff = rbd_util.RbdUtil.rbd_import_diff_cmd
             ssh_cmd = cmd_cfg.ssh_cmd
-            rbd_export = rbd_util.RbdUtil.rbd_export_cmd
+            rbd_export_diff = rbd_util.RbdUtil.rbd_export_diff_cmd
 
-            ssh_rbd_import = ssh_cmd(host_dst, rbd_import)
+            ssh_rbd_import_diff = ssh_cmd(host_dst, rbd_import_diff)
 
-            process = rbd_export >> ssh_rbd_import
-            process = process(data['path_src'], '-', '2', '-',
+            process = rbd_export_diff >> ssh_rbd_import_diff
+            process = process(data['path_src'], '-', '-',
                               data['path_dst'])
 
             self.src_cloud.ssh_util.execute(process)
