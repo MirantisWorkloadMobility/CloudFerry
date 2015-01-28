@@ -57,6 +57,9 @@ class NeutronNetwork(network.Network):
                 'floating_ips': self.get_floatingips(),
                 'security_groups': self.get_sec_gr_and_rules(),
                 'meta': {}}
+        if self.config.migrate.keep_lbaas:
+            info['lbaas'] = dict()
+            info['lbaas']['pools'] = self.get_lb_pools()
         return info
 
     def deploy(self, info):
@@ -72,6 +75,9 @@ class NeutronNetwork(network.Network):
                                     deploy_info['floating_ips'])
         self.upload_neutron_security_groups(deploy_info['security_groups'])
         self.upload_sec_group_rules(deploy_info['security_groups'])
+        if self.config.migrate.keep_lbaas:
+            self.upload_lb_pools(deploy_info['lbaas']['pools'],
+                                 deploy_info['subnets'])
 
     def get_func_mac_address(self, instance):
         return self.get_mac_by_ip
@@ -403,6 +409,58 @@ class NeutronNetwork(network.Network):
             sec_groups_info.append(sec_gr_info)
 
         return sec_groups_info
+
+    def get_lb_pools(self):
+        pools = self.neutron_client.list_pools()['pools']
+        get_tenant_name = self.identity_client.get_tenants_func()
+        pools_info = []
+        for pool in pools:
+            pool_info = dict()
+            pool_info['name'] = pool['name']
+            pool_info['description'] = pool['description']
+            pool_info['lb_method'] = pool['lb_method']
+            pool_info['protocol'] = pool['protocol']
+            pool_info['provider'] = pool['provider']
+            pool_info['subnet_id'] = pool['subnet_id']
+            pool_info['tenant_id'] = pool['tenant_id']
+            pool_info['tenant_name'] = get_tenant_name(pool['tenant_id'])
+            pool_info['res_hash'] = self.get_resource_hash(pool_info,
+                                                           'name',
+                                                           'tenant_name',
+                                                           'lb_method',
+                                                           'protocol',
+                                                           'provider')
+            pool_info['meta'] = dict()
+            pools_info.append(pool_info)
+        return pools_info
+
+    def upload_lb_pools(self, pools, subnets):
+        existing_pools = self.get_lb_pools()
+        existing_pools_hashlist = \
+            [ex_pool['res_hash'] for ex_pool in existing_pools]
+        existing_subnets = self.get_subnets()
+        for pool in pools:
+            if pool['res_hash'] not in existing_pools_hashlist:
+                snet_hash = self.get_res_hash_by_id(subnets, pool['subnet_id'])
+                snet_id = self.get_res_by_hash(existing_subnets,
+                                               snet_hash)['id']
+                pool_info = {
+                    'pool':
+                        {
+                            'name': pool['name'],
+                            'description': pool['description'],
+                            'provider': pool['provider'],
+                            'subnet_id': snet_id,
+                            'protocol': pool['protocol'],
+                            'lb_method': pool['lb_method']
+                            }
+                }
+                pool['meta']['id'] = \
+                    self.neutron_client.create_pool(pool_info)['pool']['id']
+            else:
+                LOG.info("| Dst cloud already has the same pool "
+                         "with name %s in tenant %s" %
+                         (pool['name'], pool['tenant_name']))
 
     def upload_neutron_security_groups(self, sec_groups):
         exist_secgrs = self.get_sec_gr_and_rules()
