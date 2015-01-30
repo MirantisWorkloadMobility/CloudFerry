@@ -32,5 +32,5 @@ class CloudFerry(object):
     def __init__(self, config):
         self.config = config
 
-    def migrate(self):
+    def migrate(self, scenario=None):
         pass

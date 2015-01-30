@@ -1,0 +1,43 @@
+namespace:
+  info_result:
+      instances: {}
+
+process:
+  - task_resources_transporting:
+      - act_identity_trans: True
+      - task_images_trans:
+          - act_get_info_images: True
+          - act_deploy_images: True
+      - act_comp_res_trans: True
+      - act_network_trans: True
+  - transport_instances_and_dependency_resources:
+      - act_get_filter: True
+      - act_get_info_inst: True
+      - init_iteration_instance:
+          - init_iteration_instance_copy_var: True
+          - init_iteration_instance_ref: True
+      - get_next_instance: True
+      - trans_one_inst:
+          - act_stop_vms: True
+          - transport_resource_inst:
+              - transport_images:
+                  - act_conv_comp_img: True
+                  - act_copy_inst_images: True
+                  - act_conv_image_comp: True
+              - task_transport_volumes:
+                  - act_convert_c_to_v: True
+                  - act_convert_v_to_i: True
+                  - act_copy_g2g_vols: True
+                  - act_convert_i_to_v: True
+                  - act_convert_v_to_c: True
+          - transport_inst:
+              - act_net_prep: True
+              - act_map_com_info: True
+              - act_deploy_instances: True
+          - act_attaching: True
+          - act_dissociate_floatingip: True
+          - act_start_vms: True
+      - save_result_migrate_instances: True
+      - is_instances: ['get_next_instance']
+      - rename_info_iter: True
+      - act_cleanup_images: True

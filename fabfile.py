@@ -18,6 +18,7 @@ from cloudferrylib.scheduler.scheduler import Scheduler
 import cfglib
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import utils
+from cloudferrylib.scheduler.scenario import Scenario
 from cloud import cloud_ferry
 env.forward_agent = True
 env.user = 'root'
@@ -34,7 +35,7 @@ def migrate(name_config=None, name_instance=None):
     utils.init_singletones(cfglib.CONF)
     env.key_filename = cfglib.CONF.migrate.key_filename
     cloud = cloud_ferry.CloudFerry(cfglib.CONF)
-    cloud.migrate()
+    cloud.migrate(Scenario())
 
 
 @task

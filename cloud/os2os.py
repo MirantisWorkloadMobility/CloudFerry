@@ -72,22 +72,27 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             'cfg': self.config
         }
 
-    def migrate(self):
+    def migrate(self, scenario=None):
         namespace_scheduler = namespace.Namespace({
             '__init_task__': self.init,
             'info_result': {
                 utl.INSTANCES_TYPE: {}
             }
-            })
-
-        task_resources_transporting = self.transport_resources()
-        transport_instances_and_dependency_resources = self.migrate_instances()
-
-        process_migration = task_resources_transporting >> transport_instances_and_dependency_resources
-
+        })
+        if not scenario:
+            process_migration = self.process_migrate()
+        else:
+            scenario.init_tasks(self.init)
+            scenario.load_scenario()
+            process_migration = scenario.get_net()
         process_migration = cursor.Cursor(process_migration)
         scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, cursor=process_migration)
         scheduler_migr.start()
+
+    def process_migrate(self):
+        task_resources_transporting = self.transport_resources()
+        transport_instances_and_dependency_resources = self.migrate_instances()
+        return task_resources_transporting >> transport_instances_and_dependency_resources
 
     def migrate_instances(self):
         name_data = 'info'
@@ -100,9 +105,9 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_get_filter = get_filter.GetFilter(self.init)
         act_get_info_inst = get_info_instances.GetInfoInstances(self.init, cloud='src_cloud')
         act_cleanup_images = cleanup_images.CleanupImages(self.init)
-        get_next_instance = get_info_iter.GetInfoIter()
-        rename_info_iter = rename_info.RenameInfo(name_result, name_data)
-        is_instances = is_end_iter.IsEndIter()
+        get_next_instance = get_info_iter.GetInfoIter(self.init)
+        rename_info_iter = rename_info.RenameInfo(self.init, name_result, name_data)
+        is_instances = is_end_iter.IsEndIter(self.init)
 
         transport_instances_and_dependency_resources = \
             act_get_filter >> \
@@ -127,7 +132,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         return act_get_info_images >> act_deploy_images
 
     def save_result(self, data1, data2, result, resources_name):
-        return merge.Merge(data1, data2, result, resources_name)
+        return merge.Merge(self.init, data1, data2, result, resources_name)
 
     def transport_volumes_by_instance(self):
         act_copy_g2g_vols = copy_g2g.CopyFromGlanceToGlance(self.init)

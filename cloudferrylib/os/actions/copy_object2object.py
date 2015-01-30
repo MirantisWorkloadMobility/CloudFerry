@@ -19,10 +19,10 @@ from cloudferrylib.utils import utils as utl
 
 
 class CopyFromObjectToObject(transporter.Transporter):
-    def __init__(self, src_cloud, dst_cloud):
+    def __init__(self, init, src_cloud, dst_cloud):
         self.src_cloud = src_cloud
         self.dst_cloud = dst_cloud
-        super(CopyFromObjectToObject, self).__init__({})
+        super(CopyFromObjectToObject, self).__init__(init)
 
     def run(self, objstorage_info=None, **kwargs):
         dst_objstorage = self.dst_cloud.resources[utl.OBJSTORAGE_RESOURCE]
