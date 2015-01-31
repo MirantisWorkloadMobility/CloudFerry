@@ -62,6 +62,7 @@ class NeutronNetwork(network.Network):
             info['lbaas']['pools'] = self.get_lb_pools()
             info['lbaas']['monitors'] = self.get_lb_monitors()
             info['lbaas']['members'] = self.get_lb_members()
+            info['lbaas']['vips'] = self.get_lb_vips()
         return info
 
     def deploy(self, info):
@@ -85,6 +86,9 @@ class NeutronNetwork(network.Network):
                                     deploy_info['lbaas']['monitors'])
             self.upload_lb_members(deploy_info['lbaas']['members'],
                                    deploy_info['lbaas']['pools'])
+            self.upload_lb_vips(deploy_info['lbaas']['vips'],
+                                deploy_info['lbaas']['pools'],
+                                deploy_info['subnets'])
 
     def get_func_mac_address(self, instance):
         return self.get_mac_by_ip
@@ -492,6 +496,70 @@ class NeutronNetwork(network.Network):
             member_info['meta'] = dict()
             members_info.append(member_info)
         return members_info
+
+    def get_lb_vips(self):
+        vips = self.neutron_client.list_vips()['vips']
+        get_tenant_name = self.identity_client.get_tenants_func()
+        vips_info = []
+        for vip in vips:
+            vip_info = dict()
+            vip_info['name'] = vip['name']
+            vip_info['id'] = vip['id']
+            vip_info['description'] = vip['description']
+            vip_info['address'] = vip['address']
+            vip_info['protocol'] = vip['protocol']
+            vip_info['protocol_port'] = vip['protocol_port']
+            vip_info['pool_id'] = vip['pool_id']
+            vip_info['connection_limit'] = vip['connection_limit']
+            vip_info['session_persistence'] = vip.get('session_persistence', None)
+            vip_info['tenant_id'] = vip['tenant_id']
+            vip_info['subnet_id'] = vip['subnet_id']
+            vip_info['tenant_name'] = get_tenant_name(vip['tenant_id'])
+            vip_info['res_hash'] = self.get_resource_hash(vip_info,
+                                                          'name',
+                                                          'address',
+                                                          'protocol',
+                                                          'protocol_port',
+                                                          'tenant_name')
+            vip_info['meta'] = dict()
+            vips_info.append(vip_info)
+        return vips_info
+
+    def upload_lb_vips(self, vips, pools, subnets):
+        existing_vips = self.get_lb_vips()
+        existing_vips_hashlist = [ex_vip['res_hash'] for ex_vip in existing_vips]
+        existing_pools = self.get_lb_pools()
+        existing_snets = self.get_subnets()
+        for vip in vips:
+            if vip['res_hash'] not in existing_vips_hashlist:
+                tenant_id = \
+                    self.identity_client.get_tenant_id_by_name(vip['tenant_name'])
+                pool_hash = self.get_res_hash_by_id(pools, vip['pool_id'])
+                dst_pool = self.get_res_by_hash(existing_pools, pool_hash)
+                snet_hash = self.get_res_hash_by_id(subnets, vip['subnet_id'])
+                dst_subnet = self.get_res_by_hash(existing_snets, snet_hash)
+                vip_info = {
+                    'vip': {
+                        'name': vip['name'],
+                        'description': vip['description'],
+                        'address': vip['address'],
+                        'protocol': vip['protocol'],
+                        'protocol_port': vip['protocol_port'],
+                        'connection_limit': vip['connection_limit'],
+                        'pool_id': dst_pool['id'],
+                        'tenant_id': tenant_id,
+                        'subnet_id': dst_subnet['id']
+                    }
+                }
+                if vip['session_persistence']:
+                    vip_info['vip']['session_persistence'] = vip['session_persistence']
+                vip['meta']['id'] = \
+                    self.neutron_client.create_vip(vip_info)['vip']['id']
+            else:
+                LOG.info("| Dst cloud already has the same VIP "
+                         "with address %s in tenant %s" %
+                         (vip['address'], vip['tenant_name']))
+
 
     def upload_lb_members(self, members, pools):
         existing_members = self.get_lb_members()
