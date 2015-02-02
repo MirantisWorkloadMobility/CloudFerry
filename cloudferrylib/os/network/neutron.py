@@ -59,10 +59,10 @@ class NeutronNetwork(network.Network):
                 'meta': {}}
         if self.config.migrate.keep_lbaas:
             info['lbaas'] = dict()
-            info['lbaas']['pools'] = self.get_lb_pools()
-            info['lbaas']['monitors'] = self.get_lb_monitors()
-            info['lbaas']['members'] = self.get_lb_members()
-            info['lbaas']['vips'] = self.get_lb_vips()
+            info['lb_pools'] = self.get_lb_pools()
+            info['lb_monitors'] = self.get_lb_monitors()
+            info['lb_members'] = self.get_lb_members()
+            info['lb_vips'] = self.get_lb_vips()
         return info
 
     def deploy(self, info):
@@ -79,15 +79,15 @@ class NeutronNetwork(network.Network):
         self.upload_neutron_security_groups(deploy_info['security_groups'])
         self.upload_sec_group_rules(deploy_info['security_groups'])
         if self.config.migrate.keep_lbaas:
-            self.upload_lb_pools(deploy_info['lbaas']['pools'],
+            self.upload_lb_pools(deploy_info['lb_pools'],
                                  deploy_info['subnets'])
-            self.upload_lb_monitors(deploy_info['lbaas']['monitors'])
-            self.associate_lb_monitors(deploy_info['lbaas']['pools'],
-                                    deploy_info['lbaas']['monitors'])
-            self.upload_lb_members(deploy_info['lbaas']['members'],
-                                   deploy_info['lbaas']['pools'])
-            self.upload_lb_vips(deploy_info['lbaas']['vips'],
-                                deploy_info['lbaas']['pools'],
+            self.upload_lb_monitors(deploy_info['lb_monitors'])
+            self.associate_lb_monitors(deploy_info['lb_pools'],
+                                    deploy_info['lb_monitors'])
+            self.upload_lb_members(deploy_info['lb_members'],
+                                   deploy_info['lb_pools'])
+            self.upload_lb_vips(deploy_info['lb_vips'],
+                                deploy_info['lb_pools'],
                                 deploy_info['subnets'])
 
     def get_func_mac_address(self, instance):
@@ -164,6 +164,10 @@ class NeutronNetwork(network.Network):
             'floating_ip': NeutronNetwork.convert_floatingips,
             'security_group': NeutronNetwork.convert_security_groups,
             'rule': NeutronNetwork.convert_rules,
+            'lb_pool': NeutronNetwork.convert_lb_pools,
+            'lb_member': NeutronNetwork.convert_lb_members,
+            'lb_monitor': NeutronNetwork.convert_lb_monitors,
+            'lb_vip': NeutronNetwork.convert_lb_vips
         }
 
         return obj_map[obj_name](neutron_object, cloud)
@@ -367,6 +371,133 @@ class NeutronNetwork(network.Network):
 
         return result
 
+    @staticmethod
+    def convert_lb_pools(pool, cloud):
+        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+
+        get_tenant_name = identity_res.get_tenants_func()
+
+        result = {
+            'name': pool['name'],
+            'id': pool['id'],
+            'description': pool['description'],
+            'lb_method': pool['lb_method'],
+            'protocol': pool['protocol'],
+            'provider': pool['provider'],
+            'subnet_id': pool['subnet_id'],
+            'tenant_id': pool['tenant_id'],
+            'tenant_name': get_tenant_name(pool['tenant_id']),
+            'health_monitors': pool['health_monitors'],
+            'members': pool['members'],
+            'meta': {}
+        }
+
+        res_hash = net_res.get_resource_hash(result,
+                                             'name',
+                                             'tenant_name',
+                                             'lb_method',
+                                             'protocol',
+                                             'provider')
+
+        result['res_hash'] = res_hash
+
+        return result
+
+    @staticmethod
+    def convert_lb_monitors(monitor, cloud):
+        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+
+        get_tenant_name = identity_res.get_tenants_func()
+
+        result = {
+            'id': monitor['id'],
+            'tenant_id': monitor['tenant_id'],
+            'tenant_name': get_tenant_name(monitor['tenant_id']),
+            'type': monitor['type'],
+            'delay': monitor['delay'],
+            'timeout': monitor['timeout'],
+            'max_retries': monitor['max_retries'],
+            'url_path': monitor.get('url_path', None),
+            'expected_codes': monitor.get('expected_codes', None),
+            'pools': monitor['pools'],
+            'meta': {}
+        }
+
+        res_hash = net_res.get_resource_hash(result,
+                                             'tenant_name',
+                                             'type',
+                                             'delay',
+                                             'timeout',
+                                             'max_retries')
+
+        result['res_hash'] = res_hash
+
+        return result
+
+    @staticmethod
+    def convert_lb_members(member, cloud):
+        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+
+        get_tenant_name = identity_res.get_tenants_func()
+
+        result = {
+            'id': member['id'],
+            'pool_id': member['pool_id'],
+            'address': member['address'],
+            'protocol_port': member['protocol_port'],
+            'weight': member['weight'],
+            'tenant_id': member['tenant_id'],
+            'tenant_name': get_tenant_name(member['tenant_id']),
+            'meta': {}
+        }
+
+        res_hash = net_res.get_resource_hash(result,
+                                             'address',
+                                             'protocol_port',
+                                             'weight',
+                                             'tenant_name')
+
+        result['res_hash'] = res_hash
+
+        return result
+
+    @staticmethod
+    def convert_lb_vips(vip, cloud):
+        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+
+        get_tenant_name = identity_res.get_tenants_func()
+
+        result = {
+            'name': vip['name'],
+            'id': vip['id'],
+            'description': vip['description'],
+            'address': vip['address'],
+            'protocol': vip['protocol'],
+            'protocol_port': vip['protocol_port'],
+            'pool_id': vip['pool_id'],
+            'connection_limit': vip['connection_limit'],
+            'session_persistence': vip.get('session_persistence', None),
+            'tenant_id': vip['tenant_id'],
+            'subnet_id': vip['subnet_id'],
+            'tenant_name': get_tenant_name(vip['tenant_id']),
+            'meta': {}
+        }
+
+        res_hash = net_res.get_resource_hash(result,
+                                             'name',
+                                             'address',
+                                             'protocol',
+                                             'protocol_port',
+                                             'tenant_name')
+
+        result['res_hash'] = res_hash
+
+        return result
+
     def get_networks(self):
         networks = self.neutron_client.list_networks()['networks']
         networks_info = []
@@ -423,106 +554,43 @@ class NeutronNetwork(network.Network):
 
     def get_lb_pools(self):
         pools = self.neutron_client.list_pools()['pools']
-        get_tenant_name = self.identity_client.get_tenants_func()
         pools_info = []
+
         for pool in pools:
-            pool_info = dict()
-            pool_info['name'] = pool['name']
-            pool_info['id'] = pool['id']
-            pool_info['description'] = pool['description']
-            pool_info['lb_method'] = pool['lb_method']
-            pool_info['protocol'] = pool['protocol']
-            pool_info['provider'] = pool['provider']
-            pool_info['subnet_id'] = pool['subnet_id']
-            pool_info['tenant_id'] = pool['tenant_id']
-            pool_info['tenant_name'] = get_tenant_name(pool['tenant_id'])
-            pool_info['health_monitors'] = pool['health_monitors']
-            pool_info['members'] = pool['members']
-            pool_info['res_hash'] = self.get_resource_hash(pool_info,
-                                                           'name',
-                                                           'tenant_name',
-                                                           'lb_method',
-                                                           'protocol',
-                                                           'provider')
-            pool_info['meta'] = dict()
+            pool_info = self.convert(pool, self.cloud, 'lb_pool')
             pools_info.append(pool_info)
+
         return pools_info
 
     def get_lb_monitors(self):
         monitors = \
             self.neutron_client.list_health_monitors()['health_monitors']
-        get_tenant_name = self.identity_client.get_tenants_func()
         monitors_info = []
+
         for mon in monitors:
-            mon_info = dict()
-            mon_info['id'] = mon['id']
-            mon_info['tenant_id'] = mon['tenant_id']
-            mon_info['tenant_name'] = get_tenant_name(mon['tenant_id'])
-            mon_info['type'] = mon['type']
-            mon_info['delay'] = mon['delay']
-            mon_info['timeout'] = mon['timeout']
-            mon_info['max_retries'] = mon['max_retries']
-            mon_info['url_path'] = mon.get('url_path', None)
-            mon_info['expected_codes'] = mon.get('expected_codes', None)
-            mon_info['pools'] = mon['pools']
-            mon_info['res_hash'] = self.get_resource_hash(mon_info,
-                                                          'tenant_name',
-                                                          'type',
-                                                          'delay',
-                                                          'timeout',
-                                                          'max_retries')
-            mon_info['meta'] = dict()
+            mon_info = self.convert(mon, self.cloud, 'lb_monitor')
             monitors_info.append(mon_info)
+
         return monitors_info
 
     def get_lb_members(self):
         members = self.neutron_client.list_members()['members']
-        get_tenant_name = self.identity_client.get_tenants_func()
         members_info = []
+
         for member in members:
-            member_info = dict()
-            member_info['id'] = member['id']
-            member_info['pool_id'] = member['pool_id']
-            member_info['address'] = member['address']
-            member_info['protocol_port'] = member['protocol_port']
-            member_info['weight'] = member['weight']
-            member_info['tenant_id'] = member['tenant_id']
-            member_info['tenant_name'] = get_tenant_name(member_info['tenant_id'])
-            member_info['res_hash'] = self.get_resource_hash(member_info,
-                                                             'address',
-                                                             'protocol_port',
-                                                             'weight',
-                                                             'tenant_name')
-            member_info['meta'] = dict()
+            member_info = self.convert(member, self.cloud, 'lb_member')
             members_info.append(member_info)
+
         return members_info
 
     def get_lb_vips(self):
         vips = self.neutron_client.list_vips()['vips']
-        get_tenant_name = self.identity_client.get_tenants_func()
         vips_info = []
+
         for vip in vips:
-            vip_info = dict()
-            vip_info['name'] = vip['name']
-            vip_info['id'] = vip['id']
-            vip_info['description'] = vip['description']
-            vip_info['address'] = vip['address']
-            vip_info['protocol'] = vip['protocol']
-            vip_info['protocol_port'] = vip['protocol_port']
-            vip_info['pool_id'] = vip['pool_id']
-            vip_info['connection_limit'] = vip['connection_limit']
-            vip_info['session_persistence'] = vip.get('session_persistence', None)
-            vip_info['tenant_id'] = vip['tenant_id']
-            vip_info['subnet_id'] = vip['subnet_id']
-            vip_info['tenant_name'] = get_tenant_name(vip['tenant_id'])
-            vip_info['res_hash'] = self.get_resource_hash(vip_info,
-                                                          'name',
-                                                          'address',
-                                                          'protocol',
-                                                          'protocol_port',
-                                                          'tenant_name')
-            vip_info['meta'] = dict()
+            vip_info = self.convert(vip, self.cloud, 'lb_vip')
             vips_info.append(vip_info)
+
         return vips_info
 
     def upload_lb_vips(self, vips, pools, subnets):
