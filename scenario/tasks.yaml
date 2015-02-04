@@ -24,7 +24,7 @@ tasks:
    act_rename_inst_vol_dst: ['CreateReference', 'storage_info', 'dst_storage_info']
    act_inst_vol_data_map: ['PrepareVolumesDataMap', 'src_storage_info', 'dst_storage_info']
    act_deploy_inst_volumes: ['DeployVolumes', 'dst_cloud']
-   act_inst_vol_transport_data: ['TransportCephToCephViaSsh']
+   act_inst_vol_transport_data: ['TaskTransfer', 'ssh_ceph_to_ceph', 'storage_info']
    save_result_migrate_instances: ['Merge', 'info', 'info_result', 'info_result', 'instances']
    act_get_info_images: ['GetInfoImages', 'src_cloud']
    act_deploy_images: ['CopyFromGlanceToGlance']

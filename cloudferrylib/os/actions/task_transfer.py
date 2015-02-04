@@ -16,6 +16,17 @@
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
 
+from cloudferrylib.utils.drivers import ssh_file_to_file
+from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
+from cloudferrylib.utils.drivers import ssh_ceph_to_file
+from cloudferrylib.utils.drivers import ssh_file_to_ceph
+
+
+DRIVER_MAP = {'ssh_file_to_file': ssh_file_to_file.SSHFileToFile,
+              'ssh_file_to_ceph': ssh_file_to_ceph.SSHFileToCeph,
+              'ssh_ceph_to_file': ssh_ceph_to_file.SSHCephToFile,
+              'ssh_ceph_to_ceph': ssh_ceph_to_ceph.SSHCephToCeph}
+
 
 class TaskTransfer(action.Action):
     def __init__(self, init, driver,
@@ -23,9 +34,9 @@ class TaskTransfer(action.Action):
                  resource_name=utl.VOLUMES_TYPE,
                  resource_root_name=utl.VOLUME_BODY):
         super(TaskTransfer, self).__init__(init)
-        self.driver = driver(self.src_cloud,
-                             self.dst_cloud,
-                             self.cfg)
+        self.driver = DRIVER_MAP[driver](self.src_cloud,
+                                         self.dst_cloud,
+                                         self.cfg)
         self.resource_name = resource_name
         self.resource_root_name = resource_root_name
         self.input_info = input_info

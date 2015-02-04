@@ -156,7 +156,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_deploy_inst_volumes = deploy_volumes.DeployVolumes(self.init, cloud='dst_cloud')
 
         act_inst_vol_transport_data = task_transfer.TaskTransfer(self.init,
-                                                                 ssh_ceph_to_ceph.SSHCephToCeph,
+                                                                 'ssh_ceph_to_ceph',
                                                                  input_info='storage_info')
 
         task_get_inst_vol_info = act_convert_c_to_v >> act_rename_inst_vol_src
