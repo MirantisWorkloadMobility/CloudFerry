@@ -27,11 +27,6 @@ from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.os.actions import task_transfer
 from cloudferrylib.utils import utils as utl, forward_agent
 
-from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
-from cloudferrylib.utils.drivers import ssh_ceph_to_file
-from cloudferrylib.utils.drivers import ssh_file_to_file
-from cloudferrylib.utils.drivers import ssh_file_to_ceph
-
 
 CLOUD = 'cloud'
 BACKEND = 'backend'
@@ -55,10 +50,10 @@ TEMP = 'temp'
 FLAVORS = 'flavors'
 
 
-TRANSPORTER_MAP = {CEPH: {CEPH: ssh_ceph_to_ceph.SSHCephToCeph,
-                          ISCSI: ssh_ceph_to_file.SSHCephToFile},
-                   ISCSI: {CEPH: ssh_file_to_ceph.SSHFileToCeph,
-                           ISCSI: ssh_file_to_file.SSHFileToFile}}
+TRANSPORTER_MAP = {CEPH: {CEPH: 'ssh_ceph_to_ceph',
+                          ISCSI: 'ssh_ceph_to_file'},
+                   ISCSI: {CEPH: 'ssh_file_to_ceph',
+                           ISCSI: 'ssh_file_to_file'}}
 
 
 class TransportInstance(action.Action):
