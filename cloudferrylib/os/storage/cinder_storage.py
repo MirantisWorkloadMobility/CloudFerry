@@ -101,6 +101,13 @@ class CinderStorage(storage.Storage):
     def get_snapshots_list(self, detailed=True, search_opts=None):
         return self.cinder_client.volume_snapshots.list(detailed, search_opts)
 
+    def create_snapshot(self, volume_id, force=False,
+                        display_name=None, display_description=None):
+        return self.cinder_client.volume_snapshots.create(volume_id,
+                                                          force,
+                                                          display_name,
+                                                          display_description)
+
     def create_volume(self, size, **kwargs):
         return self.cinder_client.volumes.create(size, **kwargs)
 
