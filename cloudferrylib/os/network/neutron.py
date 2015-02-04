@@ -57,6 +57,12 @@ class NeutronNetwork(network.Network):
                 'floating_ips': self.get_floatingips(),
                 'security_groups': self.get_sec_gr_and_rules(),
                 'meta': {}}
+        if self.config.migrate.keep_lbaas:
+            info['lbaas'] = dict()
+            info['lb_pools'] = self.get_lb_pools()
+            info['lb_monitors'] = self.get_lb_monitors()
+            info['lb_members'] = self.get_lb_members()
+            info['lb_vips'] = self.get_lb_vips()
         return info
 
     def deploy(self, info):
@@ -72,6 +78,17 @@ class NeutronNetwork(network.Network):
                                     deploy_info['floating_ips'])
         self.upload_neutron_security_groups(deploy_info['security_groups'])
         self.upload_sec_group_rules(deploy_info['security_groups'])
+        if self.config.migrate.keep_lbaas:
+            self.upload_lb_pools(deploy_info['lb_pools'],
+                                 deploy_info['subnets'])
+            self.upload_lb_monitors(deploy_info['lb_monitors'])
+            self.associate_lb_monitors(deploy_info['lb_pools'],
+                                    deploy_info['lb_monitors'])
+            self.upload_lb_members(deploy_info['lb_members'],
+                                   deploy_info['lb_pools'])
+            self.upload_lb_vips(deploy_info['lb_vips'],
+                                deploy_info['lb_pools'],
+                                deploy_info['subnets'])
 
     def get_func_mac_address(self, instance):
         return self.get_mac_by_ip
@@ -147,6 +164,10 @@ class NeutronNetwork(network.Network):
             'floating_ip': NeutronNetwork.convert_floatingips,
             'security_group': NeutronNetwork.convert_security_groups,
             'rule': NeutronNetwork.convert_rules,
+            'lb_pool': NeutronNetwork.convert_lb_pools,
+            'lb_member': NeutronNetwork.convert_lb_members,
+            'lb_monitor': NeutronNetwork.convert_lb_monitors,
+            'lb_vip': NeutronNetwork.convert_lb_vips
         }
 
         return obj_map[obj_name](neutron_object, cloud)
@@ -350,6 +371,133 @@ class NeutronNetwork(network.Network):
 
         return result
 
+    @staticmethod
+    def convert_lb_pools(pool, cloud):
+        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+
+        get_tenant_name = identity_res.get_tenants_func()
+
+        result = {
+            'name': pool['name'],
+            'id': pool['id'],
+            'description': pool['description'],
+            'lb_method': pool['lb_method'],
+            'protocol': pool['protocol'],
+            'provider': pool['provider'],
+            'subnet_id': pool['subnet_id'],
+            'tenant_id': pool['tenant_id'],
+            'tenant_name': get_tenant_name(pool['tenant_id']),
+            'health_monitors': pool['health_monitors'],
+            'members': pool['members'],
+            'meta': {}
+        }
+
+        res_hash = net_res.get_resource_hash(result,
+                                             'name',
+                                             'tenant_name',
+                                             'lb_method',
+                                             'protocol',
+                                             'provider')
+
+        result['res_hash'] = res_hash
+
+        return result
+
+    @staticmethod
+    def convert_lb_monitors(monitor, cloud):
+        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+
+        get_tenant_name = identity_res.get_tenants_func()
+
+        result = {
+            'id': monitor['id'],
+            'tenant_id': monitor['tenant_id'],
+            'tenant_name': get_tenant_name(monitor['tenant_id']),
+            'type': monitor['type'],
+            'delay': monitor['delay'],
+            'timeout': monitor['timeout'],
+            'max_retries': monitor['max_retries'],
+            'url_path': monitor.get('url_path', None),
+            'expected_codes': monitor.get('expected_codes', None),
+            'pools': monitor['pools'],
+            'meta': {}
+        }
+
+        res_hash = net_res.get_resource_hash(result,
+                                             'tenant_name',
+                                             'type',
+                                             'delay',
+                                             'timeout',
+                                             'max_retries')
+
+        result['res_hash'] = res_hash
+
+        return result
+
+    @staticmethod
+    def convert_lb_members(member, cloud):
+        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+
+        get_tenant_name = identity_res.get_tenants_func()
+
+        result = {
+            'id': member['id'],
+            'pool_id': member['pool_id'],
+            'address': member['address'],
+            'protocol_port': member['protocol_port'],
+            'weight': member['weight'],
+            'tenant_id': member['tenant_id'],
+            'tenant_name': get_tenant_name(member['tenant_id']),
+            'meta': {}
+        }
+
+        res_hash = net_res.get_resource_hash(result,
+                                             'address',
+                                             'protocol_port',
+                                             'weight',
+                                             'tenant_name')
+
+        result['res_hash'] = res_hash
+
+        return result
+
+    @staticmethod
+    def convert_lb_vips(vip, cloud):
+        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+
+        get_tenant_name = identity_res.get_tenants_func()
+
+        result = {
+            'name': vip['name'],
+            'id': vip['id'],
+            'description': vip['description'],
+            'address': vip['address'],
+            'protocol': vip['protocol'],
+            'protocol_port': vip['protocol_port'],
+            'pool_id': vip['pool_id'],
+            'connection_limit': vip['connection_limit'],
+            'session_persistence': vip.get('session_persistence', None),
+            'tenant_id': vip['tenant_id'],
+            'subnet_id': vip['subnet_id'],
+            'tenant_name': get_tenant_name(vip['tenant_id']),
+            'meta': {}
+        }
+
+        res_hash = net_res.get_resource_hash(result,
+                                             'name',
+                                             'address',
+                                             'protocol',
+                                             'protocol_port',
+                                             'tenant_name')
+
+        result['res_hash'] = res_hash
+
+        return result
+
     def get_networks(self):
         networks = self.neutron_client.list_networks()['networks']
         networks_info = []
@@ -403,6 +551,190 @@ class NeutronNetwork(network.Network):
             sec_groups_info.append(sec_gr_info)
 
         return sec_groups_info
+
+    def get_lb_pools(self):
+        pools = self.neutron_client.list_pools()['pools']
+        pools_info = []
+
+        for pool in pools:
+            pool_info = self.convert(pool, self.cloud, 'lb_pool')
+            pools_info.append(pool_info)
+
+        return pools_info
+
+    def get_lb_monitors(self):
+        monitors = \
+            self.neutron_client.list_health_monitors()['health_monitors']
+        monitors_info = []
+
+        for mon in monitors:
+            mon_info = self.convert(mon, self.cloud, 'lb_monitor')
+            monitors_info.append(mon_info)
+
+        return monitors_info
+
+    def get_lb_members(self):
+        members = self.neutron_client.list_members()['members']
+        members_info = []
+
+        for member in members:
+            member_info = self.convert(member, self.cloud, 'lb_member')
+            members_info.append(member_info)
+
+        return members_info
+
+    def get_lb_vips(self):
+        vips = self.neutron_client.list_vips()['vips']
+        vips_info = []
+
+        for vip in vips:
+            vip_info = self.convert(vip, self.cloud, 'lb_vip')
+            vips_info.append(vip_info)
+
+        return vips_info
+
+    def upload_lb_vips(self, vips, pools, subnets):
+        existing_vips = self.get_lb_vips()
+        existing_vips_hashlist = [ex_vip['res_hash'] for ex_vip in existing_vips]
+        existing_pools = self.get_lb_pools()
+        existing_snets = self.get_subnets()
+        for vip in vips:
+            if vip['res_hash'] not in existing_vips_hashlist:
+                tenant_id = \
+                    self.identity_client.get_tenant_id_by_name(vip['tenant_name'])
+                pool_hash = self.get_res_hash_by_id(pools, vip['pool_id'])
+                dst_pool = self.get_res_by_hash(existing_pools, pool_hash)
+                snet_hash = self.get_res_hash_by_id(subnets, vip['subnet_id'])
+                dst_subnet = self.get_res_by_hash(existing_snets, snet_hash)
+                vip_info = {
+                    'vip': {
+                        'name': vip['name'],
+                        'description': vip['description'],
+                        'address': vip['address'],
+                        'protocol': vip['protocol'],
+                        'protocol_port': vip['protocol_port'],
+                        'connection_limit': vip['connection_limit'],
+                        'pool_id': dst_pool['id'],
+                        'tenant_id': tenant_id,
+                        'subnet_id': dst_subnet['id']
+                    }
+                }
+                if vip['session_persistence']:
+                    vip_info['vip']['session_persistence'] = vip['session_persistence']
+                vip['meta']['id'] = \
+                    self.neutron_client.create_vip(vip_info)['vip']['id']
+            else:
+                LOG.info("| Dst cloud already has the same VIP "
+                         "with address %s in tenant %s" %
+                         (vip['address'], vip['tenant_name']))
+
+
+    def upload_lb_members(self, members, pools):
+        existing_members = self.get_lb_members()
+        existing_members_hashlist = \
+            [ex_member['res_hash'] for ex_member in existing_members]
+        existing_pools = self.get_lb_pools()
+        for member in members:
+            if member['res_hash'] not in existing_members_hashlist:
+                tenant_id = \
+                    self.identity_client.get_tenant_id_by_name(member['tenant_name'])
+                pool_hash = self.get_res_hash_by_id(pools, member['pool_id'])
+                dst_pool = self.get_res_by_hash(existing_pools, pool_hash)
+                member_info = {
+                    'member': {
+                        'protocol_port': member["protocol_port"],
+                        'address': member['address'],
+                        'pool_id': dst_pool['id']
+                    }
+                }
+                member['meta']['id'] = \
+                    self.neutron_client.create_member(member_info)['member']['id']
+            else:
+                LOG.info("| Dst cloud already has the same member "
+                         "with address %s in tenant %s" %
+                         (member['address'], member['tenant_name']))
+
+
+    def upload_lb_monitors(self, monitors):
+        existing_mons = self.get_lb_monitors()
+        existing_mons_hashlist = \
+            [ex_mon['res_hash'] for ex_mon in existing_mons]
+        for mon in monitors:
+            if mon['res_hash'] not in existing_mons_hashlist:
+                tenant_id = \
+                    self.identity_client.get_tenant_id_by_name(mon['tenant_name'])
+                mon_info = {
+                    'health_monitor':
+                        {
+                            'tenant_id': tenant_id,
+                            'type': mon['type'],
+                            'delay': mon['delay'],
+                            'timeout': mon['timeout'],
+                            'max_retries': mon['max_retries']
+                        }
+                }
+                if mon['url_path']:
+                    mon_info['health_monitor']['url_path'] = mon['url_path']
+                    mon_info['health_monitor']['expected_codes'] = mon['expected_codes']
+                mon['meta']['id'] = \
+                    self.neutron_client.create_health_monitor(mon_info)['health_monitor']['id']
+            else:
+                LOG.info("| Dst cloud already has the same healthmonitor "
+                         "with type %s in tenant %s" %
+                         (mon['type'], mon['tenant_name']))
+
+    def associate_lb_monitors(self, pools, monitors):
+        existing_pools = self.get_lb_pools()
+        existing_monitors = self.get_lb_monitors()
+        for pool in pools:
+            pool_hash = self.get_res_hash_by_id(pools, pool['id'])
+            dst_pool = self.get_res_by_hash(existing_pools, pool_hash)
+            for monitor_id in pool['health_monitors']:
+                monitor_hash = self.get_res_hash_by_id(monitors, monitor_id)
+                dst_monitor = self.get_res_by_hash(existing_monitors, monitor_hash)
+                if dst_monitor['id'] not in dst_pool['health_monitors']:
+                    dst_monitor_info = {
+                        'health_monitor':{
+                            'id': dst_monitor['id']
+                        }
+                    }
+                    self.neutron_client.associate_health_monitor(dst_pool['id'],
+                                                                 dst_monitor_info)
+                else:
+                    LOG.info("| Dst pool with name %s already has associated the healthmonitor "
+                         "with id %s in tenant %s" %
+                         (dst_pool['name'], dst_monitor['id'], dst_monitor['tenant_name']))
+
+    def upload_lb_pools(self, pools, subnets):
+        existing_pools = self.get_lb_pools()
+        existing_pools_hashlist = \
+            [ex_pool['res_hash'] for ex_pool in existing_pools]
+        existing_subnets = self.get_subnets()
+        for pool in pools:
+            if pool['res_hash'] not in existing_pools_hashlist:
+                tenant_id = \
+                    self.identity_client.get_tenant_id_by_name(pool['tenant_name'])
+                snet_hash = self.get_res_hash_by_id(subnets, pool['subnet_id'])
+                snet_id = self.get_res_by_hash(existing_subnets,
+                                               snet_hash)['id']
+                pool_info = {
+                    'pool':
+                        {
+                            'name': pool['name'],
+                            'description': pool['description'],
+                            'tenant_id': tenant_id,
+                            'provider': pool['provider'],
+                            'subnet_id': snet_id,
+                            'protocol': pool['protocol'],
+                            'lb_method': pool['lb_method']
+                            }
+                }
+                pool['meta']['id'] = \
+                    self.neutron_client.create_pool(pool_info)['pool']['id']
+            else:
+                LOG.info("| Dst cloud already has the same pool "
+                         "with name %s in tenant %s" %
+                         (pool['name'], pool['tenant_name']))
 
     def upload_neutron_security_groups(self, sec_groups):
         exist_secgrs = self.get_sec_gr_and_rules()
