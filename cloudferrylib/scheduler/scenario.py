@@ -34,7 +34,13 @@ class Scenario(object):
             actions.update(self.get_actions(mod))
         tasks = {}
         for task in tasks_file['tasks']:
-            tasks[task] = actions[tasks_file['tasks'][task][0]](init, *tasks_file['tasks'][task][1:])
+            args = tasks_file['tasks'][task][1:]
+            if isinstance(args[-1], dict):
+                args_map = args[-1]
+                args = args[:-1]
+            else:
+                args_map = {}
+            tasks[task] = actions[tasks_file['tasks'][task][0]](init, *args, **args_map)
         self.tasks = tasks
 
     def load_scenario(self, path_scenario=None):
