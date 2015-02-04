@@ -60,8 +60,15 @@ class CinderStorage(storage.Storage):
     def read_info(self, **kwargs):
         info = {utl.VOLUMES_TYPE: {}}
         for vol in self.get_volumes_list(search_opts=kwargs):
-            volume = self.convert(vol, self.config, self.cloud)
+            volume = self.convert_volume(vol, self.config, self.cloud)
+            snapshots = {}
+            if self.config.migrate.keep_volume_snapshots:
+                search_opts = {'volume_id': volume['id']}
+                for snap in self.get_snapshots_list(search_opts=search_opts):
+                    snapshot = self.convert_snapshot(snap, vol, self.config, self.cloud)
+                    snapshots[snapshot['id']] = snapshot
             info[utl.VOLUMES_TYPE][vol.id] = {utl.VOLUME_BODY: volume,
+                                              'snapshots': snapshots,
                                               utl.META_INFO: {
                                               }}
         if self.config.migrate.keep_volume_storage:
@@ -90,6 +97,9 @@ class CinderStorage(storage.Storage):
 
     def get_volumes_list(self, detailed=True, search_opts=None):
         return self.cinder_client.volumes.list(detailed, search_opts)
+
+    def get_snapshots_list(self, detailed=True, search_opts=None):
+        return self.cinder_client.volume_snapshots.list(detailed, search_opts)
 
     def create_volume(self, size, **kwargs):
         return self.cinder_client.volumes.create(size, **kwargs)
@@ -171,7 +181,7 @@ class CinderStorage(storage.Storage):
         return {}
 
     @staticmethod
-    def convert(vol, cfg, cloud):
+    def convert_volume(vol, cfg, cloud):
         compute = cloud.resources[utl.COMPUTE_RESOURCE]
         volume = {
             'id': vol.id,
@@ -214,6 +224,33 @@ class CinderStorage(storage.Storage):
                 instance_info['host'])
             volume['path'] = utl.find_element_by_in(list_disk, vol.id)
         return volume
+
+    @staticmethod
+    def convert_snapshot(snap, vol, cfg, cloud):
+
+        snapshot = {
+            'id': snap.id,
+            'volume_id': snap.volume_id,
+            'tenant_id': snap.project_id,
+            'display_name': snap.display_name,
+            'display_description': snap.display_description,
+            'created_at': snap.created_at,
+            'size': snap.size
+        }
+
+        if cfg.storage.backend == utl.CEPH:
+            snapshot['path'] = "%s/%s%s@%s%s" % (
+                cfg.storage.rbd_pool,
+                cfg.storage.volume_name_template,
+                vol.id,
+                cfg.storage.snapshot_name_template,
+                snap.id
+            )
+            snapshot['host'] = (cfg.storage.host
+                                if cfg.storage.host
+                                else cfg.cloud.host)
+
+        return snapshot
 
     @staticmethod
     def convert_to_params(vol):
