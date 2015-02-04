@@ -197,3 +197,40 @@ class CinderStorageTestCase(test.TestCase):
         self.cinder_client.attach_volume_to_instance = attach_vol_to_instance
         res = self.cinder_client.deploy(info)
         self.assertIn(vol_return.id, res)
+
+    def test_get_volume_path_iscsi(self):
+        fake_mysql_return = ('fake_ip:fake_port,3 iqn.2010-10.org.openstack:'
+                             'volume-fake_volume_id fake_lun',)
+        self.fake_cloud.mysql_connector.execute().fetchone.return_value = (
+            fake_mysql_return)
+
+        volume_path = self.cinder_client.get_volume_path_iscsi('fake_vol_id')
+
+        expected_volume_path = (
+            '/dev/disk/by-path/ip-fake_ip:fake_port-iscsi-iqn.2010-10.org.'
+            'openstack:volume-fake_volume_id-lun-fake_lun')
+
+        self.assertEqual(expected_volume_path, volume_path)
+        self.fake_cloud.mysql_connector.execute.assert_called_with(
+            "SELECT provider_location FROM volumes WHERE id='fake_vol_id';")
+
+    def test_get_volume_path_iscsi_error(self):
+        fake_mysql_return = None
+        self.fake_cloud.mysql_connector.execute.return_value = (
+            fake_mysql_return)
+
+        expected_msg = ('There is no such raw in Cinder DB with the specified '
+                        'volume_id=fake_vol_id')
+
+        try:
+            volume_path = self.cinder_client.get_volume_path_iscsi(
+                'fake_vol_id')
+        except Exception as e:
+            self.assertEqual(expected_msg, e.message)
+
+        self.fake_cloud.mysql_connector.execute.assert_called_once_with(
+            "SELECT provider_location FROM volumes WHERE id='fake_vol_id';")
+
+        self.assertRaises(Exception,
+                          self.cinder_client.get_volume_path_iscsi,
+                          'fake_vol_id')
