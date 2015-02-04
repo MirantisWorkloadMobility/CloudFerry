@@ -24,7 +24,6 @@ from cloudferrylib.os.image import glance_image
 from cloudferrylib.os.storage import cinder_storage
 from cloudferrylib.os.network import neutron
 from cloudferrylib.os.identity import keystone
-from cloudferrylib.os.object_storage import swift_storage
 from cloudferrylib.os.compute import nova_compute
 from cloudferrylib.os.actions import get_info_images
 from cloudferrylib.os.actions import transport_instance
@@ -37,9 +36,7 @@ from cloudferrylib.os.actions import convert_compute_to_image
 from cloudferrylib.os.actions import convert_compute_to_volume
 from cloudferrylib.os.actions import convert_volume_to_image
 from cloudferrylib.os.actions import convert_volume_to_compute
-from cloudferrylib.os.actions import attach_used_volumes
 from cloudferrylib.os.actions import networks_transporter
-from cloudferrylib.base.action import create_reference
 from cloudferrylib.os.actions import prepare_volumes_data_map
 from cloudferrylib.os.actions import get_info_instances
 from cloudferrylib.os.actions import prepare_networks
@@ -122,8 +119,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         return transport_instances_and_dependency_resources
 
     def init_iteration_instance(self, data, name_backup, name_iter):
-        init_iteration_instance = copy_var.CopyVar(data, name_backup, True) >>\
-                                  create_reference.CreateReference(data, name_iter)
+        init_iteration_instance = copy_var.CopyVar(self.init, data, name_backup, True) >>\
+                                  create_reference.CreateReference(self.init, data, name_iter)
         return init_iteration_instance
 
     def migration_images(self):
@@ -146,10 +143,12 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
 
     def transport_volumes_by_instance_via_ssh(self):
         act_convert_c_to_v = convert_compute_to_volume.ConvertComputeToVolume(self.init, cloud='src_cloud')
-        act_rename_inst_vol_src = create_reference.CreateReference('storage_info',
+        act_rename_inst_vol_src = create_reference.CreateReference(self.init,
+                                                                   'storage_info',
                                                                    'src_storage_info')
         act_convert_v_to_c = convert_volume_to_compute.ConvertVolumeToCompute(self.init, cloud='dst_cloud')
-        act_rename_inst_vol_dst = create_reference.CreateReference('storage_info',
+        act_rename_inst_vol_dst = create_reference.CreateReference(self.init,
+                                                                   'storage_info',
                                                                    'dst_storage_info')
         act_inst_vol_data_map = prepare_volumes_data_map.PrepareVolumesDataMap(self.init,
                                                                                'src_storage_info',
@@ -199,8 +198,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.init, cloud='dst_cloud')
         act_stop_vms = stop_vm.StopVms(self.init, cloud='src_cloud')
         act_start_vms = start_vm.StartVms(self.init, cloud='dst_cloud')
-        transport_resource_inst = self.migrate_resources_by_instance_via_ssh()
-        # transport_resource_inst = self.migrate_resources_by_instance()
+        #transport_resource_inst = self.migrate_resources_by_instance_via_ssh()
+        transport_resource_inst = self.migrate_resources_by_instance()
         transport_inst = self.migrate_instance()
         act_dissociate_floatingip = dissociate_floatingip_via_compute.DissociateFloatingip(self.init, cloud='src_cloud')
         return act_stop_vms >> transport_resource_inst >> transport_inst >> \
