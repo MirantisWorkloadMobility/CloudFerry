@@ -14,7 +14,8 @@
 
 
 from cloudferrylib.base.action import action
-from cloudferrylib.os.actions import task_transfer
+from cloudferrylib.os.actions import snap_transfer
+from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
 from cloudferrylib.utils import utils as utl
 import copy
 
@@ -32,14 +33,17 @@ class DeploySnapshots(action.Action):
         volume_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
         for vol in deploy_info[utl.VOLUMES_TYPE].values():
             if vol['snapshots']:
-                snapshots_time_list = []
-                for snap in vol['snapshots']:
-                    if len(snapshots_time_list) == 0:
-                        snapshots_time_list.append(snap)
+                snapshots_list = [snapshot_info for snapshot_info in vol['snapshots'].values()]
+                snapshots_list.sort(key=lambda x: x.created_at)
+                for snap in snapshots_list:
+                    if snapshots_list.index(snap) == 0:
+                        act_snap_transfer = snap_transfer.SnapTransfer(self.init,
+                                                                       ssh_ceph_to_ceph.SSHCephToCeph, 1)
+                    elif snapshots_list.index(snap) == len(vol['snapshots']) - 1:
+                        act_snap_transfer = snap_transfer.SnapTransfer(self.init,
+                                                                       ssh_ceph_to_ceph.SSHCephToCeph, 3)
                     else:
-                        pass
-
-
-
-
-
+                        snap_num = snapshots_list.index(snap)
+                        snap['next_snapname'] = snapshots_list[snap_num + 1]['name']
+                        act_snap_transfer = snap_transfer.SnapTransfer(self.init,
+                                                                       ssh_ceph_to_ceph.SSHCephToCeph, 2)

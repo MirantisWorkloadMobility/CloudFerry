@@ -65,7 +65,7 @@ class CinderStorage(storage.Storage):
             if self.config.migrate.keep_volume_snapshots:
                 search_opts = {'volume_id': volume['id']}
                 for snap in self.get_snapshots_list(search_opts=search_opts):
-                    snapshot = self.convert_snapshot(snap, vol, self.config, self.cloud)
+                    snapshot = self.convert_snapshot(snap, volume, self.config, self.cloud)
                     snapshots[snapshot['id']] = snapshot
             info[utl.VOLUMES_TYPE][vol.id] = {utl.VOLUME_BODY: volume,
                                               'snapshots': snapshots,
@@ -233,7 +233,7 @@ class CinderStorage(storage.Storage):
         return volume
 
     @staticmethod
-    def convert_snapshot(snap, vol, cfg, cloud):
+    def convert_snapshot(snap, volume, cfg, cloud):
 
         snapshot = {
             'id': snap.id,
@@ -242,17 +242,13 @@ class CinderStorage(storage.Storage):
             'display_name': snap.display_name,
             'display_description': snap.display_description,
             'created_at': snap.created_at,
-            'size': snap.size
+            'size': snap.size,
+            'vol_path': volume['path']
         }
 
         if cfg.storage.backend == utl.CEPH:
-            snapshot['path'] = "%s/%s%s@%s%s" % (
-                cfg.storage.rbd_pool,
-                cfg.storage.volume_name_template,
-                vol.id,
-                cfg.storage.snapshot_name_template,
-                snap.id
-            )
+            snapshot['name'] = "%s%s" % (cfg.storage.snapshot_name_template, snap.id)
+            snapshot['path'] = "%s@%s" % (snapshot['vol_path'], snapshot['name'])
             snapshot['host'] = (cfg.storage.host
                                 if cfg.storage.host
                                 else cfg.cloud.host)

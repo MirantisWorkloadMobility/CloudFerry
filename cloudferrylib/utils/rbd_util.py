@@ -23,9 +23,9 @@ class RbdUtil(ssh_util.SshUtil):
     rbd_import_diff_cmd = cmd_cfg.rbd_cmd("import-diff %s %s")
     rbd_export_cmd = cmd_cfg.rbd_cmd("export %s %s")
     rbd_export_diff_cmd = cmd_cfg.rbd_cmd("export-diff %s %s")
-    rbd_export_diff_snap = cmd_cfg.rbd_cmd("export-diff --snap %s %s %s")
-    rbd_export_diff_from_snap = cmd_cfg.rbd_cmd("export-diff --from-snap %s --snap %s %s %s")
-    rbd_export_diff_from = cmd_cfg.rbd_cmd("export-diff --from-snap %s %s %s")
+    rbd_export_diff_snap_cmd = cmd_cfg.rbd_cmd("export-diff --snap %s %s %s")
+    rbd_export_diff_from_snap_cmd = cmd_cfg.rbd_cmd("export-diff --from-snap %s --snap %s %s %s")
+    rbd_export_diff_from_cmd = cmd_cfg.rbd_cmd("export-diff --from-snap %s %s %s")
     rbd_info_cmd = cmd_cfg.rbd_cmd("-p %s info %s --format %s")
 
     #exmaple pool=compute filename = %s_disk.local % instance_id
