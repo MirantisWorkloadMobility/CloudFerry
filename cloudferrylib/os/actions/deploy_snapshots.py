@@ -16,6 +16,7 @@
 from cloudferrylib.base.action import action
 from cloudferrylib.os.actions import snap_transfer
 from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
+from cloudferrylib.utils import rbd_util
 from cloudferrylib.utils import utils as utl
 import copy
 
@@ -33,17 +34,45 @@ class DeploySnapshots(action.Action):
         volume_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
         for vol in deploy_info[utl.VOLUMES_TYPE].values():
             if vol['snapshots']:
-                snapshots_list = [snapshot_info for snapshot_info in vol['snapshots'].values()]
-                snapshots_list.sort(key=lambda x: x.created_at)
+
+                vol_info = vol[utl.VOLUME_BODY]
+
+                snapshots_list = \
+                    [snap_info for snap_info in vol['snapshots'].values()]
+
+                snapshots_list.sort(key=lambda x: x['created_at'])
+
                 for snap in snapshots_list:
                     if snapshots_list.index(snap) == 0:
                         act_snap_transfer = snap_transfer.SnapTransfer(self.init,
                                                                        ssh_ceph_to_ceph.SSHCephToCeph, 1)
-                    elif snapshots_list.index(snap) == len(vol['snapshots']) - 1:
-                        act_snap_transfer = snap_transfer.SnapTransfer(self.init,
-                                                                       ssh_ceph_to_ceph.SSHCephToCeph, 3)
                     else:
                         snap_num = snapshots_list.index(snap)
-                        snap['next_snapname'] = snapshots_list[snap_num + 1]['name']
+                        snap['prev_snapname'] = snapshots_list[snap_num - 1]['name']
                         act_snap_transfer = snap_transfer.SnapTransfer(self.init,
                                                                        ssh_ceph_to_ceph.SSHCephToCeph, 2)
+
+
+
+                    act_snap_transfer.run(volume=vol_info, snapshot_info=snap)
+
+                    new_snapshot = volume_resource.create_snapshot(volume_id=vol_info['id'],
+                                                                   display_name=snap['display_name'],
+                                                                   display_description=snap['display_description'])
+
+                act_snap_transfer = snap_transfer.SnapTransfer(self.init,
+                                                               ssh_ceph_to_ceph.SSHCephToCeph, 3)
+                act_snap_transfer.run(volume=vol_info, snapshot_info=snapshots_list[-1])
+
+                for snap in snapshots_list:
+                    if volume_resource.config.storage.host:
+                        act_delete_redundant_snap = rbd_util.RbdUtil(cloud=self.cloud,
+                                                                     config_migrate=self.cfg.migrate,
+                                                                     host=vol_info[utl.HOST_DST])
+                        act_delete_redundant_snap.snap_rm(vol_info[utl.PATH_DST],
+                                                              snap['name'])
+                    else:
+                        act_delete_redundant_snap = rbd_util.RbdUtil(cloud=self.cloud,
+                                                                     config_migrate=self.cfg.migrate)
+                        act_delete_redundant_snap.snap_rm(vol_info[utl.PATH_DST],
+                                                              snap['name'], vol_info[utl.HOST_DST])

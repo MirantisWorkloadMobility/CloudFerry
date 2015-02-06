@@ -50,6 +50,7 @@ from cloudferrylib.os.actions import transport_compute_resources
 from cloudferrylib.os.actions import task_transfer
 from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
 from cloudferrylib.os.actions import get_filter
+from cloudferrylib.os.actions import deploy_snapshots
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
@@ -159,18 +160,21 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                                                                  'ssh_ceph_to_ceph',
                                                                  input_info='storage_info')
 
+        act_deploy_snapshots = deploy_snapshots.DeploySnapshots(self.init, cloud='dst_cloud')
+
         task_get_inst_vol_info = act_convert_c_to_v >> act_rename_inst_vol_src
         task_deploy_inst_vol = act_deploy_inst_volumes >> act_rename_inst_vol_dst
-        task_transfer_inst_vol_data = act_inst_vol_data_map >> act_inst_vol_transport_data
+        # task_transfer_inst_vol_data = act_inst_vol_data_map >> act_inst_vol_transport_data
         return task_get_inst_vol_info \
-               >> task_deploy_inst_vol >> task_transfer_inst_vol_data >> act_convert_v_to_c
+               >> task_deploy_inst_vol >> act_inst_vol_data_map >> act_deploy_snapshots >> act_convert_v_to_c
 
     def transport_resources(self):
         act_identity_trans = identity_transporter.IdentityTransporter(self.init)
         task_images_trans = self.migration_images()
         act_comp_res_trans = transport_compute_resources.TransportComputeResources(self.init)
-        act_network_trans = networks_transporter.NetworkTransporter(self.init)
-        return act_identity_trans >> task_images_trans >> act_network_trans >> act_comp_res_trans
+        # act_network_trans = networks_transporter.NetworkTransporter(self.init)
+        # return act_identity_trans >> task_images_trans >> act_network_trans >> act_comp_res_trans
+        return act_identity_trans >> task_images_trans >>  act_comp_res_trans
 
     def migrate_images_by_instances(self):
         act_conv_comp_img = convert_compute_to_image.ConvertComputeToImage(self.init, cloud='src_cloud')

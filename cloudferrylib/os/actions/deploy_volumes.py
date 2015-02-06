@@ -40,6 +40,8 @@ class DeployVolumes(action.Action):
         for new_id, old_id in new_ids.iteritems():
             volume = volume_resource.read_info(id=new_id)
             volume[utl.VOLUMES_TYPE][new_id][OLD_ID] = old_id
+            volume[utl.VOLUMES_TYPE][new_id]['snapshots'] = \
+                storage_info[utl.VOLUMES_TYPE][old_id]['snapshots']
             volume[utl.VOLUMES_TYPE][new_id][utl.META_INFO] = \
                 storage_info[utl.VOLUMES_TYPE][old_id][utl.META_INFO]
             volumes.update(volume[utl.VOLUMES_TYPE])

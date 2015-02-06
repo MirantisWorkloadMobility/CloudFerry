@@ -46,7 +46,7 @@ class SSHCephToCeph(driver_transporter.DriverTransporter):
                     rbd_export_diff = rbd_util.RbdUtil.rbd_export_diff_snap_cmd
                 elif snapshot_type == 2:
                     rbd_export_diff = rbd_util.RbdUtil.rbd_export_diff_from_snap_cmd
-                    process_params.insert(1, snapshot['next_snapname'])
+                    process_params.insert(0, snapshot['prev_snapname'])
                 elif snapshot_type == 3:
                     rbd_export_diff = rbd_util.RbdUtil.rbd_export_diff_from_cmd
                 else:

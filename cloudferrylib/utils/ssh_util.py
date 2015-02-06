@@ -21,19 +21,19 @@ from utils import forward_agent
 
 
 class SshUtil(object):
-    def __init__(self, cloud, config_migrate):
+    def __init__(self, cloud, config_migrate, host=None):
         self.cloud = cloud
-        self.host = cloud.host
+        self.host = host if host else cloud.host
         self.config_migrate = config_migrate
 
-    def execute(self, cmd, host_compute=None, host_exec=None):
+    def execute(self, cmd, internal_host=None, host_exec=None):
         host = host_exec if host_exec else self.host
         with settings(host_string=host):
-            if host_compute:
-                return self.execute_on_compute(str(cmd), host_compute)
+            if internal_host:
+                return self.execute_on_inthost(str(cmd), internal_host)
             else:
                 return run(str(cmd))
 
-    def execute_on_compute(self, cmd, host):
+    def execute_on_inthost(self, cmd, host):
         with forward_agent(self.config_migrate.key_filename):
             return run(str(cmd_cfg.ssh_cmd(host, str(cmd))))
