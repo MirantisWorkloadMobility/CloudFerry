@@ -15,6 +15,7 @@
 
 from cloudferrylib.base.action import action
 from cloudferrylib.os.actions import snap_transfer
+from cloudferrylib.os.actions import task_transfer
 from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
 from cloudferrylib.utils import rbd_util
 from cloudferrylib.utils import utils as utl
@@ -32,7 +33,7 @@ class DeploySnapshots(action.Action):
         deploy_info.update(identity_info)
         storage_info.update(identity_info)
         volume_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
-        for vol in deploy_info[utl.VOLUMES_TYPE].values():
+        for vol_id, vol in deploy_info[utl.VOLUMES_TYPE].iteritems():
             if vol['snapshots']:
 
                 vol_info = vol[utl.VOLUME_BODY]
@@ -56,7 +57,7 @@ class DeploySnapshots(action.Action):
 
                     act_snap_transfer.run(volume=vol_info, snapshot_info=snap)
 
-                    new_snapshot = volume_resource.create_snapshot(volume_id=vol_info['id'],
+                    new_snapshot = volume_resource.create_snapshot(volume_id=vol_id,
                                                                    display_name=snap['display_name'],
                                                                    display_description=snap['display_description'])
 
@@ -70,9 +71,25 @@ class DeploySnapshots(action.Action):
                                                                      config_migrate=self.cfg.migrate,
                                                                      host=vol_info[utl.HOST_DST])
                         act_delete_redundant_snap.snap_rm(vol_info[utl.PATH_DST],
-                                                              snap['name'])
+                                                          snap['name'])
                     else:
                         act_delete_redundant_snap = rbd_util.RbdUtil(cloud=self.cloud,
                                                                      config_migrate=self.cfg.migrate)
                         act_delete_redundant_snap.snap_rm(vol_info[utl.PATH_DST],
-                                                              snap['name'], vol_info[utl.HOST_DST])
+                                                          snap['name'], vol_info[utl.HOST_DST])
+
+            else:
+                one_volume_info = {
+                    'one_volume_info': {
+                        utl.VOLUMES_TYPE: {
+                            vol_id: vol
+                        }
+                    }
+                }
+
+
+                act_transport_vol_data = task_transfer.TaskTransfer(self.init,
+                                                                    ssh_ceph_to_ceph.SSHCephToCeph,
+                                                                    input_info='one_volume_info')
+
+                act_transport_vol_data.run(**one_volume_info)
