@@ -89,7 +89,7 @@ class DeployVolSnapshots(action.Action):
 
 
                 act_transport_vol_data = task_transfer.TaskTransfer(self.init,
-                                                                    ssh_ceph_to_ceph.SSHCephToCeph,
+                                                                    'ssh_ceph_to_ceph',
                                                                     input_info='one_volume_info')
 
                 act_transport_vol_data.run(**one_volume_info)
