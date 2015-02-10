@@ -93,3 +93,5 @@ class DeploySnapshots(action.Action):
                                                                     input_info='one_volume_info')
 
                 act_transport_vol_data.run(**one_volume_info)
+
+        return {}
