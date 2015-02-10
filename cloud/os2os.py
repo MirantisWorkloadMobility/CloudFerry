@@ -161,7 +161,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                                                                  'ssh_ceph_to_ceph',
                                                                  input_info='storage_info') - act_convert_v_to_c
 
-        act_deploy_snapshots = deploy_snapshots.DeploySnapshots(self.init, cloud='dst_cloud') - act_convert_v_to_c
+        act_deploy_snapshots = deploy_snapshots.DeployVolSnapshots(self.init, cloud='dst_cloud') - act_convert_v_to_c
 
         is_snapshots = is_option.IsOption(self.init, 'keep_volume_snapshots')
 

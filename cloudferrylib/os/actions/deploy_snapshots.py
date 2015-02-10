@@ -25,7 +25,7 @@ import copy
 OLD_ID = 'old_id'
 
 
-class DeploySnapshots(action.Action):
+class DeployVolSnapshots(action.Action):
 
     def run(self, storage_info=None, identity_info=None, **kwargs):
         storage_info = copy.deepcopy(storage_info)
