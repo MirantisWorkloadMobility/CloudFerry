@@ -156,7 +156,7 @@ class NovaCompute(compute.Compute):
                                   cloud.getIpSsh(),
                                   instance_host)
         elif is_ceph:
-            host = cfg.storage.host
+            host = cfg.compute.host_eph_drv
         else:
             host = instance_host
 

@@ -30,7 +30,7 @@ class GetInfoImages(action.Action):
         :param images_list: List of names/id's of images
         :rtype: Dictionary with image data
         """
-
+        search_opts = kwargs.get('search_opts_img', self.search_opts)
         image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
-        images_info = image_resource.read_info(**self.search_opts)
+        images_info = image_resource.read_info(**search_opts)
         return {'images_info': images_info}
