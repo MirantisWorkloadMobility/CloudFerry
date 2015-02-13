@@ -6,6 +6,7 @@ from fabric.api import run, settings
 class ConvertFileToImage(action.Action):
 
     def run(self, file_path=None, image_format=None, image_name=None, **kwargs):
+
         cfg = self.cloud.cloud_config.cloud
         with settings(host_string=cfg.host):
             out = run(("glance --os-username=%s --os-password=%s --os-tenant-name=%s " +

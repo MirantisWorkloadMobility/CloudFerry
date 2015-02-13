@@ -36,7 +36,9 @@ from cloudferrylib.os.actions import convert_compute_to_image
 from cloudferrylib.os.actions import convert_compute_to_volume
 from cloudferrylib.os.actions import convert_volume_to_image
 from cloudferrylib.os.actions import convert_volume_to_compute
+from cloudferrylib.os.actions import attach_used_volumes
 from cloudferrylib.os.actions import networks_transporter
+from cloudferrylib.base.action import create_reference
 from cloudferrylib.os.actions import prepare_volumes_data_map
 from cloudferrylib.os.actions import get_info_instances
 from cloudferrylib.os.actions import prepare_networks
@@ -44,11 +46,23 @@ from cloudferrylib.os.actions import dissociate_floatingip_via_compute
 from cloudferrylib.os.actions import map_compute_info
 from cloudferrylib.os.actions import deploy_volumes
 from cloudferrylib.os.actions import start_vm
+from cloudferrylib.os.actions import load_compute_image_to_file
+from cloudferrylib.os.actions import merge_base_and_diff
+from cloudferrylib.os.actions import convert_file
+from cloudferrylib.os.actions import upload_file_to_image
+from cloudferrylib.os.actions import post_transport_instance
+from cloudferrylib.os.actions import transport_ephemeral
+from cloudferrylib.os.actions import is_not_transport_image
+from cloudferrylib.os.actions import is_not_merge_diff
 from cloudferrylib.os.actions import stop_vm
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.actions import transport_compute_resources
 from cloudferrylib.os.actions import task_transfer
+from cloudferrylib.os.actions import is_not_copy_diff_file
 from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
+from cloudferrylib.utils.drivers import ssh_ceph_to_file
+from cloudferrylib.utils.drivers import ssh_file_to_file
+from cloudferrylib.utils.drivers import ssh_file_to_ceph
 from cloudferrylib.os.actions import get_filter
 from cloudferrylib.os.actions import deploy_snapshots
 from cloudferrylib.base.action import is_option
@@ -68,7 +82,11 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         self.init = {
             'src_cloud': self.src_cloud,
             'dst_cloud': self.dst_cloud,
-            'cfg': self.config
+            'cfg': self.config,
+            'SSHCephToCeph': ssh_ceph_to_ceph.SSHCephToCeph,
+            'SSHCephToFile': ssh_ceph_to_file.SSHCephToFile,
+            'SSHFileToFile': ssh_file_to_file.SSHFileToFile,
+            'SSHFileToCeph': ssh_file_to_ceph.SSHFileToCeph
         }
 
     def migrate(self, scenario=None):
@@ -145,12 +163,10 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
 
     def transport_volumes_by_instance_via_ssh(self):
         act_convert_c_to_v = convert_compute_to_volume.ConvertComputeToVolume(self.init, cloud='src_cloud')
-        act_rename_inst_vol_src = create_reference.CreateReference(self.init,
-                                                                   'storage_info',
+        act_rename_inst_vol_src = create_reference.CreateReference(self.init, 'storage_info',
                                                                    'src_storage_info')
         act_convert_v_to_c = convert_volume_to_compute.ConvertVolumeToCompute(self.init, cloud='dst_cloud')
-        act_rename_inst_vol_dst = create_reference.CreateReference(self.init,
-                                                                   'storage_info',
+        act_rename_inst_vol_dst = create_reference.CreateReference(self.init, 'storage_info',
                                                                    'dst_storage_info')
         act_inst_vol_data_map = prepare_volumes_data_map.PrepareVolumesDataMap(self.init,
                                                                                'src_storage_info',
@@ -158,8 +174,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_deploy_inst_volumes = deploy_volumes.DeployVolumes(self.init, cloud='dst_cloud')
 
         act_inst_vol_transport_data = task_transfer.TaskTransfer(self.init,
-                                                                 'ssh_ceph_to_ceph',
-                                                                 input_info='storage_info') - act_convert_v_to_c
+                                                                 'SSHCephToCeph',
+                                                                 input_info='storage_info')
 
         act_deploy_snapshots = deploy_snapshots.DeployVolSnapshots(self.init, cloud='dst_cloud') - act_convert_v_to_c
 
@@ -199,7 +215,45 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_map_com_info = map_compute_info.MapComputeInfo(self.init)
         act_net_prep = prepare_networks.PrepareNetworks(self.init, cloud='dst_cloud')
         act_deploy_instances = transport_instance.TransportInstance(self.init)
-        return act_net_prep >> act_map_com_info >> act_deploy_instances
+        act_i_to_f = load_compute_image_to_file.LoadComputeImageToFile(self.init, cloud='dst_cloud')
+        act_merge = merge_base_and_diff.MergeBaseDiff(self.init, cloud='dst_cloud')
+        act_convert_image = convert_file.ConvertFile(self.init, cloud='dst_cloud')
+        act_f_to_i = upload_file_to_image.UploadFileToImage(self.init, cloud='dst_cloud')
+        act_transfer_file = task_transfer.TaskTransfer(self.init, 'SSHCephToFile',
+                                                       resource_name=utl.INSTANCES_TYPE,
+                                                       resource_root_name=utl.DIFF_BODY)
+        act_f_to_i_after_transfer = upload_file_to_image.UploadFileToImage(self.init, cloud='dst_cloud')
+        act_is_not_trans_image = is_not_transport_image.IsNotTransportImage(self.init, cloud='src_cloud')
+        act_is_not_merge_diff = is_not_merge_diff.IsNotMergeDiff(self.init, cloud='src_cloud')
+        act_post_transport_instance = post_transport_instance.PostTransportInstance(self.init, cloud='dst_cloud')
+        act_transport_ephemeral = transport_ephemeral.TransportEphemeral(self.init, cloud='dst_cloud')
+        trans_file_to_file = task_transfer.TaskTransfer(
+            self.init,
+            'SSHFileToFile',
+            resource_name=utl.INSTANCES_TYPE,
+            resource_root_name=utl.DIFF_BODY)
+        act_trans_diff_file = task_transfer.TaskTransfer(
+            self.init,
+            'SSHFileToFile',
+            resource_name=utl.INSTANCES_TYPE,
+            resource_root_name=utl.DIFF_BODY)
+        act_is_not_copy_diff_file = is_not_copy_diff_file.IsNotCopyDiffFile(self.init)
+        process_merge_diff_and_base = act_i_to_f >> trans_file_to_file >> act_merge >> act_convert_image >> act_f_to_i
+        process_merge_diff_and_base = act_i_to_f
+        process_transport_image = act_transfer_file >> act_f_to_i_after_transfer
+        process_transport_image = act_transfer_file
+        act_pre_transport_instance = (act_is_not_trans_image | act_is_not_merge_diff) >> \
+                                     process_transport_image >> \
+                                     (act_is_not_merge_diff | act_deploy_instances) >> \
+                                     process_merge_diff_and_base
+        act_post_transport_instance = (act_is_not_copy_diff_file |
+                                       act_transport_ephemeral) >> act_trans_diff_file
+        return act_net_prep >> \
+               act_map_com_info >> \
+               act_pre_transport_instance >> \
+               act_deploy_instances >> \
+               act_post_transport_instance >> \
+               act_transport_ephemeral
 
     def migrate_process_instance(self):
         act_attaching = attach_used_volumes_via_compute.AttachVolumesCompute(self.init, cloud='dst_cloud')

@@ -35,7 +35,7 @@ class Scenario(object):
         tasks = {}
         for task in tasks_file['tasks']:
             args = tasks_file['tasks'][task][1:]
-            if isinstance(args[-1], dict):
+            if args and isinstance(args[-1], dict):
                 args_map = args[-1]
                 args = args[:-1]
             else:

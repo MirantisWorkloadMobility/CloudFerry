@@ -136,7 +136,9 @@ src_compute_opts = [
     cfg.StrOpt('convert_diff_file', default='qcow2',
                help='convert diff file to'),
     cfg.StrOpt('convert_ephemeral_disk', default='qcow2',
-               help='convert ephemeral disk to')
+               help='convert ephemeral disk to'),
+    cfg.StrOpt('host_eph_drv', default='-',
+               help='host ephemeral drive')
 ]
 
 
@@ -224,6 +226,8 @@ dst_compute_opts = [
                help='convert diff file to'),
     cfg.StrOpt('convert_ephemeral_disk', default='qcow2',
                help='convert ephemeral disk to'),
+    cfg.StrOpt('host_eph_drv', default='-',
+               help='host ephemeral drive')
 ]
 
 
