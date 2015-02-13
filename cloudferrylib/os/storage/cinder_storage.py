@@ -264,3 +264,26 @@ class CinderStorage(storage.Storage):
         connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
         connector.execute("UPDATE %s SET %s='%s'" % (table_name, column_name,
                                                      new_value))
+
+    def get_volume_path_iscsi(self, vol_id):
+        cmd = "SELECT provider_location FROM volumes WHERE id='%s';" % vol_id
+
+        result = self.cloud.mysql_connector.execute(cmd)
+
+        if not result:
+            raise Exception('There is no such raw in Cinder DB with the '
+                            'specified volume_id=%s' % vol_id)
+
+        provider_location = result.fetchone()[0]
+        provider_location_list = provider_location.split()
+
+        iscsi_target_id = provider_location_list[1]
+        lun = provider_location_list[2]
+        ip = provider_location_list[0].split(',')[0]
+
+        volume_path = '/dev/disk/by-path/ip-%s-iscsi-%s-lun-%s' % (
+            ip,
+            iscsi_target_id,
+            lun)
+
+        return volume_path
