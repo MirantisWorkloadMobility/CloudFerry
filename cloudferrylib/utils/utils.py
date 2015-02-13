@@ -61,6 +61,7 @@ STORAGE_RESOURCE = 'storage'
 VOLUMES_TYPE = 'volumes'
 VOLUME_BODY = 'volume'
 VOLUMES_DB = 'volumes_db'
+SNAPSHOTS = 'snapshots'
 
 OBJSTORAGE_RESOURCE = 'objstorage'
 CONTAINERS = 'containers'

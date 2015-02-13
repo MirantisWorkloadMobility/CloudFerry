@@ -14,19 +14,17 @@
 
 
 from cloudferrylib.base.action import action
-from cloudferrylib.utils.ssh_util import SshUtil
 
 
-class RemoteExecution(action.Action):
+class SnapTransfer(action.Action):
+    def __init__(self, init, driver,
+                 snap_position):
+        super(SnapTransfer, self).__init__(init)
+        self.driver = driver(self.src_cloud,
+                             self.dst_cloud,
+                             self.cfg)
+        self.snap_position = snap_position
 
-    def __init__(self, cloud, host=None, int_host=None, config_migrate=None):
-        self.cloud = cloud
-        self.host = host
-        self.int_host = int_host
-        self.config_migrate = config_migrate
-        self.remote_exec_obj = SshUtil(self.cloud, self.config_migrate, self.host)
-        super(RemoteExecution, self).__init__({})
-
-    def run(self, command, **kwargs):
-        self.remote_exec_obj.execute(command, self.int_host)
+    def run(self, volume, snapshot_info, **kwargs):
+        self.driver.transfer(volume, snapshot_info, self.snap_position)
         return {}

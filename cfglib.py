@@ -62,6 +62,8 @@ migrate_opts = [
                help='yes - keep floatingip, no - not keep floatingip'),
     cfg.BoolOpt('keep_lbaas', default=False,
                help='yes - keep lbaas settings, no - not keep lbaas settings'),
+    cfg.BoolOpt('keep_volume_snapshots', default=False,
+               help='yes - keep volume snapshots, no - not keep volume snapshots'),
     cfg.BoolOpt('keep_volume_storage', default=False,
                help='True - keep volume_storage, False - not keep volume_storage'),
     cfg.StrOpt('speed_limit', default='10MB',
@@ -155,7 +157,9 @@ src_storage_opts = [
     cfg.StrOpt('volume_name_template', default='volume-',
                help='template for creating names of volumes on storage backend'),
     cfg.StrOpt('rbd_pool', default='volumes',
-               help='name of pool for volumes in Ceph RBD storage')
+               help='name of pool for volumes in Ceph RBD storage'),
+    cfg.StrOpt('snapshot_name_template', default='snapshot-',
+               help='template for creating names of snapshots on storage backend')
 ]
 
 src_image = cfg.OptGroup(name='src_image',
@@ -240,7 +244,9 @@ dst_storage_opts = [
     cfg.StrOpt('volume_name_template', default='volume-',
                help='template for creating names of volumes on storage backend'),
     cfg.StrOpt('rbd_pool', default='volumes',
-               help='name of pool for volumes in Ceph RBD storage')
+               help='name of pool for volumes in Ceph RBD storage'),
+    cfg.StrOpt('snapshot_name_template', default='snapshot-',
+               help='template for creating names of snapshots on storage backend')
 ]
 
 dst_image = cfg.OptGroup(name='dst_image',

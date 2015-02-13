@@ -14,19 +14,28 @@
 
 
 from cloudferrylib.base.action import action
-from cloudferrylib.utils.ssh_util import SshUtil
 
+DEFAULT = 0
+PATH_ONE = 1
+PATH_TWO = 2
 
-class RemoteExecution(action.Action):
+class IsOption(action.Action):
 
-    def __init__(self, cloud, host=None, int_host=None, config_migrate=None):
-        self.cloud = cloud
-        self.host = host
-        self.int_host = int_host
-        self.config_migrate = config_migrate
-        self.remote_exec_obj = SshUtil(self.cloud, self.config_migrate, self.host)
-        super(RemoteExecution, self).__init__({})
+    def __init__(self, init, option_name):
+        self.option_name = option_name
+        super(IsOption, self).__init__(init)
 
-    def run(self, command, **kwargs):
-        self.remote_exec_obj.execute(command, self.int_host)
+    def run(self, **kwargs):
+        self.set_next_path(DEFAULT) # DEFAULT PATH
+        option_value = self.cfg.migrate[self.option_name]
+        if option_value:
+            self.set_next_path(PATH_ONE)
+        else:
+            self.set_next_path(PATH_TWO)
         return {}
+
+
+
+
+
+

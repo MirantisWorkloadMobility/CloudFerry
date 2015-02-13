@@ -50,6 +50,8 @@ from cloudferrylib.os.actions import transport_compute_resources
 from cloudferrylib.os.actions import task_transfer
 from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
 from cloudferrylib.os.actions import get_filter
+from cloudferrylib.os.actions import deploy_snapshots
+from cloudferrylib.base.action import is_option
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
@@ -157,13 +159,18 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
 
         act_inst_vol_transport_data = task_transfer.TaskTransfer(self.init,
                                                                  'ssh_ceph_to_ceph',
-                                                                 input_info='storage_info')
+                                                                 input_info='storage_info') - act_convert_v_to_c
+
+        act_deploy_snapshots = deploy_snapshots.DeployVolSnapshots(self.init, cloud='dst_cloud') - act_convert_v_to_c
+
+        is_snapshots = is_option.IsOption(self.init, 'keep_volume_snapshots')
 
         task_get_inst_vol_info = act_convert_c_to_v >> act_rename_inst_vol_src
         task_deploy_inst_vol = act_deploy_inst_volumes >> act_rename_inst_vol_dst
-        task_transfer_inst_vol_data = act_inst_vol_data_map >> act_inst_vol_transport_data
-        return task_get_inst_vol_info \
-               >> task_deploy_inst_vol >> task_transfer_inst_vol_data >> act_convert_v_to_c
+        return task_get_inst_vol_info >> \
+               task_deploy_inst_vol >> act_inst_vol_data_map >> \
+               (is_snapshots | act_deploy_snapshots | act_inst_vol_transport_data) >> \
+               act_convert_v_to_c
 
     def transport_resources(self):
         act_identity_trans = identity_transporter.IdentityTransporter(self.init)

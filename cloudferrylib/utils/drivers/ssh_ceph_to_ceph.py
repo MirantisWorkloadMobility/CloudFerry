@@ -28,21 +28,34 @@ LOG = utils.get_log(__name__)
 
 
 class SSHCephToCeph(driver_transporter.DriverTransporter):
-    def transfer(self, data):
+    def transfer(self, data, snapshot=None, snapshot_type=1):
         host_src = (data.get('host_src') if data.get('host_src')
                     else self.src_cloud.getIpSsh())
         host_dst = (data.get('host_dst') if data.get('host_dst')
                     else self.dst_cloud.getIpSsh())
         with settings(host_string=host_src), utils.forward_agent(
                 env.key_filename):
+
             rbd_import_diff = rbd_util.RbdUtil.rbd_import_diff_cmd
             ssh_cmd = cmd_cfg.ssh_cmd
-            rbd_export_diff = rbd_util.RbdUtil.rbd_export_diff_cmd
-
             ssh_rbd_import_diff = ssh_cmd(host_dst, rbd_import_diff)
 
+            if snapshot:
+                process_params = [snapshot['name'], data['path_src'], '-', '-', data['path_dst']]
+                if snapshot_type == 1:
+                    rbd_export_diff = rbd_util.RbdUtil.rbd_export_diff_snap_cmd
+                elif snapshot_type == 2:
+                    rbd_export_diff = rbd_util.RbdUtil.rbd_export_diff_from_snap_cmd
+                    process_params.insert(0, snapshot['prev_snapname'])
+                elif snapshot_type == 3:
+                    rbd_export_diff = rbd_util.RbdUtil.rbd_export_diff_from_cmd
+                else:
+                    raise ValueError("Unsupported snapshot type %s", snapshot_type)
+            else:
+                rbd_export_diff = rbd_util.RbdUtil.rbd_export_diff_cmd
+                process_params = [data['path_src'], '-', '-', data['path_dst']]
+
             process = rbd_export_diff >> ssh_rbd_import_diff
-            process = process(data['path_src'], '-', '-',
-                              data['path_dst'])
+            process = process(*process_params)
 
             self.src_cloud.ssh_util.execute(process)
