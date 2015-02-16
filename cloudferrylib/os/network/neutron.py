@@ -24,6 +24,7 @@ from cloudferrylib.utils import utils as utl
 
 LOG = utl.get_log(__name__)
 DEFAULT_SECGR = 'default'
+SERVICES_TENANT_NAME = 'services'
 
 
 class NeutronNetwork(network.Network):
@@ -761,35 +762,36 @@ class NeutronNetwork(network.Network):
     def upload_sec_group_rules(self, sec_groups):
         ex_secgrs = self.get_sec_gr_and_rules()
         for sec_gr in sec_groups:
-            ex_secgr = \
-                self.get_res_by_hash(ex_secgrs, sec_gr['res_hash'])
-            exrules_hlist = \
-                [r['rule_hash'] for r in ex_secgr['security_group_rules']]
-            for rule in sec_gr['security_group_rules']:
-                if rule['protocol'] \
-                        and (rule['rule_hash'] not in exrules_hlist):
-                    rinfo = \
-                        {'security_group_rule': {
-                            'direction': rule['direction'],
-                            'protocol': rule['protocol'],
-                            'port_range_min': rule['port_range_min'],
-                            'port_range_max': rule['port_range_min'],
-                            'ethertype': rule['ethertype'],
-                            'remote_ip_prefix': rule['remote_ip_prefix'],
-                            'security_group_id': ex_secgr['id'],
-                            'tenant_id': ex_secgr['tenant_id']}}
-                    if rule['remote_group_id']:
-                        remote_sghash = \
-                            self.get_res_hash_by_id(sec_groups,
-                                                    rule['remote_group_id'])
-                        rem_ex_sec_gr = \
-                            self.get_res_by_hash(ex_secgrs,
-                                                 remote_sghash)
-                        rinfo['security_group_rule']['remote_group_id'] = \
-                            rem_ex_sec_gr['id']
-                    new_rule = \
-                        self.neutron_client.create_security_group_rule(rinfo)
-                    rule['meta']['id'] = new_rule['security_group_rule']['id']
+            if sec_gr['tenant_name'] != SERVICES_TENANT_NAME:
+                ex_secgr = \
+                    self.get_res_by_hash(ex_secgrs, sec_gr['res_hash'])
+                exrules_hlist = \
+                    [r['rule_hash'] for r in ex_secgr['security_group_rules']]
+                for rule in sec_gr['security_group_rules']:
+                    if rule['protocol'] \
+                            and (rule['rule_hash'] not in exrules_hlist):
+                        rinfo = \
+                            {'security_group_rule': {
+                                'direction': rule['direction'],
+                                'protocol': rule['protocol'],
+                                'port_range_min': rule['port_range_min'],
+                                'port_range_max': rule['port_range_min'],
+                                'ethertype': rule['ethertype'],
+                                'remote_ip_prefix': rule['remote_ip_prefix'],
+                                'security_group_id': ex_secgr['id'],
+                                'tenant_id': ex_secgr['tenant_id']}}
+                        if rule['remote_group_id']:
+                            remote_sghash = \
+                                self.get_res_hash_by_id(sec_groups,
+                                                        rule['remote_group_id'])
+                            rem_ex_sec_gr = \
+                                self.get_res_by_hash(ex_secgrs,
+                                                     remote_sghash)
+                            rinfo['security_group_rule']['remote_group_id'] = \
+                                rem_ex_sec_gr['id']
+                        new_rule = \
+                            self.neutron_client.create_security_group_rule(rinfo)
+                        rule['meta']['id'] = new_rule['security_group_rule']['id']
 
     def upload_networks(self, networks):
         existing_nets_hashlist = \
