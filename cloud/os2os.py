@@ -219,12 +219,13 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                                                                           'src_storage_info',
                                                                           'dst_storage_info')
 
-        act_vol_transport_data = task_transfer.TaskTransfer(self.init,
-                                                            'SSHCephToCeph',
-                                                            input_info='storage_info')
+        act_vol_transport_data = \
+            task_transfer.TaskTransfer(self.init,
+                                       'SSHCephToCeph',
+                                       input_info='storage_info') - final_action
 
         act_deploy_vol_snapshots = \
-            deploy_snapshots.DeployVolSnapshots(self.init,cloud='dst_cloud') -final_action
+            deploy_snapshots.DeployVolSnapshots(self.init,cloud='dst_cloud') - final_action
 
         return task_get_available_vol_info >> \
                task_deploy_available_volumes >> \
