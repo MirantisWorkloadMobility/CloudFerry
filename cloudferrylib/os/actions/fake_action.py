@@ -14,16 +14,11 @@
 
 
 from cloudferrylib.base.action import action
-from cloudferrylib.utils import utils as utl
 
 
-class GetInfoObjects(action.Action):
-    def __init__(self, init, cloud=None):
-        super(GetInfoObjects, self).__init__(init, cloud)
+class FakeAction(action.Action):
+    def __init__(self, init):
+        super(FakeAction, self).__init__(init)
 
     def run(self, **kwargs):
-        """Get info about objects from cloud object storage."""
-
-        objstorage_resource = self.cloud.resources[utl.OBJSTORAGE_RESOURCE]
-        objstorage_info = objstorage_resource.read_info()
-        return {'objstorage_info': objstorage_info}
+        pass
