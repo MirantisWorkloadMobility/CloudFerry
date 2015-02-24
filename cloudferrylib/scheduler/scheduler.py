@@ -41,15 +41,18 @@ class BaseScheduler(object):
         self.map_func_task[BaseTask()] = self.task_run
 
     def event_start_task(self, task):
+        LOG.info('%s Start task: %s', '-' * 8, task)
         return True
 
     def event_end_task(self, task):
+        LOG.info('%s End task: %s', '-' * 8, task)
         return True
 
     def event_error_task(self, task, e):
         return True
 
     def error_task(self, task, e):
+        LOG.exception("%s TASK FAILED", task)
         return self.event_error_task(task, e)
 
     def run_task(self, task):
@@ -60,14 +63,10 @@ class BaseScheduler(object):
     def start(self):
         for task in self.cursor:
             try:
-                task_print = str(task).split('|')[1]
-                LOG.info('%s Start task: %s', '-' * 8, task_print)
                 self.run_task(task)
-                LOG.info('%s End task: %s', '-' * 8, task_print)
             except Exception as e:
                 self.status_error = ERROR
                 self.exception = e
-                traceback.print_exc()
                 self.error_task(task, e)
                 break
 
