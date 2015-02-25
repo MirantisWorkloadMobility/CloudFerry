@@ -20,6 +20,7 @@ from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import utils
 from cloudferrylib.scheduler.scenario import Scenario
 from cloud import cloud_ferry
+from dry_run import chain
 env.forward_agent = True
 env.user = 'root'
 LOG = utl.get_log(__name__)
@@ -43,6 +44,12 @@ def get_info(name_config):
     LOG.info("Init getting information")
     namespace = Namespace({'name_config': name_config})
     scheduler = Scheduler(namespace)
+
+
+@task
+def dry_run():
+    chain.process_test_chain()
+
 
 if __name__ == '__main__':
     migrate(None)
