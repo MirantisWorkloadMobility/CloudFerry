@@ -224,6 +224,7 @@ class NeutronNetwork(network.Network):
             'ip_version': snet['ip_version'],
             'cidr': snet['cidr'],
             'network_name': net['network']['name'],
+            'external': net['network']['router:external'],
             'network_id': snet['network_id'],
             'tenant_name': get_tenant_name(snet['tenant_id']),
             'meta': {},
@@ -283,8 +284,7 @@ class NeutronNetwork(network.Network):
         res_hash = net_res.get_resource_hash(result,
                                              'name',
                                              'routes',
-                                             'tenant_name',
-                                             'ips')
+                                             'tenant_name')
 
         result['res_hash'] = res_hash
 
@@ -809,6 +809,8 @@ class NeutronNetwork(network.Network):
                 }
             }
             if net['router:external']:
+                if not self.config.migrate.migrate_extnets:
+                    continue
                 network_info['network']['router:external'] = \
                     net['router:external']
                 network_info['network']['provider:physical_network'] = \
@@ -831,18 +833,20 @@ class NeutronNetwork(network.Network):
         existing_subnets_hashlist = \
             [ex_snet['res_hash'] for ex_snet in self.get_subnets()]
         for snet in subnets:
+            if snet['external'] and not self.config.migrate.migrate_extnets:
+                continue
             tenant_id = \
                 self.identity_client.get_tenant_id_by_name(snet['tenant_name'])
             net_hash = \
                 self.get_res_hash_by_id(networks, snet['network_id'])
-            network_id = \
-                self.get_res_by_hash(existing_nets, net_hash)['id']
+            network = \
+                self.get_res_by_hash(existing_nets, net_hash)
             subnet_info = {
                 'subnet':
                 {
                     'name': snet['name'],
                     'enable_dhcp': snet['enable_dhcp'],
-                    'network_id': network_id,
+                    'network_id': network['id'],
                     'cidr': snet['cidr'],
                     'allocation_pools': snet['allocation_pools'],
                     'gateway_ip': snet['gateway_ip'],
@@ -870,7 +874,7 @@ class NeutronNetwork(network.Network):
                 self.identity_client.get_tenant_id_by_name(tname)
             r_info = {'router': {'name': router['name'],
                                  'tenant_id': tenant_id}}
-            if router['external_gateway_info']:
+            if router['external_gateway_info'] and self.config.migrate.migrate_extnets:
                 ex_net_hash = \
                     self.get_res_hash_by_id(networks, router['ext_net_id'])
                 ex_net_id = \
@@ -902,10 +906,10 @@ class NeutronNetwork(network.Network):
                              (router['name'], router['tenant_name']))
 
     def add_router_interfaces(self, src_router, dst_router,
-                              src_snets, dst_sets):
+                              src_snets, dst_snets):
         for snet_id in src_router['subnet_ids']:
             snet_hash = self.get_res_hash_by_id(src_snets, snet_id)
-            ex_snet = self.get_res_by_hash(dst_sets,
+            ex_snet = self.get_res_by_hash(dst_snets,
                                            snet_hash)
             if dst_router['external_gateway_info']:
                 if ex_snet['network_id'] == \
