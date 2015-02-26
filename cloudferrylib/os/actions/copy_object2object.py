@@ -27,6 +27,8 @@ class CopyFromObjectToObject(transporter.Transporter):
     def run(self, objstorage_info=None, **kwargs):
         dst_objstorage = self.dst_cloud.resources[utl.OBJSTORAGE_RESOURCE]
         if not objstorage_info:
-            action_get_obj = get_info_objects.GetInfoObjects(self.src_cloud)
+            action_get_obj = get_info_objects.GetInfoObjects(self.init,
+                                                             self.src_cloud)
             objstorage_info = action_get_obj.run()
         dst_objstorage.deploy(objstorage_info)
+        return {}

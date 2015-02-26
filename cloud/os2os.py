@@ -25,6 +25,7 @@ from cloudferrylib.os.storage import cinder_storage
 from cloudferrylib.os.network import neutron
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.os.compute import nova_compute
+from cloudferrylib.os.object_storage import swift_storage
 from cloudferrylib.os.actions import get_info_images
 from cloudferrylib.os.actions import transport_instance
 from cloudferrylib.os.actions import attach_used_volumes_via_compute
@@ -66,6 +67,10 @@ from cloudferrylib.utils.drivers import ssh_file_to_ceph
 from cloudferrylib.os.actions import get_filter
 from cloudferrylib.os.actions import deploy_snapshots
 from cloudferrylib.base.action import is_option
+from cloudferrylib.os.actions import get_info_volumes
+from cloudferrylib.os.actions import get_info_objects
+from cloudferrylib.os.actions import copy_object2object
+from cloudferrylib.os.actions import fake_action
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
@@ -76,7 +81,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                      'image': glance_image.GlanceImage,
                      'storage': cinder_storage.CinderStorage,
                      'network': neutron.NeutronNetwork,
-                     'compute': nova_compute.NovaCompute}
+                     'compute': nova_compute.NovaCompute,
+                     'objstorage': swift_storage.SwiftStorage}
         self.src_cloud = cloud.Cloud(resources, cloud.SRC, config)
         self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)
         self.init = {
@@ -187,6 +193,64 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                task_deploy_inst_vol >> act_inst_vol_data_map >> \
                (is_snapshots | act_deploy_snapshots | act_inst_vol_transport_data) >> \
                act_convert_v_to_c
+
+    def transport_available_volumes_via_ssh(self):
+        is_volume_snapshots = is_option.IsOption(self.init,
+                                                 'keep_volume_snapshots')
+
+        final_action = fake_action.FakeAction(self.init)
+
+        act_get_info_available_volumes = get_info_volumes.GetInfoVolumes(self.init,
+                                                                         cloud='src_cloud',
+                                                                         search_opts={'status': 'available'})
+        act_rename_vol_src = create_reference.CreateReference(self.init,
+                                                              'storage_info',
+                                                              'src_storage_info')
+        task_get_available_vol_info = act_get_info_available_volumes >> act_rename_vol_src
+
+        act_deploy_vol = deploy_volumes.DeployVolumes(self.init,
+                                                      cloud='dst_cloud')
+        act_rename_vol_dst = create_reference.CreateReference(self.init,
+                                                              'storage_info',
+                                                              'dst_storage_info')
+        task_deploy_available_volumes = act_deploy_vol >> act_rename_vol_dst
+
+        act_vol_data_map = prepare_volumes_data_map.PrepareVolumesDataMap(self.init,
+                                                                          'src_storage_info',
+                                                                          'dst_storage_info')
+
+        act_vol_transport_data = \
+            task_transfer.TaskTransfer(self.init,
+                                       'SSHCephToCeph',
+                                       input_info='storage_info') - final_action
+
+        act_deploy_vol_snapshots = \
+            deploy_snapshots.DeployVolSnapshots(self.init,cloud='dst_cloud') - final_action
+
+        return task_get_available_vol_info >> \
+               task_deploy_available_volumes >> \
+               act_vol_data_map >> \
+               (is_volume_snapshots | act_deploy_vol_snapshots | act_vol_transport_data) \
+               >> final_action
+
+    def transport_object_storage(self):
+        act_get_objects_info = get_info_objects.GetInfoObjects(self.init,
+                                                               cloud='src_cloud')
+        act_transfer_objects = copy_object2object.CopyFromObjectToObject(self.init,
+                                                                         src_cloud='src_cloud',
+                                                                         dst_cloud='dst_cloud')
+        task_transfer_objects = act_get_objects_info >> act_transfer_objects
+        return task_transfer_objects
+
+    def transport_cold_data(self):
+        act_identity_trans = identity_transporter.IdentityTransporter(self.init)
+        task_transport_available_volumes = self.transport_available_volumes_via_ssh()
+        task_transport_objects = self.transport_object_storage()
+        task_transport_images = self.migration_images()
+        return act_identity_trans >> \
+               task_transport_available_volumes \
+               >> task_transport_objects \
+               >> task_transport_images
 
     def transport_resources(self):
         act_identity_trans = identity_transporter.IdentityTransporter(self.init)
