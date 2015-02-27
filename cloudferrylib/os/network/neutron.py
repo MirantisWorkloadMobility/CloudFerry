@@ -874,7 +874,7 @@ class NeutronNetwork(network.Network):
                 self.identity_client.get_tenant_id_by_name(tname)
             r_info = {'router': {'name': router['name'],
                                  'tenant_id': tenant_id}}
-            if router['external_gateway_info'] and self.config.migrate.migrate_extnets:
+            if router['external_gateway_info']:
                 ex_net_hash = \
                     self.get_res_hash_by_id(networks, router['ext_net_id'])
                 ex_net_id = \
@@ -909,12 +909,11 @@ class NeutronNetwork(network.Network):
                               src_snets, dst_snets):
         for snet_id in src_router['subnet_ids']:
             snet_hash = self.get_res_hash_by_id(src_snets, snet_id)
+            src_net = self.get_res_by_hash(src_snets, snet_hash)
+            if src_net['external']:
+                continue
             ex_snet = self.get_res_by_hash(dst_snets,
                                            snet_hash)
-            if dst_router['external_gateway_info']:
-                if ex_snet['network_id'] == \
-                        dst_router['external_gateway_info']['network_id']:
-                    continue
             self.neutron_client.add_interface_router(
                 dst_router['id'],
                 {"subnet_id": ex_snet['id']})
