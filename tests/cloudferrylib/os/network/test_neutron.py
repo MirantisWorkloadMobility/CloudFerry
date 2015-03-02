@@ -99,6 +99,7 @@ class NeutronTestCase(test.TestCase):
                               'ip_version': 4,
                               'cidr': 'fake_cidr_1',
                               'network_name': 'fake_network_name_1',
+                              'external': False,
                               'network_id': 'fake_network_id_1',
                               'tenant_name': 'fake_tenant_name_1',
                               'res_hash': 'fake_subnet_hash_1',
@@ -113,6 +114,7 @@ class NeutronTestCase(test.TestCase):
                               'ip_version': 4,
                               'cidr': 'fake_cidr_2',
                               'network_name': 'fake_network_name_2',
+                              'external': False,
                               'network_id': 'fake_network_id_2',
                               'tenant_name': 'fake_tenant_name_2',
                               'res_hash': 'fake_subnet_hash_2',
@@ -189,7 +191,8 @@ class NeutronTestCase(test.TestCase):
         self.neutron_mock_client().list_subnets.return_value = \
             fake_subnets_list
         self.neutron_mock_client.show_network.return_value = \
-            {'network': {'name': 'fake_network_name_1'}}
+            {'network': {'name': 'fake_network_name_1',
+                         'router:external': False}}
         self.network_mock.get_resource_hash = \
             mock.Mock(return_value='fake_subnet_hash_1')
 
@@ -572,11 +575,13 @@ class NeutronTestCase(test.TestCase):
                       'subnet_ids': ['fake_subnet_id_1'],
                       'external_gateway_info': None}
         src_subnets = [{'id': 'fake_subnet_id_1',
+                        'external':False,
                         'res_hash': 'fake_subnet_hash'}]
         dst_router = {'id': 'fake_router_id_2',
                       'subnet_ids': ['fake_subnet_id_2'],
                       'external_gateway_info': None}
         dst_subnets = [{'id': 'fake_subnet_id_2',
+                        'external':False,
                         'res_hash': 'fake_subnet_hash'}]
         self.neutron_network_client.add_router_interfaces(src_router,
                                                           dst_router,
