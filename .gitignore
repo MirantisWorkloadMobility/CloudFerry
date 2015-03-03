@@ -4,3 +4,4 @@
 id_rsa
 transaction
 snapshots
+*.sw*
