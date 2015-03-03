@@ -306,6 +306,13 @@ import_rules_opts = [
                help=''),
 ]
 
+snapshot = cfg.OptGroup(name='snapshot',
+                        title="Rules for snapshot")
+
+snapshot_opts = [
+    cfg.StrOpt('snapshot_path', default="/root/dump.sql"),
+    cfg.StrOpt('host', default='')]
+
 cfg_for_reg = [
     (src, src_opts),
     (dst, dst_opts),
@@ -325,6 +332,7 @@ cfg_for_reg = [
     (dst_image, dst_image_opts),
     (dst_network, dst_network_opts),
     (dst_objstorage, dst_objstorage_opts),
+    (snapshot, snapshot_opts),
     (import_rules, import_rules_opts)
 ]
 
