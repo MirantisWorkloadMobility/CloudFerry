@@ -1,0 +1,43 @@
+version: 1
+formatters:
+  simple:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  colored:
+    (): colorlog.ColoredFormatter
+    format: '%(bg_black)s%(log_color)s%(levelname)-8s%(reset)s %(bg_blue)s[%(pathname)s : lineno %(lineno)s]%(reset)s %(bg_cyan)s %(asctime)s %(reset)s %(bg_black)s%(log_color)s%(message)s%(reset)s'
+    datefmt: '%m-%d %H:%M:%S'
+    log_colors:
+      DEBUG: green
+      INFO: white
+      WARNING: yellow
+      ERROR: red,
+      CRITICAL: purple
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: colored
+    stream: ext://sys.stdout
+  info:
+    backupCount: 20
+    class: logging.handlers.RotatingFileHandler
+    encoding: utf-8
+    filename: info.log
+    formatter: colored
+    level: INFO
+    maxBytes: 10485760
+  error:
+    backupCount: 20
+    class: logging.handlers.RotatingFileHandler
+    encoding: utf-8
+    filename: errors.log
+    formatter: colored
+    level: ERROR
+    maxBytes: 10485760
+loggers:
+  CF:
+    level: INFO
+    handlers: [console, info, error]
+root:
+  level: INFO
+  handlers: []

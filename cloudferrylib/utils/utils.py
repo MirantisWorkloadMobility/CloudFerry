@@ -29,6 +29,7 @@ from multiprocessing import Lock
 from fabric.api import run, settings, local, env
 import ipaddr
 import yaml
+from logging import config
 
 
 ISCSI = "iscsi"
@@ -42,7 +43,7 @@ REMOTE_FILE = "remote file"
 QCOW2 = "qcow2"
 RAW = "raw"
 YES = "yes"
-NAME_LOG_FILE = 'migrate.log'
+LOGGING_CONFIG = 'configs/logging_config.yaml'
 PATH_TO_SNAPSHOTS = 'snapshots'
 AVAILABLE = 'available'
 IN_USE = 'in-use'
@@ -231,21 +232,17 @@ class Templater:
         temp_file.close()
         return temp_render
 
+with open(LOGGING_CONFIG, 'r') as logging_config:
+    # read config from file and store it as module global variable
+    config.dictConfig(yaml.load(logging_config))
+    LOGGER = logging.getLogger("CF")
+
+def configure_logging(level):
+    # redefine default logging level
+    LOGGER.setLevel(level)
 
 def get_log(name):
-    LOG = logging.getLogger(name)
-    LOG.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s : %(message)s')
-    hdlr = logging.FileHandler(NAME_LOG_FILE)
-    hdlr.setFormatter(formatter)
-    LOG.addHandler(hdlr)
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
-    formatter_out = logging.Formatter('%(asctime)s: %(message)s')
-    ch.setFormatter(formatter_out)
-    LOG.addHandler(ch)
-    return LOG
-
+    return LOGGER
 
 class StackCallFunctions(object):
     def __init__(self):

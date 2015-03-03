@@ -27,10 +27,12 @@ LOG = utl.get_log(__name__)
 
 
 @task
-def migrate(name_config=None, name_instance=None):
+def migrate(name_config=None, name_instance=None, debug=False):
     """
         :name_config - name of config yaml-file, example 'config.yaml'
     """
+    if debug:
+        utl.configure_logging("DEBUG")
     cfglib.collector_configs_plugins()
     cfglib.init_config(name_config)
     utils.init_singletones(cfglib.CONF)
@@ -40,7 +42,9 @@ def migrate(name_config=None, name_instance=None):
 
 
 @task
-def get_info(name_config):
+def get_info(name_config, debug=False):
+    if debug:
+        utl.configure_logging("DEBUG")
     LOG.info("Init getting information")
     namespace = Namespace({'name_config': name_config})
     scheduler = Scheduler(namespace)
