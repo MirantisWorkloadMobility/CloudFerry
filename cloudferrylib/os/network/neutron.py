@@ -500,7 +500,7 @@ class NeutronNetwork(network.Network):
         return result
 
     def get_networks(self):
-        networks = self.neutron_client.list_networks()['networks']
+        networks = self.get_networks_list()
         networks_info = []
 
         for net in networks:
@@ -508,6 +508,9 @@ class NeutronNetwork(network.Network):
             networks_info.append(cf_net)
 
         return networks_info
+
+    def get_networks_list(self):
+        return self.neutron_client.list_networks()['networks']
 
     def get_subnets(self):
         subnets = self.neutron_client.list_subnets()['subnets']

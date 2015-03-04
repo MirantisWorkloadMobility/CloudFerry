@@ -1,0 +1,7 @@
+group_by:
+    - network
+user_defined_group_1:
+    - <server1>
+    - <server2>
+user_defined_group_2:
+    - <server3>
