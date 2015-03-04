@@ -43,6 +43,7 @@ class Cloud(object):
                                       cloud=utils.ext_dict(),
                                       import_rules=utils.ext_dict(),
                                       mail=utils.ext_dict(),
+                                      snapshot=utils.ext_dict(),
                                       mysql=utils.ext_dict())
         for k, v in config.migrate.iteritems():
             cloud_config['migrate'][k] = v
@@ -58,6 +59,8 @@ class Cloud(object):
 
         for k, v in getattr(config, position + '_mysql').iteritems():
             cloud_config['mysql'][k] = v
+
+        cloud_config['snapshot'].update(config.snapshot)
 
         return cloud_config
 
