@@ -10,7 +10,7 @@ formatters:
       DEBUG: green
       INFO: white
       WARNING: yellow
-      ERROR: red,
+      ERROR: red
       CRITICAL: purple
 handlers:
   console:
