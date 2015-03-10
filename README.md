@@ -36,7 +36,7 @@ automatically) or list new networks for instances in config.yaml file in overwri
 
 
 Cloudferry also allow keep ip addresses of instances and transfer security groups (with rules) with automatic detection
-of network manager on source and destination clouds (neutron, quantum or nova).
+of network manager on source and destination clouds (quantum/neutron or nova).
 
 
 All functions are configured in yaml file, you can see the examples in configs directory.
