@@ -1,5 +1,5 @@
 from cloudferrylib.base.action import action
-import utils
+import cloudferrylib.os.actions.utils as utils
 
 
 class SelectBootVolume(action.Action):
