@@ -30,7 +30,7 @@ FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
                                                    }),
                              migrate=utils.ext_dict({'speed_limit': '10MB',
                                                      'retry': '7',
-                                                     'time_wait': '5'}))
+                                                     'time_wait': 5}))
 
 
 class GlanceImageTestCase(test.TestCase):
