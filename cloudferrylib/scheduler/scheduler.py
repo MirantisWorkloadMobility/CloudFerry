@@ -31,10 +31,13 @@ ERROR = 255
 
 
 class BaseScheduler(object):
-    def __init__(self, namespace=None, cursor=None):
+    def __init__(self, namespace=None, migration=None, preparation=None,
+                 rollback=None):
         self.namespace = namespace if namespace else Namespace()
         self.status_error = NO_ERROR
-        self.cursor = cursor
+        self.migration = migration
+        self.preparation = preparation
+        self.rollback = rollback
         self.map_func_task = dict() if not hasattr(
             self,
             'map_func_task') else self.map_func_task
@@ -60,15 +63,30 @@ class BaseScheduler(object):
             self.map_func_task[task](task)
         self.event_end_task(task)
 
+    def process_chain(self, chain, chain_name):
+        if chain:
+            LOG.info("Processing CHAIN %s", chain_name)
+            for task in chain:
+                try:
+                    self.run_task(task)
+                except Exception as e:
+                    self.status_error = ERROR
+                    self.exception = e
+                    self.error_task(task, e)
+                    LOG.info("Failed processing CHAIN %s", chain_name)
+                    break
+            else:
+                LOG.info("Succesfully finished CHAIN %s", chain_name)
+
     def start(self):
-        for task in self.cursor:
-            try:
-                self.run_task(task)
-            except Exception as e:
-                self.status_error = ERROR
-                self.exception = e
-                self.error_task(task, e)
-                break
+        # try to prepare for migration
+        self.process_chain(self.preparation, "PREPARATION")
+        # if we didn't get error during preparation task - process migration
+        if self.status_error != ERROR:
+            self.process_chain(self.migration, "MIGRATION")
+            # if we had an error during process migration - rollback
+            if self.status_error == ERROR:
+                self.process_chain(self.rollback, "ROLLBACK")
 
     def task_run(self, task):
         task(namespace=self.namespace)
@@ -78,9 +96,11 @@ class BaseScheduler(object):
 
 
 class SchedulerThread(BaseScheduler):
-    def __init__(self, namespace=None, thread_task=None, cursor=None,
-                 scheduler_parent=None):
-        super(SchedulerThread, self).__init__(namespace, cursor)
+    def __init__(self, namespace=None, thread_task=None, migration=None,
+                 preparation=None, rollback=None, scheduler_parent=None):
+        super(SchedulerThread, self).__init__(namespace, migration=migration,
+                                              preparation=preparation,
+                                              rollback=rollback)
         self.map_func_task[WrapThreadTask()] = self.task_run_thread
         self.child_threads = dict()
         self.thread_task = thread_task
@@ -137,7 +157,4 @@ class SchedulerThread(BaseScheduler):
 
 
 class Scheduler(SchedulerThread):
-    def __init__(self, namespace=None, thread_task=False, cursor=None,
-                 scheduler_parent=None):
-        super(Scheduler, self).__init__(namespace, thread_task, cursor,
-                                        scheduler_parent)
+    pass

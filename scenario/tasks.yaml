@@ -49,5 +49,7 @@ tasks:
    trans_file_to_file:  ['TaskTransfer', 'SSHFileToFile', 'info', 'instances', 'diff']
    act_trans_diff_file:  ['TaskTransfer', 'SSHFileToFile', 'info', 'instances', 'diff']
    act_is_not_copy_diff_file: ['IsNotCopyDiffFile']
+   create_snapshot: ['MysqlDump', 'dst_cloud']
+   restore_from_snapshot: ['MysqlRestore', 'dst_cloud']
 
 

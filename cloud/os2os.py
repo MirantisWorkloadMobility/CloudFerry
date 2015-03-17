@@ -102,14 +102,21 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                 utl.INSTANCES_TYPE: {}
             }
         })
+        # "process_migration" is dict with 3 keys:
+        #    "preparation" - is cursor that points to tasks must be processed
+        #                    before migration i.e - taking snapshots,
+        #                    figuring out all services are up
+        #    "migration" - is cursor that points to the first
+        #                  task in migration process
+        #    "rollback" - is cursor that points to tasks must be processed
+        #                 in case of "migration" failure
         if not scenario:
-            process_migration = self.process_migrate()
+            process_migration = {"migration": cursor.Cursor(self.process_migrate())}
         else:
             scenario.init_tasks(self.init)
             scenario.load_scenario()
-            process_migration = scenario.get_net()
-        process_migration = cursor.Cursor(process_migration)
-        scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, cursor=process_migration)
+            process_migration = {k: cursor.Cursor(v) for k, v in scenario.get_net().items()}
+        scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, **process_migration)
         scheduler_migr.start()
 
     def process_migrate(self):

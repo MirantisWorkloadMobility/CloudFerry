@@ -2,6 +2,12 @@ namespace:
   info_result:
       instances: {}
 
+preparation:
+  - create_snapshot: True
+
+rollback:
+  - restore_from_snapshot: True
+
 process:
   - task_resources_transporting:
       - act_identity_trans: True

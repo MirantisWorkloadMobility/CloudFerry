@@ -28,30 +28,42 @@ class Scenario(object):
         self.path_scenario = path_scenario
 
     def init_tasks(self, init={}):
-        tasks_file = yaml.load(open(self.path_tasks, 'r'))
-        actions = {}
-        for mod in tasks_file['paths']:
-            actions.update(self.get_actions(mod))
-        tasks = {}
-        for task in tasks_file['tasks']:
-            args = tasks_file['tasks'][task][1:]
-            if args and isinstance(args[-1], dict):
-                args_map = args[-1]
-                args = args[:-1]
-            else:
-                args_map = {}
-            tasks[task] = actions[tasks_file['tasks'][task][0]](init, *args, **args_map)
-        self.tasks = tasks
+        with open(self.path_tasks) as tasks_file:
+            tasks_file = yaml.load(tasks_file)
+            actions = {}
+            for mod in tasks_file['paths']:
+                actions.update(self.get_actions(mod))
+            tasks = {}
+            for task in tasks_file['tasks']:
+                args = tasks_file['tasks'][task][1:]
+                if args and isinstance(args[-1], dict):
+                    args_map = args[-1]
+                    args = args[:-1]
+                else:
+                    args_map = {}
+                tasks[task] = actions[tasks_file['tasks'][task][0]](init, *args, **args_map)
+            self.tasks = tasks
 
     def load_scenario(self, path_scenario=None):
         if path_scenario is None:
             path_scenario = self.path_scenario
-        migrate = yaml.load(open(path_scenario, 'r'))
-        self.process = migrate['process']
-        self.namespace = migrate['namespace']
+        with open(path_scenario) as scenario_file:
+            migrate = yaml.load(scenario_file)
+            self.namespace = migrate.get('namespace', {})
+            # "migration" yaml chain is responsible for migration
+            self.migration = migrate.get("process")
+            # "preparation" yaml chain can be added to process pre-migration tasks
+            self.preparation = migrate.get("preparation")
+            # "rollback" yaml chain can be added to rollback to previous state
+            #                                    in case of main chain failure
+            self.rollback = migrate.get("rollback")
 
     def get_net(self):
-        return self.construct_net(self.process, self.tasks)
+        result = {}
+        for key in ['migration', 'preparation', 'rollback']:
+            if hasattr(self, key) and getattr(self, key):
+                result.update({key: self.construct_net(getattr(self, key), self.tasks)})
+        return result
 
     def construct_net(self, process, tasks):
         net = None
