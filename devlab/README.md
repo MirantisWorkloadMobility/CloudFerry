@@ -47,6 +47,23 @@ Configuration is done through modifying `Vagrantfile`. Configurable options:
  5. At some point vagrant will ask you for the password, this is needed to
     configure NFS export on your host system.
 
+## Common Vagrant use-cases
+
+ 1. Check current VMs state (whether it's up, down and so on)
+   - `vagrant status`
+ 2. SSH
+   - `vagrant ssh <vm name>`
+   - `<vm name>` is one of grizzly, icehouse or cloudferry
+ 3. SSH configuration used for each VM:
+   - `vagrant ssh-config <vm name>`
+ 4. If something went wrong and you cannot ssh with keypairs, all the VMs have
+    following users:
+   - Username: vagrant
+   - Password: vagrant
+ 5. `vagrant` user is added to paswordless sudoers, so you can easily become
+    root:
+   - `sudo su`
+
 ## Known Issues
 
  - Windows is *not* supported due to NFS dependency;

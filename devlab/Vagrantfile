@@ -11,13 +11,13 @@ cloudferry_path = "Documents"
 
 nodes = {
   "grizzly" => {
-    "box" => "rverchikov/precise-grizzly",
+    "box" => "openstack-user/precise-grizzly",
     "ip" => "192.168.1.2",
     "memory" => 4096,
     "role" => "openstack"
   },
   "icehouse" => {
-    "box" => "rverchikov/precise-icehouse",
+    "box" => "openstack-user/precise-icehouse",
     "ip" => "192.168.1.3",
     "memory" => 4096,
     "role" => "openstack"
@@ -47,7 +47,6 @@ Vagrant.configure(2) do |config|
           thisnode.vm.provision "shell",
             path: "./provision/keys.sh",
             args: [ "--public-key", File.read(public_key_path).strip() ]
-          thisnode.vm.provision "shell", inline: "ovs-vsctl del-port br-ex eth1"
         when "dev"
           thisnode.vm.provision "shell",
             path: "./provision/user.sh",
