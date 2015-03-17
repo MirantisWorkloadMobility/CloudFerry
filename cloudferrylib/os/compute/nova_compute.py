@@ -89,8 +89,8 @@ class NovaCompute(compute.Compute):
         for keypair in self.get_keypair_list():
             info['keypairs'][keypair.id] = self.convert(keypair)
 
-        for flavor in self.get_flavor_list():
-            info['flavors'][flavor.id] = self.convert(flavor)
+        for flavor in self.get_flavor_list(is_public=None):
+            info['flavors'][flavor.id] = self.convert(flavor, cloud=self.cloud)
 
         if self.config.migrate.migrate_quotas:
             self._read_info_quotas(info)
@@ -225,13 +225,22 @@ class NovaCompute(compute.Compute):
         return inst
 
     @staticmethod
-    def convert_resources(compute_obj):
+    def convert_resources(compute_obj, cloud):
+
         if isinstance(compute_obj, nova_client.keypairs.Keypair):
             return {'keypair': {'name': compute_obj.name,
                                 'public_key': compute_obj.public_key},
                     'meta': {}}
 
         elif isinstance(compute_obj, nova_client.flavors.Flavor):
+
+            compute_res = cloud.resources[utl.COMPUTE_RESOURCE]
+            tenants = None
+
+            if not compute_obj.is_public:
+                flavor_access_list = compute_res.get_flavor_access_list(compute_obj.id)
+                tenants = [flv_acc.tenant_id for flv_acc in flavor_access_list]
+
             return {'flavor': {'name': compute_obj.name,
                                'ram': compute_obj.ram,
                                'vcpus': compute_obj.vcpus,
@@ -239,7 +248,8 @@ class NovaCompute(compute.Compute):
                                'ephemeral': compute_obj.ephemeral,
                                'swap': compute_obj.swap,
                                'rxtx_factor': compute_obj.rxtx_factor,
-                               'is_public': compute_obj.is_public},
+                               'is_public': compute_obj.is_public,
+                               'tenants': tenants},
                     'meta': {}}
 
     @staticmethod
@@ -249,7 +259,7 @@ class NovaCompute(compute.Compute):
         if isinstance(obj, nova_client.servers.Server):
             return NovaCompute.convert_instance(obj, cfg, cloud)
         elif isinstance(obj, res_tuple):
-            return NovaCompute.convert_resources(obj)
+            return NovaCompute.convert_resources(obj, cloud)
 
         LOG.error('NovaCompute converter has received incorrect value. Please '
                   'pass to it only instance, keypair or flavor objects.')
@@ -271,7 +281,7 @@ class NovaCompute(compute.Compute):
                     identity_info['users']}
 
         self._deploy_keypair(info['keypairs'])
-        self._deploy_flavors(info['flavors'])
+        self._deploy_flavors(info['flavors'], tenant_map)
         if self.config['migrate']['migrate_quotas']:
             self._deploy_project_quotas(info['project_quotas'],
                                         tenant_map)
@@ -362,9 +372,9 @@ class NovaCompute(compute.Compute):
                 continue
             self.create_keypair(keypair['name'], keypair['public_key'])
 
-    def _deploy_flavors(self, flavors):
+    def _deploy_flavors(self, flavors, tenant_map):
         dest_flavors = {flavor.name: flavor.id for flavor in
-                        self.get_flavor_list()}
+                        self.get_flavor_list(is_public=None)}
         for flavor_id, _flavor in flavors.iteritems():
             flavor = _flavor['flavor']
             if flavor['name'] in dest_flavors:
@@ -381,6 +391,10 @@ class NovaCompute(compute.Compute):
                 swap=int(flavor['swap']) if flavor['swap'] else 0,
                 rxtx_factor=flavor['rxtx_factor'],
                 is_public=flavor['is_public']).id
+            if not flavor['is_public']:
+                for tenant in flavor['tenants']:
+                    self.add_flavor_access(_flavor['meta']['id'],
+                                           tenant_map[tenant])
 
     def _deploy_instances(self, info_compute):
         new_ids = {}
@@ -533,6 +547,12 @@ class NovaCompute(compute.Compute):
 
     def delete_flavor(self, flavor_id):
         self.nova_client.flavors.delete(flavor_id)
+
+    def get_flavor_access_list(self, flavor_id):
+        return self.nova_client.flavor_access.list(flavor=flavor_id)
+
+    def add_flavor_access(self, flavor_id, tenant_id):
+        self.nova_client.flavor_access.add_tenant_access(flavor_id, tenant_id)
 
     def get_keypair_list(self):
         return self.nova_client.keypairs.list()
