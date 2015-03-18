@@ -406,8 +406,6 @@ class NovaCompute(compute.Compute):
             create_params = {'name': instance['name'],
                              'flavor': instance['flavor_id'],
                              'key_name': instance['key_name'],
-                             'availability_zone': instance[
-                                 'availability_zone'],
                              'nics': instance['nics'],
                              'image': instance['image_id']}
             if instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
