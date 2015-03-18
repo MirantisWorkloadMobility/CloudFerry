@@ -32,7 +32,7 @@ FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
                                                    }),
                              migrate=utils.ext_dict({'speed_limit': '10MB',
                                                      'retry': '7',
-                                                     'time_wait': '5'}))
+                                                     'time_wait': 5}))
 
 
 class NeutronTestCase(test.TestCase):
@@ -575,13 +575,13 @@ class NeutronTestCase(test.TestCase):
                       'subnet_ids': ['fake_subnet_id_1'],
                       'external_gateway_info': None}
         src_subnets = [{'id': 'fake_subnet_id_1',
-                        'external':False,
+                        'external': False,
                         'res_hash': 'fake_subnet_hash'}]
         dst_router = {'id': 'fake_router_id_2',
                       'subnet_ids': ['fake_subnet_id_2'],
                       'external_gateway_info': None}
         dst_subnets = [{'id': 'fake_subnet_id_2',
-                        'external':False,
+                        'external': False,
                         'res_hash': 'fake_subnet_hash'}]
         self.neutron_network_client.add_router_interfaces(src_router,
                                                           dst_router,
