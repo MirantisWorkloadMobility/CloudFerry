@@ -396,8 +396,7 @@ class NovaCompute(compute.Compute):
             tenant_name = _instance['instance']['tenant_name']
             if tenant_name not in nova_tenants_clients:
                 params['tenant'] = tenant_name
-                nova_tenants_clients[tenant_name] = self.get_nova_client(
-                    params)
+                nova_tenants_clients[tenant_name] = self.get_client(params)
 
         for _instance in info_compute['instances'].itervalues():
             instance = _instance['instance']
