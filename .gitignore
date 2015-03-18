@@ -6,3 +6,5 @@ transaction
 snapshots
 *.sw*
 .DS_Store
+.ubuntu-venv
+.vagrant
