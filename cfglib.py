@@ -129,6 +129,17 @@ src_mysql_opts = [
                help='driver for connection'),
 ]
 
+
+src_rabbit = cfg.OptGroup(name='src_rabbit',
+                          title='Config RabbitMQ for source cloud')
+
+src_rabbit_opts = [
+    cfg.StrOpt('password', default='-',
+               help='password for RabbitMQ'),
+    cfg.StrOpt('hosts', default='-',
+               help='comma separated RabbitMQ hosts')
+]
+
 src_compute = cfg.OptGroup(name='src_compute',
                            title='Config service for compute')
 
@@ -217,6 +228,17 @@ dst_mysql_opts = [
     cfg.StrOpt('connection', default='mysql+mysqlconnector',
                help='driver for connection'),
 ]
+
+dst_rabbit = cfg.OptGroup(name='dst_rabbit',
+                          title='Config RabbitMQ for source cloud')
+
+dst_rabbit_opts = [
+    cfg.StrOpt('password', default='-',
+               help='password for RabbitMQ'),
+    cfg.StrOpt('hosts', default='-',
+               help='comma separated RabbitMQ hosts')
+]
+
 
 dst_compute = cfg.OptGroup(name='dst_compute',
                            title='Config service for compute')
@@ -319,6 +341,7 @@ cfg_for_reg = [
     (migrate, migrate_opts),
     (mail, mail_opts),
     (src_mysql, src_mysql_opts),
+    (src_rabbit, src_rabbit_opts),
     (src_compute, src_compute_opts),
     (src_storage, src_storage_opts),
     (src_identity, src_identity_opts),
@@ -326,6 +349,7 @@ cfg_for_reg = [
     (src_network, src_network_opts),
     (src_objstorage, src_objstorage_opts),
     (dst_mysql, dst_mysql_opts),
+    (dst_rabbit, dst_rabbit_opts),
     (dst_compute, dst_compute_opts),
     (dst_storage, dst_storage_opts),
     (dst_identity, dst_identity_opts),

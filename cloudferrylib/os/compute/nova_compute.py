@@ -582,3 +582,7 @@ class NovaCompute(compute.Compute):
 
     def dissociate_floatingip(self, instance_id, floatingip):
         self.nova_client.servers.remove_floating_ip(instance_id, floatingip)
+
+    def get_hypervisors(self):
+        return [hypervisor.host_ip for hypervisor in
+                self.nova_client.hypervisors.list()]

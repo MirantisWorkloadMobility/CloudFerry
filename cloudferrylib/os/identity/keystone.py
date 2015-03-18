@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import pika
 
 from keystoneclient.v2_0 import client as keystone_client
 
@@ -377,3 +378,10 @@ class KeystoneIdentity(identity.Identity):
             return self.templater.render(name_file, args)
         else:
             return None
+
+    def check_rabbitmq(self):
+        credentials = pika.PlainCredentials('guest',
+                                            self.config.rabbit.password)
+        for host in self.config.rabbit.hosts.split(","):
+            pika.BlockingConnection(pika.ConnectionParameters(
+                host=host.strip(), credentials=credentials))
