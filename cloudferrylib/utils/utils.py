@@ -15,6 +15,7 @@
 import logging
 import sys
 import time
+import timeit
 import random
 import string
 import smtplib
@@ -472,3 +473,9 @@ def read_yaml_file(yaml_file_path):
 def write_yaml_file(file_name, content):
     with open(file_name, 'w') as yfile:
         yaml.dump(content, yfile)
+
+
+def timer(func, *args, **kwargs):
+    t = timeit.Timer(lambda: func(*args, **kwargs))
+    elapsed = t.timeit(number=1)
+    return elapsed

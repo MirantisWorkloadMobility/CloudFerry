@@ -15,6 +15,7 @@ process:
           - act_get_info_inst_src: True
           - act_get_info_volumes_src: True
           - act_get_info_objects_src: True
+          - act_check_bandwidth_src: True
           - check_src_ssh_access: True
           - check_src_sql: True
           - check_src_rabbit: True
@@ -23,6 +24,7 @@ process:
           - act_get_info_inst_dst: True
           - act_get_info_volumes_dst: True
           - act_get_info_objects_dst: True
+          - act_check_bandwidth_dst: True
           - check_dst_ssh_access: True
           - check_dst_sql: True
           - check_dst_rabbit: True
