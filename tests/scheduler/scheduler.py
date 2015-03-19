@@ -21,6 +21,20 @@ from cloudferrylib.scheduler import scheduler
 from tests import test
 
 
+class WrapThreadTaskFake(mock.MagicMock):
+    __name__ = 'WrapThreadTask'
+
+    def __repr__(self):
+        return "WrapThreadTask|FakeTask"
+
+
+class BaseTaskFake(mock.MagicMock):
+    __name__ = 'WrapThreadTask'
+
+    def __repr__(self):
+        return "BaseTask|FakeTask"
+
+
 class SchedulerTestCase(test.TestCase):
     def setUp(self):
         super(SchedulerTestCase, self).setUp()
@@ -30,16 +44,14 @@ class SchedulerTestCase(test.TestCase):
         self.useFixture(self.cursor_patch)
 
         self.fake_process = mock.MagicMock()
-        self.process_patch = mockpatch.PatchObject(scheduler, 'Process',
+        self.process_patch = mockpatch.PatchObject(scheduler, 'WrapThreadTask',
                                                    new=self.fake_process)
         self.useFixture(self.process_patch)
-        self.fake_wrap_tt = mock.MagicMock()
-        self.fake_wrap_tt.__name__ = 'WrapThreadTask'
+        self.fake_wrap_tt = WrapThreadTaskFake()
         self.wrap_tt_patch = mockpatch.PatchObject(scheduler, 'WrapThreadTask',
                                                    new=self.fake_wrap_tt)
         self.useFixture(self.wrap_tt_patch)
-        self.fake_base_task = mock.MagicMock()
-        self.fake_base_task.__name__ = 'BaseTask'
+        self.fake_base_task = BaseTaskFake()
         self.wrap_base_task = mockpatch.PatchObject(scheduler, 'BaseTask',
                                                     new=self.fake_base_task)
         self.useFixture(self.wrap_base_task)
@@ -48,19 +60,19 @@ class SchedulerTestCase(test.TestCase):
                                                     new=self.fake_namespace)
         self.useFixture(self.wrap_namespace)
 
-    # def test_start_scheduler(self):
-    #    fake_cursor = [self.fake_base_task(),
-    #                   self.fake_wrap_tt(),
-    #                   self.fake_base_task()]
-    #    s = scheduler.Scheduler(cursor=fake_cursor)
-    #    s.event_start_task = mock.Mock()
-    #    s.event_start_task.return_value = True
-    #    s.event_end_task = mock.Mock()
-    #    s.start()
-    #    self.assertEqual(scheduler.NO_ERROR, s.status_error)
-    #    self.assertIsNotNone(s.event_start_task.call_args)
-    #    self.assertIn(fake_cursor[0], s.event_start_task.call_args[0])
-    #    self.assertIsNotNone(s.event_end_task.call_args)
-    #    self.assertIn(fake_cursor[0], s.event_end_task.call_args[0])
-    #    self.assertTrue(fake_cursor[0].called)
-    #    self.assertTrue(fake_cursor[2].called)
+    def test_start_scheduler(self):
+       fake_cursor = [self.fake_base_task(),
+                      self.fake_wrap_tt(),
+                      self.fake_base_task()]
+       s = scheduler.Scheduler(cursor=fake_cursor)
+       s.event_start_task = mock.Mock()
+       s.event_start_task.return_value = True
+       s.event_end_task = mock.Mock()
+       s.start()
+       self.assertEqual(scheduler.NO_ERROR, s.status_error)
+       self.assertIsNotNone(s.event_start_task.call_args)
+       self.assertIn(fake_cursor[0], s.event_start_task.call_args[0])
+       self.assertIsNotNone(s.event_end_task.call_args)
+       self.assertIn(fake_cursor[0], s.event_end_task.call_args[0])
+       self.assertTrue(fake_cursor[0].called)
+       self.assertTrue(fake_cursor[2].called)
