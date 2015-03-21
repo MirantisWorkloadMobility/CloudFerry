@@ -794,8 +794,8 @@ class NeutronNetwork(network.Network):
                         rule['meta']['id'] = new_rule['security_group_rule']['id']
 
     def upload_networks(self, networks):
-        existing_nets_hashlist = \
-            [ex_net['res_hash'] for ex_net in self.get_networks()]
+        existing_nets_hashlist = (
+            [ex_net['res_hash'] for ex_net in self.get_networks()])
         for net in networks:
             tenant_id = \
                 self.identity_client.get_tenant_id_by_name(net['tenant_name'])
@@ -805,24 +805,22 @@ class NeutronNetwork(network.Network):
                     'name': net['name'],
                     'admin_state_up': net['admin_state_up'],
                     'tenant_id': tenant_id,
-                    'shared': net['shared']
+                    'shared': net['shared'],
+                    'router:external': net['router:external'],
+                    'provider:physical_network': \
+                       net['provider:physical_network'],
+                    'provider:network_type':  net['provider:network_type']
                 }
             }
             if net['router:external']:
                 if not self.config.migrate.migrate_extnets:
                     continue
-                network_info['network']['router:external'] = \
-                    net['router:external']
-                network_info['network']['provider:physical_network'] = \
-                    net['provider:physical_network']
-                network_info['network']['provider:network_type'] = \
-                    net['provider:network_type']
-                if net['provider:network_type'] == 'vlan':
-                    network_info['network']['provider:segmentation_id'] = \
-                        net['provider:segmentation_id']
+            if net['provider:network_type'] == 'vlan':
+                network_info['network']['provider:segmentation_id'] = (
+                    net['provider:segmentation_id'])
             if net['res_hash'] not in existing_nets_hashlist:
-                net['meta']['id'] = self.neutron_client.\
-                    create_network(network_info)['network']['id']
+                net['meta']['id'] = (self.neutron_client.
+                    create_network(network_info)['network']['id'])
             else:
                 LOG.info("| Dst cloud already has the same network "
                          "with name %s in tenant %s" %

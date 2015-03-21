@@ -463,7 +463,11 @@ class NeutronTestCase(test.TestCase):
             'network': {'name': 'fake_network_name_1',
                         'admin_state_up': True,
                         'tenant_id': 'fake_tenant_id_1',
-                        'shared': False}}
+                        'shared': False,
+                        'router:external': False,
+                        'provider:physical_network': None,
+                        'provider:network_type': 'gre' 
+                        }}
 
         self.neutron_network_client.upload_networks([self.net_1_info])
 
