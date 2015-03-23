@@ -51,19 +51,7 @@ to implement in nearest future.
 - Connection to source and destination clouds through external(public) network from host with CloudFerry.
 - Valid private ssh-key for both clouds which will be using by CloudFerry for data transferring.
 - Credentials of global cloud admin for both clouds.
-- python-dev
-- Fabric ver.>= 1.8.2
-- python-novaclient
-- python-cinderclient
-- python-glanceclient
-- python-keystoneclient
-- python-neutronclient (python-quantumclient)*
-- ipaddr
-- sqlalchemy
-
-
-\* If you know which network managers are used on your clouds you can install only f.e. python-neutronclient,
-if you are not we recommend to install both packages.
+- All the Python requirements are listed in requirements.txt.
 
 
 ## Usage
