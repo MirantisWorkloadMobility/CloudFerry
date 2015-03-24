@@ -30,6 +30,8 @@ class CheckSSH(action.Action):
         return self.cloud.resources[utl.COMPUTE_RESOURCE].get_hypervisors()
 
     def check_access(self, node):
-        with settings(host_string=self.cloud.getIpSsh()):
+        with settings(host_string=self.cloud.getIpSsh(),
+                      abort_on_prompts=True):
             with forward_agent(env.key_filename):
-                run("ssh -oStrictHostKeyChecking=no %s 'echo'" % node)
+                run("ssh -oStrictHostKeyChecking=no "
+                    "-oPasswordAuthentication=no %s 'echo'" % node)
