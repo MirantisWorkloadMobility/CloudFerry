@@ -142,7 +142,9 @@ class SchedulerThread(BaseScheduler):
         namespace = self.namespace.fork(is_deep_copy)
         scheduler = self.__class__(namespace=namespace,
                                    thread_task=thread_task,
-                                   cursor=Cursor(thread_task.getNet()),
+                                   preparation=self.preparation,
+                                   migration=Cursor(thread_task.getNet()),
+                                   rollback=self.rollback,
                                    scheduler_parent=self)
         self.namespace.vars[CHILDREN][thread_task] = {
             'namespace': namespace,
