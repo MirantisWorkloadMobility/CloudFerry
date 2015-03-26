@@ -22,6 +22,7 @@ from cloudferrylib.scheduler.scenario import Scenario
 from cloud import cloud_ferry
 from cloud import grouping
 from dry_run import chain
+from condensation import process
 env.forward_agent = True
 env.user = 'root'
 LOG = utl.get_log(__name__)
@@ -56,7 +57,6 @@ def dry_run():
     chain.process_test_chain()
 
 
-
 @task
 def get_groups(name_config=None, group_file=None, cloud_id='src',
                validate_users_group=False):
@@ -74,6 +74,15 @@ def get_groups(name_config=None, group_file=None, cloud_id='src',
     cfglib.init_config(name_config)
     group = grouping.Grouping(cfglib.CONF, group_file, cloud_id)
     group.group(validate_users_group)
+
+
+@task
+def condense(name_config=None, debug=False):
+    if debug:
+        utl.configure_logging("DEBUG")
+    cfglib.collector_configs_plugins()
+    cfglib.init_config(name_config)
+    process.process()
 
 
 if __name__ == '__main__':

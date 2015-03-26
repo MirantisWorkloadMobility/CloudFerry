@@ -359,6 +359,25 @@ initial_check_opts = [
                help='Size of testing file to send/receive via network (MB).'),
 ]
 
+condense = cfg.OptGroup(name='condense',
+                        title="options for condensation")
+
+condense_opts = [
+    cfg.StrOpt('nova_file'),
+    cfg.StrOpt('node_file'),
+    cfg.StrOpt('group_file'),
+    cfg.IntOpt('ram_reduction_coef', default=1),
+    cfg.IntOpt('core_reduction_coef', default=4),
+    cfg.IntOpt('precision', default=85)]
+
+database = cfg.OptGroup(name="database",
+                        title="options for database")
+
+database_opts = [
+    cfg.StrOpt("host", default="localhost"),
+    cfg.IntOpt("port", default=6379)]
+
+
 cfg_for_reg = [
     (src, src_opts),
     (dst, dst_opts),
@@ -382,7 +401,10 @@ cfg_for_reg = [
     (dst_objstorage, dst_objstorage_opts),
     (snapshot, snapshot_opts),
     (import_rules, import_rules_opts),
-    (initial_check, initial_check_opts)
+    (initial_check, initial_check_opts),
+    (condense, condense_opts),
+    (database, database_opts),
+    (import_rules, import_rules_opts)
 ]
 
 CONF = cfg.CONF
