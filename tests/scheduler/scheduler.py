@@ -17,7 +17,10 @@ import mock
 
 from oslotest import mockpatch
 
+from cloudferrylib.scheduler import cursor
 from cloudferrylib.scheduler import scheduler
+from cloudferrylib.scheduler import task
+
 from tests import test
 
 
@@ -64,7 +67,7 @@ class SchedulerTestCase(test.TestCase):
        fake_cursor = [self.fake_base_task(),
                       self.fake_wrap_tt(),
                       self.fake_base_task()]
-       s = scheduler.Scheduler(cursor=fake_cursor)
+       s = scheduler.Scheduler(migration=fake_cursor)
        s.event_start_task = mock.Mock()
        s.event_start_task.return_value = True
        s.event_end_task = mock.Mock()
@@ -76,3 +79,41 @@ class SchedulerTestCase(test.TestCase):
        self.assertIn(fake_cursor[0], s.event_end_task.call_args[0])
        self.assertTrue(fake_cursor[0].called)
        self.assertTrue(fake_cursor[2].called)
+
+
+class MigrationRollbackTestCase(test.TestCase):
+    def test_task_is_rolled_back_on_error(self):
+        migration = self._mock_out_task(throws_exception=True)
+        rollback = self._mock_out_task()
+
+        s = scheduler.Scheduler(migration=[migration], rollback=[rollback])
+        s.map_func_task[migration] = s.task_run
+        s.map_func_task[rollback] = s.task_run
+        s.start()
+
+        assert rollback.run.called
+
+    def test_preparation_step_is_not_rolled_back_and_error_raised(self):
+        migration = self._mock_out_task()
+        preparation = self._mock_out_task(throws_exception=True)
+        rollback = self._mock_out_task()
+
+        s = scheduler.Scheduler(migration=[migration],
+                                preparation=[preparation],
+                                rollback=[rollback])
+
+        s.map_func_task[preparation] = s.task_run
+        s.map_func_task[migration] = s.task_run
+        s.map_func_task[rollback] = s.task_run
+        s.start()
+
+        assert preparation.run.called
+        assert not rollback.run.called
+        assert not migration.run.called
+
+    def _mock_out_task(self, throws_exception=False):
+        t = task.Task()
+        t.run = mock.Mock()
+        if throws_exception:
+            t.run.side_effect = Exception
+        return t
