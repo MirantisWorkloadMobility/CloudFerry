@@ -34,7 +34,7 @@ class NovaNetwork(network.Network):
             self.config.cloud.user,
             self.config.cloud.password,
             self.config.cloud.tenant,
-            "http://%s:35357/v2.0/" % self.config.cloud.host)
+            self.config.cloud.auth_url)
 
     def read_info(self, opts=None):
         opts = {} if not opts else opts

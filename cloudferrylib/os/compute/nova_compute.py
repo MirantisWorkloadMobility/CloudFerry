@@ -54,7 +54,7 @@ class NovaCompute(compute.Compute):
         return nova_client.Client(params.cloud.user,
                                   params.cloud.password,
                                   params.cloud.tenant,
-                                  "http://%s:35357/v2.0/" % params.cloud.host)
+                                  params.cloud.auth_url)
 
     def _read_info_quotas(self, info):
         user_quotas_cmd = ("SELECT user_id, project_id, resource, "

@@ -10,12 +10,12 @@ class ConvertImageToFile(action.Action):
         with settings(host_string=cfg.host):
             with forward_agent(env.key_filename):
                 run(("glance --os-username=%s --os-password=%s --os-tenant-name=%s " +
-                     "--os-auth-url=http://%s:35357/v2.0 " +
+                     "--os-auth-url=%s " +
                     "image-download %s > %s") %
                     (cfg.user,
                      cfg.password,
                      cfg.tenant,
-                     cfg.host,
+                     cfg.auth_url,
                      image_id,
                      base_filename))
 

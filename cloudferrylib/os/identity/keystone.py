@@ -123,11 +123,11 @@ class KeystoneIdentity(identity.Identity):
             username=self.config.cloud.user,
             password=self.config.cloud.password,
             tenant_name=self.config.cloud.tenant,
-            auth_url="http://%s:35357/v2.0/" % self.config.cloud.host)
+            auth_url=self.config.cloud.auth_url)
 
         return keystone_client.Client(
             token=ks_client_for_token.auth_ref['token']['id'],
-            endpoint="http://%s:35357/v2.0/" % self.config.cloud.host)
+            endpoint=self.config.cloud.auth_url)
 
     def get_service_name_by_type(self, service_type):
         """Getting service_name from keystone. """
