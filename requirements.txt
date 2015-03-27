@@ -1,6 +1,6 @@
-ecdsa
 --allow-external mysql-connector-python
 colorlog
+ecdsa
 fabric>=1.8.2
 ipaddr
 jinja2
