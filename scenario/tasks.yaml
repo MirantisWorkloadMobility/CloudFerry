@@ -65,3 +65,4 @@ tasks:
    check_dst_rabbit: ['CheckRabbitMQ', 'dst_cloud']
    create_snapshot: ['MysqlDump', 'dst_cloud']
    restore_from_snapshot: ['MysqlRestore', 'dst_cloud']
+   check_needed_compute_resources: ['CheckNeededComputeResources']

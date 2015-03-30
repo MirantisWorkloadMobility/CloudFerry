@@ -70,6 +70,7 @@ from cloudferrylib.os.actions import get_info_volumes
 from cloudferrylib.os.actions import get_info_objects
 from cloudferrylib.os.actions import copy_object2object
 from cloudferrylib.os.actions import fake_action
+from cloudferrylib.os.actions import check_needed_compute_resources
 from cloudferrylib.os.actions import check_ssh
 from cloudferrylib.os.actions import check_sql
 from cloudferrylib.os.actions import check_rabbitmq
@@ -154,6 +155,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         save_result = self.save_result(name_data, name_result, name_result, 'instances')
         trans_one_inst = self.migrate_process_instance()
         init_iteration_instance = self.init_iteration_instance(name_data, name_backup, name_iter)
+        act_check_needed_compute_resources = check_needed_compute_resources.CheckNeededComputeResources(self.init)
         act_get_filter = get_filter.GetFilter(self.init)
         act_get_info_inst = get_info_instances.GetInfoInstances(self.init, cloud='src_cloud')
         act_cleanup_images = cleanup_images.CleanupImages(self.init)
@@ -165,6 +167,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             act_get_filter >> \
             act_get_info_inst >> \
             init_iteration_instance >> \
+            act_check_needed_compute_resources >> \
             get_next_instance >> \
             trans_one_inst >> \
             save_result >> \

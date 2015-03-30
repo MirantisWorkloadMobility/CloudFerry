@@ -583,6 +583,27 @@ class NovaCompute(compute.Compute):
     def dissociate_floatingip(self, instance_id, floatingip):
         self.nova_client.servers.remove_floating_ip(instance_id, floatingip)
 
+    def get_hypervisor_statistics(self):
+        return self.nova_client.hypervisors.statistics()
+
     def get_hypervisors(self):
         return [hypervisor.hypervisor_hostname for hypervisor in
                 self.nova_client.hypervisors.list()]
+
+    def get_free_vcpus(self):
+        hypervisor_statistics = self.get_hypervisor_statistics()
+        return (hypervisor_statistics.vcpus *
+                self.config.compute.cpu_allocation_ratio -
+                hypervisor_statistics.vcpus_used)
+
+    def get_free_ram(self):
+        hypervisor_statistics = self.get_hypervisor_statistics()
+        return (hypervisor_statistics.memory_mb *
+                self.config.compute.ram_allocation_ratio -
+                hypervisor_statistics.memory_mb_used)
+
+    def get_free_disk(self):
+        hypervisor_statistics = self.get_hypervisor_statistics()
+        return (hypervisor_statistics.local_gb *
+                self.config.compute.disk_allocation_ratio -
+                hypervisor_statistics.local_gb_used)
