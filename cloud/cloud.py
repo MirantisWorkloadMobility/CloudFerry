@@ -82,8 +82,11 @@ class Cloud(object):
             self)
         self.resources['identity'] = identity
 
+        skip_initialization = ['identity']
+        if not self.config.src_objstorage.service:
+            skip_initialization.append('objstorage')
         for resource in resources:
-            if resource != 'identity':
+            if resource not in skip_initialization:
                 resource_config = self.make_resource_config(self.config,
                                                             self.position,
                                                             cloud_config,
