@@ -34,6 +34,9 @@ done
 CF_PATH=/home/${VAGRANT_USER}/${CF_PATH}
 pushd $CF_PATH
 
+apt-get install redis-server -y
+service redis-server start
+
 if [[ ! -d CloudFerry && ! -f CloudFerry/requirements.txt ]]; then
     echo "Cloning CloudFerry repo to $CF_PATH"
     run git clone https://github.com/MirantisWorkloadMobility/CloudFerry.git
@@ -48,6 +51,7 @@ if [[ ! -d .ubuntu-venv ]]; then
     run PATH=$(pwd)/.ubuntu-venv/bin:$PATH env pip install --upgrade pip
     run PATH=$(pwd)/.ubuntu-venv/bin:$PATH env pip install -r requirements.txt
     run PATH=$(pwd)/.ubuntu-venv/bin:$PATH env pip install -r test-requirements.txt
+    run PATH=$(pwd)/.ubuntu-venv/bin:$PATH env pip install pylint pep8 flake8
     echo "CloudFerry setup succeeded!"
 else
     echo "CloudFerry venv is already present, skipping"
