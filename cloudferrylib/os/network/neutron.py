@@ -518,6 +518,15 @@ class NeutronNetwork(network.Network):
 
         return subnets_info
 
+    def reset_subnet_dhcp(self, subnet_id, dhcp_flag):
+        subnet_info = {
+            'subnet':
+            {
+                'enable_dhcp': dhcp_flag
+            }
+        }
+        return self.neutron_client.update_subnet(subnet_id, subnet_info)
+
     def get_routers(self):
         routers = self.neutron_client.list_routers()['routers']
         routers_info = []
