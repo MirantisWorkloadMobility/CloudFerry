@@ -41,10 +41,10 @@ class NeutronNetwork(network.Network):
 
     def get_client(self):
         return neutron_client.Client(
-            username=self.config['cloud']["user"],
-            password=self.config['cloud']["password"],
-            tenant_name=self.config['cloud']["tenant"],
-            auth_url="http://" + self.config['cloud']["host"] + ":35357/v2.0/")
+            username=self.config.cloud.user,
+            password=self.config.cloud.password,
+            tenant_name=self.config.cloud.tenant,
+            auth_url=self.config.cloud.auth_url)
 
     def read_info(self, **kwargs):
 

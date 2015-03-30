@@ -23,14 +23,14 @@ from cloudferrylib.utils import utils
 from tests import test
 
 
-FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
-                                                   'password': 'fake_password',
-                                                   'tenant': 'fake_tenant',
-                                                   'host': '1.1.1.1',
-                                                   }),
-                             migrate=utils.ext_dict({'speed_limit': '10MB',
-                                                     'retry': '7',
-                                                     'time_wait': 5}))
+FAKE_CONFIG = utils.ext_dict(
+    cloud=utils.ext_dict({'user': 'fake_user',
+                          'password': 'fake_password',
+                          'tenant': 'fake_tenant',
+                          'auth_url': 'http://1.1.1.1:35357/v2.0/'}),
+    migrate=utils.ext_dict({'speed_limit': '10MB',
+                            'retry': '7',
+                            'time_wait': 5}))
 
 
 class TestNovaNetwork(test.TestCase):
@@ -65,7 +65,7 @@ class TestNovaNetwork(test.TestCase):
         args = (FAKE_CONFIG.cloud.user,
                 FAKE_CONFIG.cloud.password,
                 FAKE_CONFIG.cloud.tenant,
-                "http://%s:35357/v2.0/" % FAKE_CONFIG.cloud.host)
+                FAKE_CONFIG.cloud.auth_url)
         client = self.nova_network_client.get_client()
         self.nova_mock_client.assert_called_once_with(*args)
 

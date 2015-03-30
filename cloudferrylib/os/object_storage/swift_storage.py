@@ -29,12 +29,12 @@ class SwiftStorage(objstorage.ObjStorage):
     def get_swift_conn(self, params=None):
         """Getting nova client. """
         if params is None:
-            params = self.config['cloud']
+            params = self.config.cloud
 
-        conn = swift_client.Connection(user=params['user'],
-                                       key=params['password'],
-                                       tenant_name=params['tenant'],
-                                       authurl="http://%s:35357/v2.0/" % params['host'],
+        conn = swift_client.Connection(user=params.user,
+                                       key=params.password,
+                                       tenant_name=params.tenant,
+                                       authurl=params.auth_url,
                                        auth_version="2")
         return conn.get_auth()
 
