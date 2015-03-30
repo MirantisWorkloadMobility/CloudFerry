@@ -257,7 +257,13 @@ dst_compute_opts = [
     cfg.StrOpt('convert_ephemeral_disk', default='qcow2',
                help='convert ephemeral disk to'),
     cfg.StrOpt('host_eph_drv', default='-',
-               help='host ephemeral drive')
+               help='host ephemeral drive'),
+    cfg.FloatOpt('cpu_allocation_ratio', default='16',
+                 help='cpu allocation ratio'),
+    cfg.FloatOpt('ram_allocation_ratio', default='1',
+                 help='ram allocation ratio'),
+    cfg.FloatOpt('disk_allocation_ratio', default='0.9',
+                 help='disk allocation ratio')
 ]
 
 

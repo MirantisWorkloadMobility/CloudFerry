@@ -39,6 +39,7 @@ process:
       - init_iteration_instance:
           - init_iteration_instance_copy_var: True
           - init_iteration_instance_ref: True
+      - check_needed_compute_resources: True
       - get_next_instance: True
       - trans_one_inst:
           - act_stop_vms: True
