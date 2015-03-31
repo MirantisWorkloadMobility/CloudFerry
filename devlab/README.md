@@ -17,7 +17,8 @@ Vagrant sets up 3 nodes:
 
 ## Configuration
 
-Configuration is done through modifying `Vagrantfile`. Configurable options:
+Configuration is done through modifying `config.ini`. Most recent configurable
+options:
 
  - `public_key_path` -- public key CloudFerry uses to ssh into SRC and DST
    migration environments;
@@ -63,6 +64,22 @@ Configuration is done through modifying `Vagrantfile`. Configurable options:
  5. `vagrant` user is added to paswordless sudoers, so you can easily become
     root:
    - `sudo su`
+
+## CloudFerry usage
+
+ 1. Connect to 'cloudferry' node:
+    ```
+    vagrant ssh cloudferry
+    ```
+ 2. Move to directory with CloudFerry and activate virtual environment:
+    ```
+    cd <cloud_ferry_dir>
+    source .ubuntu-venv/bin/activate
+    ```
+ 3. Run migration process:
+    ```
+    fab migrate:configuration.ini
+    ```
 
 ## Known Issues
 

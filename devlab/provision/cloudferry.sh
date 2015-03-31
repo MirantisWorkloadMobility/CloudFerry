@@ -56,6 +56,19 @@ if [[ ! -d .ubuntu-venv ]]; then
 else
     echo "CloudFerry venv is already present, skipping"
 fi
+
+echo "Preparing configuration for CloudFerry"
+cp devlab/config.template configuration.ini
+
+while read key value
+do
+    value=($value)
+    value=${value[1]}
+    if [[ -n $value ]]; then
+      sed -i "s|<${key}>|${value}|g" configuration.ini
+    fi
+done < devlab/config.ini
+
 popd
 
 popd
