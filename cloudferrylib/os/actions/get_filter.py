@@ -21,8 +21,8 @@ class GetFilter(action.Action):
     def run(self, **kwargs):
         search_opts = None
         filter_path = self.cfg.migrate.filter_path
-        if utl.get_filter_config(filter_path):
-            filter_config = utl.get_filter_config(filter_path)
+        if utl.read_yaml_file(filter_path):
+            filter_config = utl.read_yaml_file(filter_path)
             if utl.INSTANCES_TYPE in filter_config:
                 search_opts = filter_config[utl.INSTANCES_TYPE]
         return {

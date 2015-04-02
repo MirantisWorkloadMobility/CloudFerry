@@ -18,6 +18,7 @@ import time
 from sqlalchemy import exc
 
 from novaclient.v1_1 import client as nova_client
+from novaclient import exceptions as nova_exc
 
 from cloudferrylib.base import compute
 from cloudferrylib.utils import mysql_connector
@@ -425,9 +426,19 @@ class NovaCompute(compute.Compute):
     def create_instance(self, **kwargs):
         return self.nova_client.servers.create(**kwargs).id
 
-    def get_instances_list(self, detailed=True, search_opts=None,
-                           marker=None,
+    def get_instances_list(self, detailed=True, search_opts=None, marker=None,
                            limit=None):
+        """
+        Get a list of servers.
+
+        :param detailed: Whether to return detailed server info (optional).
+        :param search_opts: Search options to filter out servers (optional).
+        :param marker: Begin returning servers that appear later in the server
+                       list than that represented by this server id (optional).
+        :param limit: Maximum number of servers to return (optional).
+
+        :rtype: list of :class:`Server`
+        """
         ids = search_opts.get('id', None) if search_opts else None
         if not ids:
             return self.nova_client.servers.list(detailed=detailed,
@@ -438,6 +449,20 @@ class NovaCompute(compute.Compute):
                 return [self.nova_client.servers.get(i) for i in ids]
             else:
                 return [self.nova_client.servers.get(ids)]
+
+    def is_nova_instance(self, object_id):
+        """
+        Define OpenStack Nova Server instance by id.
+
+        :param object_id: ID of supposed Nova Server instance
+        :return: True - if it is Nova Server instance, False - if it is not
+        """
+        try:
+            self.get_instance(object_id)
+        except nova_exc.NotFound:
+            LOG.error("%s is not a Nova Server instance", object_id)
+            return False
+        return True
 
     def get_instance(self, instance_id):
         return self.get_instances_list(search_opts={'id': instance_id})[0]

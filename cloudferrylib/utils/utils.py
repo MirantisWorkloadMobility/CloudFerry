@@ -461,9 +461,14 @@ def get_ext_ip(ext_cidr, init_host, compute_host):
 def check_file(file_path):
     return os.path.isfile(file_path)
 
-def get_filter_config(file_path):
-    if check_file(file_path):
-        return yaml.load(open(file_path, 'r'))
-    else:
-        return None
 
+def read_yaml_file(yaml_file_path):
+    if not check_file(yaml_file_path):
+        return None
+    with open(yaml_file_path) as yfile:
+        return yaml.load(yfile)
+
+
+def write_yaml_file(file_name, content):
+    with open(file_name, 'w') as yfile:
+        yaml.dump(content, yfile)

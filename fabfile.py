@@ -20,6 +20,7 @@ from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import utils
 from cloudferrylib.scheduler.scenario import Scenario
 from cloud import cloud_ferry
+from cloud import grouping
 from dry_run import chain
 env.forward_agent = True
 env.user = 'root'
@@ -53,6 +54,26 @@ def get_info(name_config, debug=False):
 @task
 def dry_run():
     chain.process_test_chain()
+
+
+
+@task
+def get_groups(name_config=None, group_file=None, cloud_id='src',
+               validate_users_group=False):
+    """
+    Function to group VM's by any of those dependencies (f.e. tenants,
+    networks, etc.).
+
+    :param name_config: name of config ini-file, example 'config.ini',
+    :param group_file: name of groups defined yaml-file, example 'groups.yaml',
+    :param validate_users_group: Remove dublicate id's and check if valid
+           VM id specified. Takes more time because of nova API multiple calls
+    :return: yaml-file with tree-based groups defined based on grouping rules.
+    """
+    cfglib.collector_configs_plugins()
+    cfglib.init_config(name_config)
+    group = grouping.Grouping(cfglib.CONF, group_file, cloud_id)
+    group.group(validate_users_group)
 
 
 if __name__ == '__main__':

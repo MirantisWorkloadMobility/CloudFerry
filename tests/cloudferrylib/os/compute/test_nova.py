@@ -86,13 +86,13 @@ class NovaComputeTestCase(test.TestCase):
     def test_get_instances_list(self):
         fake_instances_list = [self.fake_instance_0, self.fake_instance_1]
         self.mock_client().servers.list.return_value = fake_instances_list
-
-        instances_list = self.nova_client.get_instances_list()
-
         test_args = {'marker': None,
                      'detailed': True,
                      'limit': None,
                      'search_opts': None}
+
+        instances_list = self.nova_client.get_instances_list(**test_args)
+
         self.mock_client().servers.list.assert_called_once_with(**test_args)
         self.assertEqual(fake_instances_list, instances_list)
 
