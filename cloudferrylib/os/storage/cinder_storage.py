@@ -15,9 +15,6 @@
 
 import time
 
-from fabric.api import run
-from fabric.api import settings
-
 from cinderclient.v1 import client as cinder_client
 
 from cloudferrylib.base import storage
@@ -270,18 +267,10 @@ class CinderStorage(storage.Storage):
         return info
 
     def __patch_option_bootable_of_volume(self, volume_id, bootable):
-        cmd = ('use cinder;update volumes set volumes.bootable=%s where '
+        cmd = ('UPDATE volumes SET volumes.bootable=%s WHERE '
                'volumes.id="%s"') % (int(bootable), volume_id)
-        self.__cmd_mysql_on_dest_controller(cmd)
-
-    def __cmd_mysql_on_dest_controller(self, cmd):
-        with settings(host_string=self.mysql_host):
-            run('mysql %s %s -e \'%s\'' % (
-                ("-u " + self.config['mysql']['user'])
-                if self.config['mysql']['user'] else "",
-                "-p" + self.config['mysql']['password']
-                if self.config['mysql']['password'] else "",
-                cmd))
+        connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
+        connector.execute(cmd)
 
     def download_table_from_db_to_file(self, table_name, file_name):
         connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
