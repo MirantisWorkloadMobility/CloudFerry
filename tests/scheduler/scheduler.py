@@ -87,8 +87,6 @@ class MigrationRollbackTestCase(test.TestCase):
         rollback = self._mock_out_task()
 
         s = scheduler.Scheduler(migration=[migration], rollback=[rollback])
-        s.map_func_task[migration] = s.task_run
-        s.map_func_task[rollback] = s.task_run
         s.start()
 
         assert rollback.run.called
@@ -102,9 +100,6 @@ class MigrationRollbackTestCase(test.TestCase):
                                 preparation=[preparation],
                                 rollback=[rollback])
 
-        s.map_func_task[preparation] = s.task_run
-        s.map_func_task[migration] = s.task_run
-        s.map_func_task[rollback] = s.task_run
         s.start()
 
         assert preparation.run.called
