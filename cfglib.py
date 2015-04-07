@@ -347,6 +347,18 @@ snapshot_opts = [
     cfg.StrOpt('snapshot_path', default="/root/dump.sql"),
     cfg.StrOpt('host', default='')]
 
+initial_check = cfg.OptGroup(name='initial_check',
+                             title='Some configuration to initial checks')
+
+initial_check_opts = [
+    cfg.IntOpt('claimed_bandwidth', default=100,
+               help='Claimed bandwidth of network (Mb/s).'),
+    cfg.FloatOpt('factor', default=0.5,
+                 help='The percentage of the allowable loss of network speed'),
+    cfg.IntOpt('test_file_size', default=100,
+               help='Size of testing file to send/receive via network (MB).'),
+]
+
 cfg_for_reg = [
     (src, src_opts),
     (dst, dst_opts),
@@ -369,7 +381,8 @@ cfg_for_reg = [
     (dst_network, dst_network_opts),
     (dst_objstorage, dst_objstorage_opts),
     (snapshot, snapshot_opts),
-    (import_rules, import_rules_opts)
+    (import_rules, import_rules_opts),
+    (initial_check, initial_check_opts)
 ]
 
 CONF = cfg.CONF

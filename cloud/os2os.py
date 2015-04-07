@@ -74,6 +74,7 @@ from cloudferrylib.os.actions import check_needed_compute_resources
 from cloudferrylib.os.actions import check_ssh
 from cloudferrylib.os.actions import check_sql
 from cloudferrylib.os.actions import check_rabbitmq
+from cloudferrylib.os.actions import check_bandwidth
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
@@ -126,8 +127,9 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         check_environment = self.check_environment()
         task_resources_transporting = self.transport_resources()
         transport_instances_and_dependency_resources = self.migrate_instances()
-        return check_environment >> task_resources_transporting >> \
-            transport_instances_and_dependency_resources
+        return (check_environment >> 
+                task_resources_transporting >> 
+                transport_instances_and_dependency_resources)
 
     def check_environment(self):
         check_src_cloud = self.check_cloud('src_cloud')
@@ -143,9 +145,15 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         check_ssh_access = check_ssh.CheckSSH(self.init, cloud=cloud)
         sql_check = check_sql.CheckSQL(self.init, cloud=cloud)
         rabbit_check = check_rabbitmq.CheckRabbitMQ(self.init, cloud=cloud)
-        return read_instances >> read_images >> read_objects >> \
-            read_volumes >> check_ssh_access >> sql_check >> \
-            rabbit_check
+        bandwidh_check = check_bandwidth.CheckBandwidth(self.init, cloud=cloud)
+        return (read_instances >>
+                read_images >>
+                read_objects >>
+                read_volumes >>
+                check_ssh_access >>
+                sql_check >>
+                rabbit_check >>
+                bandwidh_check)
 
     def migrate_instances(self):
         name_data = 'info'
