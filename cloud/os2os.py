@@ -83,7 +83,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         super(OS2OSFerry, self). __init__(config)
         resources = {'identity': keystone.KeystoneIdentity,
                      'image': glance_image.GlanceImage,
-                     'storage': cinder_storage.CinderStorage,
+                     'storage': utl.import_class_by_string(
+                         config.migrate.cinder_migration_strategy),
                      'network': neutron.NeutronNetwork,
                      'compute': nova_compute.NovaCompute,
                      'objstorage': swift_storage.SwiftStorage}

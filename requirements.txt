@@ -3,6 +3,7 @@ ecdsa
 fabric>=1.8.2
 ipaddr
 jinja2
+jsondate
 mysql-connector-python
 pika==0.9.14
 pycrypto

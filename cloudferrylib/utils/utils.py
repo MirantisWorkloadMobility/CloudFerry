@@ -479,3 +479,14 @@ def timer(func, *args, **kwargs):
     t = timeit.Timer(lambda: func(*args, **kwargs))
     elapsed = t.timeit(number=1)
     return elapsed
+
+
+def import_class_by_string(name):
+    """ This function takes string in format
+        'cloudferrylib.os.storage.cinder_storage.CinderStorage'
+        And returns class object"""
+    module, class_name = name.split('.')[:-1], name.split('.')[-1]
+    mod = __import__(".".join(module))
+    for comp in module[1:]:
+        mod = getattr(mod, comp)
+    return getattr(mod, class_name)
