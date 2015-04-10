@@ -44,42 +44,42 @@ class CursorTestCase(test.TestCase):
         self.assertEqual(cur.current(), self.elements[0])
 
     def test_iterating_first_case_cursor(self):
-       cur = cursor.Cursor(self.elements[0])
-       expected_result = [self.elements[0], self.elements[1],
-                          self.elements[4], self.elements[6],
-                          self.elements[5]]
-       expected_result.reverse()
-       for c in cur:
-           self.assertEqual(expected_result.pop(), c)
+        cur = cursor.Cursor(self.elements[0])
+        expected_result = [self.elements[0], self.elements[1],
+                           self.elements[4], self.elements[6],
+                           self.elements[5]]
+        expected_result.reverse()
+        for c in cur:
+            self.assertEqual(expected_result.pop(), c)
 
     def test_iterating_second_case_cursor(self):
-       self.elements[1].num_element = 1
-       cur = cursor.Cursor(self.elements[0])
-       expected_result = [self.elements[0], self.elements[1],
-                          self.elements[2], self.elements[4],
-                          self.elements[6],
-                          self.elements[5]]
-       expected_result.reverse()
-       for c in cur:
-           self.assertEqual(expected_result.pop(), c)
+        self.elements[1].num_element = 1
+        cur = cursor.Cursor(self.elements[0])
+        expected_result = [self.elements[0], self.elements[1],
+                           self.elements[2], self.elements[4],
+                           self.elements[6],
+                           self.elements[5]]
+        expected_result.reverse()
+        for c in cur:
+            self.assertEqual(expected_result.pop(), c)
 
     def test_iterating_third_case_cursor(self):
-       self.elements[1].num_element = 2
-       cur = cursor.Cursor(self.elements[0])
-       expected_result = [self.elements[0], self.elements[1],
-                          self.elements[3], self.elements[4],
-                          self.elements[6],
-                          self.elements[5]]
-       expected_result.reverse()
-       for c in cur:
-           self.assertEqual(expected_result.pop(), c)
+        self.elements[1].num_element = 2
+        cur = cursor.Cursor(self.elements[0])
+        expected_result = [self.elements[0], self.elements[1],
+                           self.elements[3], self.elements[4],
+                           self.elements[6],
+                           self.elements[5]]
+        expected_result.reverse()
+        for c in cur:
+            self.assertEqual(expected_result.pop(), c)
 
     def test_iterating_fourth_case_cursor(self):
-       self.elements[1].num_element = 3
-       cur = cursor.Cursor(self.elements[0])
-       expected_result = [self.elements[0], self.elements[1],
-                          self.elements[4], self.elements[6],
-                          self.elements[5]]
-       expected_result.reverse()
-       for c in cur:
-           self.assertEqual(expected_result.pop(), c)
+        self.elements[1].num_element = 3
+        cur = cursor.Cursor(self.elements[0])
+        expected_result = [self.elements[0], self.elements[1],
+                           self.elements[4], self.elements[6],
+                           self.elements[5]]
+        expected_result.reverse()
+        for c in cur:
+            self.assertEqual(expected_result.pop(), c)
