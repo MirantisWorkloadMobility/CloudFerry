@@ -51,11 +51,17 @@ class NeutronNetwork(network.Network):
         """Get info about neutron resources:
         :rtype: Dictionary with all necessary neutron info
         """
-        info = {'networks': self.get_networks(),
-                'subnets': self.get_subnets(),
-                'routers': self.get_routers(),
-                'floating_ips': self.get_floatingips(),
-                'security_groups': self.get_sec_gr_and_rules(),
+
+        tenant_id = ''
+        if not self.config.migrate.all_networks:
+            tenant_name = self.config.cloud.tenant
+            tenant_id = self.identity_client.get_tenant_id_by_name(tenant_name)
+
+        info = {'networks': self.get_networks(tenant_id),
+                'subnets': self.get_subnets(tenant_id),
+                'routers': self.get_routers(tenant_id),
+                'floating_ips': self.get_floatingips(tenant_id),
+                'security_groups': self.get_sec_gr_and_rules(tenant_id),
                 'meta': {}}
         if self.config.migrate.keep_lbaas:
             info['lbaas'] = dict()
@@ -498,8 +504,8 @@ class NeutronNetwork(network.Network):
 
         return result
 
-    def get_networks(self):
-        networks = self.get_networks_list()
+    def get_networks(self, tenant_id=''):
+        networks = self.get_networks_list(tenant_id)
         networks_info = []
 
         for net in networks:
@@ -508,11 +514,13 @@ class NeutronNetwork(network.Network):
 
         return networks_info
 
-    def get_networks_list(self):
-        return self.neutron_client.list_networks()['networks']
+    def get_networks_list(self, tenant_id=''):
+        return self.neutron_client.list_networks(
+            tenant_id=tenant_id)['networks']
 
-    def get_subnets(self):
-        subnets = self.neutron_client.list_subnets()['subnets']
+    def get_subnets(self, tenant_id=''):
+        subnets = self.neutron_client.list_subnets(
+            tenant_id=tenant_id)['subnets']
         subnets_info = []
 
         for snet in subnets:
@@ -530,8 +538,9 @@ class NeutronNetwork(network.Network):
         }
         return self.neutron_client.update_subnet(subnet_id, subnet_info)
 
-    def get_routers(self):
-        routers = self.neutron_client.list_routers()['routers']
+    def get_routers(self, tenant_id=''):
+        routers = self.neutron_client.list_routers(
+            tenant_id=tenant_id)['routers']
         routers_info = []
 
         for router in routers:
@@ -540,8 +549,9 @@ class NeutronNetwork(network.Network):
 
         return routers_info
 
-    def get_floatingips(self):
-        floatings = self.neutron_client.list_floatingips()['floatingips']
+    def get_floatingips(self, tenant_id=''):
+        floatings = self.neutron_client.list_floatingips(
+            tenant_id=tenant_id)['floatingips']
         floatingips_info = []
 
         for floating in floatings:
@@ -550,12 +560,13 @@ class NeutronNetwork(network.Network):
 
         return floatingips_info
 
-    def get_security_groups(self):
-        sec_grs = self.neutron_client.list_security_groups()['security_groups']
+    def get_security_groups(self, tenant_id=''):
+        sec_grs = self.neutron_client.list_security_groups(
+            tenant_id=tenant_id)['security_groups']
         return sec_grs
 
-    def get_sec_gr_and_rules(self):
-        sec_grs = self.get_security_groups()
+    def get_sec_gr_and_rules(self, tenant_id=''):
+        sec_grs = self.get_security_groups(tenant_id)
         sec_groups_info = []
 
         for sec_gr in sec_grs:

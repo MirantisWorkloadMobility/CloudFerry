@@ -105,6 +105,8 @@ migrate_opts = [
                help='Size of one chunk to transfer via SSH'),
     cfg.StrOpt('group_file_path',
                help='Path to file with the groups of VMs'),
+    cfg.BoolOpt('all_networks', default=False,
+                help="Migrate all network resources from all tenants"),
 ]
 
 mail = cfg.OptGroup(name='mail',
