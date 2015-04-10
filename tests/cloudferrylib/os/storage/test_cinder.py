@@ -225,8 +225,7 @@ class CinderStorageTestCase(test.TestCase):
                         'volume_id=fake_vol_id')
 
         try:
-            volume_path = self.cinder_client.get_volume_path_iscsi(
-                'fake_vol_id')
+            self.cinder_client.get_volume_path_iscsi('fake_vol_id')
         except Exception as e:
             self.assertEqual(expected_msg, e.message)
 

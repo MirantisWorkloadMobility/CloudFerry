@@ -466,7 +466,7 @@ class NeutronTestCase(test.TestCase):
                         'shared': False,
                         'router:external': False,
                         'provider:physical_network': None,
-                        'provider:network_type': 'gre' 
+                        'provider:network_type': 'gre'
                         }}
 
         self.neutron_network_client.upload_networks([self.net_1_info])
