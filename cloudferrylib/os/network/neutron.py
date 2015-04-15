@@ -15,7 +15,7 @@
 
 import ipaddr
 
-from neutronclient.common.exceptions import IpAddressGenerationFailureClient
+from neutronclient.common import exceptions as neutron_exc
 from neutronclient.v2_0 import client as neutron_client
 
 from cloudferrylib.base import network
@@ -950,9 +950,12 @@ class NeutronNetwork(network.Network):
             while True:
                 self.neutron_client.create_floatingip({
                     'floatingip': {'floating_network_id': ext_net_id}})
-        except IpAddressGenerationFailureClient:
-            LOG.info("| Floating IPs "
-                     "were allocated in network %s" % ext_net_id)
+        except neutron_exc.NeutronClientException as e:
+            if e.status_code == 409:  # 409 - Conflict
+                LOG.info("| Floating IPs were allocated in network %s" %
+                         ext_net_id)
+            else:
+                raise
 
     def recreate_floatingips(self, src_floats, src_nets,
                              existing_nets,
