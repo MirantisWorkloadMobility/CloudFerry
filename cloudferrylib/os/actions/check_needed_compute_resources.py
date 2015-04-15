@@ -19,6 +19,9 @@ from cloudferrylib.base import exception
 from cloudferrylib.utils import utils as utl
 
 
+LOG = utl.get_log(__name__)
+
+
 class CheckNeededComputeResources(action.Action):
     def run(self, **kwargs):
         info = kwargs['info']
@@ -26,6 +29,7 @@ class CheckNeededComputeResources(action.Action):
         cnt_map = collections.defaultdict(int)
         for instance in objs.values():
             cnt_map[instance['instance']['flavor_id']] += 1
+        self.check_in_use_flavor(objs)
         needed_cpu = 0
         needed_ram = 0
         needed_hdd = 0
@@ -50,3 +54,18 @@ class CheckNeededComputeResources(action.Action):
                                            "Have %s %s, needed %s %s." % (
                                                name, have, units, needed,
                                                units))
+
+    def check_in_use_flavor(self, objs):
+        # when a flavor is updated, the flavor id will change. If an instance
+        # is in this flavor, it will keep the old flavor id, can not be matched
+        # to existing flavors
+        src_compute = self.src_cloud.resources[utl.COMPUTE_RESOURCE]
+        src_flavors = [flavor.id for flavor in src_compute.get_flavor_list()]
+
+        for instance in objs.values():
+            if instance['instance']['flavor_id'] not in src_flavors:
+                LOG.error("The flavor ID of instance %s does not match to any"
+                          " flavor. Please resize the instance.",
+                          instance['instance']['id'])
+                raise RuntimeError("Obsolete flavor ID",
+                                   instance['instance']['flavor_id'])
