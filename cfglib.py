@@ -116,6 +116,8 @@ migrate_opts = [
                 help="Migrate all VM's from all tenants. User, specified in "
                      "the 'dst' section of config also should have admin role "
                      "in all tenants."),
+    cfg.BoolOpt('all_images', default=False,
+                help='Migrate images of all tenants')
 ]
 
 mail = cfg.OptGroup(name='mail',
@@ -212,6 +214,16 @@ src_image = cfg.OptGroup(name='src_image',
 src_image_opts = [
     cfg.StrOpt('service', default='glance',
                help='name service for images'),
+    cfg.StrOpt('user', default='',
+               help='user for db access (if backend == db)'),
+    cfg.StrOpt('host', default='',
+               help='glance mysql node ip address'),
+    cfg.StrOpt('password', default='',
+               help='password for db access (if backend == db)'),
+    cfg.StrOpt('database_name', default='',
+               help='cinder_database name (if backend == db)'),
+    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+               help='driver for connection'),
     cfg.StrOpt('backend', default='file',
                help='backend for images')
 ]
@@ -330,6 +342,16 @@ dst_image_opts = [
                help='name service for images'),
     cfg.BoolOpt('convert_to_raw', default='True',
                 help='convert to raw images'),
+    cfg.StrOpt('host', default='',
+               help='glance mysql node ip address'),
+    cfg.StrOpt('user', default='',
+               help='user for db access (if backend == db)'),
+    cfg.StrOpt('password', default='',
+               help='password for db access (if backend == db)'),
+    cfg.StrOpt('database_name', default='',
+               help='cinder_database name (if backend == db)'),
+    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+               help='driver for connection'),
     cfg.StrOpt('backend', default='file',
                help='backend for images')
 ]

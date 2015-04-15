@@ -14,15 +14,19 @@
 
 
 import copy
+import datetime
 import json
+import re
 import time
 
 from fabric.api import run
 from fabric.api import settings
 
-from glanceclient.v1 import client as glance_client
+from glanceclient import client as glance_client
+from glanceclient.v1.images import CREATE_PARAMS
 
 from cloudferrylib.base import image
+from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import file_like_proxy
 from cloudferrylib.utils import utils as utl
 
@@ -36,26 +40,55 @@ class GlanceImage(image.Image):
     The main class for working with Openstack Glance Image Service.
 
     """
+
     def __init__(self, config, cloud):
         self.config = config
         self.host = config.cloud.host
         self.cloud = cloud
         self.identity_client = cloud.resources['identity']
+        # get mysql settings
         self.glance_client = self.proxy(self.get_client(), config)
         super(GlanceImage, self).__init__(config)
 
-    def get_client(self):
+    def get_db_connection(self):
+        if not hasattr(
+                self.cloud.config,
+                self.cloud.position + '_image'):
+            LOG.debug('running on default mysql settings')
+            return mysql_connector.MysqlConnector(
+                self.config.mysql, 'glance')
+        else:
+            LOG.debug('running on custom mysql settings')
+            my_settings = getattr(
+                self.cloud.config,
+                self.cloud.position + '_image')
+            return mysql_connector.MysqlConnector(
+                my_settings, my_settings.database_name)
 
+    def get_client(self):
         """ Getting glance client """
 
         endpoint_glance = self.identity_client.get_endpoint_by_service_name(
             'glance')
+        # we can figure out what version of client to use from url
+        # check if we have "v1" or "v2" in the end of url
+        m = re.search("(.*)/v(\d)", endpoint_glance)
+        if m:
+            endpoint_glance = m.group(1)
+            # for now we always use 1 version of client
+            version = 1  # m.group(2)
+        else:
+            version = 1
         return glance_client.Client(
+            version,
             endpoint=endpoint_glance,
             token=self.identity_client.get_auth_token_from_user())
 
     def get_image_list(self):
-        return self.glance_client.images.list()
+        # by some reason - guys from community decided to create that strange
+        # option to get images of all tenants
+        filters = {"is_public": None} if self.config.migrate.all_images else {}
+        return self.glance_client.images.list(filters=filters)
 
     def create_image(self, **kwargs):
         return self.glance_client.images.create(**kwargs)
@@ -105,23 +138,55 @@ class GlanceImage(image.Image):
         """
 
         resource = cloud.resources[utl.IMAGE_RESOURCE]
+        keystone = cloud.resources["identity"]
         gl_image = {
-            'id': glance_image.id,
-            'size': glance_image.size,
-            'name': glance_image.name,
-            'checksum': glance_image.checksum,
-            'container_format': glance_image.container_format,
-            'disk_format': glance_image.disk_format,
-            'is_public': glance_image.is_public,
-            'protected': glance_image.protected,
-            'resource': resource,
-            'properties': ({
-                'image_type': glance_image.properties['image_type']}
-                if 'image_type' in glance_image.properties
-                else glance_image.properties)
-        }
-
+            k: w for k, w in glance_image.to_dict().items(
+            ) if k in CREATE_PARAMS}
+        # we need to pass resource to destination to copy image
+        gl_image.update({'resource': resource})
+        # at this point we write name of owner of this tenant
+        # to map it to different tenant id on destination
+        gl_image.update(
+            {'owner_name': keystone.get_tenant_by_id(
+                glance_image.owner).name})
+        if resource.is_snapshot(glance_image):
+            # for snapshots we need to write snapshot username to namespace
+            # to map it later to new user id
+            user_ids = [i.id for i in keystone.keystone_client.users.list()]
+            user_id = gl_image["properties"].get("user_id")
+            if user_id in user_ids:
+                gl_image["properties"]["user_name"] = \
+                    keystone.keystone_client.users.get(user_id).name
         return gl_image
+
+    def is_snapshot(self, img):
+        # snapshots have {'image_type': 'snapshot"} in "properties" field
+        return img.to_dict().get("properties", {}).get(
+            'image_type') == 'snapshot'
+
+    def get_tags(self):
+        return {}
+
+    def get_members(self):
+        # members structure {image_id: {tenant_name: can_share}}
+        result = {}
+        for image in self.get_image_list():
+            for entry in self.glance_client.image_members.list(image=image.id):
+                if image.id not in result:
+                    result[image.id] = {}
+                # change tenant_id to tenant_name
+                tenant_name = self.identity_client.get_tenant_by_id(
+                    entry.member_id).name
+                result[image.id][tenant_name] = entry.can_share
+        return result
+
+    def create_member(self, image_id, tenant_name, can_share):
+        # change tenant_name to tenant_id
+        tenant_id = self.identity_client.get_tenant_id_by_name(tenant_name)
+        self.glance_client.image_members.create(
+            image_id,
+            tenant_id,
+            can_share)
 
     def read_info(self, **kwargs):
         """Get info about images or specified image.
@@ -131,10 +196,25 @@ class GlanceImage(image.Image):
         :param images_list: List of specified images
         :param images_list_meta: Tuple of specified images with metadata in
                                  format [(image, meta)]
+        :param date: date object. snapshots updated after this date will be
+                     dropped
         :rtype: Dictionary with all necessary images info
         """
 
         info = {'images': {}}
+
+        def image_valid(img, date):
+            """ Check if image was updated recently """
+            updated = datetime.datetime.strptime(
+                img.updated_at,
+                "%Y-%m-%dT%H:%M:%S")
+            return date <= updated.date()
+
+        if kwargs.get('date'):
+            for img in self.get_image_list():
+                if (not self.is_snapshot(img)) or image_valid(
+                        img, kwargs.get('date')):
+                    self.make_image_info(img, info)
 
         if kwargs.get('image_id'):
             glance_image = self.get_image_by_id(kwargs['image_id'])
@@ -159,15 +239,27 @@ class GlanceImage(image.Image):
             for glance_image in self.get_image_list():
                 info = self.make_image_info(glance_image, info)
 
+        info.update({
+            "tags": self.get_tags(),
+            "members": self.get_members()
+        })
+
         return info
 
     def make_image_info(self, glance_image, info):
         if glance_image:
-            gl_image = self.convert(glance_image, self.cloud)
+            if glance_image.status == "active":
+                gl_image = self.convert(glance_image, self.cloud)
 
-            info['images'][glance_image.id] = {'image': gl_image,
-                                               'meta': {},
-                                               }
+                info['images'][glance_image.id] = {'image': gl_image,
+                                                   'meta': {},
+                                                   }
+            else:
+                LOG.warning("image {img} was not migrated according to "
+                            "status = {status}, (expected status "
+                            "= active)".format(
+                                img=glance_image.id,
+                                status=glance_image.status))
         else:
             LOG.error('Image has not been found')
 
@@ -177,6 +269,7 @@ class GlanceImage(image.Image):
         info = copy.deepcopy(info)
         new_info = {'images': {}}
         migrate_images_list = []
+        delete_container_format, delete_disk_format = [], []
         empty_image_list = {}
         for image_id_src, gl_image in info['images'].iteritems():
             if gl_image['image']:
@@ -191,12 +284,49 @@ class GlanceImage(image.Image):
                     migrate_images_list.append(
                         (dst_img_checksums[checksum_current], meta))
                     continue
+
+                LOG.debug("updating owner of image {image}".format(
+                    image=gl_image["image"]["owner"]))
+                gl_image["image"]["owner"] = \
+                    self.identity_client.get_tenant_id_by_name(
+                    gl_image["image"]["owner_name"])
+                del gl_image["image"]["owner_name"]
+
+                if gl_image["image"]["properties"]:
+                    # update snapshot metadata
+                    metadata = gl_image["image"]["properties"]
+                    if "owner_id" in metadata:
+                        # update tenant id
+                        LOG.debug("updating snapshot metadata for field "
+                                  "'owner_id' for image {image}".format(
+                                      image=gl_image["image"]["id"]))
+                        metadata["owner_id"] = gl_image["image"]["owner"]
+                    if "user_id" in metadata:
+                        # update user id by specified name
+                        LOG.debug("updating snapshot metadata for field "
+                                  "'user_id' for image {image}".format(
+                                      image=gl_image["image"]["id"]))
+                        metadata["user_id"] = \
+                            self.identity_client.keystone_client.users.find(
+                                username=metadata["user_name"]).id
+                        del metadata["user_name"]
+
+                LOG.debug("migrating image {image}".format(
+                    image=gl_image["image"]["id"]))
+                # we can face situation when image has no
+                # disk_format and container_format properties
+                # this situation appears, when image was created
+                # with option --copy-from
+                # glance-client cannot create image without this
+                # properties, we need to create them artificially
+                # and then - delete from database
                 migrate_image = self.create_image(
                     name=gl_image['image']['name'],
-                    container_format=gl_image['image']['container_format'],
-                    disk_format=gl_image['image']['disk_format'],
+                    container_format=gl_image['image']['container_format'] or "bare",
+                    disk_format=gl_image['image']['disk_format'] or "qcow2",
                     is_public=gl_image['image']['is_public'],
                     protected=gl_image['image']['protected'],
+                    owner=gl_image['image']['owner'],
                     size=gl_image['image']['size'],
                     properties=gl_image['image']['properties'],
                     data=file_like_proxy.FileLikeProxy(
@@ -204,6 +334,10 @@ class GlanceImage(image.Image):
                         callback,
                         self.config['migrate']['speed_limit']))
                 migrate_images_list.append((migrate_image, meta))
+                if not gl_image["image"]["container_format"]:
+                    delete_container_format.append(migrate_image.id)
+                if not gl_image["image"]["disk_format"]:
+                    delete_disk_format.append(migrate_image.id)
             else:
                 empty_image_list[image_id_src] = gl_image
         if migrate_images_list:
@@ -211,7 +345,38 @@ class GlanceImage(image.Image):
                             migrate_images_list]
             new_info = self.read_info(images_list_meta=im_name_list)
         new_info['images'].update(empty_image_list)
+        # on this step we need to create map between source ids and dst ones
+        LOG.debug("creating map between source and destination image ids")
+        image_ids_map = {}
+        dst_img_checksums = {x.checksum: x.id for x in self.get_image_list()}
+        for image_id_src, gl_image in info['images'].iteritems():
+            cur_image = gl_image["image"]
+            image_ids_map[cur_image["id"]] = dst_img_checksums[cur_image["checksum"]]
+        LOG.debug("deploying image members")
+        for image_id, data in info.get("members", {}).items():
+            for tenant_name, can_share in data.items():
+                LOG.debug("deploying image member for image {image}"
+                          " tenant {tenant}".format(
+                              image=image_id,
+                              tenant=tenant_name))
+                self.create_member(
+                    image_ids_map[image_id],
+                    tenant_name,
+                    can_share)
+        self.delete_fields('disk_format', delete_disk_format)
+        self.delete_fields('container_format', delete_container_format)
         return new_info
+
+    def delete_fields(self, field, list_of_ids):
+        if not list_of_ids:
+            return
+        # this command sets disk_format, container_format to NULL
+        command = ("UPDATE images SET {field}=NULL"
+                   " where id in ({id_list})".format(
+                       field=field,
+                       id_list=",".join(
+                           [" '{0}' ".format(i) for i in list_of_ids])))
+        self.get_db_connection().execute(command)
 
     def wait_for_status(self, id_res, status):
         while self.glance_client.images.get(id_res).status != status:
