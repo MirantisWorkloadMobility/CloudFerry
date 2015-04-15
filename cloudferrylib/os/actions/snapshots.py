@@ -14,8 +14,8 @@
 
 
 from cloudferrylib.base.action import action
-from cloudferrylib.utils.drivers import ssh_file_to_file
 from cloudferrylib.utils import utils
+from fabric.api import local
 
 
 LOG = utils.get_log(__name__)
@@ -41,14 +41,13 @@ class MysqlDump(action.Action):
         # in future we will store snapshot for every step of migration
         context = {
             'host_src': self.cloud.cloud_config.mysql.host,
-            'host_dst': self.cloud.cloud_config.snapshot.host,
             'path_src': self.cloud.cloud_config.snapshot.snapshot_path,
+            'key': self.cloud.config.migrate.key_filename,
             'path_dst': self.cloud.cloud_config.snapshot.snapshot_path}
-        LOG.info("copying {host_src}:{path_src} to "
-                 "{host_dst}:{path_src}".format(**context))
-        ssh_file_to_file.SSHFileToFile(self.src_cloud, self.dst_cloud,
-                                       self.cloud.cloud_config).transfer(
-            context)
+        command = "scp -i {key} root@{host_src}:{path_src} {path_dst}".format(
+            **context)
+        LOG.info("EXECUTING {command} local".format(command=command))
+        local(command)
         return {}
 
 
