@@ -5,7 +5,7 @@
 # 3. Repackage box
 #
 
-SCRIPT=$(basename 0)
+SCRIPT=$(basename $0)
 
 error_exit() {
     echo $* 1>&2
@@ -70,5 +70,7 @@ if [[ ! $forced ]]; then
 fi
 
 echo "Vagrant box packaging started for $box (VirtualBox VM name is $vm_name)"
-vagrant package --base $vm_name --output ${box}.box
+
+packaged_box_name=${box}-$(date +%d%m%y_%H%M%S).box
+vagrant package --base $vm_name --output $packaged_box_name
 
