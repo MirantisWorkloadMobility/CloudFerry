@@ -49,7 +49,7 @@ if [[ ! -d .ubuntu-venv ]]; then
     apt-get install python-dev libffi-dev -y
     run virtualenv .ubuntu-venv
     run PATH=$(pwd)/.ubuntu-venv/bin:$PATH env pip install --upgrade pip
-    run PATH=$(pwd)/.ubuntu-venv/bin:$PATH env pip install -r requirements.txt
+    run PATH=$(pwd)/.ubuntu-venv/bin:$PATH env pip install --allow-all-external -r requirements.txt
     run PATH=$(pwd)/.ubuntu-venv/bin:$PATH env pip install -r test-requirements.txt
     run PATH=$(pwd)/.ubuntu-venv/bin:$PATH env pip install pylint pep8 flake8
     echo "CloudFerry setup succeeded!"

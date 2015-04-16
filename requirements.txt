@@ -1,9 +1,9 @@
---allow-external mysql-connector-python
 colorlog
 ecdsa
 fabric>=1.8.2
 ipaddr
 jinja2
+mysql-connector-python
 pika==0.9.14
 pycrypto
 python-cinderclient==1.0.9
