@@ -818,35 +818,100 @@ class NeutronNetwork(network.Network):
     def upload_networks(self, networks):
         existing_nets_hashlist = (
             [ex_net['res_hash'] for ex_net in self.get_networks()])
+
+        # we need to handle duplicates in segmentation ids
+        # hash is used with structure {"gre": [1, 2, ...],
+        #                              "vlan": [1, 2, ...]}
+        # networks with "provider:physical_network" property added
+        # because only this networks seg_ids will be copied
+        used_seg_ids = {}
+        for net in self.get_networks():
+            if net.get("provider:physical_network"):
+                net_type = net.get("provider:network_type")
+                if net_type not in used_seg_ids:
+                    used_seg_ids[net_type] = []
+                used_seg_ids[net_type].append(
+                    net.get("provider:segmentation_id"))
+
+        networks_without_seg_ids = {}
         for net in networks:
+
             tenant_id = \
                 self.identity_client.get_tenant_id_by_name(net['tenant_name'])
+
+            # create dict, representing basic info about network
             network_info = {
-                'network':
-                {
-                    'name': net['name'],
-                    'admin_state_up': net['admin_state_up'],
+                'network': {
                     'tenant_id': tenant_id,
-                    'shared': net['shared'],
-                    'router:external': net['router:external'],
-                    'provider:physical_network': \
-                       net['provider:physical_network'],
-                    'provider:network_type':  net['provider:network_type']
+                    'admin_state_up': net["admin_state_up"],
+                    'shared': net["shared"],
+                    'name': net['name'],
+                    'router:external': net['router:external']
                 }
             }
-            if net['router:external']:
+
+            if net.get('router:external'):
                 if not self.config.migrate.migrate_extnets:
                     continue
-            if net['provider:network_type'] == 'vlan':
-                network_info['network']['provider:segmentation_id'] = (
-                    net['provider:segmentation_id'])
+            # create network on destination cloud
             if net['res_hash'] not in existing_nets_hashlist:
-                net['meta']['id'] = (self.neutron_client.
-                    create_network(network_info)['network']['id'])
+                if net.get("provider:physical_network"):
+                    # update info with additional arguments
+                    # we need to check if we have parameter
+                    # "provider:physical_network"
+                    # if we do - we need to specify 2 more
+                    # "provider:network_type" and "provider:segmentation_id"
+                    # if we don't have this parameter - creation will be
+                    # handled automatically (this automatic handling goes
+                    # after creation of networks with provider:physical_network
+                    # attribute to avoid seg_id overlap)
+                    for atr in ["provider:physical_network",
+                                "provider:network_type"]:
+                        network_info['network'].update({atr: net.get(atr)})
+
+                    # check if we have seg_ids of that type
+                    if (used_seg_ids.get(net["provider:network_type"]) and
+                        net['provider:segmentation_id'] in used_seg_ids[
+                            net["provider:network_type"]]):
+                        LOG.warning(
+                            "network {network} was dropped according"
+                            " because its segmentation id already "
+                            " exists on destination cloud".format(
+                                network=net.get("id")))
+                        continue
+                    else:
+                        if net["provider:segmentation_id"]:
+                            network_info['network'][
+                                'provider:segmentation_id'] = net[
+                                    'provider:segmentation_id']
+                        else:
+                            networks_without_seg_ids.update({
+                                net.get("id"): network_info
+                            })
+                            continue
+                    net['meta']['id'] = (
+                        self.neutron_client.create_network(
+                            network_info)['network']['id'])
+                else:
+                    # create networks later (to be sure that generated
+                    # segmentation ids don't overlap segmentation ids
+                    # created manually)
+                    networks_without_seg_ids.update({
+                        net.get("id"): network_info
+                    })
             else:
                 LOG.info("| Dst cloud already has the same network "
                          "with name %s in tenant %s" %
                          (net['name'], net['tenant_name']))
+
+        for net in networks:
+            # we need second cycle to update external object "networks"
+            # with metadata
+            if net.get("id") in networks_without_seg_ids:
+                network_info = networks_without_seg_ids[net.get("id")]
+                net['meta']['id'] = (
+                    self.neutron_client.create_network(
+                        network_info)['network']['id'])
 
     def upload_subnets(self, networks, subnets):
         existing_nets = self.get_networks()
@@ -857,10 +922,23 @@ class NeutronNetwork(network.Network):
                 continue
             tenant_id = \
                 self.identity_client.get_tenant_id_by_name(snet['tenant_name'])
+            if not tenant_id:
+                LOG.debug("Cannot get tenant_id for subnet {subnet}".format(
+                    subnet=snet.get("id")))
+                continue
             net_hash = \
                 self.get_res_hash_by_id(networks, snet['network_id'])
+            if not net_hash:
+                LOG.debug("Cannot get network info for subnet {subnet}".format(
+                    subnet=snet.get("id")))
+                continue
             network = \
                 self.get_res_by_hash(existing_nets, net_hash)
+            if not network:
+                LOG.debug("Cannot get network for subnet {subnet}".format(
+                    subnet=snet.get("id")))
+                continue
+
             subnet_info = {
                 'subnet':
                 {
@@ -897,8 +975,11 @@ class NeutronNetwork(network.Network):
             if router['external_gateway_info']:
                 ex_net_hash = \
                     self.get_res_hash_by_id(networks, router['ext_net_id'])
-                ex_net_id = \
-                    self.get_res_by_hash(existing_nets, ex_net_hash)['id']
+                ex_net = \
+                    self.get_res_by_hash(existing_nets, ex_net_hash)
+                if not ex_net:
+                    continue
+                ex_net_id = ex_net["id"]
                 r_info['router']['external_gateway_info'] = \
                     dict(network_id=ex_net_id)
             if router['res_hash'] not in existing_routers_hashlist:

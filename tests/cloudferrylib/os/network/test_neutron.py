@@ -471,8 +471,9 @@ class NeutronTestCase(test.TestCase):
 
         self.neutron_network_client.upload_networks([self.net_1_info])
 
-        self.neutron_mock_client().create_network.\
-            assert_called_once_with(network_info)
+        if network_info['network']['provider:physical_network']:
+            self.neutron_mock_client().create_network.\
+                assert_called_once_with(network_info)
 
     def test_upload_subnets(self):
 
