@@ -346,8 +346,7 @@ snapshot = cfg.OptGroup(name='snapshot',
                         title="Rules for snapshot")
 
 snapshot_opts = [
-    cfg.StrOpt('snapshot_path', default="/root/dump.sql"),
-    cfg.StrOpt('host', default='')]
+    cfg.StrOpt('snapshot_path', default="dump.sql")]
 
 initial_check = cfg.OptGroup(name='initial_check',
                              title='Some configuration to initial checks')
