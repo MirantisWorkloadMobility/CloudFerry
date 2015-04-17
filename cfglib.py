@@ -107,6 +107,10 @@ migrate_opts = [
                help='Path to file with the groups of VMs'),
     cfg.BoolOpt('all_networks', default=False,
                 help="Migrate all network resources from all tenants"),
+    cfg.BoolOpt('all_vms', default=False,
+                help="Migrate all VM's from all tenants. User, specified in "
+                     "the 'dst' section of config also should have admin role "
+                     "in all tenants."),
 ]
 
 mail = cfg.OptGroup(name='mail',

@@ -32,7 +32,8 @@ FAKE_CONFIG = utils.ext_dict(
     mysql=utils.ext_dict({'host': '1.1.1.1'}),
     migrate=utils.ext_dict({'speed_limit': '10MB',
                             'retry': '7',
-                            'time_wait': 5}))
+                            'time_wait': 5,
+                            'all_vms': False}))
 
 
 class NovaComputeTestCase(test.TestCase):
