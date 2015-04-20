@@ -41,7 +41,7 @@ temp = <src_temp>
 [src_mysql]
 user = <src_mysql_user>
 password = <src_mysql_password>
-host = localhost
+host = <grizzly_ip>
 connection = mysql+mysqlconnector
 
 [src_rabbit]
@@ -94,7 +94,7 @@ temp = <dst_temp>
 [dst_mysql]
 user = <dst_mysql_user> 
 password = <dst_mysql_password> 
-host = localhost
+host = <icehouse_ip>
 connection = mysql+mysqlconnector
 
 [dst_compute]
@@ -137,4 +137,3 @@ service =
 
 [snapshot]
 snapshot_path = <snapshot_snapshot_path>
-host = <icehouse_ip>
