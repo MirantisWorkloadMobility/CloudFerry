@@ -39,7 +39,7 @@ Prepare the same virtualenv as for Cloudferry and run to create Openstack
 objects on source cloud:
 ```
 cd devlab/tests
-python prerequisite_actions.py
+python generate_load.py
 ```
 
 To execute tests run:
