@@ -146,7 +146,9 @@ src_rabbit = cfg.OptGroup(name='src_rabbit',
                           title='Config RabbitMQ for source cloud')
 
 src_rabbit_opts = [
-    cfg.StrOpt('password', default='-',
+    cfg.StrOpt('user', default='guest',
+               help='user for RabbitMQ'),
+    cfg.StrOpt('password', default='guest',
                help='password for RabbitMQ'),
     cfg.StrOpt('hosts', default='-',
                help='comma separated RabbitMQ hosts')
@@ -245,7 +247,9 @@ dst_rabbit = cfg.OptGroup(name='dst_rabbit',
                           title='Config RabbitMQ for source cloud')
 
 dst_rabbit_opts = [
-    cfg.StrOpt('password', default='-',
+    cfg.StrOpt('user', default='guest',
+               help='user for RabbitMQ'),
+    cfg.StrOpt('password', default='guest',
                help='password for RabbitMQ'),
     cfg.StrOpt('hosts', default='-',
                help='comma separated RabbitMQ hosts')

@@ -380,7 +380,7 @@ class KeystoneIdentity(identity.Identity):
             return None
 
     def check_rabbitmq(self):
-        credentials = pika.PlainCredentials('guest',
+        credentials = pika.PlainCredentials(self.config.rabbit.user,
                                             self.config.rabbit.password)
         for host in self.config.rabbit.hosts.split(","):
             pika.BlockingConnection(pika.ConnectionParameters(
