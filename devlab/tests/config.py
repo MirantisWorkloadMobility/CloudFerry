@@ -43,13 +43,14 @@ images = [
     {'name': 'image1', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/ci'
                                     'rros-0.3.3-x86_64-disk.img'},
     {'name': 'image2', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/ci'
-                                    'rros-0.3.3-x86_64-disk.img'}
+                                    'rros-0.3.3-x86_64-disk.img',
+     'container_format': 'bare', 'disk_format': 'qcow2'}
 ]
 
 # Flavors to create
 flavors = [
-    {'name': 'flavorname1', 'disk': '100', 'ram': '32', 'vcpus': '1'},
-    {'name': 'flavorname2', 'disk': '50', 'ram': '64', 'vcpus': '2'}
+    {'name': 'flavorname1', 'disk': '10', 'ram': '32', 'vcpus': '1'},
+    {'name': 'flavorname2', 'disk': '5', 'ram': '64', 'vcpus': '2'}
 ]
 
 # Networks to create
