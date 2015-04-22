@@ -20,6 +20,9 @@ ssh_chunk_size = 100
 retry = 5
 migrate_extnets = True
 time_wait = 5
+all_vms = False
+all_images = True
+all_networks = True
 
 [src]
 type = os

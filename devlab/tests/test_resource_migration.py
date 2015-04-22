@@ -1,6 +1,6 @@
 import unittest
 
-from prerequisite_actions import Prerequisites
+from generate_load import Prerequisites
 
 
 class ResourceMigrationTests(unittest.TestCase):
