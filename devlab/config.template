@@ -21,12 +21,6 @@ retry = 5
 migrate_extnets = True
 time_wait = 5
 
-[mail]
-server = <server_name:port_number>
-username = <username>
-password = <password>
-from_addr = <e-mail address>
-
 [src]
 type = os
 auth_url = http://<grizzly_ip>:35357/v2.0
@@ -69,6 +63,12 @@ disk_format = qcow2
 [src_image]
 service = glance
 backend = swift
+disk_format = qcow2
+user = <src_mysql_user>
+password = <src_mysql_password>
+host = <grizzly_ip>
+connection = mysql+mysqlconnector
+database_name = glance
 
 [src_identity]
 service = keystone
@@ -121,6 +121,11 @@ protocol_transfer = <dst_storage_protocol_transfer>
 service = glance
 convert_to_raw = False
 backend = swift
+user = <dst_mysql_user>
+password = <dst_mysql_password>
+host = <icehouse_ip>
+connection = mysql+mysqlconnector
+database_name = glance
 
 [dst_identity]
 service = keystone
@@ -137,3 +142,17 @@ service =
 
 [snapshot]
 snapshot_path = <snapshot_snapshot_path>
+
+[initial_check]
+claimed_bandwidth = 100
+factor = 0.5
+test_file_size = 1024
+
+[condense]
+nova_file=
+group_file=
+node_file=
+
+[database]
+host=
+port=
