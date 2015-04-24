@@ -30,7 +30,7 @@ while [[ $# -ge 1 ]]; do
     esac
 done
 
-if [[ -z $box || $box -ne 'grizzly' || $box -ne 'icehouse' ]]; then
+if [[ -z $box || "$box" != 'grizzly' && "$box" != 'icehouse' ]]; then
     error_exit "Invalid box name provided: '$box'. Should be one of 'grizzly' or 'icehouse'."
 fi
 
@@ -40,22 +40,40 @@ ssh_port=$(echo "$ssh_config" | grep Port | cut -d' ' -f4)
 ssh_private_key=$(echo "$ssh_config" | grep IdentityFile | cut -d' ' -f4)
 ssh_user=$(echo "$ssh_config" | grep '\<User\>' | cut -d' ' -f4)
 ssh_users_private_key=~/.ssh/id_rsa.pub
-ssh_opts='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+ssh_opts='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR'
 
 insecure_pub_key=~/.vagrant.d/vagrant.pub
 insecure_private_key=~/.vagrant.d/insecure_private_key
 
 ssh_cmd() {
-    local private_key=$1
-    local cmd=$2
+    local private_key="$1"
+    local cmd="$2"
 
-    ssh $ssh_user@$ssh_host -p $ssh_port -i $private_key $ssh_opts $cmd
+    ssh $ssh_user@$ssh_host -p $ssh_port -i $private_key $ssh_opts "$cmd"
 }
 
+# grizzly box has eth1 udev rules which must be flushed
+# to correctly assign eth device index on boot
+# Icehouse box doesn't have this because it runs more recent Ubuntu
+if [[ $box == 'grizzly' ]]; then
+    grizzly_mac_re='([0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2})'
+    grizzly_eth1_mac=$(ssh_cmd $ssh_private_key "ip link show eth1 | sed -r -n 's/.*\<$grizzly_mac_re\>.*/\1/p'")
+    echo "Removing $grizzly_eth1_mac from udev net rules"
+    ssh_cmd $ssh_private_key "sudo sed -i -r '/$grizzly_eth1_mac/d' /etc/udev/rules.d/70-persistent-net.rules"
+fi
+
 # remove vagrant-assigned static IP
+echo "Removing static configuration for eth1 network interface"
 ssh_cmd $ssh_private_key 'sudo sed -i "/^#VAGRANT-BEGIN/,\$d" /etc/network/interfaces'
-ssh_cmd $ssh_private_key "echo \"$(cat $insecure_pub_key)\" > ~/.ssh/authorized_keys"
-ssh_cmd $insecure_private_key "echo \"$(cat $insecure_pub_key)\" | sudo tee /root/.ssh/authorized_keys"
+echo "Updating authorized keys for vagrant user"
+ssh_cmd $ssh_private_key "echo '$(cat $insecure_pub_key)' > ~/.ssh/authorized_keys"
+echo "Updating authorized keys for root user"
+ssh_cmd $insecure_private_key "echo '$(cat $insecure_pub_key)' | sudo tee /root/.ssh/authorized_keys >/dev/null"
+
+vagrant_key_updated=$(ssh_cmd $insecure_private_key "grep insecure ~/.ssh/authorized_keys")
+if [[ $? != 0 || ! $vagrant_key_updated ]]; then
+    error_exit "Something went wrong during SSH keys substitution. Please check your box. Packaging will be aborted"
+fi
 
 vm_name=$(VBoxManage list runningvms | grep $box | head -1 | cut -d' ' -f1 | sed 's/"//g')
 
