@@ -1,3 +1,4 @@
+import argparse
 import os
 import time
 
@@ -14,7 +15,6 @@ NEUTRON_CLIENT_VERSION = config.NEUTRON_CLIENT_VERSION
 
 
 class Prerequisites():
-
     def __init__(self, cloud_prefix='SRC'):
         self.username = os.environ['%s_OS_USERNAME' % cloud_prefix]
         self.password = os.environ['%s_OS_PASSWORD' % cloud_prefix]
@@ -45,6 +45,31 @@ class Prerequisites():
                                             endpoint_url=self.neutron_endpoint,
                                             token=self.token)
 
+    def get_tenant_id(self, tenant_name):
+        tenants = self.keystoneclient.tenants.list()
+        my_tenant = [x for x in tenants if x.name == tenant_name][0]
+        return my_tenant.id
+
+    def get_user_id(self, user_name):
+        users = self.keystoneclient.users.list()
+        my_user = [x for x in users if x.name == user_name][0]
+        return my_user.id
+
+    def get_image_id(self, image_name):
+        images = self.glanceclient.images.list()
+        my_image = [x for x in images if x.name == image_name][0]
+        return my_image.id
+
+    def get_flavor_id(self, flavor_name):
+        flavors = self.novaclient.flavors.list()
+        my_flavor = [x for x in flavors if x.name == flavor_name][0]
+        return my_flavor.id
+
+    def get_vm_id(self, vm_name):
+        vms = self.novaclient.servers.list()
+        my_vm = [x for x in vms if x.name == vm_name][0]
+        return my_vm.id
+
     def create_users(self):
         for user in config.users:
             self.keystoneclient.users.create(name=user['name'],
@@ -65,26 +90,6 @@ class Prerequisites():
                                                description=tenant[
                                                    'description'],
                                                enabled=tenant['enabled'])
-
-    def get_tenant_id(self, tenant_name):
-        tenants = self.keystoneclient.tenants.list()
-        my_tenant = [x for x in tenants if x.name == tenant_name][0]
-        return my_tenant.id
-
-    def get_image_id(self, image_name):
-        images = self.glanceclient.images.list()
-        my_image = [x for x in images if x.name == image_name][0]
-        return my_image.id
-
-    def get_flavor_id(self, flavor_name):
-        flavors = self.novaclient.flavors.list()
-        my_flavor = [x for x in flavors if x.name == flavor_name][0]
-        return my_flavor.id
-
-    def get_vm_id(self, vm_name):
-        vms = self.novaclient.servers.list()
-        my_vm = [x for x in vms if x.name == vm_name][0]
-        return my_vm.id
 
     def create_keypairs(self):
         for user, keypair in zip(config.users, config.keypairs):
@@ -146,11 +151,70 @@ class Prerequisites():
         self.modify_quotas()
         self.create_flavors()
         self.upload_image()
+        self.create_networks()
         self.create_vms()
         self.create_vm_snapshots()
-        self.create_networks()
+
+    def clean_objects(self):
+        for tenant in config.tenants:
+            try:
+                self.keystoneclient.tenants.delete(
+                    self.get_tenant_id(tenant['name']))
+            except Exception as e:
+                print "Tenant %s failed to delete" % tenant['name']
+                print repr(e)
+        for user in config.users:
+            try:
+                self.keystoneclient.users.delete(
+                    self.get_user_id(user['name']))
+            except Exception as e:
+                print "User %s failed to delete" % user['name']
+                print repr(e)
+        for flavor in config.flavors:
+            try:
+                self.novaclient.flavors.delete(
+                    self.get_flavor_id(flavor['name']))
+            except Exception as e:
+                print "Flavor %s failed to delete" % flavor['name']
+                print repr(e)
+        for vm in config.vms:
+            try:
+                self.novaclient.servers.delete(self.get_vm_id(vm['name']))
+            except Exception as e:
+                print "VM %s failed to delete" % vm['name']
+                print repr(e)
+        for image in config.images:
+            try:
+                self.glanceclient.images.delete(
+                    self.get_image_id(image['name']))
+            except Exception as e:
+                print "Image %s failed to delete" % image['name']
+                print repr(e)
+        for network in config.networks:
+            try:
+                nets = self.neutronclient.list_networks(name=network['name'])
+                self.neutronclient.delete_network(nets['networks'][0]['id'])
+            except Exception as e:
+                print "Network %s failed to delete" % network['name']
+                print repr(e)
+        for snapshot in config.snapshots:
+            try:
+                self.glanceclient.images.delete(
+                    self.get_image_id(snapshot['image_name']))
+            except Exception as e:
+                print "Image %s failed to delete" % snapshot['image_name']
+                print repr(e)
 
 
 if __name__ == '__main__':
     preqs = Prerequisites()
-    preqs.run_preparation_scenario()
+    parser = argparse.ArgumentParser(
+        description='Script to generate load for Openstack and delete '
+                    'generated objects')
+    parser.add_argument('--clean', help='clean objects described in '
+                                        'config.ini', action='store_true')
+    args = parser.parse_args()
+    if args.clean:
+        preqs.clean_objects()
+    else:
+        preqs.run_preparation_scenario()

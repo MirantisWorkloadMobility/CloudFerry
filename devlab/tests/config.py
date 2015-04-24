@@ -1,4 +1,4 @@
-# Users to create
+# Users to create/delete
 users = [
     {'name': 'user1', 'pass': 'passwd1', 'email': 'mail@example.com',
      'tenant': 'tenant1', 'enabled': True},
@@ -6,7 +6,7 @@ users = [
      'tenant': 'tenant1', 'enabled': True}
 ]
 
-# Tenants to create
+# Tenants to create/delete
 tenants = [
     {'name': 'tenant1', 'description': 'None', 'enabled': True}
 ]
@@ -18,7 +18,7 @@ quotas = [
      'key_pairs': '5', 'security_groups': '9', 'security_group_rules': ''}
 ]
 
-# Keypairs to create
+# Keypairs to create/delete
 keypairs = [
     {'name': 'key1', 'pub': 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCn4vaa1MvLL'
                             'IQM9G2i9eo2OWoW66i7/tz+F+sSBxjiscmXMGSUxZN1a0yK4T'
@@ -38,7 +38,7 @@ keypairs = [
                             'm3kZtZPSTgT6GIGoWA1+QHlhx5kiMVEN+YRZF vagrant'}
 ]
 
-# Images to create
+# Images to create/delete
 images = [
     {'name': 'image1', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/ci'
                                     'rros-0.3.3-x86_64-disk.img'},
@@ -47,24 +47,24 @@ images = [
      'container_format': 'bare', 'disk_format': 'qcow2'}
 ]
 
-# Flavors to create
+# Flavors to create/delete
 flavors = [
     {'name': 'flavorname1', 'disk': '10', 'ram': '32', 'vcpus': '1'},
     {'name': 'flavorname2', 'disk': '5', 'ram': '64', 'vcpus': '2'}
 ]
 
-# Networks to create
+# Networks to create/delete
 networks = [
     {'name': 'mynetwork1', 'admin_state_up': True}
 
 ]
 
-# Subnets to create
+# Subnets to create/delete
 subnets = [
     {'cidr': '10.4.2.0/24', 'ip_version': 4}
 ]
 
-# VM's to create
+# VM's to create/delete
 vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'server2', 'image': 'image2', 'flavor': 'flavorname1'},
@@ -73,7 +73,7 @@ vms = [
     {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1'}
 ]
 
-# Snapshots to create
+# Snapshots to create/delete
 snapshots = [
     {'server': 'server2', 'image_name': 'asdasd'}
 ]
