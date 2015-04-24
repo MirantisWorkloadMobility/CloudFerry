@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-__author__ = 'mirrorcoder'
-import cloudferrylib
-import addons
+
 import imp
-import os
 import inspect
+import os
+import re
 import yaml
+
+import addons
+import cloudferrylib
+
 from cloudferrylib.base.action import action
 
 
@@ -93,8 +96,14 @@ class Scenario(object):
             module = module.__dict__[p]
         path = module.__path__[0]
         files = os.listdir(path)
-        list_name_modules = filter(lambda x: (".py" in x) and (".pyc" not in x), files)
-        list_name_modules = map(lambda x: x.replace(".py", ""), list_name_modules)
+
+        # Match only *.py files
+        modules_matches = filter(lambda file_name: file_name is not None,
+                                 [re.match(".*\.py$", f) for f in files])
+        # cut off extension part (.py)
+        list_name_modules = map(lambda x: x.string.replace(".py", ""),
+                                modules_matches)
+
         modules = [imp.load_source(name, path+'/%s.py' % name) for name in list_name_modules]
         actions = {}
         for module in modules:
