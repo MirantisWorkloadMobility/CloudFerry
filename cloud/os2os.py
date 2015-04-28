@@ -45,6 +45,7 @@ from cloudferrylib.os.actions import prepare_networks
 from cloudferrylib.os.actions import dissociate_floatingip_via_compute
 from cloudferrylib.os.actions import map_compute_info
 from cloudferrylib.os.actions import deploy_volumes
+from cloudferrylib.os.actions import check_instances
 from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import load_compute_image_to_file
 from cloudferrylib.os.actions import merge_base_and_diff
@@ -168,6 +169,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         act_get_info_inst = get_info_instances.GetInfoInstances(self.init, cloud='src_cloud')
         act_cleanup_images = cleanup_images.CleanupImages(self.init)
         get_next_instance = get_info_iter.GetInfoIter(self.init)
+        check_for_instance = check_instances.CheckInstances(self.init)
         rename_info_iter = rename_info.RenameInfo(self.init, name_result, name_data)
         is_instances = is_end_iter.IsEndIter(self.init)
 
@@ -176,6 +178,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             act_get_info_inst >> \
             init_iteration_instance >> \
             act_check_needed_compute_resources >> \
+            (check_for_instance | rename_info_iter) >> \
             get_next_instance >> \
             trans_one_inst >> \
             save_result >> \
