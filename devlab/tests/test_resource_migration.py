@@ -148,3 +148,14 @@ class ResourceMigrationTests(unittest.TestCase):
 
         self.validate_neutron_resource_parameter_in_dst(
             src_routers, dst_routers, resource_name='routers')
+
+    def test_migrate_vms_parameters(self):
+        src_vms = self.src_cloud.novaclient.servers.list()
+        dst_vms = self.dst_cloud.novaclient.servers.list()
+
+        self.validate_resource_parameter_in_dst(
+            src_vms, dst_vms, resource_name='VM', parameter='name')
+        self.validate_resource_parameter_in_dst(
+            src_vms, dst_vms, resource_name='VM', parameter='config_drive')
+        self.validate_resource_parameter_in_dst(
+            src_vms, dst_vms, resource_name='VM', parameter='key_name')
