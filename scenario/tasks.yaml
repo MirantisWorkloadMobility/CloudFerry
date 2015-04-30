@@ -36,6 +36,7 @@ tasks:
    get_next_instance: ['GetInfoIter']
    rename_info_iter: ['RenameInfo', 'info_result', 'info']
    is_instances: ['IsEndIter']
+   check_instances: ['CheckInstances']
    act_i_to_f: ['LoadComputeImageToFile', 'dst_cloud']
    act_merge: ['MergeBaseDiff', 'dst_cloud']
    act_convert_image: ['ConvertFile', 'dst_cloud']
