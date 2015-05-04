@@ -4,8 +4,12 @@ namespace:
 
 preparation:
   - create_snapshot: True
+  - create_vm_snapshot_src: True
+  - create_vm_snapshot_dst: True
 
 rollback:
+  - restore_from_vm_snapshot_dst: True
+  - restore_from_vm_snapshot_src: True
   - restore_from_snapshot: True
 
 process:
