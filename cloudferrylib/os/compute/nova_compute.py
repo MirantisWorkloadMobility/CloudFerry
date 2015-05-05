@@ -139,7 +139,7 @@ class NovaCompute(compute.Compute):
         get_tenant_name = identity_res.get_tenants_func()
 
         security_groups = []
-        for security_group in instance.security_groups:
+        for security_group in getattr(instance, 'security_groups', []):
             security_groups.append(security_group['name'])
 
         interfaces = compute_res.get_networks(instance)
