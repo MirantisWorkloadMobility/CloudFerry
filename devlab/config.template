@@ -23,6 +23,7 @@ time_wait = 5
 all_vms = True
 all_images = True
 all_networks = True
+cinder_migration_strategy = cloudferrylib.os.storage.cinder_database.CinderStorage
 
 [src]
 type = os
@@ -56,8 +57,12 @@ host_eph_drv = <grizzly_ip>
 service = cinder
 backend = ceph
 host = <grizzly_ip>
+connection = mysql+mysqlconnector
+user = <src_mysql_user>
+password = <src_mysql_password>
+database_name = cinder
 # protocol_transfer=GLANCE ; or SSH
-protocol_transfer = src_storage_protocol_transfer 
+protocol_transfer = <src_storage_protocol_transfer>
 disk_format = qcow2
 # Ceph
 # volume_name_template=volume-
@@ -115,7 +120,11 @@ hosts = <icehouse_ip>
 service = cinder
 backend = ceph
 host = <icehouse_ip>
-protocol_transfer = <dst_storage_protocol_transfer>  
+protocol_transfer = <dst_storage_protocol_transfer>
+connection = mysql+mysqlconnector
+user = <dst_mysql_user>
+password = <dst_mysql_password>
+database_name = cinder
 # Ceph
 # volume_name_template=volume-
 # rbd_pool=volumes
