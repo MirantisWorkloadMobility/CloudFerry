@@ -31,6 +31,7 @@ all_volumes = True
 cinder_migration_strategy = cloudferrylib.os.storage.cinder_database.CinderStorage
 skip_down_hosts = True
 migrate_user_quotas = False
+incloud_live_migration = nova
 
 [src]
 type = os
@@ -50,7 +51,7 @@ host = <grizzly_ip>
 connection = mysql+mysqlconnector
 
 [src_rabbit]
-password = <src_rabbit_password> 
+password = <src_rabbit_password>
 hosts = <grizzly_ip>
 
 [src_compute]

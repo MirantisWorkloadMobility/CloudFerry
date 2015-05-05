@@ -19,13 +19,18 @@ from cloudferrylib.scheduler.namespace import Namespace
 from cloudferrylib.scheduler.scheduler import Scheduler
 from cloudferrylib.utils import utils
 from cloudferrylib.scheduler.scenario import Scenario
+
 from cloud import cloud_ferry
 from cloud import grouping
+
 from condensation import process
 from condensation import utils as condense_utils
+from condensation.action import get_freed_nodes
 from condensation.scripts import nova_collector
+
 import data_storage
 from dry_run import chain
+from evacuation import evacuation_chain
 from make_filters import make_filters
 
 
@@ -35,6 +40,7 @@ LOG = utils.get_log(__name__)
 
 
 DEFAULT_FILTERS_FILES = 'configs/filters'
+
 
 @task
 def migrate(name_config=None, name_instance=None, debug=False):
@@ -58,12 +64,36 @@ def get_info(name_config, debug=False):
         utils.configure_logging("DEBUG")
     LOG.info("Init getting information")
     namespace = Namespace({'name_config': name_config})
-    scheduler = Scheduler(namespace)
+    Scheduler(namespace)
 
 
 @task
 def dry_run():
     chain.process_test_chain()
+
+
+@task
+def evacuate(name_config=None, debug=False, iteration=False):
+    if debug:
+        utils.configure_logging("DEBUG")
+
+    try:
+        iteration = int(iteration)
+    except ValueError:
+        LOG.error("Invalid value provided as 'iteration' argument, it must be "
+                  "integer")
+        return
+    cfglib.collector_configs_plugins()
+    cfglib.init_config(name_config)
+    utils.init_singletones(cfglib.CONF)
+    env.key_filename = cfglib.CONF.migrate.key_filename
+    cloud = cloud_ferry.CloudFerry(cfglib.CONF)
+    LOG.info("running evacuation")
+    evacuation_chain.process_chain(cloud, iteration)
+
+    LOG.info("Following nodes will be freed once in-cloud migration finishes, "
+             "and can be moved from source to destination: %s",
+             get_freed_nodes(iteration))
 
 
 @task
