@@ -75,6 +75,9 @@ if [[ $? != 0 || ! $vagrant_key_updated ]]; then
     error_exit "Something went wrong during SSH keys substitution. Please check your box. Packaging will be aborted"
 fi
 
+echo "Writing caches to disk"
+ssh_cmd $insecure_private_key "sync"
+
 vm_name=$(VBoxManage list runningvms | grep $box | head -1 | cut -d' ' -f1 | sed 's/"//g')
 
 echo "Shutting down $box VM"
