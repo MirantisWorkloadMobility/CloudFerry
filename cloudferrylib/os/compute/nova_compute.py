@@ -654,3 +654,6 @@ class NovaCompute(compute.Compute):
         return (hypervisor_statistics.local_gb *
                 self.config.compute.disk_allocation_ratio -
                 hypervisor_statistics.local_gb_used)
+
+    def delete_vm_by_id(self, vm_id):
+        self.nova_client.servers.delete(vm_id)
