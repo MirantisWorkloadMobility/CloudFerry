@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import logging
-import sys
 import time
 import timeit
 import random
@@ -28,6 +27,7 @@ import os
 import inspect
 from multiprocessing import Lock
 from fabric.api import run, settings, local, env
+from fabric.context_managers import hide
 import ipaddr
 import yaml
 from logging import config
@@ -296,8 +296,7 @@ def log_step(log):
     return decorator
 
 
-class forward_agent:
-
+class forward_agent(object):
     """
         Forwarding ssh-key for access on to source and destination clouds via ssh
     """
@@ -305,18 +304,36 @@ class forward_agent:
     def __init__(self, key_file):
         self.key_file = key_file
 
+    def _agent_already_running(self):
+        with settings(hide('warnings', 'running', 'stdout', 'stderr'),
+                      warn_only=True):
+            res = local("ssh-add -l", capture=True)
+
+            if res.succeeded:
+                present_keys = res.split(os.linesep)
+                for key in present_keys:
+                    # TODO: this will break for path with whitespaces
+                    key_path = key.split(' ')[2]
+                    if key_path == os.path.expanduser(self.key_file):
+                        return True
+
+        return False
+
     def __enter__(self):
-        info_agent = local("eval `ssh-agent` && echo $SSH_AUTH_SOCK && ssh-add %s" %
-                           (self.key_file), capture=True).split("\n")
+        if self._agent_already_running():
+            return
+        start_ssh_agent = ("eval `ssh-agent` && echo $SSH_AUTH_SOCK && "
+                           "ssh-add %s") % self.key_file
+        info_agent = local(start_ssh_agent, capture=True).split("\n")
         self.pid = info_agent[0].split(" ")[-1]
         self.ssh_auth_sock = info_agent[1]
         os.environ["SSH_AGENT_PID"] = self.pid
         os.environ["SSH_AUTH_SOCK"] = self.ssh_auth_sock
 
     def __exit__(self, type, value, traceback):
-        local("kill -9 %s"%(self.pid))
-        del os.environ["SSH_AGENT_PID"]
-        del os.environ["SSH_AUTH_SOCK"]
+        # never kill previously started ssh-agent, so that user only has to
+        # enter private key password once
+        pass
 
 
 class wrapper_singletone_ssh_tunnel:
