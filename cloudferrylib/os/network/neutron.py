@@ -121,10 +121,6 @@ class NeutronNetwork(network.Network):
     def delete_port(self, port_id):
         return self.neutron_client.delete_port(port_id)
 
-    def get_security_groups_list(self, **kwargs):
-        return self.neutron_client.\
-            list_security_groups(**kwargs)['security_groups']
-
     def get_network(self, network_info, tenant_id, keep_ip=False):
         if keep_ip:
             instance_addr = ipaddr.IPAddress(network_info['ip'])
