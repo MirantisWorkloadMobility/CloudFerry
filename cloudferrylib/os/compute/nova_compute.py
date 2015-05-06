@@ -122,9 +122,10 @@ class NovaCompute(compute.Compute):
         info = {'instances': {}}
 
         for instance in self.get_instances_list(search_opts=search_opts):
-            info['instances'][instance.id] = self.convert(instance,
-                                                          self.config,
-                                                          self.cloud)
+            if instance.status != 'ERROR':
+                info['instances'][instance.id] = self.convert(instance,
+                                                              self.config,
+                                                              self.cloud)
 
         return info
 
