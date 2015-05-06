@@ -31,12 +31,17 @@ class PrepareNetworks(action.Action):
         keep_ip = self.cfg.migrate.keep_ip
 
         instances = info_compute[utl.INSTANCES_TYPE]
+
+        # Get all tenants, participated in migration process
+        tenants = set()
+        for instance in instances.values():
+            tenants.add(instance[utl.INSTANCE_BODY]['tenant_name'])
+
         # disable DHCP in all subnets
         subnets = network_resource.get_subnets()
         for snet in subnets:
-            if snet['tenant_name'] == self.cfg.dst.tenant:
-                network_resource. \
-                    reset_subnet_dhcp(snet['id'], False)
+            if snet['tenant_name'] in tenants:
+                network_resource.reset_subnet_dhcp(snet['id'], False)
 
         for (id_inst, inst) in instances.iteritems():
             params = []
@@ -72,11 +77,13 @@ class PrepareNetworks(action.Action):
                 params.append({'net-id': dst_net['id'], 'port-id': port['id']})
             instances[id_inst][utl.INSTANCE_BODY]['nics'] = params
         info_compute[utl.INSTANCES_TYPE] = instances
-        # reset dhcp to the original setting
+
+        # Reset DHCP to the original settings
         for snet in subnets:
-            if snet['tenant_name'] == self.cfg.dst.tenant:
-                network_resource.\
-                    reset_subnet_dhcp(snet['id'], snet['enable_dhcp'])
+            if snet['tenant_name'] in tenants:
+                network_resource.reset_subnet_dhcp(snet['id'],
+                                                   snet['enable_dhcp'])
+
         return {
             'info': info_compute
         }
