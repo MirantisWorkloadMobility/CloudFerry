@@ -18,6 +18,7 @@ from cloudferrylib.utils import utils as utl
 
 
 class GetInfoImages(action.Action):
+
     def __init__(self, init, cloud=None, search_opts=dict()):
         super(GetInfoImages, self).__init__(init, cloud)
         self.search_opts = search_opts
