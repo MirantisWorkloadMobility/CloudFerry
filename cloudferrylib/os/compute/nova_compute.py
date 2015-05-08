@@ -21,6 +21,8 @@ from novaclient.v1_1 import client as nova_client
 from novaclient import exceptions as nova_exc
 
 from cloudferrylib.base import compute
+from cloudferrylib.os.compute import keypairs
+from cloudferrylib.os.compute import instances
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils as utl
@@ -87,8 +89,9 @@ class NovaCompute(compute.Compute):
                 'user_quotas': [],
                 'project_quotas': []}
 
-        for keypair in self.get_keypair_list():
-            info['keypairs'][keypair.id] = self.convert(keypair)
+        kps = keypairs.DBBroker.get_all_keypairs(self.cloud)
+        for keypair in kps:
+            info['keypairs'][keypair.id] = keypair.to_dict()
 
         for flavor in self.get_flavor_list(is_public=None):
             info['flavors'][flavor.id] = self.convert(flavor, cloud=self.cloud)
@@ -222,7 +225,8 @@ class NovaCompute(compute.Compute):
                              'interfaces': interfaces,
                              'host': instance_host,
                              'is_ephemeral': is_ephemeral,
-                             'volumes': volumes
+                             'volumes': volumes,
+                             'user_id': instance.user_id
                              },
                 'ephemeral': ephemeral_path,
                 'diff': diff,
@@ -234,12 +238,7 @@ class NovaCompute(compute.Compute):
     @staticmethod
     def convert_resources(compute_obj, cloud):
 
-        if isinstance(compute_obj, nova_client.keypairs.Keypair):
-            return {'keypair': {'name': compute_obj.name,
-                                'public_key': compute_obj.public_key},
-                    'meta': {}}
-
-        elif isinstance(compute_obj, nova_client.flavors.Flavor):
+        if isinstance(compute_obj, nova_client.flavors.Flavor):
 
             compute_res = cloud.resources[utl.COMPUTE_RESOURCE]
             tenants = None
@@ -261,15 +260,13 @@ class NovaCompute(compute.Compute):
 
     @staticmethod
     def convert(obj, cfg=None, cloud=None):
-        res_tuple = (nova_client.keypairs.Keypair, nova_client.flavors.Flavor)
-
         if isinstance(obj, nova_client.servers.Server):
             return NovaCompute.convert_instance(obj, cfg, cloud)
-        elif isinstance(obj, res_tuple):
+        elif isinstance(obj, nova_client.flavors.Flavor):
             return NovaCompute.convert_resources(obj, cloud)
 
         LOG.error('NovaCompute converter has received incorrect value. Please '
-                  'pass to it only instance, keypair or flavor objects.')
+                  'pass to it only instance or flavor objects.')
         return None
 
     def _deploy_resources(self, info, **kwargs):
@@ -287,7 +284,6 @@ class NovaCompute(compute.Compute):
         user_map = {user['user']['id']: user['meta']['new_id'] for user in
                     identity_info['users']}
 
-        self._deploy_keypair(info['keypairs'])
         self._deploy_flavors(info['flavors'], tenant_map)
         if self.config['migrate']['migrate_quotas']:
             self._deploy_project_quotas(info['project_quotas'],
@@ -371,14 +367,6 @@ class NovaCompute(compute.Compute):
                 else:
                     raise
 
-    def _deploy_keypair(self, keypairs):
-        dest_keypairs = [keypair.name for keypair in self.get_keypair_list()]
-        for _keypair in keypairs.itervalues():
-            keypair = _keypair['keypair']
-            if keypair['name'] in dest_keypairs:
-                continue
-            self.create_keypair(keypair['name'], keypair['public_key'])
-
     def _deploy_flavors(self, flavors, tenant_map):
         dest_flavors = {flavor.name: flavor.id for flavor in
                         self.get_flavor_list(is_public=None)}
@@ -424,7 +412,9 @@ class NovaCompute(compute.Compute):
                              'flavor': instance['flavor_id'],
                              'key_name': instance['key_name'],
                              'nics': instance['nics'],
-                             'image': instance['image_id']}
+                             'image': instance['image_id'],
+                             # user_id matches user_id on source
+                             'user_id': instance.get('user_id')}
             if instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
                 volume_id = instance['volumes'][0]['id']
                 create_params["block_device_mapping_v2"] = [{
@@ -441,7 +431,22 @@ class NovaCompute(compute.Compute):
         return new_ids
 
     def create_instance(self, **kwargs):
-        return self.nova_client.servers.create(**kwargs).id
+        # do not provide key pair as boot argument, it will be updated with the
+        # low level SQL update. See
+        # `cloudferrylib.os.actions.transport_compute_resources` for more
+        # information
+        ignored_instance_args = ['key_name', 'user_id']
+
+        boot_args = {k: v for k, v in kwargs.items()
+                     if k not in ignored_instance_args}
+
+        created_instance = self.nova_client.servers.create(**boot_args)
+
+        instances.update_user_ids_for_instance(self.mysql_connector,
+                                               created_instance.id,
+                                               kwargs['user_id'])
+
+        return created_instance.id
 
     def get_instances_list(self, detailed=True, search_opts=None, marker=None,
                            limit=None):
@@ -578,15 +583,6 @@ class NovaCompute(compute.Compute):
 
     def add_flavor_access(self, flavor_id, tenant_id):
         self.nova_client.flavor_access.add_tenant_access(flavor_id, tenant_id)
-
-    def get_keypair_list(self):
-        return self.nova_client.keypairs.list()
-
-    def get_keypair(self, name):
-        return self.nova_client.keypairs.get(name)
-
-    def create_keypair(self, name, public_key=None):
-        return self.nova_client.keypairs.create(name, public_key)
 
     def get_interface_list(self, server_id):
         return self.nova_client.servers.interface_list(server_id)

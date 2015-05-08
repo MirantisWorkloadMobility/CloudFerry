@@ -11,10 +11,12 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import keystoneclient
 
 import pika
 
 from keystoneclient.v2_0 import client as keystone_client
+import cfglib
 
 from cloudferrylib.base import identity
 from cloudferrylib.utils import GeneratorPassword
@@ -390,3 +392,26 @@ class KeystoneIdentity(identity.Identity):
         for host in self.config.rabbit.hosts.split(","):
             pika.BlockingConnection(pika.ConnectionParameters(
                 host=host.strip(), credentials=credentials))
+
+
+def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
+                                  fallback_to_admin=True):
+    """Returns user from destination with the same name as on source. None if
+    user does not exist"""
+    try:
+        src_user = src_keystone.keystone_client.users.find(id=src_user_id)
+        src_user_name = src_user.name
+    except keystoneclient.exceptions.NotFound:
+        LOG.warning("User '%s' not found on source!", src_user_id)
+        if fallback_to_admin:
+            LOG.warning("Replacing user '%s' with admin", src_user_id)
+            src_user_name = cfglib.CONF.src.user
+        else:
+            return
+
+    try:
+        dst_user = dst_keystone.keystone_client.users.find(name=src_user_name)
+        return dst_user
+    except keystoneclient.exceptions.NotFound:
+        LOG.warning("User '%s' not found on DST!", src_user_name)
+        return

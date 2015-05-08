@@ -25,6 +25,7 @@ from cloudferrylib.os.actions import convert_image_to_file
 from cloudferrylib.os.actions import convert_volume_to_image
 from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.os.actions import task_transfer
+from cloudferrylib.os.identity import keystone
 from cloudferrylib.utils import utils as utl, forward_agent
 
 
@@ -68,6 +69,8 @@ class TransportInstance(action.Action):
 
         #Get next one instance
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
+            instance = self._replace_user_ids(instance)
+
             one_instance = {
                 utl.INSTANCES_TYPE: {
                     instance_id: instance
@@ -93,9 +96,13 @@ class TransportInstance(action.Action):
         for i in new_ids.iterkeys():
             dst_compute.change_status('shutoff', instance_id=i)
         for new_id, old_id in new_ids.iteritems():
-            new_info['instances'][new_id]['old_id'] = old_id
-            new_info['instances'][new_id]['meta'] = \
-                info['instances'][old_id]['meta']
+            new_instance = new_info['instances'][new_id]
+            old_instance = info['instances'][old_id]
+
+            new_instance['old_id'] = old_id
+            new_instance['meta'] = old_instance['meta']
+            new_instance[utl.INSTANCE_BODY]['key_name'] = \
+                old_instance[utl.INSTANCE_BODY]['key_name']
         info = self.prepare_ephemeral_drv(info, new_info, new_ids)
         return info
 
@@ -127,3 +134,16 @@ class TransportInstance(action.Action):
             instance_new[DIFF][HOST_SRC] = diff_host_src
 
         return new_info
+
+    def _replace_user_ids(self, instance):
+        """User IDs for VMs on DST by default is set to admin's ID. This
+        replaces admin user IDs with correct user IDs"""
+
+        src_user_id = instance['instance']['user_id']
+        dst_user = keystone.get_dst_user_from_src_user_id(
+            self.src_cloud.resources[utl.IDENTITY_RESOURCE],
+            self.dst_cloud.resources[utl.IDENTITY_RESOURCE],
+            src_user_id
+        )
+        instance['instance']['user_id'] = dst_user.id
+        return instance

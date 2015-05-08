@@ -80,7 +80,8 @@ class NovaComputeTestCase(test.TestCase):
 
         instance_id = self.nova_client.create_instance(name='fake_instance',
                                                        image='fake_image',
-                                                       flavor='fake_flavor')
+                                                       flavor='fake_flavor',
+                                                       user_id='some-id')
 
         self.assertEqual('fake_instance_id', instance_id)
 

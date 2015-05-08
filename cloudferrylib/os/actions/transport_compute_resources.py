@@ -11,16 +11,18 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
-
-
 import copy
 
 from cloudferrylib.base.action import action
+from cloudferrylib.os.compute import keypairs
+from cloudferrylib.os.identity import keystone
 from cloudferrylib.utils import utils as utl
 
 
-class TransportComputeResources(action.Action):
+LOG = utl.get_log(__name__)
 
+
+class TransportComputeResources(action.Action):
     def run(self, info=None, identity_info=None, **kwargs):
         info = copy.deepcopy(info)
         target = 'resources'
@@ -38,3 +40,95 @@ class TransportComputeResources(action.Action):
         return {
             'info': new_info
         }
+
+
+class TransportKeyPairs(action.Action):
+    """
+    # Overview
+
+    Key pair migration is special because
+      - key pair is associated with user's ID;
+      - user's key pair is not accessible by admin.
+    Because of that there should be a low-level SQL call implemented to migrate
+    key pairs.
+
+    # DB model
+
+     - `nova.key_pairs` table (identical for grizzly and icehouse):
+    +-------------+--------------+------+-----+---------+----------------+
+    | Field       | Type         | Null | Key | Default | Extra          |
+    +-------------+--------------+------+-----+---------+----------------+
+    | created_at  | datetime     | YES  |     | NULL    |                |
+    | updated_at  | datetime     | YES  |     | NULL    |                |
+    | deleted_at  | datetime     | YES  |     | NULL    |                |
+    | id          | int(11)      | NO   | PRI | NULL    | auto_increment |
+    | name        | varchar(255) | YES  |     | NULL    |                |
+    | user_id     | varchar(255) | YES  | MUL | NULL    |                |
+    | fingerprint | varchar(255) | YES  |     | NULL    |                |
+    | public_key  | mediumtext   | YES  |     | NULL    |                |
+    | deleted     | int(11)      | YES  |     | NULL    |                |
+    +-------------+--------------+------+-----+---------+----------------+
+
+    # Migration process notes
+
+     - It is assumed that user names in keystone are unique
+     - It is assumed that users are migrated to DST
+     - Since keystone backend can be LDAP as well, user names and IDs must be
+       fetched through keystone API, not the low-level SQL
+     - Update DST DB with key pairs from SRC using SQL
+    """
+
+    def __init__(self, init, kp_db_broker=keypairs.DBBroker, **kwargs):
+        super(TransportKeyPairs, self).__init__(init)
+        self.kp_db_broker = kp_db_broker
+
+    def run(self, **kwargs):
+        """Since user IDs on SRC and DST may be different, we must update the
+        DST ids for key pairs with IDs from DST (see `nova.key_pairs` table
+        schema)"""
+        src_keystone = self.src_cloud.resources[utl.IDENTITY_RESOURCE]
+        dst_keystone = self.dst_cloud.resources[utl.IDENTITY_RESOURCE]
+
+        key_pairs = self.kp_db_broker.get_all_keypairs(self.src_cloud)
+
+        for key_pair in key_pairs:
+            dst_user = keystone.get_dst_user_from_src_user_id(
+                src_keystone, dst_keystone, key_pair.user_id,
+                fallback_to_admin=True)
+            if dst_user is None:
+                continue
+
+            key_pair.user_id = dst_user.id
+
+            LOG.debug('Adding key pair %s for user %s on DST', key_pair.name,
+                      dst_user.name)
+            self.kp_db_broker.store_keypair(key_pair, self.dst_cloud)
+
+
+class SetKeyPairsForInstances(action.Action):
+    """
+    Keypair migration process requires key pair to be associated with a VM on
+    a lower DB level.
+    """
+    def __init__(self, init, kp_db_broker=keypairs.DBBroker, **kwargs):
+        super(SetKeyPairsForInstances, self).__init__(init)
+        self.kp_db_broker = kp_db_broker
+
+    def run(self, info=None, **kwargs):
+        if info is None:
+            LOG.warning("Task '%s' is called without required arguments being "
+                        "passed. Nothing will be done. Check your migration "
+                        "scenario.", self.__class__.__name__)
+            return
+
+        instances = info[utl.INSTANCES_TYPE]
+        for instance_id in instances:
+            instance = instances[instance_id][utl.INSTANCE_BODY]
+            key_name = instance.get('key_name')
+            user_id = instance.get('user_id')
+
+            if key_name is not None and user_id is not None:
+                LOG.info("Associating key pair '%s' with instance '%s'",
+                         key_name, instance_id)
+                self.kp_db_broker.add_keypair_to_instance(
+                    self.dst_cloud, key_name, user_id, instance_id)
