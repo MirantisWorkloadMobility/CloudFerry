@@ -45,11 +45,12 @@ tenant = <src_tenant>
 user = <src_mysql_user>
 password = <src_mysql_password>
 host = <grizzly_ip>
+port = 3306
 connection = mysql+mysqlconnector
 
 [src_rabbit]
 password = <src_rabbit_password>
-hosts = <grizzly_ip>
+hosts = <grizzly_ip>:5672
 
 [src_compute]
 service = nova
@@ -59,6 +60,7 @@ convert_ephemeral_disk = qcow2
 host_eph_drv = <grizzly_ip>
 connection = mysql+mysqlconnector
 host = <grizzly_ip>
+port = 3306
 database_name = nova
 user = <src_mysql_user>
 password = <src_mysql_password>
@@ -67,6 +69,7 @@ password = <src_mysql_password>
 service = cinder
 backend = ceph
 host = <grizzly_ip>
+port = 3306
 connection = mysql+mysqlconnector
 user = <src_mysql_user>
 password = <src_mysql_password>
@@ -81,6 +84,7 @@ disk_format = qcow2
 user = <src_mysql_user>
 password = <src_mysql_password>
 host = <grizzly_ip>
+port = 3306
 connection = mysql+mysqlconnector
 database_name = glance
 
@@ -110,6 +114,7 @@ tenant = <dst_tenant>
 user = <dst_mysql_user> 
 password = <dst_mysql_password> 
 host = <icehouse_ip>
+port = 3306
 connection = mysql+mysqlconnector
 
 [dst_compute]
@@ -120,18 +125,20 @@ convert_ephemeral_disk = qcow2
 host_eph_drv = <icehouse_ip>
 connection = mysql+mysqlconnector
 host = <icehouse_ip>
+port = 3306
 database_name = nova
 user = <dst_mysql_user>
 password = <dst_mysql_password>
 
 [dst_rabbit]
 password = <dst_rabbit_password>
-hosts = <icehouse_ip>
+hosts = <icehouse_ip>:5672
 
 [dst_storage]
 service = cinder
 backend = ceph
 host = <icehouse_ip>
+port = 3306
 protocol_transfer = <dst_storage_protocol_transfer>
 connection = mysql+mysqlconnector
 user = <dst_mysql_user>
@@ -145,6 +152,7 @@ backend = swift
 user = <dst_mysql_user>
 password = <dst_mysql_password>
 host = <icehouse_ip>
+port = 3306
 connection = mysql+mysqlconnector
 database_name = glance
 
