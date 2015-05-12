@@ -68,8 +68,10 @@ class GlanceImage(image.Image):
     def get_client(self):
         """ Getting glance client """
 
-        endpoint_glance = self.identity_client.get_endpoint_by_service_name(
-            'glance')
+        endpoint_glance = self.identity_client.get_endpoint_by_service_type(
+            service_type='image',
+            endpoint_type='publicURL')
+
         # we can figure out what version of client to use from url
         # check if we have "v1" or "v2" in the end of url
         m = re.search("(.*)/v(\d)", endpoint_glance)
