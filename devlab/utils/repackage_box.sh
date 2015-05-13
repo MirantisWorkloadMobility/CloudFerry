@@ -30,8 +30,8 @@ while [[ $# -ge 1 ]]; do
     esac
 done
 
-if [[ -z $box || "$box" != 'grizzly' && "$box" != 'icehouse' ]]; then
-    error_exit "Invalid box name provided: '$box'. Should be one of 'grizzly' or 'icehouse'."
+if [[ -z $box || "$box" != 'grizzly' && "$box" != 'grizzlycompute' && "$box" != 'icehouse' && "$box" != 'icehousecompute' ]]; then
+    error_exit "Invalid box name provided: '$box'. Should be one of 'grizzly' or 'icehouse' or 'grizzlycompute' or 'icehousecompute' ."
 fi
 
 ssh_config=$(vagrant ssh-config $box)
@@ -39,7 +39,6 @@ ssh_host=$(echo "$ssh_config" | grep HostName | cut -d' ' -f4)
 ssh_port=$(echo "$ssh_config" | grep Port | cut -d' ' -f4)
 ssh_private_key=$(echo "$ssh_config" | grep IdentityFile | cut -d' ' -f4)
 ssh_user=$(echo "$ssh_config" | grep '\<User\>' | cut -d' ' -f4)
-ssh_users_private_key=~/.ssh/id_rsa.pub
 ssh_opts='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR'
 
 insecure_pub_key=~/.vagrant.d/vagrant.pub
@@ -55,7 +54,7 @@ ssh_cmd() {
 # grizzly box has eth1 udev rules which must be flushed
 # to correctly assign eth device index on boot
 # Icehouse box doesn't have this because it runs more recent Ubuntu
-if [[ $box == 'grizzly' ]]; then
+if [[ $box == 'grizzly' || $box == 'grizzlycompute' ]]; then
     grizzly_mac_re='([0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2}:[0-9a-f]{2})'
     grizzly_eth1_mac=$(ssh_cmd $ssh_private_key "ip link show eth1 | sed -r -n 's/.*\<$grizzly_mac_re\>.*/\1/p'")
     echo "Removing $grizzly_eth1_mac from udev net rules"

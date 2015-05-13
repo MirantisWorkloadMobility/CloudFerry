@@ -7,9 +7,11 @@ This allows for setting up a development lab environment using
 
 ## Lab Description
 
-Vagrant sets up 3 nodes:
+Vagrant sets up 5 nodes:
  - Openstack Grizzly all-in-one node on Ubuntu 12.04;
+ - Openstack Grizzly compute node on Ubuntu 12.04;
  - Openstack Icehouse all-in-one node on Ubuntu 12.04;
+ - Openstack Icehouse compute node on Ubuntu 12.04;
  - CloudFerry node on Ubuntu 12.04
    - Creates a user with the same name as the one running vagrant;
    - Mounts user's $HOME in VMs $HOME so that user has familiar working
@@ -47,6 +49,10 @@ options:
     ```
  5. At some point vagrant will ask you for the password, this is needed to
     configure NFS export on your host system.
+ 6. You also can start minimum development environment by running:
+    ```
+    vagrant up grizzly icehouse cloudferry
+    ```
 
 ## Common Vagrant use-cases
 
