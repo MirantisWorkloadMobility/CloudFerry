@@ -112,7 +112,11 @@ class CinderStorage(storage.Storage):
         if not hasattr(self, "host_counter"):
             self.host_counter = 0
         self.host_counter += 1
-        return self.hosts[len(self.hosts) % self.host_counter]
+        # counter modulo length of hosts will give
+        # round robin results on each call
+        if not self.hosts:
+            raise RuntimeError("cannot find cinder volume service in cloud")
+        return self.hosts[self.host_counter % len(self.hosts)]
 
     def deploy_data_to_table(self, table_name, table_list_of_dicts):
         """ Inserts data to database with single query """
