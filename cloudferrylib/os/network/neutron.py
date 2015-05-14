@@ -37,6 +37,8 @@ class NeutronNetwork(network.Network):
         self.cloud = cloud
         self.identity_client = cloud.resources['identity']
         self.neutron_client = self.proxy(self.get_client(), config)
+        self.ext_net_map = \
+            utl.read_yaml_file(self.config.migrate.ext_net_map) or {}
 
     def get_client(self):
         return neutron_client.Client(
@@ -846,9 +848,9 @@ class NeutronNetwork(network.Network):
                     'router:external': net['router:external']
                 }
             }
-
             if net.get('router:external'):
-                if not self.config.migrate.migrate_extnets:
+                if not self.config.migrate.migrate_extnets or \
+                        (net['id'] in self.ext_net_map):
                     continue
             # create network on destination cloud
             if net['res_hash'] not in existing_nets_hashlist:
@@ -915,8 +917,10 @@ class NeutronNetwork(network.Network):
         existing_subnets_hashlist = \
             [ex_snet['res_hash'] for ex_snet in self.get_subnets()]
         for snet in subnets:
-            if snet['external'] and not self.config.migrate.migrate_extnets:
-                continue
+            if snet['external']:
+                if not self.config.migrate.migrate_extnets or \
+                                snet['network_id'] in self.ext_net_map:
+                    continue
             tenant_id = \
                 self.identity_client.get_tenant_id_by_name(snet['tenant_name'])
             if not tenant_id:
@@ -970,13 +974,10 @@ class NeutronNetwork(network.Network):
             r_info = {'router': {'name': router['name'],
                                  'tenant_id': tenant_id}}
             if router['external_gateway_info']:
-                ex_net_hash = \
-                    self.get_res_hash_by_id(networks, router['ext_net_id'])
-                ex_net = \
-                    self.get_res_by_hash(existing_nets, ex_net_hash)
-                if not ex_net:
+                ex_net_id = self.get_new_extnet_id(router['ext_net_id'],
+                                                   networks, existing_nets)
+                if not ex_net_id:
                     continue
-                ex_net_id = ex_net["id"]
                 r_info['router']['external_gateway_info'] = \
                     dict(network_id=ex_net_id)
             if router['res_hash'] not in existing_routers_hashlist:
@@ -1021,11 +1022,8 @@ class NeutronNetwork(network.Network):
         ext_nets_ids = []
         # getting list of external networks with allocated floating ips
         for src_float in src_floats:
-            ext_net_hash = \
-                self.get_res_hash_by_id(networks,
-                                        src_float['floating_network_id'])
-            ext_net_id = \
-                self.get_res_by_hash(existing_nets, ext_net_hash)['id']
+            ext_net_id = self.get_new_extnet_id(src_float['floating_network_id'],
+                                                networks, existing_nets)
             if ext_net_id not in ext_nets_ids:
                 ext_nets_ids.append(ext_net_id)
                 self.allocate_floatingips(ext_net_id)
@@ -1058,21 +1056,19 @@ class NeutronNetwork(network.Network):
             tname = src_float['tenant_name']
             tenant_id = \
                 self.identity_client.get_tenant_id_by_name(tname)
-            ext_net_hash = \
-                self.get_res_hash_by_id(src_nets,
-                                        src_float['floating_network_id'])
-            ext_net = self.get_res_by_hash(existing_nets, ext_net_hash)
+            ext_net_id = self.get_new_extnet_id(src_float['floating_network_id'],
+                                                src_nets, existing_nets)
             for floating in existing_floatingips:
                 if floating['floating_ip_address'] == \
                         src_float['floating_ip_address']:
-                    if floating['floating_network_id'] == ext_net['id']:
+                    if floating['floating_network_id'] == ext_net_id:
                         if floating['tenant_id'] != tenant_id:
                             fl_id = floating['id']
                             self.neutron_client.delete_floatingip(fl_id)
                             self.neutron_client.create_floatingip({
                                 'floatingip':
                                 {
-                                    'floating_network_id': ext_net['id'],
+                                    'floating_network_id': ext_net_id,
                                     'tenant_id': tenant_id
                                 }
                             })
@@ -1116,3 +1112,11 @@ class NeutronNetwork(network.Network):
             [info.lower() if type(info) is str else info for info in list_info]
         hash_list.sort()
         return hash(tuple(hash_list))
+
+    def get_new_extnet_id(self, src_net_id, src_nets, dst_nets):
+        if src_net_id in self.ext_net_map:
+            dst_net_id = self.ext_net_map[src_net_id]
+        else:
+            net_hash = self.get_res_hash_by_id(src_nets, src_net_id)
+            dst_net_id = self.get_res_by_hash(dst_nets, net_hash)['id']
+        return dst_net_id
