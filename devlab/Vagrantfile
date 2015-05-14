@@ -33,6 +33,18 @@ nodes = {
     "ip" => "#{options['cloudferry_ip']}",
     "memory" => 2048,
     "role" => "dev"
+  },
+  "grizzlycompute" => {
+    "box" => "openstack-user/precise-grizzlycompute",
+    "ip" => "#{options['grizzly_compute_ip']}",
+    "memory" => 4096,
+    "role" => "openstack"
+  },
+  "icehousecompute" => {
+    "box" => "openstack-user/precise-icehousecompute",
+    "ip" => "#{options['icehouse_compute_ip']}",
+    "memory" => 4096,
+    "role" => "openstack"
   }
 }
 
