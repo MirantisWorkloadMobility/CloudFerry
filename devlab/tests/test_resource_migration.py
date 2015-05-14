@@ -159,3 +159,31 @@ class ResourceMigrationTests(unittest.TestCase):
             src_vms, dst_vms, resource_name='VM', parameter='config_drive')
         self.validate_resource_parameter_in_dst(
             src_vms, dst_vms, resource_name='VM', parameter='key_name')
+
+    def test_migrate_cinder_volumes(self):
+        src_volume_list = self.src_cloud.cinderclient.volumes.list(
+            search_opts={'all_tenants': 1})
+        dst_volume_list = self.dst_cloud.cinderclient.volumes.list(
+            search_opts={'all_tenants': 1})
+
+        self.validate_resource_parameter_in_dst(
+            src_volume_list, dst_volume_list, resource_name='volume',
+            parameter='display_name')
+        self.validate_resource_parameter_in_dst(
+            src_volume_list, dst_volume_list, resource_name='volume',
+            parameter='size')
+
+    @unittest.skip("Temporarily disabled: snapshots doesn't implemented in "
+                   "cinder's nfs driver")
+    def test_migrate_cinder_snapshots(self):
+        src_volume_list = self.src_cloud.cinderclient.volume_snapshots.list(
+            search_opts={'all_tenants': 1})
+        dst_volume_list = self.dst_cloud.cinderclient.volume_snapshots.list(
+            search_opts={'all_tenants': 1})
+
+        self.validate_resource_parameter_in_dst(
+            src_volume_list, dst_volume_list, resource_name='volume',
+            parameter='display_name')
+        self.validate_resource_parameter_in_dst(
+            src_volume_list, dst_volume_list, resource_name='volume',
+            parameter='size')
