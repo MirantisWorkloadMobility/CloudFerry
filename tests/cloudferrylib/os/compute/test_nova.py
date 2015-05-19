@@ -18,6 +18,7 @@ import mock
 
 from novaclient.v1_1 import client as nova_client
 from oslotest import mockpatch
+import cfglib
 
 from cloudferrylib.os.compute import nova_compute
 from cloudferrylib.utils import utils
@@ -92,6 +93,7 @@ class NovaComputeTestCase(test.TestCase):
                      'limit': None,
                      'search_opts': None}
 
+        cfglib.init_config()
         instances_list = self.nova_client.get_instances_list(**test_args)
 
         self.mock_client().servers.list.assert_called_once_with(**test_args)
@@ -187,3 +189,56 @@ class NovaComputeTestCase(test.TestCase):
         self.nova_client.delete_flavor('fake_fl_id')
 
         self.mock_client().flavors.delete.assert_called_once_with('fake_fl_id')
+
+    def test_nothing_is_filtered_if_skip_down_hosts_option_not_set(self):
+        cfglib.init_config()
+        cfglib.CONF.migrate.skip_down_hosts = False
+        self.fake_instance_0.host = 'host1'
+        self.fake_instance_1.host = 'host2'
+
+        hosts_down = ['host1', 'host2', 'host3']
+        instances = [self.fake_instance_0, self.fake_instance_1]
+
+        filtered = nova_compute.filter_down_hosts(hosts_down, instances)
+
+        self.assertEqual(filtered, instances)
+
+    def test_down_hosts_has_no_hosts_in_up_state(self):
+        def service(hostname, state):
+            s = mock.Mock()
+            s.host = hostname
+            s.state = state
+            return s
+
+        num_up_services = 5
+        num_down_services = 10
+        services = [service('uphost%d' % i, 'up')
+                    for i in xrange(num_up_services)]
+        services.extend([service('downhost%d' % i, 'down')
+                         for i in xrange(num_down_services)])
+        client = mock.Mock()
+        client.services.list.return_value = services
+
+        hosts = nova_compute.down_hosts(client)
+
+        self.assertEqual(len(hosts), num_down_services)
+
+    def test_down_hosts_are_filtered_if_config_option_is_set(self):
+        def instance(hostname):
+            inst = mock.Mock()
+            setattr(inst, nova_compute.INSTANCE_HOST_ATTRIBUTE, hostname)
+            return inst
+
+        num_instances_up = 5
+        num_hosts_down = 10
+        hosts_down = ['downhost%d' % i for i in xrange(num_hosts_down)]
+        instances = [instance('host%d' % i) for i in xrange(num_instances_up)]
+        instances.extend([instance(host_down) for host_down in hosts_down])
+        cfglib.init_config()
+        cfglib.CONF.migrate.skip_down_hosts = True
+
+        filtered = nova_compute.filter_down_hosts(
+            hosts_down=hosts_down, elements=instances,
+            hostname_attribute=nova_compute.INSTANCE_HOST_ATTRIBUTE)
+
+        self.assertEqual(len(filtered), num_instances_up)
