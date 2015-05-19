@@ -183,6 +183,21 @@ class KeystoneIdentity(identity.Identity):
 
         return self.keystone_client.tenants.get(tenant_id)
 
+    def try_get_tenant_name_by_id(self, tenant_id, default=None):
+        """ Same as `get_tenant_by_id` but returns `default` in case tenant
+        ID is not present """
+        try:
+            return self.keystone_client.tenants.get(tenant_id).name
+        except keystoneclient.exceptions.NotFound:
+            LOG.warning("Tenant '%s' not found, returning default value = "
+                        "'%s'", tenant_id, default)
+            return default
+
+    def get_services_list(self):
+        """ Getting list of available services from keystone. """
+
+        return self.keystone_client.services.list()
+
     def get_tenants_list(self):
         """ Getting list of tenants from keystone. """
 
@@ -197,6 +212,12 @@ class KeystoneIdentity(identity.Identity):
         """ Getting list of available roles from keystone. """
 
         return self.keystone_client.roles.list()
+
+    def try_get_username_by_id(self, user_id, default=None):
+        try:
+            return self.keystone_client.users.get(user_id).name
+        except keystoneclient.exceptions.NotFound:
+            return default
 
     def roles_for_user(self, user_id, tenant_id):
         """ Getting list of user roles for tenant """
