@@ -48,7 +48,7 @@ class GlanceImageTestCase(test.TestCase):
             new=self.glance_mock_client)
         self.useFixture(self.glance_client_patch)
         self.identity_mock = mock.Mock()
-        self.identity_mock.get_endpoint_by_service_name = mock.Mock(
+        self.identity_mock.get_endpoint_by_service_type = mock.Mock(
             return_value="http://192.168.1.2:9696/v2")
         self.identity_mock.get_tenant_by_id = mock.Mock(
             return_value=utils.ext_dict(name="fake_tenant_name"))
@@ -110,7 +110,7 @@ class GlanceImageTestCase(test.TestCase):
     def test_get_glance_client(self):
         fake_endpoint = 'fake_endpoint'
         fake_auth_token = 'fake_auth_token'
-        self.identity_mock.get_endpoint_by_service_name.return_value = (
+        self.identity_mock.get_endpoint_by_service_type.return_value = (
             fake_endpoint)
         self.identity_mock.get_auth_token_from_user.return_value = (
             fake_auth_token)

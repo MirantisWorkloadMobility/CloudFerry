@@ -27,8 +27,6 @@ from cloudferrylib.utils import utils as utl
 
 LOG = utl.get_log(__name__)
 
-NOVA_SERVICE = 'nova'
-
 
 class KeystoneIdentity(identity.Identity):
     """The main class for working with OpenStack Keystone Identity Service."""
@@ -36,6 +34,7 @@ class KeystoneIdentity(identity.Identity):
     def __init__(self, config, cloud):
         super(KeystoneIdentity, self).__init__()
         self.config = config
+        self._ks_client_creds = self.proxy(self._get_client_by_creds(), config)
         self.keystone_client = self.proxy(self.get_client(), config)
         self.mysql_connector = cloud.mysql_connector
         self.cloud = cloud
@@ -124,45 +123,38 @@ class KeystoneIdentity(identity.Identity):
         print 'Finished'
 
     def get_client(self):
-        """ Getting keystone client """
+        """ Getting keystone client using authentication with admin auth token.
 
-        ks_client_for_token = keystone_client.Client(
-            username=self.config.cloud.user,
-            password=self.config.cloud.password,
-            tenant_name=self.config.cloud.tenant,
-            auth_url=self.config.cloud.auth_url)
+        :return: OpenStack Keystone Client instance
+        """
 
         return keystone_client.Client(
-            token=ks_client_for_token.auth_ref['token']['id'],
+            token=self._ks_client_creds.auth_ref['token']['id'],
             endpoint=self.config.cloud.auth_url)
 
-    def get_service_name_by_type(self, service_type):
-        """Getting service_name from keystone. """
+    def _get_client_by_creds(self):
+        """Authenticating with a user name and password.
 
-        for service in self.get_services_list():
-            if service.type == service_type:
-                return service.name
-        return NOVA_SERVICE
+        :return: OpenStack Keystone Client instance
+        """
 
-    def get_public_endpoint_service_by_id(self, service_id):
-        """Getting endpoint public URL from keystone. """
+        return keystone_client.Client(username=self.config.cloud.user,
+                                      password=self.config.cloud.password,
+                                      tenant_name=self.config.cloud.tenant,
+                                      auth_url=self.config.cloud.auth_url)
 
-        for endpoint in self.keystone_client.endpoints.list():
-            if endpoint.service_id == service_id:
-                return endpoint.publicurl
+    def get_endpoint_by_service_type(self, service_type, endpoint_type):
+        """Getting endpoint URL by service type.
 
-    def get_service_id(self, service_name):
-        """Getting service_id from keystone. """
+        :param service_type: OpenStack service type (image, compute etc.)
+        :param endpoint_type: publicURL or internalURL
 
-        for service in self.get_services_list():
-            if service.name == service_name:
-                return service.id
+        :return: String endpoint of specified OpenStack service
+        """
 
-    def get_endpoint_by_service_name(self, service_name):
-        """ Getting endpoint public URL by service name from keystone. """
-
-        service_id = self.get_service_id(service_name)
-        return self.get_public_endpoint_service_by_id(service_id)
+        return self._ks_client_creds.service_catalog.url_for(
+            service_type=service_type,
+            endpoint_type=endpoint_type)
 
     def get_tenants_func(self):
         tenants = {tenant.id: tenant.name for tenant in
@@ -190,11 +182,6 @@ class KeystoneIdentity(identity.Identity):
         """ Getting tenant by id from keystone. """
 
         return self.keystone_client.tenants.get(tenant_id)
-
-    def get_services_list(self):
-        """ Getting list of available services from keystone. """
-
-        return self.keystone_client.services.list()
 
     def get_tenants_list(self):
         """ Getting list of tenants from keystone. """
