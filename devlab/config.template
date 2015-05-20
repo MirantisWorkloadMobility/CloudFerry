@@ -30,6 +30,7 @@ all_networks = True
 all_volumes = True
 cinder_migration_strategy = cloudferrylib.os.storage.cinder_database.CinderStorage
 skip_down_hosts = True
+migrate_user_quotas = False
 
 [src]
 type = os

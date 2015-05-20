@@ -37,6 +37,7 @@ DISK = "disk"
 LOCAL = ".local"
 LEN_UUID_INSTANCE = 36
 INTERFACES = "interfaces"
+DEFAULT_QUOTA_VALUE = -1
 
 INSTANCE_HOST_ATTRIBUTE = 'OS-EXT-SRV-ATTR:host'
 
@@ -63,26 +64,33 @@ class NovaCompute(compute.Compute):
                                   params.cloud.tenant,
                                   params.cloud.auth_url)
 
-    def _read_info_quotas(self, info):
-        user_quotas_cmd = ("SELECT user_id, project_id, resource, "
-                           "hard_limit FROM project_user_quotas WHERE "
-                           "deleted = 0")
-        for quota in self.mysql_connector.execute(user_quotas_cmd):
-            info['user_quotas'].append(
-                {'quota': {'user_id': quota[0],
-                           'project_id': quota[1],
-                           'resource': quota[2],
-                           'hard_limit': quota[3]},
-                 'meta': {}})
+    def _read_info_quotas(self):
+        service_tenant_id = self.identity.get_tenant_id_by_name(
+            self.config.cloud.service_tenant)
+        tenant_ids = [tenant.id for tenant in self.identity.get_tenants_list()
+                      if tenant.id != service_tenant_id]
+        user_ids = [user.id for user in self.identity.get_users_list()]
+        project_quotas = list()
+        user_quotas = list()
 
-        project_quotas_cmd = ("SELECT project_id, resource, hard_limit "
-                              "FROM quotas WHERE deleted = 0")
-        for quota in self.mysql_connector.execute(project_quotas_cmd):
-            info['project_quotas'].append(
-                {'quota': {'project_id': quota[0],
-                           'resource': quota[1],
-                           'hard_limit': quota[2]},
-                 'meta': {}})
+        for tenant_id in tenant_ids:
+            project_quota = self.get_quotas(tenant_id=tenant_id)
+            project_quota_info = self.convert_resources(project_quota,
+                                                        None)
+            project_quota_info['tenant_id'] = tenant_id
+            project_quotas.append(project_quota_info)
+            if self.config.migrate.migrate_user_quotas:
+                for user_id in user_ids:
+                    if self.identity.roles_for_user(user.id, tenant_id):
+                        user_quota = self.get_quotas(tenant_id=tenant_id,
+                                                     user_id=user_id)
+                        user_quota_info = self.convert_resources(
+                            user_quota, None)
+                        user_quota_info['tenant_id'] = tenant_id
+                        user_quota_info['user_id'] = user_id
+                        user_quotas.append(user_quota_info)
+
+        return project_quotas, user_quotas
 
     def _read_info_resources(self, **kwargs):
         """
@@ -101,7 +109,8 @@ class NovaCompute(compute.Compute):
             info['flavors'][flavor.id] = self.convert(flavor, cloud=self.cloud)
 
         if self.config.migrate.migrate_quotas:
-            self._read_info_quotas(info)
+            info['project_quotas'], info['user_quotas'] = \
+                self._read_info_quotas()
 
         return info
 
@@ -268,6 +277,24 @@ class NovaCompute(compute.Compute):
                                'tenants': tenants},
                     'meta': {}}
 
+        elif isinstance(compute_obj, nova_client.quotas.QuotaSet):
+            return {'quota': {'cores': compute_obj.cores,
+                              'fixed_ips': compute_obj.fixed_ips,
+                              'floating_ips': compute_obj.floating_ips,
+                              'instances': compute_obj.instances,
+                              'key_pairs': compute_obj.key_pairs,
+                              'ram': compute_obj.ram,
+                              'security_group_rules':
+                                  compute_obj.security_group_rules,
+                              'security_groups': compute_obj.security_groups,
+                              'injected_file_content_bytes':
+                                  compute_obj.injected_file_content_bytes,
+                              'injected_file_path_bytes':
+                                  compute_obj.injected_file_path_bytes,
+                              'injected_files': compute_obj.injected_files,
+                              'metadata_items': compute_obj.metadata_items},
+                    'meta': {}}
+
     @staticmethod
     def convert(obj, cfg=None, cloud=None):
         if isinstance(obj, nova_client.servers.Server):
@@ -296,10 +323,8 @@ class NovaCompute(compute.Compute):
 
         self._deploy_flavors(info['flavors'], tenant_map)
         if self.config['migrate']['migrate_quotas']:
-            self._deploy_project_quotas(info['project_quotas'],
-                                        tenant_map)
-            self._deploy_user_quotas(info['user_quotas'],
-                                     tenant_map, user_map)
+            self._deploy_quotas(info['project_quotas'], tenant_map)
+            self._deploy_quotas(info['user_quotas'], tenant_map, user_map)
 
         new_info = self.read_info(target='resources')
 
@@ -325,58 +350,6 @@ class NovaCompute(compute.Compute):
 
         return info
 
-    def _deploy_user_quotas(self, quotas, tenant_map, user_map):
-        insert_cmd = ("INSERT INTO project_user_quotas (user_id, project_id, "
-                      "resource, hard_limit, deleted) VALUES ('%s', '%s', '%s'"
-                      ", %s, 0)")
-
-        update_cmd = ("UPDATE project_user_quotas SET hard_limit=%s WHERE "
-                      "user_id='%s' AND project_id='%s' AND resource='%s' AND "
-                      "deleted=0")
-
-        for _quota in quotas:
-            quota = _quota['quota']
-            try:
-                self.mysql_connector.execute(insert_cmd % (
-                    user_map[quota['user_id']],
-                    tenant_map[quota['project_id']],
-                    quota['resource'],
-                    quota['hard_limit']))
-            except exc.IntegrityError as e:
-                if 'Duplicate entry' in e.message:
-                    self.mysql_connector.execute(update_cmd % (
-                        quota['hard_limit'],
-                        user_map[quota['user_id']],
-                        tenant_map[quota['project_id']],
-                        quota['resource'],
-                    ))
-                else:
-                    raise
-
-    def _deploy_project_quotas(self, quotas, tenant_map):
-        insert_cmd = ("INSERT INTO quotas (project_id, resource, "
-                      "hard_limit, deleted) VALUES ('%s', '%s', %s, 0)")
-
-        update_cmd = ("UPDATE quotas SET hard_limit=%s WHERE project_id='%s' "
-                      "AND resource='%s' AND deleted=0")
-
-        for _quota in quotas:
-            quota = _quota['quota']
-            try:
-                self.mysql_connector.execute(insert_cmd % (
-                    tenant_map[quota['project_id']],
-                    quota['resource'],
-                    quota['hard_limit']))
-            except exc.IntegrityError as e:
-                if 'Duplicate entry' in e.message:
-                    self.mysql_connector.execute(update_cmd % (
-                        quota['hard_limit'],
-                        tenant_map[quota['project_id']],
-                        quota['resource'],
-                    ))
-                else:
-                    raise
-
     def _deploy_flavors(self, flavors, tenant_map):
         dest_flavors = {flavor.name: flavor.id for flavor in
                         self.get_flavor_list(is_public=None)}
@@ -400,6 +373,26 @@ class NovaCompute(compute.Compute):
                 for tenant in flavor['tenants']:
                     self.add_flavor_access(_flavor['meta']['id'],
                                            tenant_map[tenant])
+
+    def _deploy_quotas(self, quotas, tenant_map, user_map=None):
+        for _quota in quotas:
+            old_tenant_id = _quota['tenant_id']
+            tenant_id = tenant_map[old_tenant_id]
+            user_id = None
+            if user_map:
+                old_user_id = _quota['user_id']
+                user_id = user_map[old_user_id]
+            quota = _quota['quota']
+            quota_info = dict()
+
+            for quota_name, quota_value in quota.iteritems():
+                if quota_value != DEFAULT_QUOTA_VALUE:
+                    quota_info[quota_name] = quota_value
+
+            quota_info['force'] = True
+
+            self.update_quota(tenant_id=tenant_id, user_id=user_id,
+                              **quota_info)
 
     def _deploy_instances(self, info_compute):
         new_ids = {}
@@ -599,6 +592,13 @@ class NovaCompute(compute.Compute):
 
     def add_flavor_access(self, flavor_id, tenant_id):
         self.nova_client.flavor_access.add_tenant_access(flavor_id, tenant_id)
+
+    def get_quotas(self, tenant_id, user_id=None):
+        return self.nova_client.quotas.get(tenant_id, user_id)
+
+    def update_quota(self, tenant_id, user_id=None, **quota_items):
+        return self.nova_client.quotas.update(tenant_id=tenant_id,
+                                              user_id=user_id, **quota_items)
 
     def get_interface_list(self, server_id):
         return self.nova_client.servers.interface_list(server_id)

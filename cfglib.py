@@ -144,6 +144,10 @@ migrate_opts = [
                     'this file must be used in the migration scenario.'),
     cfg.BoolOpt('migrate_users', default=True,
                 help='Migrate users'),
+    cfg.BoolOpt('migrate_user_quotas', default=True,
+                help='Migrate user quotas. If it set in "false" only tenant '
+                     'quotas will be migrated. Use this in case when '
+                     'OpenStack does not support user quotas (e.g. Grizzly)'),
 ]
 
 mail = cfg.OptGroup(name='mail',
