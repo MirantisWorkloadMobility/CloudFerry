@@ -75,3 +75,5 @@ tasks:
    act_check_bandwidth_dst: ['CheckBandwidth', 'dst_cloud']
    get_volumes_db_data: ["GetVolumesDb", 'src_cloud']
    write_volumes_db_data: ["WriteVolumesDb", 'dst_cloud']
+   transport_key_pairs: ["TransportKeyPairs"]
+   add_key_pairs_to_instances: ["SetKeyPairsForInstances"]
