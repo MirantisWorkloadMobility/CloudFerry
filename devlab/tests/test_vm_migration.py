@@ -9,9 +9,12 @@ class VmMigration(unittest.TestCase):
         self.src_cloud = Prerequisites(cloud_prefix='SRC')
         self.dst_cloud = Prerequisites(cloud_prefix='DST')
         self.src_vms = [x.__dict__ for x in
-                        self.src_cloud.novaclient.servers.list()]
+                        self.src_cloud.novaclient.servers.list(
+                            search_opts={'all_tenants': 1})]
         self.dst_vms = [x.__dict__ for x in
-                        self.dst_cloud.novaclient.servers.list()]
+                        self.dst_cloud.novaclient.servers.list(
+                            search_opts={'all_tenants': 1})]
+        self.src_vms =[vm for vm in self.src_vms if vm['status'] != 'ERROR']
         self.dst_vm_indexes = []
         for src_vm in self.src_vms:
             self.dst_vm_indexes.append([x['name'] for x in self.dst_vms].index(

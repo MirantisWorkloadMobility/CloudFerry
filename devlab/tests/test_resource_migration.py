@@ -150,8 +150,12 @@ class ResourceMigrationTests(unittest.TestCase):
             src_routers, dst_routers, resource_name='routers')
 
     def test_migrate_vms_parameters(self):
-        src_vms = self.src_cloud.novaclient.servers.list()
-        dst_vms = self.dst_cloud.novaclient.servers.list()
+        src_vms = self.src_cloud.novaclient.servers.list(
+            search_opts={'all_tenants': 1})
+        dst_vms = self.dst_cloud.novaclient.servers.list(
+            search_opts={'all_tenants': 1})
+
+        src_vms = [vm for vm in src_vms if vm.__dict__['status'] != 'ERROR']
 
         self.validate_resource_parameter_in_dst(
             src_vms, dst_vms, resource_name='VM', parameter='name')
