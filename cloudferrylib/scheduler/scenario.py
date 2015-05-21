@@ -26,7 +26,7 @@ from cloudferrylib.base.action import action
 
 
 class Scenario(object):
-    def __init__(self, path_tasks='scenario/tasks.yaml', path_scenario='scenario/migrate.yaml'):
+    def __init__(self, path_tasks, path_scenario):
         self.path_tasks = path_tasks
         self.path_scenario = path_scenario
 

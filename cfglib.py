@@ -121,7 +121,14 @@ migrate_opts = [
     cfg.BoolOpt('skip_down_hosts', default=True,
                 help="If set to True, removes unreachable compute hosts from "
                      "nova hypervisor list. Otherwise migration process fails "
-                     "with unrecoverable error if host is down.")
+                     "with unrecoverable error if host is down."),
+    cfg.StrOpt('scenario', default='scenario/migrate.yaml',
+               help='Path to a scenario file, which holds the whole migration '
+                    'procedure. Must be YAML format'),
+    cfg.StrOpt('tasks_mapping', default='scenario/tasks.yaml',
+               help='Path to a file which holds CloudFerry python code tasks '
+                    'mapped to migration scenario items. Items defined in '
+                    'this file must be used in the migration scenario.')
 ]
 
 mail = cfg.OptGroup(name='mail',

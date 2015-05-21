@@ -40,7 +40,8 @@ def migrate(name_config=None, name_instance=None, debug=False):
     utils.init_singletones(cfglib.CONF)
     env.key_filename = cfglib.CONF.migrate.key_filename
     cloud = cloud_ferry.CloudFerry(cfglib.CONF)
-    cloud.migrate(Scenario())
+    cloud.migrate(Scenario(path_scenario=cfglib.CONF.migrate.scenario,
+                           path_tasks=cfglib.CONF.migrate.tasks_mapping))
 
 
 @task
