@@ -153,6 +153,12 @@ cinder_snapshots = [
     # {'display_name': 'snapsh1', 'volume_id': 'cinder_volume1'}
 ]
 
+# Emulate different VM states
+vm_states = [
+    {'name': 'server3', 'state': 'error'},
+    {'name': 'server4', 'state': 'error'}
+]
+
 # Client's versions
 NOVA_CLIENT_VERSION = '1.1'
 GLANCE_CLIENT_VERSION = '1'

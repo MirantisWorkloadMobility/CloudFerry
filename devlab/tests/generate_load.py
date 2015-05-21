@@ -285,6 +285,12 @@ class Prerequisites():
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
+    def emulate_vm_states(self):
+        for vm_state in config.vm_states:
+            self.novaclient.servers.reset_state(
+                server=self.get_vm_id(vm_state['name']),
+                state=vm_state['state'])
+
     def run_preparation_scenario(self):
         self.create_tenants()
         self.create_users()
@@ -298,6 +304,7 @@ class Prerequisites():
         self.create_vm_snapshots()
         self.create_security_groups()
         self.create_cinder_objects()
+        self.emulate_vm_states()
 
     def clean_objects(self):
         for flavor in config.flavors:
