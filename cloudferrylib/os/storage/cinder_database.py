@@ -22,6 +22,7 @@ from cloudferrylib.utils import mysql_connector
 CINDER_VOLUME = "cinder-volume"
 LOG = utl.get_log(__name__)
 PROJECT_ID = 'project_id'
+STATUS = 'status'
 TENANT_ID = 'tenant_id'
 USER_ID = 'user_id'
 DELETED = 'deleted'
@@ -54,6 +55,9 @@ class CinderStorage(storage.Storage):
             settings = getattr(cloud.config, cloud.position + '_storage')
             self.connector = mysql_connector.MysqlConnector(
                 settings, settings.database_name)
+
+        # FIXME This class holds logic for all these tables. These must be
+        # split into separate classes
         self.list_of_tables = [
             'volumes',
             'quotas',
@@ -74,28 +78,32 @@ class CinderStorage(storage.Storage):
             params.cloud.tenant,
             params.cloud.auth_url)
 
+    def _update_tenant_names(self, result, tenant_id_key):
+        for entry in result:
+            tenant_name = self.identity_client.try_get_tenant_name_by_id(
+                entry[tenant_id_key], self.config.cloud.tenant)
+            entry[tenant_id_key] = tenant_name
+
     def list_of_dicts_for_table(self, table):
         """ Performs SQL query and returns rows as dict """
-        query = self.connector.execute("SELECT * from {table}".format(
-            table=table))
+        # ignore deleted and errored volumes
+        sql = ("SELECT * from {table}").format(table=table)
+        query = self.connector.execute(sql)
         column_names = query.keys()
         result = [dict(zip(column_names, row)) for row in query]
         # check if result has "deleted" column
         if DELETED in column_names:
             result = filter(lambda a: a.get(DELETED) == 0, result)
         if PROJECT_ID in column_names:
-            for entry in result:
-                entry[PROJECT_ID] = self.identity_client.get_tenant_by_id(
-                    entry[PROJECT_ID]).name
+            self._update_tenant_names(result, PROJECT_ID)
         if TENANT_ID in column_names:
-            for entry in result:
-                entry[TENANT_ID] = self.identity_client.get_tenant_by_id(
-                    entry[TENANT_ID]).name
+            self._update_tenant_names(result, TENANT_ID)
+        if STATUS in column_names:
+            result = filter(lambda e: 'error' not in e[STATUS], result)
         if USER_ID in column_names:
             for entry in result:
-                entry[USER_ID] = (
-                    self.identity_client.keystone_client.users.get(
-                        entry[USER_ID]).name)
+                entry[USER_ID] = self.identity_client.try_get_username_by_id(
+                    entry[USER_ID], default=self.config.cloud.user)
         return result
 
     def read_info(self):
