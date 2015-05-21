@@ -117,7 +117,11 @@ migrate_opts = [
                      "the 'dst' section of config also should have admin role "
                      "in all tenants."),
     cfg.BoolOpt('all_images', default=False,
-                help='Migrate images of all tenants')
+                help='Migrate images of all tenants'),
+    cfg.BoolOpt('skip_down_hosts', default=True,
+                help="If set to True, removes unreachable compute hosts from "
+                     "nova hypervisor list. Otherwise migration process fails "
+                     "with unrecoverable error if host is down.")
 ]
 
 mail = cfg.OptGroup(name='mail',

@@ -14,6 +14,7 @@
 
 from novaclient import client
 import json
+from cloudferrylib.os.compute import nova_compute
 
 
 username = ""
@@ -27,7 +28,7 @@ flavors = cli.flavors.list()
 result = {"vms": {i.id:
                   {"id": i.id,
                    "flavor": i.flavor.get("id"),
-                   "host": getattr(i, 'OS-EXT-SRV-ATTR:host')
+                   "host": getattr(i, nova_compute.INSTANCE_HOST_ATTRIBUTE)
                    } for i in servers
                   },
           "flavors": {i.id:
