@@ -177,8 +177,10 @@ class CinderStorage(storage.Storage):
             keys = entries[0].keys()
             query = "INSERT INTO {table} ({keys}) VALUES ({values})".format(
                     keys=",".join(keys),
-                    table=table_name,
-                    values=",".join(["%s" for i in keys]))
+                    table=table,
+                    values=",".join(["%s" for _ in keys]))
+
+            LOG.debug(query)
             cursor.executemany(query, [i.values() for i in entries])
 
         def fix_entries(table_list_of_dicts):
