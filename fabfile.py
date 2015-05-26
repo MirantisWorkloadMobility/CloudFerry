@@ -23,6 +23,7 @@ from cloud import cloud_ferry
 from cloud import grouping
 from dry_run import chain
 from condensation import process
+from condensation.scripts import nova_collector as nova_collector_module
 env.forward_agent = True
 env.user = 'root'
 LOG = utl.get_log(__name__)
@@ -83,6 +84,13 @@ def condense(name_config=None, debug=False):
     cfglib.collector_configs_plugins()
     cfglib.init_config(name_config)
     process.process()
+
+
+@task
+def nova_collector(name_config=None):
+    cfglib.collector_configs_plugins()
+    cfglib.init_config(name_config)
+    nova_collector_module.run_it(cfglib.CONF)
 
 
 if __name__ == '__main__':
