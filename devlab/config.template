@@ -15,7 +15,7 @@ instances = key_name-qwerty
 file_compression = gzip
 level_compression = 9
 overwrite_user_passwords = False
-migrate_quotas = False
+migrate_quotas = True
 direct_compute_transfer = yes
 filter_path = configs/filter.yaml
 keep_lbaas = no
@@ -27,6 +27,7 @@ all_vms = True
 all_images = True
 all_networks = True
 cinder_migration_strategy = cloudferrylib.os.storage.cinder_database.CinderStorage
+skip_down_hosts = True
 
 [src]
 type = os
@@ -64,12 +65,8 @@ connection = mysql+mysqlconnector
 user = <src_mysql_user>
 password = <src_mysql_password>
 database_name = cinder
-# protocol_transfer=GLANCE ; or SSH
 protocol_transfer = <src_storage_protocol_transfer>
 disk_format = qcow2
-# Ceph
-# volume_name_template=volume-
-# rbd_pool=volumes
 
 [src_image]
 service = glance
@@ -128,9 +125,6 @@ connection = mysql+mysqlconnector
 user = <dst_mysql_user>
 password = <dst_mysql_password>
 database_name = cinder
-# Ceph
-# volume_name_template=volume-
-# rbd_pool=volumes
 
 [dst_image]
 service = glance
@@ -161,7 +155,7 @@ snapshot_path = <snapshot_snapshot_path>
 [initial_check]
 claimed_bandwidth = 100
 factor = 0.5
-test_file_size = 1024
+test_file_size = 10
 
 [condense]
 nova_file=
