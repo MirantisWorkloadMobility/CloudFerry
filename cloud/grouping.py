@@ -27,6 +27,10 @@ LOG = utils.get_log(__name__)
 class Grouping(object):
     def __init__(self, config, group_file, cloud_id):
         self.config = config
+        if group_file is None:
+            message = "Grouping config is not provided."
+            LOG.error(message)
+            raise ValueError(message)
         self.group_config = utils.read_yaml_file(group_file)
         resources = {'identity': keystone.KeystoneIdentity,
                      'network': neutron.NeutronNetwork,

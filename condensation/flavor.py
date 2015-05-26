@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import uuid
+
 
 class Flavor(object):
 
@@ -67,5 +69,19 @@ class Flavor(object):
                 result[vm_obj.node] += 1
         return result
 
+    @classmethod
+    def default(cls, flavor_id=str(uuid.uuid4())):
+        """
+        In case flavor is not available for a VM (flavor was deleted after VM
+        is spawned), this method generates 'default' flavor. Currently all the
+        values are hardcoded."""
+        return cls(fl_id=flavor_id,
+                   name="default-condensation-flavor",
+                   ram=4096,
+                   core=2)
+
     def __repr__(self):
         return "%s [%s]" % (self.name, self.fl_id)
+
+
+default = Flavor.default()

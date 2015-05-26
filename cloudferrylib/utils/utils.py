@@ -482,7 +482,7 @@ def get_ext_ip(ext_cidr, init_host, compute_host, ssh_user):
 
 
 def check_file(file_path):
-    return os.path.isfile(file_path)
+    return file_path is not None and os.path.isfile(file_path)
 
 
 def read_yaml_file(yaml_file_path):

@@ -119,7 +119,7 @@ migrate_opts = [
                help='Time wait if except Performing error'),
     cfg.IntOpt('ssh_chunk_size', default=100,
                help='Size of one chunk to transfer via SSH'),
-    cfg.StrOpt('group_file_path',
+    cfg.StrOpt('group_file_path', default="vm_groups.yaml",
                help='Path to file with the groups of VMs'),
     cfg.BoolOpt('all_networks', default=False,
                 help="Migrate all network resources from all tenants"),
@@ -445,11 +445,16 @@ condense = cfg.OptGroup(name='condense',
                         title="options for condensation")
 
 condense_opts = [
-    cfg.StrOpt('nova_file'),
-    cfg.StrOpt('node_file'),
-    cfg.StrOpt('group_file'),
-    cfg.IntOpt('ram_reduction_coef', default=1),
-    cfg.IntOpt('core_reduction_coef', default=4),
+    cfg.FloatOpt('ram_reduction_coef', default=1),
+    cfg.FloatOpt('core_reduction_coef', default=4),
+    cfg.StrOpt('flavors_file', default='flavors.json'),
+    cfg.StrOpt('nodes_file', default='nodes.json'),
+    cfg.StrOpt('vms_file', default='vms.json'),
+    cfg.StrOpt('group_file', default='groups.yaml'),
+    cfg.BoolOpt('keep_interim_data', default=False,
+                help=("Stores interim data required for the condensation "
+                      "process to run in files defined in `flavors_file`, "
+                      "`nodes_file`, and `group_file` config options.")),
     cfg.IntOpt('precision', default=85)]
 
 database = cfg.OptGroup(name="database",

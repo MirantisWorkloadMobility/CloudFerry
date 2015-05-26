@@ -49,6 +49,7 @@ class Cloud(object):
         for flavor_id, flavor_params in flavors.items():
             flavors_dict.update(
                 {flavor_id: flavor.Flavor(**flavor_params)})
+        flavors_dict[flavor.default] = flavor.default
 
         # count gcd on Flavors for ram and cores
         ram_factor = reduce(
@@ -74,6 +75,11 @@ class Cloud(object):
         # create Vm objects linked to Nodes and Flavors
         for vm_params in vms.values():
             node_obj = nodes_dict.get(vm_params.get("host"))
+            if node_obj is None:
+                # VM is running on a host which is down
+                LOG.info("VM '%s' is running on a down host. Skipping.",
+                         vm_params['id'])
+                continue
             flavor_obj = flavors_dict.get(vm_params.get("flavor"))
             vms_dict.update({vm_params.get("id"): vm.Vm(
                 node=node_obj,
