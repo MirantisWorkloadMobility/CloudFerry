@@ -18,8 +18,7 @@ class Flavor(object):
     """This class is representation of OpenStack flavor"""
 
     def __init__(self, fl_id, name, ram, core, ephemeral=None, swap=None):
-        # by some reason - id of flavor is string
-        self.fl_id = int(fl_id)
+        self.fl_id = fl_id
         self.name = name
         self.ram = ram
         self.core = core
@@ -67,3 +66,6 @@ class Flavor(object):
                     result[vm_obj.node] = 0
                 result[vm_obj.node] += 1
         return result
+
+    def __repr__(self):
+        return "%s [%s]" % (self.name, self.fl_id)

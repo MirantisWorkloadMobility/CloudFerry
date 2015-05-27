@@ -48,7 +48,7 @@ class Cloud(object):
         # create Flavor Objects
         for flavor_id, flavor_params in flavors.items():
             flavors_dict.update(
-                {int(flavor_id): flavor.Flavor(**flavor_params)})
+                {flavor_id: flavor.Flavor(**flavor_params)})
 
         # count gcd on Flavors for ram and cores
         ram_factor = reduce(
@@ -74,7 +74,7 @@ class Cloud(object):
         # create Vm objects linked to Nodes and Flavors
         for vm_params in vms.values():
             node_obj = nodes_dict.get(vm_params.get("host"))
-            flavor_obj = flavors_dict.get(int(vm_params.get("flavor")))
+            flavor_obj = flavors_dict.get(vm_params.get("flavor"))
             vms_dict.update({vm_params.get("id"): vm.Vm(
                 node=node_obj,
                 vm_id=vm_params.get("id"),
@@ -337,7 +337,7 @@ class Cloud(object):
             group_to_migrate, cloud)
         if flavors_left:
             if strict:
-                msg = "cannot fit flavors " + flavors_left
+                msg = "cannot fit flavors %s" % flavors_left
                 raise RuntimeError(msg)
             else:
                 self.groups.insert(0, group_to_migrate)
