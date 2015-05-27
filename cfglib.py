@@ -23,7 +23,11 @@ src_opts = [
     cfg.StrOpt('temp', default='-',
                help='temporary directory on controller'),
     cfg.StrOpt('service_tenant', default='services',
-               help='Tenant name for services')
+               help='Tenant name for services'),
+    cfg.StrOpt('ssh_user', default='root',
+               help='user to connect via ssh'),
+    cfg.StrOpt('ssh_sudo_password', default='',
+               help='sudo password to connect via ssh, if any')
 ]
 
 dst = cfg.OptGroup(name='dst',
@@ -50,7 +54,11 @@ dst_opts = [
     cfg.StrOpt('temp', default='-',
                help='temporary directory on controller'),
     cfg.StrOpt('service_tenant', default='services',
-               help='Tenant name for services')
+               help='Tenant name for services'),
+    cfg.StrOpt('ssh_user', default='root',
+               help='user to connect via ssh'),
+    cfg.StrOpt('ssh_sudo_password', default='',
+               help='sudo password to connect via ssh, if any')
 ]
 
 migrate = cfg.OptGroup(name='migrate',

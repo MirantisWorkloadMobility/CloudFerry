@@ -79,7 +79,10 @@ process:
               - act_deploy_instances: True
               - add_key_pairs_to_instances: True
               - act_is_not_copy_diff_file: ['act_transport_ephemeral']
-              - act_trans_diff_file: True
+              # Use this action if you have `direct_compute_transfer=False` in the config:
+              - act_trans_diff_file: False
+              # Use this action if you have `direct_compute_transfer=True` in the config:
+              - act_trans_diff_file_chunks : True
               - act_transport_ephemeral: True
           - act_attaching: True
           - act_dissociate_floatingip: True

@@ -42,10 +42,11 @@ class MysqlDump(action.Action):
         context = {
             'host_src': self.cloud.cloud_config.mysql.host,
             'path_src': self.cloud.cloud_config.snapshot.snapshot_path,
+            'user_src': self.cloud.cloud_config.cloud.ssh_user,
             'key': self.cloud.config.migrate.key_filename,
             'path_dst': self.cloud.cloud_config.snapshot.snapshot_path}
-        command = "scp -i {key} root@{host_src}:{path_src} {path_dst}".format(
-            **context)
+        command = ("scp -i {key} {user_src}@{host_src}:{path_src} "
+                   "{path_dst}".format(**context))
         LOG.info("EXECUTING {command} local".format(command=command))
         local(command)
         return {}

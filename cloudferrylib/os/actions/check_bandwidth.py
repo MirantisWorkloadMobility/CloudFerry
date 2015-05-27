@@ -30,6 +30,9 @@ class CheckBandwidth(action.Action):
     def run(self, **kwargs):
         claimed_bandw = self.cloud.cloud_config.initial_check.claimed_bandwidth
         test_file_size = self.cloud.cloud_config.initial_check.test_file_size
+
+        ssh_user = self.cloud.cloud_config.cloud.ssh_user
+
         factor = self.cloud.cloud_config.initial_check.factor
         req_bandwidth = claimed_bandw * factor
         temp_file_name = str(uuid.uuid4())
@@ -38,13 +41,13 @@ class CheckBandwidth(action.Action):
                                       temp_file_name)
 
         scp_upload = cmd_cfg.scp_cmd('',
-                                     'root',
+                                     ssh_user,
                                      self.cloud.cloud_config.cloud.ssh_host,
                                      remote_file_path,
                                      '/tmp/')
 
         scp_download = cmd_cfg.scp_cmd(local_file_path,
-                                       'root',
+                                       ssh_user,
                                        self.cloud.cloud_config.cloud.ssh_host,
                                        self.cloud.cloud_config.cloud.temp,
                                        '')

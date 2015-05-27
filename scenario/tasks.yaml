@@ -49,6 +49,7 @@ tasks:
    act_transport_ephemeral: ['TransportEphemeral', 'dst_cloud']
    trans_file_to_file:  ['TaskTransfer', 'SSHFileToFile', 'info', 'instances', 'diff']
    act_trans_diff_file:  ['TaskTransfer', 'SSHFileToFile', 'info', 'instances', 'diff']
+   act_trans_diff_file_chunks:  ['TaskTransfer', 'SSHChunksTransfer', 'info', 'instances', 'diff']
    act_is_not_copy_diff_file: ['IsNotCopyDiffFile']
    act_get_info_inst_src: ['GetInfoInstances', 'src_cloud']
    act_get_info_images_src: ['GetInfoImages', 'src_cloud']

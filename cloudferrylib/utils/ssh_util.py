@@ -28,7 +28,8 @@ class SshUtil(object):
 
     def execute(self, cmd, internal_host=None, host_exec=None):
         host = host_exec if host_exec else self.host
-        with settings(host_string=host):
+        with settings(host_string=host,
+                      user=self.cloud.ssh_user):
             if internal_host:
                 return self.execute_on_inthost(str(cmd), internal_host)
             else:
