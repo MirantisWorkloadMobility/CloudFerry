@@ -42,3 +42,19 @@ def put(key, value, connection):
 @redis_socket_to_kwargs
 def get(key, connection):
     return connection.get(key)
+
+
+@redis_socket_to_kwargs
+def delete(key, connection):
+    return connection.delete(key)
+
+@redis_socket_to_kwargs
+def delete_batch(keys, connection):
+    pipe = connection.pipeline()
+    for key in keys:
+        pipe.delete(key)
+    pipe.execute()
+
+@redis_socket_to_kwargs
+def keys(pattern, connection):
+    return connection.keys(pattern)

@@ -24,6 +24,8 @@ from cloud import grouping
 from dry_run import chain
 from condensation import process
 from condensation.scripts import nova_collector as nova_collector_module
+from make_filters import make_filters
+
 env.forward_agent = True
 env.user = 'root'
 LOG = utl.get_log(__name__)
@@ -92,6 +94,14 @@ def nova_collector(name_config=None):
     cfglib.collector_configs_plugins()
     cfglib.init_config(name_config)
     nova_collector_module.run_it(cfglib.CONF)
+
+
+@task
+def create_filters(name_config=None, filter_folder='configs/filters',
+                   images_date='2000-01-01'):
+    cfglib.collector_configs_plugins()
+    cfglib.init_config(name_config)
+    make_filters.make(filter_folder, images_date)
 
 
 if __name__ == '__main__':
