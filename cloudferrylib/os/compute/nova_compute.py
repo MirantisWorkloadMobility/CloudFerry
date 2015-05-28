@@ -164,11 +164,14 @@ class NovaCompute(compute.Compute):
         is_ceph = cfg.compute.backend.lower() == utl.CEPH
         direct_transfer = cfg.migrate.direct_compute_transfer
 
+        ssh_user = cfg.cloud.ssh_user
+
         if direct_transfer:
             ext_cidr = cfg.cloud.ext_cidr
             host = utl.get_ext_ip(ext_cidr,
                                   cloud.getIpSsh(),
-                                  instance_host)
+                                  instance_host,
+                                  ssh_user)
         elif is_ceph:
             host = cfg.compute.host_eph_drv
         else:
@@ -177,7 +180,9 @@ class NovaCompute(compute.Compute):
         instance_block_info = utl.get_libvirt_block_info(
             instance_name,
             cloud.getIpSsh(),
-            instance_host)
+            instance_host,
+            ssh_user,
+            cfg.cloud.ssh_sudo_password)
 
         ephemeral_path = {
             'path_src': None,
@@ -248,7 +253,8 @@ class NovaCompute(compute.Compute):
             tenants = None
 
             if not compute_obj.is_public:
-                flavor_access_list = compute_res.get_flavor_access_list(compute_obj.id)
+                flavor_access_list = compute_res.get_flavor_access_list(
+                    compute_obj.id)
                 tenants = [flv_acc.tenant_id for flv_acc in flavor_access_list]
 
             return {'flavor': {'name': compute_obj.name,

@@ -12,12 +12,11 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from fabric.api import env
+
 from fabric.api import run
 from fabric.api import settings
 
 from cloudferrylib.base.action import action
-from cloudferrylib.utils import forward_agent
 from cloudferrylib.utils import utils as utl
 
 
@@ -30,8 +29,9 @@ class CheckSSH(action.Action):
         return self.cloud.resources[utl.COMPUTE_RESOURCE].get_hypervisors()
 
     def check_access(self, node):
-        with settings(host_string=self.cloud.getIpSsh(),
-                      abort_on_prompts=True):
-            with forward_agent(env.key_filename):
-                run("ssh -oStrictHostKeyChecking=no "
-                    "-oPasswordAuthentication=no %s 'echo'" % node)
+        with settings(host_string=node,
+                      abort_on_prompts=True,
+                      user=self.cloud.cloud_config.cloud.ssh_user,
+                      password=self.cloud.cloud_config.cloud.ssh_sudo_password,
+                      gateway=self.cloud.getIpSsh()):
+            run("echo")

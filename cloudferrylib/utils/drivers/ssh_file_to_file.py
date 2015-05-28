@@ -70,6 +70,11 @@ class SSHFileToFile(driver_transporter.DriverTransporter):
 
     def transfer_direct(self, data):
         LOG.debug("| | copy file")
+        if self.cfg.src.ssh_user != 'root' or self.cfg.dst.ssh_user != 'root':
+            LOG.critical("This operation needs 'sudo' access rights, that is "
+                         "currently not implemented in this driver. Please use"
+                         " 'SSHChunksTransfer' driver from "
+                         "cloudferrylib/utils/drivers/.")
         with settings(host_string=data['host_src']), utils.forward_agent(
                 self.cfg.migrate.key_filename):
             if self.cfg.migrate.file_compression == "dd":

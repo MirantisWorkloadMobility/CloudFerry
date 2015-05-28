@@ -26,7 +26,7 @@ from jinja2 import Environment, FileSystemLoader
 import os
 import inspect
 from multiprocessing import Lock
-from fabric.api import run, settings, local, env
+from fabric.api import run, settings, local, env, sudo
 from fabric.context_managers import hide
 import ipaddr
 import yaml
@@ -417,12 +417,14 @@ def write_info(rendered_info, info_file = "source_info.html"):
         ifile.write(rendered_info)
 
 
-def get_libvirt_block_info(libvirt_name, init_host, compute_host):
-    with settings(host_string=init_host):
-        with forward_agent(env.key_filename):
-            out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" %
-                      (compute_host, libvirt_name))
-            libvirt_output = out.split()
+def get_libvirt_block_info(libvirt_name, init_host, compute_host, ssh_user,
+                           ssh_sudo_password):
+    with settings(host_string=compute_host,
+                  user=ssh_user,
+                  password=ssh_sudo_password,
+                  gateway=init_host):
+        out = sudo("virsh domblklist %s" % libvirt_name)
+        libvirt_output = out.split()
     return libvirt_output
 
 
@@ -452,29 +454,32 @@ def get_disk_path(instance, blk_list, is_ceph_ephemeral=False, disk=DISK):
                 disk_path = i
     return disk_path
 
-def get_ips(init_host, compute_host):
-    with settings(host_string=init_host):
-        with forward_agent(env.key_filename):
-            cmd = "ifconfig | awk -F \"[: ]+\" \'/inet addr:/ " +\
-                  "{ if ($4 != \"127.0.0.1\") print $4 }\'"
-            out = run("ssh -oStrictHostKeyChecking=no %s %s" %
-                      (compute_host, cmd))
-            list_ips = []
-            for info in out.split():
-                try:
-                    ip = ipaddr.IPAddress(info)
-                except ValueError:
-                    continue
-                list_ips.append(info)
+
+def get_ips(init_host, compute_host, ssh_user):
+    with settings(host_string=compute_host,
+                  user=ssh_user,
+                  gateway=init_host):
+        cmd = ("ifconfig | awk -F \"[: ]+\" \'/inet addr:/ "
+               "{ if ($4 != \"127.0.0.1\") print $4 }\'")
+        out = run(cmd)
+        list_ips = []
+        for info in out.split():
+            try:
+                ip = ipaddr.IPAddress(info)
+            except ValueError:
+                continue
+            list_ips.append(info)
     return list_ips
 
-def get_ext_ip(ext_cidr, init_host, compute_host):
-    list_ips = get_ips(init_host, compute_host)
+
+def get_ext_ip(ext_cidr, init_host, compute_host, ssh_user):
+    list_ips = get_ips(init_host, compute_host, ssh_user)
     for ip_str in list_ips:
         ip_addr = ipaddr.IPAddress(ip_str)
         if ipaddr.IPNetwork(ext_cidr).Contains(ip_addr):
             return ip_str
     return None
+
 
 def check_file(file_path):
     return os.path.isfile(file_path)
@@ -507,3 +512,16 @@ def import_class_by_string(name):
     for comp in module[1:]:
         mod = getattr(mod, comp)
     return getattr(mod, class_name)
+
+
+def get_remote_file_size(host, file_path, ssh_user, ssh_sudo_password):
+    """ Return file size in bytes on the remote host.
+
+    :param host: Remote host,
+    :param file_path: Full file path,
+    :return: File size in bytes.
+    """
+
+    with settings(host_string=host, user=ssh_user):
+        size = run('stat --printf="%s" {}'.format(file_path))
+        return int(size)

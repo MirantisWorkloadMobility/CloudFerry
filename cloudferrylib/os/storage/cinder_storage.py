@@ -62,7 +62,10 @@ class CinderStorage(storage.Storage):
             if self.config.migrate.keep_volume_snapshots:
                 search_opts = {'volume_id': volume['id']}
                 for snap in self.get_snapshots_list(search_opts=search_opts):
-                    snapshot = self.convert_snapshot(snap, volume, self.config, self.cloud)
+                    snapshot = self.convert_snapshot(snap,
+                                                     volume,
+                                                     self.config,
+                                                     self.cloud)
                     snapshots[snapshot['id']] = snapshot
             info[utl.VOLUMES_TYPE][vol.id] = {utl.VOLUME_BODY: volume,
                                               'snapshots': snapshots,
@@ -71,7 +74,7 @@ class CinderStorage(storage.Storage):
         if self.config.migrate.keep_volume_storage:
             info['volumes_db'] = {utl.VOLUMES_TYPE: '/tmp/volumes'}
 
-             #cleanup db
+            # cleanup db
             self.cloud.ssh_util.execute('rm -rf /tmp/volumes',
                                         host_exec=self.mysql_host)
 
@@ -225,7 +228,9 @@ class CinderStorage(storage.Storage):
             list_disk = utl.get_libvirt_block_info(
                 instance_info['instance_name'],
                 cloud.getIpSsh(),
-                instance_info['host'])
+                instance_info['host'],
+                cfg.cloud.ssh_user,
+                cfg.cloud.ssh_sudo_password)
             volume['path'] = utl.find_element_by_in(list_disk, vol.id)
         return volume
 
@@ -244,8 +249,10 @@ class CinderStorage(storage.Storage):
         }
 
         if cfg.storage.backend == utl.CEPH:
-            snapshot['name'] = "%s%s" % (cfg.storage.snapshot_name_template, snap.id)
-            snapshot['path'] = "%s@%s" % (snapshot['vol_path'], snapshot['name'])
+            snapshot['name'] = "%s%s" % (cfg.storage.snapshot_name_template,
+                                         snap.id)
+            snapshot['path'] = "%s@%s" % (snapshot['vol_path'],
+                                          snapshot['name'])
             snapshot['host'] = (cfg.storage.host
                                 if cfg.storage.host
                                 else cfg.cloud.host)
