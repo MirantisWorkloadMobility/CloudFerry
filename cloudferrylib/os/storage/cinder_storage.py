@@ -96,6 +96,8 @@ class CinderStorage(storage.Storage):
                     volume_info[utl.VOLUME_BODY]['device'])
 
     def get_volumes_list(self, detailed=True, search_opts=None):
+        if self.config.migrate.all_volumes:
+            search_opts['all_tenants'] = 1
         return self.cinder_client.volumes.list(detailed, search_opts)
 
     def get_snapshots_list(self, detailed=True, search_opts=None):

@@ -16,6 +16,7 @@
 import abc
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils
+import jsondate
 
 NAMESPACE_CINDER_CONST = "cinder_database"
 
@@ -39,7 +40,7 @@ class CinderDatabaseInteraction(action.Action):
 class GetVolumesDb(CinderDatabaseInteraction):
 
     def run(self, *args, **kwargs):
-        return {NAMESPACE_CINDER_CONST: self.get_resource().read_info()}
+        return {NAMESPACE_CINDER_CONST: self.get_resource().read_db_info()}
 
 
 class WriteVolumesDb(CinderDatabaseInteraction):
@@ -50,4 +51,12 @@ class WriteVolumesDb(CinderDatabaseInteraction):
             raise RuntimeError(
                 "Cannot read attribute {attribute} from namespace".format(
                     attribute=NAMESPACE_CINDER_CONST))
-        self.get_resource().deploy(data_from_namespace)
+        data = jsondate.loads(data_from_namespace)
+        # mark attached volumes as available
+        for volume in data['volumes']:
+            if volume['status'] == 'in-use':
+                volume['mountpoint'] = None
+                volume['status'] = 'available'
+                volume['instance_uuid'] = None
+                volume['attach_status'] = 'detached'
+        self.get_resource().deploy(jsondate.dumps(data))

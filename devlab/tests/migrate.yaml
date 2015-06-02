@@ -52,18 +52,15 @@ process:
       - check_instances: ['rename_info_iter']
       - get_next_instance: True
       - trans_one_inst:
+          # after migration volume will be attached on src and dst at same time
+          - detach_volumes_on_source: False
           - act_stop_vms: True
           - transport_resource_inst:
               - transport_images:
                   - act_conv_comp_img: True
                   - act_copy_inst_images: True
                   - act_conv_image_comp: True
-              - task_transport_volumes:
-                  - act_convert_c_to_v: True
-                  - act_convert_v_to_i: True
-                  - act_copy_g2g_vols: True
-                  - act_convert_i_to_v: True
-                  - act_convert_v_to_c: True
+              - set_volume_id_for_attaching: True
           - transport_inst:
               - act_net_prep: True
               - act_map_com_info: True
@@ -90,4 +87,3 @@ process:
       - save_result_migrate_instances: True
       - is_instances: ['get_next_instance']
       - rename_info_iter: True
-      - act_cleanup_images: True

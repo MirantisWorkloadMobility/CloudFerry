@@ -6,6 +6,7 @@ tasks:
    act_convert_i_to_v: ['ConvertImageToVolume', 'dst_cloud']
    act_convert_v_to_c: ['ConvertVolumeToCompute', 'dst_cloud']
    act_attaching: ['AttachVolumesCompute', 'dst_cloud']
+   detach_volumes_on_source: ['DetachVolumesCompute', 'src_cloud']
    act_stop_vms: ['StopVms', 'src_cloud']
    act_start_vms: ['StartVms', 'dst_cloud']
    act_dissociate_floatingip: ['DissociateFloatingip', 'src_cloud']
@@ -78,3 +79,4 @@ tasks:
    write_volumes_db_data: ["WriteVolumesDb", 'dst_cloud']
    transport_key_pairs: ["TransportKeyPairs"]
    add_key_pairs_to_instances: ["SetKeyPairsForInstances"]
+   set_volume_id_for_attaching: ["SetVolumeId"]

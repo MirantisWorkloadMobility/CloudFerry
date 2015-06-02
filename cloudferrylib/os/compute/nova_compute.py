@@ -640,6 +640,9 @@ class NovaCompute(compute.Compute):
             volume['volume']['id'],
             volume['volume']['device'])
 
+    def detach_volume(self, instance_id, volume_id):
+        self.nova_client.volumes.delete_server_volume(instance_id, volume_id)
+
     def dissociate_floatingip(self, instance_id, floatingip):
         self.nova_client.servers.remove_floating_ip(instance_id, floatingip)
 
