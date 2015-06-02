@@ -74,6 +74,9 @@ migrate_opts = [
                help='yes - keep ip, no - not keep ip'),
     cfg.BoolOpt('migrate_extnets', default=False,
                help='yes - migrate external networks, no - do not migrate external networks'),
+    cfg.StrOpt('ext_net_map', default='configs/ext_net_map.yaml',
+               help='path to the map of external networks, which contains '
+                    'references between old and new ids'),
     cfg.BoolOpt('keep_floatingip', default=False,
                help='yes - keep floatingip, no - not keep floatingip'),
     cfg.StrOpt('cinder_migration_strategy',
