@@ -50,8 +50,8 @@ class GlanceImageTestCase(test.TestCase):
         self.identity_mock = mock.Mock()
         self.identity_mock.get_endpoint_by_service_type = mock.Mock(
             return_value="http://192.168.1.2:9696/v2")
-        self.identity_mock.get_tenant_by_id = mock.Mock(
-            return_value=utils.ext_dict(name="fake_tenant_name"))
+        self.identity_mock.try_get_tenant_name_by_id = mock.Mock(
+            return_value="fake_tenant_name")
         self.identity_mock.keystone_client.users.list = mock.Mock(
             return_value=[])
         self.image_mock = mock.Mock()

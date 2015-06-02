@@ -146,11 +146,13 @@ class GlanceImage(image.Image):
             ) if k in CREATE_PARAMS}
         # we need to pass resource to destination to copy image
         gl_image.update({'resource': resource})
+
         # at this point we write name of owner of this tenant
         # to map it to different tenant id on destination
         gl_image.update(
-            {'owner_name': keystone.get_tenant_by_id(
-                glance_image.owner).name})
+            {'owner_name': keystone.try_get_tenant_name_by_id(
+                glance_image.owner, default=cloud.cloud_config.cloud.tenant)})
+
         if resource.is_snapshot(glance_image):
             # for snapshots we need to write snapshot username to namespace
             # to map it later to new user id
