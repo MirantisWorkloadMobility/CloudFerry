@@ -15,9 +15,9 @@
 
 import jsondate
 from cinderclient.v1 import client as cinder_client
-from cloudferrylib.base import storage
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import mysql_connector
+from cloudferrylib.os.storage import cinder_storage
 
 CINDER_VOLUME = "cinder-volume"
 LOG = utl.get_log(__name__)
@@ -29,7 +29,7 @@ DELETED = 'deleted'
 HOST = 'host'
 
 
-class CinderStorage(storage.Storage):
+class CinderStorage(cinder_storage.CinderStorage):
 
     """Migration strategy used with NFS backend
 
@@ -67,7 +67,7 @@ class CinderStorage(storage.Storage):
             'snapshots',
             'snapshot_metadata',
             'volume_types']
-        super(CinderStorage, self).__init__(config)
+        super(CinderStorage, self).__init__(config, cloud)
 
     def get_client(self, params=None):
 
@@ -106,7 +106,7 @@ class CinderStorage(storage.Storage):
                     entry[USER_ID], default=self.config.cloud.user)
         return result
 
-    def read_info(self):
+    def read_db_info(self):
         """ Returns serialized data from database """
         return jsondate.dumps(
             {i: self.list_of_dicts_for_table(i) for i in self.list_of_tables})
