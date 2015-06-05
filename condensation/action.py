@@ -15,6 +15,7 @@
 import unicodedata
 import data_storage
 from cloudferrylib.utils import utils as utl
+import json
 LOG = utl.get_log(__name__)
 
 
@@ -65,7 +66,7 @@ class Actions(object):
         """
             This method writes all actions on the current step to database
         """
-        data_storage.put(self.key, self.data)
+        data_storage.put(self.key, json.dumps(self.data))
         self.new_step()
         self.iteration += 1
 
