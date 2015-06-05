@@ -31,7 +31,8 @@ FAKE_CONFIG = utils.ext_dict(
                           'tenant': 'fake_tenant',
                           'auth_url': 'http://1.1.1.1:35357/v2.0/'}),
     mysql=utils.ext_dict({'host': '1.1.1.1'}),
-    migrate=utils.ext_dict({'speed_limit': '10MB',
+    migrate=utils.ext_dict({'migrate_quotas': True,
+                            'speed_limit': '10MB',
                             'retry': '7',
                             'time_wait': 5,
                             'all_vms': False}))
@@ -64,6 +65,8 @@ class NovaComputeTestCase(test.TestCase):
 
         self.fake_flavor_0 = mock.Mock()
         self.fake_flavor_1 = mock.Mock()
+
+        self.fake_tenant_quota_0 = mock.Mock()
 
     def test_get_nova_client(self):
         # To check self.mock_client call only from this test method
@@ -190,6 +193,21 @@ class NovaComputeTestCase(test.TestCase):
         self.nova_client.delete_flavor('fake_fl_id')
 
         self.mock_client().flavors.delete.assert_called_once_with('fake_fl_id')
+
+    def test_get_quotas(self):
+        self.mock_client().quotas.get.return_value = self.fake_tenant_quota_0
+        tenant_quota = self.nova_client.get_quotas('fake_tenant_id')
+
+        self.assertEqual(self.fake_tenant_quota_0, tenant_quota)
+
+    def test_update_quota(self):
+        self.nova_client.update_quota('fake_tenant_id',
+                                      instances='new_fake_value')
+
+        self.mock_client().quotas.update.assert_called_once_with(
+            tenant_id='fake_tenant_id',
+            user_id=None,
+            instances='new_fake_value')
 
     def test_nothing_is_filtered_if_skip_down_hosts_option_not_set(self):
         cfglib.init_config()
