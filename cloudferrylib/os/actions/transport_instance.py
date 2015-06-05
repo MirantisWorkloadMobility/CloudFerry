@@ -101,6 +101,8 @@ class TransportInstance(action.Action):
 
             new_instance['old_id'] = old_id
             new_instance['meta'] = old_instance['meta']
+            new_instance['meta']['source_status'] = \
+                old_instance['instance']['status']
             new_instance[utl.INSTANCE_BODY]['key_name'] = \
                 old_instance[utl.INSTANCE_BODY]['key_name']
         info = self.prepare_ephemeral_drv(info, new_info, new_ids)

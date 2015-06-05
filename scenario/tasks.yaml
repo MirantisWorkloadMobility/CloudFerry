@@ -9,6 +9,7 @@ tasks:
    detach_volumes_on_source: ['DetachVolumesCompute', 'src_cloud']
    act_stop_vms: ['StopVms', 'src_cloud']
    act_start_vms: ['StartVms', 'dst_cloud']
+   act_start_vms_if_needed: ['StartVmsIfNeeded', 'dst_cloud']
    act_dissociate_floatingip: ['DissociateFloatingip', 'src_cloud']
    act_map_com_info: ['MapComputeInfo']
    act_net_prep: ['PrepareNetworks', 'dst_cloud']
