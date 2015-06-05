@@ -16,6 +16,7 @@ file_compression = gzip
 level_compression = 9
 overwrite_user_passwords = False
 migrate_quotas = True
+migrate_users = True
 direct_compute_transfer = True
 filter_path = configs/filter.yaml
 keep_lbaas = no

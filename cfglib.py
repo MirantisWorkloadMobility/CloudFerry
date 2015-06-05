@@ -141,7 +141,9 @@ migrate_opts = [
     cfg.StrOpt('tasks_mapping', default='scenario/tasks.yaml',
                help='Path to a file which holds CloudFerry python code tasks '
                     'mapped to migration scenario items. Items defined in '
-                    'this file must be used in the migration scenario.')
+                    'this file must be used in the migration scenario.'),
+    cfg.BoolOpt('migrate_users', default=True,
+                help='Migrate users'),
 ]
 
 mail = cfg.OptGroup(name='mail',

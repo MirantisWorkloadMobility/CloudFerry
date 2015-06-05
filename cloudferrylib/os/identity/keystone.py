@@ -11,13 +11,14 @@
 # implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import keystoneclient
+
 
 import pika
 
+import keystoneclient
 from keystoneclient.v2_0 import client as keystone_client
-import cfglib
 
+import cfglib
 from cloudferrylib.base import identity
 from cloudferrylib.utils import GeneratorPassword
 from cloudferrylib.utils import Postman
@@ -116,6 +117,8 @@ class KeystoneIdentity(identity.Identity):
         self._deploy_tenants(tenants)
         self._deploy_roles(info['roles'])
         self._deploy_users(users, tenants)
+        if not self.config.migrate.migrate_users:
+            users = info['users'] = self._update_users_info(users)
         if self.config['migrate']['keep_user_passwords']:
             passwords = info['user_passwords']
             self._upload_user_passwords(users, passwords)
@@ -285,17 +288,23 @@ class KeystoneIdentity(identity.Identity):
 
         keep_passwd = self.config['migrate']['keep_user_passwords']
         overwrite_passwd = self.config['migrate']['overwrite_user_passwords']
+
         for _user in users:
             user = _user['user']
             password = self._generate_password()
 
             if user['name'] in dst_users:
+                # Create users mapping
                 _user['meta']['new_id'] = dst_users[user['name']]
+
                 if overwrite_passwd and not keep_passwd:
                     self.update_user(_user['meta']['new_id'],
                                      password=password)
                     self._passwd_notification(user['email'], user['name'],
                                               password)
+                continue
+
+            if not self.config.migrate.migrate_users:
                 continue
 
             tenant_id = tenant_mapped_ids[user['tenantId']]
@@ -307,6 +316,28 @@ class KeystoneIdentity(identity.Identity):
             else:
                 self._passwd_notification(user['email'], user['name'],
                                           password)
+
+    @staticmethod
+    def _update_users_info(users):
+        """
+        Update users info.
+
+        This method is needed for skip users, that have not been migrated to
+        destination cloud and that do not exist there. So we leave information
+        only about users with mapping and skip those, who don't have the same
+        user on the destination cloud. This is done, because another tasks can
+        use users mapping.
+
+        :param users: OpenStack Keystone users info;
+        :return: List with actual users info.
+        """
+
+        users_info = []
+        for user in users:
+            if user['meta'].get('new_id'):
+                users_info.append(user)
+
+        return users_info
 
     def _passwd_notification(self, email, name, password):
         if not self.postman:
@@ -360,12 +391,15 @@ class KeystoneIdentity(identity.Identity):
 
     def _upload_user_tenant_roles(self, user_tenants_roles, users, tenants):
         roles_id = {role.name: role.id for role in self.get_roles_list()}
+        dst_users = {user.name: user.id for user in self.get_users_list()}
 
         for _user in users:
             user = _user['user']
             # FIXME should be deleted after determining how
             # to change self role without logout
             if user['name'] == self.keystone_client.username:
+                continue
+            if user['name'] not in dst_users:
                 continue
             for _tenant in tenants:
                 tenant = _tenant['tenant']
