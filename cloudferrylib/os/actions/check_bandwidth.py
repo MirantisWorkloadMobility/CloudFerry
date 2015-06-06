@@ -13,6 +13,7 @@
 # limitations under the License.
 
 
+import os
 import subprocess
 import uuid
 
@@ -36,9 +37,10 @@ class CheckBandwidth(action.Action):
         factor = self.cloud.cloud_config.initial_check.factor
         req_bandwidth = claimed_bandw * factor
         temp_file_name = str(uuid.uuid4())
-        local_file_path = '/tmp/' + temp_file_name
-        remote_file_path = '%s/%s' % (self.cloud.cloud_config.cloud.temp,
-                                      temp_file_name)
+
+        local_file_path = os.path.join('/tmp', temp_file_name)
+        remote_file_path = os.path.join(self.cloud.cloud_config.cloud.temp,
+                                        temp_file_name)
 
         scp_upload = cmd_cfg.scp_cmd('',
                                      ssh_user,
