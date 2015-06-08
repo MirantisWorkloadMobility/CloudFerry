@@ -1,6 +1,8 @@
 ﻿CloudFerry
 ==========
 
+# Overview
+
 CloudFerry is a tool for resources and workloads migration between OpenStack clouds. First of all CloudFerry tool
 migrates cloud resources as tenants, users (preserving their passwords or generating new ones), roles, flavors and after
 that, it transfers virtual workloads as instances with their own data (instance
@@ -45,24 +47,111 @@ that if any valuable setting appeared to be missing in config file, process will
 to implement in nearest future.
 
 
-## Requirements
+# Requirements
+
+ - Connection to source and destination clouds through external(public) network from host with CloudFerry.
+ - Valid private ssh-key for both clouds which will be using by CloudFerry for data transferring.
+ - Admin keystone access (typically admin access point lives on 35357 port).
+ - sudo/root access on compute and controller nodes.
+ - Openstack MySQL DB write access.
+ - Credentials of global cloud admin for both clouds.
+ - All the Python requirements are listed in requirements.txt.
 
 
-- Connection to source and destination clouds through external(public) network from host with CloudFerry.
-- Valid private ssh-key for both clouds which will be using by CloudFerry for data transferring.
-- Credentials of global cloud admin for both clouds.
-- All the Python requirements are listed in requirements.txt.
+# Installation
+
+Currently the tool is not packaged in any manner, so the installation is based on simply cloning git repo
+and installing all the requirements into python virtualenv:
+```
+# there are several requirements for the python libraries used in CloudFerry
+# which are not installed on ubuntu by default
+sudo apt-get install python-virtualenv python-dev libffi-dev -y
+
+git clone https://github.com/MirantisWorkloadMobility/CloudFerry.git
+cd CloudFerry
+virtualenv .venv
+source .venv/bin/activate
+pip --upgrade pip
+pip install --allow-all-external -r requirements.txt
+pip install -r test-requirements.txt
+```
+
+# Usage
+
+## Overview
+CloudFerry tool is used by running python fabric scripts from the CloudFerry repo directory:
+```
+cd CloudFerry
+# see list of available commands
+fab list
+```
+
+## Configuration
+
+Configuration can be done through reusing of `devlab/config.template` and `devlab/provision/generate_config.sh`.
+Configuration process is quite complex and mostly manual try-and-see-if-works process. Configuration documentation
+is TBD.
+
+## Whole cloud migration
+Use `migrate` fabric command with config file specified:
+
+```
+fab migrate:<config file>
+```
+
+## Migrating specific instances
+
+In order to migrate specific VMs, one should use filters. This is done through modifying filters file
+(`configs/filter.yaml` by default).
+
+Edit `configs/filter.yaml`:
+```
+instances:
+    id:
+        - 7c53a6ab-0149-4232-80b3-b2d7ce02995a
+        - f0fea76a-0a7d-4c25-ab9e-f048dbc7365d
+```
+
+Run migration as usual:
+```
+fab migrate:<configuration file>
+```
 
 
-## Usage
+# Versions
 
+## 1.0 - Full devlab environment migration
 
-fab migrate:configs/config_iscsi_to_iscsi.yaml - to start process of migration:
-        migrate - command for tool “to start migration process”
-        configs/config_iscsi_to_iscsi.yaml - path to config file
-fab migrate:configs/config_iscsi_to_iscsi.yaml,name_instance=<name_instance> - to start migration process of one given
-instance with the name <name_instance>
+See `devlab/tests/generate_load.py` for the load migrated.
 
+See `devlab/README.md` for test environment description.
 
-Config description
-(see file config_description.txt)
+ - Successful tenants migration
+ - Successful users migration
+ - Successful roles migration
+ - Successful keypairs migration
+     * User's
+     * Admin's
+ - Successful quotas migration
+     * Quotas for all tenants
+     * Tenant's quotas
+ - Successful flavors migration
+ - Successful images migration
+ - Successful volumes migration
+     * User's
+     * Admin's
+ - Successful security groups migration
+     * User's
+     * Admin's
+ - Successful networks migration
+     * Tenant's
+     * External
+ - Successful subnets migration
+ - Successful routers migration
+ - Successful floating-ips migration
+     * Associated with VM's
+     * Allocated in tenants
+ - Successful VMs migration
+     * Admin's
+     * User's
+
