@@ -13,6 +13,8 @@
 # limitations under the License.
 
 
+import os
+
 from fabric.api import env
 from fabric.api import hide
 from fabric.api import run
@@ -49,8 +51,8 @@ class SSHChunksTransfer(driver_transporter.DriverTransporter):
         ssh_user_dst = self.cfg.dst.ssh_user
         ssh_sudo_pass_dst = self.cfg.dst.ssh_sudo_password
 
-        src_temp_dir = self.cfg.src.temp
-        dst_temp_dir = self.cfg.dst.temp
+        src_temp_dir = os.path.join(self.cfg.src.temp, '')
+        dst_temp_dir = os.path.join(self.cfg.dst.temp, '')
 
         attempts_count = self.cfg.migrate.retry
         part_size = self.cfg.migrate.ssh_chunk_size
