@@ -27,12 +27,14 @@ FAKE_CONFIG = utils.ext_dict(
     cloud=utils.ext_dict({'user': 'fake_user',
                           'password': 'fake_password',
                           'tenant': 'fake_tenant',
-                          'host': '1.1.1.1'}),
+                          'host': '1.1.1.1',
+                          'auth_url': 'http://1.1.1.1:35357/v2.0/'}),
     migrate=utils.ext_dict({'speed_limit': '10MB',
                             'retry': '7',
-                            'time_wait': '5',
+                            'time_wait': 5,
                             'keep_volume_storage': False,
-                            'keep_volume_snapshots': False}),
+                            'keep_volume_snapshots': False,
+                            'all_volumes': False}),
     mysql=utils.ext_dict({'host': '1.1.1.1'}),
     storage=utils.ext_dict({'backend': 'ceph',
                             'rbd_pool': 'volumes',
@@ -224,8 +226,7 @@ class CinderStorageTestCase(test.TestCase):
                         'volume_id=fake_vol_id')
 
         try:
-            volume_path = self.cinder_client.get_volume_path_iscsi(
-                'fake_vol_id')
+            self.cinder_client.get_volume_path_iscsi('fake_vol_id')
         except Exception as e:
             self.assertEqual(expected_msg, e.message)
 

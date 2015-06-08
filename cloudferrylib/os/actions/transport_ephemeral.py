@@ -20,17 +20,9 @@ from fabric.api import run
 from fabric.api import settings
 
 from cloudferrylib.base.action import action
-from cloudferrylib.os.actions import convert_file_to_image
-from cloudferrylib.os.actions import convert_image_to_file
-from cloudferrylib.os.actions import convert_volume_to_image
-from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.os.actions import task_transfer
-from cloudferrylib.utils import utils as utl, forward_agent
-
-from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
-from cloudferrylib.utils.drivers import ssh_ceph_to_file
-from cloudferrylib.utils.drivers import ssh_file_to_file
-from cloudferrylib.utils.drivers import ssh_file_to_ceph
+from cloudferrylib.utils import forward_agent
+from cloudferrylib.utils import utils as utl
 
 
 CLOUD = 'cloud'
@@ -55,6 +47,7 @@ BACKING_FILE_DST = 'backing_file_dst'
 TEMP = 'temp'
 FLAVORS = 'flavors'
 
+SSH_CHUNKS = 'SSHChunksTransfer'
 
 TRANSPORTER_MAP = {CEPH: {CEPH: 'SSHCephToCeph',
                           ISCSI: 'SSHCephToFile'},
@@ -67,13 +60,13 @@ class TransportEphemeral(action.Action):
 
     def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)
-        #Init before run
+        # Init before run
         new_info = {
             utl.INSTANCES_TYPE: {
             }
         }
 
-        #Get next one instance
+        # Get next one instance
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             is_ephemeral = instance[utl.INSTANCE_BODY]['is_ephemeral']
             one_instance = {
@@ -82,7 +75,9 @@ class TransportEphemeral(action.Action):
                 }
             }
             if is_ephemeral:
-                self.copy_ephemeral(self.src_cloud, self.dst_cloud, one_instance)
+                self.copy_ephemeral(self.src_cloud,
+                                    self.dst_cloud,
+                                    one_instance)
             new_info[utl.INSTANCES_TYPE].update(
                 one_instance[utl.INSTANCES_TYPE])
 
@@ -90,19 +85,25 @@ class TransportEphemeral(action.Action):
             'info': new_info
         }
 
-    def delete_remote_file_on_compute(self, path_file, host_cloud, host_instance):
+    def delete_remote_file_on_compute(self, path_file, host_cloud,
+                                      host_instance):
         with settings(host_string=host_cloud):
             with forward_agent(env.key_filename):
-                run("ssh -oStrictHostKeyChecking=no %s  'rm -rf %s'" % (host_instance, path_file))
+                run("ssh -oStrictHostKeyChecking=no %s  'rm -rf %s'" %
+                    (host_instance, path_file))
 
-    def copy_data_via_ssh(self, src_cloud, dst_cloud, info, body, resources, types):
+    def copy_data_via_ssh(self, src_cloud, dst_cloud, info, body, resources,
+                          types):
         dst_storage = dst_cloud.resources[resources]
         src_compute = src_cloud.resources[resources]
         src_backend = src_compute.config.compute.backend
         dst_backend = dst_storage.config.compute.backend
+        ssh_driver = (SSH_CHUNKS
+                      if self.cfg.migrate.direct_compute_transfer
+                      else TRANSPORTER_MAP[src_backend][dst_backend])
         transporter = task_transfer.TaskTransfer(
             self.init,
-            TRANSPORTER_MAP[src_backend][dst_backend],
+            ssh_driver,
             resource_name=types,
             resource_root_name=body)
         transporter.run(info=info)
@@ -142,10 +143,15 @@ class TransportEphemeral(action.Action):
 
             path_src_id_temp = temp_path_src % inst_id
             host_compute_dst = inst[EPHEMERAL][HOST_DST]
-            inst[EPHEMERAL][BACKING_FILE_DST] = qemu_img_dst.detect_backing_file(inst[EPHEMERAL][PATH_DST],
-                                                                                 host_compute_dst)
-            self.delete_remote_file_on_compute(inst[EPHEMERAL][PATH_DST], host_dst, host_compute_dst)
-            qemu_img_src.convert(utl.QCOW2, 'rbd:%s' % inst[EPHEMERAL][PATH_SRC], path_src_id_temp)
+            inst[EPHEMERAL][
+                BACKING_FILE_DST] = qemu_img_dst.detect_backing_file(
+                inst[EPHEMERAL][PATH_DST], host_compute_dst)
+            self.delete_remote_file_on_compute(inst[EPHEMERAL][PATH_DST],
+                                               host_dst,
+                                               host_compute_dst)
+            qemu_img_src.convert(
+                utl.QCOW2,
+                'rbd:%s' % inst[EPHEMERAL][PATH_SRC], path_src_id_temp)
             inst[EPHEMERAL][PATH_SRC] = path_src_id_temp
 
         transporter.run(info=info)
@@ -170,7 +176,10 @@ class TransportEphemeral(action.Action):
             path_src_temp_raw = path_src + "." + utl.RAW
 
             host_src = inst[EPHEMERAL][HOST_SRC]
-            qemu_img_src.convert(utl.RAW, path_src, path_src_temp_raw, host_src)
+            qemu_img_src.convert(utl.RAW,
+                                 path_src,
+                                 path_src_temp_raw,
+                                 host_src)
             inst[EPHEMERAL][PATH_SRC] = path_src_temp_raw
 
         transporter.run(info=info)

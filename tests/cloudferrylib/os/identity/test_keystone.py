@@ -28,12 +28,14 @@ FAKE_CONFIG = utils.ext_dict(
     cloud=utils.ext_dict({'user': 'fake_user',
                           'password': 'fake_password',
                           'tenant': 'fake_tenant',
-                          'host': '1.1.1.1'}),
+                          'auth_url': 'http://1.1.1.1:35357/v2.0/',
+                          'service_tenant': 'services'}),
     migrate=utils.ext_dict({'speed_limit': '10MB',
                             'retry': '7',
-                            'time_wait': '5',
+                            'time_wait': 5,
                             'keep_user_passwords': False,
-                            'overwrite_user_passwords': False}),
+                            'overwrite_user_passwords': False,
+                            'migrate_users': True}),
     mail=utils.ext_dict({'server': '-'}))
 
 
@@ -77,17 +79,6 @@ class KeystoneIdentityTestCase(test.TestCase):
         self.fake_role_1.name = 'role_name_1'
         self.fake_role_1.id = 'role_id_1'
 
-        self.fake_service_0 = mock.Mock()
-        self.fake_service_1 = mock.Mock()
-        self.fake_service_0.type = 'fake_type'
-        self.fake_service_0.name = 'fake_name'
-        self.fake_service_0.id = 'fake_id'
-
-        self.fake_endpoint_0 = mock.Mock()
-        self.fake_endpoint_1 = mock.Mock()
-        self.fake_endpoint_0.service_id = 'fake_id'
-        self.fake_endpoint_0.publicurl = 'example.com'
-
     def test_get_client(self):
         self.mock_client().auth_ref = {'token': {'id': 'fake_id'}}
 
@@ -98,7 +89,7 @@ class KeystoneIdentityTestCase(test.TestCase):
                       password='fake_password',
                       auth_url='http://1.1.1.1:35357/v2.0/'),
             mock.call(token='fake_id', endpoint='http://1.1.1.1:35357/v2.0/')]
-        self.mock_client.assert_has_calls(mock_calls)
+        self.mock_client.assert_has_calls(mock_calls, any_order=True)
         self.assertEqual(self.mock_client(), client)
 
     def test_get_tenants_list(self):
@@ -108,75 +99,6 @@ class KeystoneIdentityTestCase(test.TestCase):
         tenant_list = self.keystone_client.get_tenants_list()
 
         self.assertEqual(fake_tenants_list, tenant_list)
-
-    def test_get_services_list(self):
-        fake_services_list = [self.fake_service_0, self.fake_service_1]
-        self.mock_client().services.list.return_value = fake_services_list
-
-        services_list = self.keystone_client.get_services_list()
-
-        self.assertEqual(fake_services_list, services_list)
-
-    def test_get_service_name_by_type(self):
-        fake_services_list = [self.fake_service_0, self.fake_service_1]
-        self.mock_client().services.list.return_value = fake_services_list
-
-        service_name = self.keystone_client.get_service_name_by_type(
-            'fake_type')
-
-        self.assertEqual('fake_name', service_name)
-
-    def test_get_service_name_by_type_default(self):
-        self.mock_client().services.list.return_value = []
-
-        service_name = self.keystone_client.get_service_name_by_type(
-            'fake_type')
-
-        self.assertEqual('nova', service_name)
-
-    def test_get_public_endpoint_service_by_id(self):
-        fake_endpoints_list = [self.fake_endpoint_0, self.fake_endpoint_1]
-        self.mock_client().endpoints.list.return_value = fake_endpoints_list
-
-        endpoint = self.keystone_client.get_public_endpoint_service_by_id(
-            'fake_id')
-
-        self.assertEqual('example.com', endpoint)
-
-    def test_get_public_endpoint_service_by_id_default(self):
-        self.mock_client().endpoints.list.return_value = []
-
-        endpoint = self.keystone_client.get_public_endpoint_service_by_id(
-            'fake_service_id')
-
-        self.assertIsNone(endpoint)
-
-    def test_get_service_id(self):
-        fake_services_list = [self.fake_service_0, self.fake_service_1]
-        self.mock_client().services.list.return_value = fake_services_list
-
-        service_id = self.keystone_client.get_service_id('fake_name')
-
-        self.assertEqual('fake_id', service_id)
-
-    def test_get_service_id_default(self):
-        self.mock_client().services.list.return_value = []
-
-        service_id = self.keystone_client.get_service_id('fake_name')
-
-        self.assertIsNone(service_id)
-
-    def test_get_endpoint_by_service_name(self):
-        fake_services_list = [self.fake_service_0, self.fake_service_1]
-        self.mock_client().services.list.return_value = fake_services_list
-
-        fake_endpoints_list = [self.fake_endpoint_0, self.fake_endpoint_1]
-        self.mock_client().endpoints.list.return_value = fake_endpoints_list
-
-        endpoint = self.keystone_client.get_endpoint_by_service_name(
-            'fake_name')
-
-        self.assertEqual('example.com', endpoint)
 
     def test_get_tenant_by_name(self):
         fake_tenants_list = [self.fake_tenant_0, self.fake_tenant_1]

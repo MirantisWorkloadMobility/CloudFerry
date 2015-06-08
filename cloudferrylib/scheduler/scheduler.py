@@ -31,25 +31,31 @@ ERROR = 255
 
 
 class BaseScheduler(object):
-    def __init__(self, namespace=None, cursor=None):
+    def __init__(self, namespace=None, migration=None, preparation=None,
+                 rollback=None):
         self.namespace = namespace if namespace else Namespace()
         self.status_error = NO_ERROR
-        self.cursor = cursor
+        self.migration = migration
+        self.preparation = preparation
+        self.rollback = rollback
         self.map_func_task = dict() if not hasattr(
             self,
             'map_func_task') else self.map_func_task
         self.map_func_task[BaseTask()] = self.task_run
 
     def event_start_task(self, task):
+        LOG.info('%s Start task: %s', '-' * 8, task)
         return True
 
     def event_end_task(self, task):
+        LOG.info('%s End task: %s', '-' * 8, task)
         return True
 
     def event_error_task(self, task, e):
         return True
 
     def error_task(self, task, e):
+        LOG.exception("%s TASK FAILED", task)
         return self.event_error_task(task, e)
 
     def run_task(self, task):
@@ -57,19 +63,30 @@ class BaseScheduler(object):
             self.map_func_task[task](task)
         self.event_end_task(task)
 
+    def process_chain(self, chain, chain_name):
+        if chain:
+            LOG.info("Processing CHAIN %s", chain_name)
+            for task in chain:
+                try:
+                    self.run_task(task)
+                except Exception as e:
+                    self.status_error = ERROR
+                    self.exception = e
+                    self.error_task(task, e)
+                    LOG.info("Failed processing CHAIN %s", chain_name)
+                    break
+            else:
+                LOG.info("Succesfully finished CHAIN %s", chain_name)
+
     def start(self):
-        for task in self.cursor:
-            try:
-                task_print = str(task).split('|')[1]
-                LOG.info('%s Start task: %s', '-' * 8, task_print)
-                self.run_task(task)
-                LOG.info('%s End task: %s', '-' * 8, task_print)
-            except Exception as e:
-                self.status_error = ERROR
-                self.exception = e
-                traceback.print_exc()
-                self.error_task(task, e)
-                break
+        # try to prepare for migration
+        self.process_chain(self.preparation, "PREPARATION")
+        # if we didn't get error during preparation task - process migration
+        if self.status_error != ERROR:
+            self.process_chain(self.migration, "MIGRATION")
+            # if we had an error during process migration - rollback
+            if self.status_error == ERROR:
+                self.process_chain(self.rollback, "ROLLBACK")
 
     def task_run(self, task):
         task(namespace=self.namespace)
@@ -79,9 +96,11 @@ class BaseScheduler(object):
 
 
 class SchedulerThread(BaseScheduler):
-    def __init__(self, namespace=None, thread_task=None, cursor=None,
-                 scheduler_parent=None):
-        super(SchedulerThread, self).__init__(namespace, cursor)
+    def __init__(self, namespace=None, thread_task=None, migration=None,
+                 preparation=None, rollback=None, scheduler_parent=None):
+        super(SchedulerThread, self).__init__(namespace, migration=migration,
+                                              preparation=preparation,
+                                              rollback=rollback)
         self.map_func_task[WrapThreadTask()] = self.task_run_thread
         self.child_threads = dict()
         self.thread_task = thread_task
@@ -123,7 +142,9 @@ class SchedulerThread(BaseScheduler):
         namespace = self.namespace.fork(is_deep_copy)
         scheduler = self.__class__(namespace=namespace,
                                    thread_task=thread_task,
-                                   cursor=Cursor(thread_task.getNet()),
+                                   preparation=self.preparation,
+                                   migration=Cursor(thread_task.getNet()),
+                                   rollback=self.rollback,
                                    scheduler_parent=self)
         self.namespace.vars[CHILDREN][thread_task] = {
             'namespace': namespace,
@@ -138,7 +159,4 @@ class SchedulerThread(BaseScheduler):
 
 
 class Scheduler(SchedulerThread):
-    def __init__(self, namespace=None, thread_task=False, cursor=None,
-                 scheduler_parent=None):
-        super(Scheduler, self).__init__(namespace, thread_task, cursor,
-                                        scheduler_parent)
+    pass

@@ -2,7 +2,36 @@ namespace:
   info_result:
       instances: {}
 
+preparation:
+  - create_snapshot: True
+  - create_vm_snapshot_src: True
+  - create_vm_snapshot_dst: True
+
+rollback:
+  - restore_from_vm_snapshot_dst: True
+  - restore_from_vm_snapshot_src: True
+  - restore_from_snapshot: True
+
 process:
+  - pre_migration_test:
+      - src_test:
+          - act_get_info_images_src: True
+          - act_get_info_inst_src: True
+          - act_get_info_volumes_src: True
+          - act_get_info_objects_src: True
+          - act_check_bandwidth_src: True
+          - check_src_ssh_access: True
+          - check_src_sql: True
+          - check_src_rabbit: True
+      - dst_test:
+          - act_get_info_images_dst: True
+          - act_get_info_inst_dst: True
+          - act_get_info_volumes_dst: True
+          - act_get_info_objects_dst: True
+          - act_check_bandwidth_dst: True
+          - check_dst_ssh_access: True
+          - check_dst_sql: True
+          - check_dst_rabbit: True
   - task_resources_transporting:
       - act_identity_trans: True
       - task_images_trans:
@@ -10,12 +39,15 @@ process:
           - act_deploy_images: True
       - act_comp_res_trans: True
       - act_network_trans: True
+      - transport_key_pairs: True
   - transport_instances_and_dependency_resources:
       - act_get_filter: True
       - act_get_info_inst: True
       - init_iteration_instance:
           - init_iteration_instance_copy_var: True
           - init_iteration_instance_ref: True
+      - check_needed_compute_resources: True
+      - check_instances: ['rename_info_iter']
       - get_next_instance: True
       - trans_one_inst:
           - act_stop_vms: True
@@ -45,8 +77,12 @@ process:
                   - act_convert_image: True
                   - act_f_to_i: True
               - act_deploy_instances: True
+              - add_key_pairs_to_instances: True
               - act_is_not_copy_diff_file: ['act_transport_ephemeral']
-              - act_trans_diff_file: True
+              # Use this action if you have `direct_compute_transfer=False` in the config:
+              - act_trans_diff_file: False
+              # Use this action if you have `direct_compute_transfer=True` in the config:
+              - act_trans_diff_file_chunks : True
               - act_transport_ephemeral: True
           - act_attaching: True
           - act_dissociate_floatingip: True

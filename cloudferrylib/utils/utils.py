@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import logging
-import sys
 import time
+import timeit
 import random
 import string
 import smtplib
@@ -26,9 +26,11 @@ from jinja2 import Environment, FileSystemLoader
 import os
 import inspect
 from multiprocessing import Lock
-from fabric.api import run, settings, local, env
+from fabric.api import run, settings, local, env, sudo
+from fabric.context_managers import hide
 import ipaddr
 import yaml
+from logging import config
 
 
 ISCSI = "iscsi"
@@ -42,7 +44,7 @@ REMOTE_FILE = "remote file"
 QCOW2 = "qcow2"
 RAW = "raw"
 YES = "yes"
-NAME_LOG_FILE = 'migrate.log'
+LOGGING_CONFIG = 'configs/logging_config.yaml'
 PATH_TO_SNAPSHOTS = 'snapshots'
 AVAILABLE = 'available'
 IN_USE = 'in-use'
@@ -231,21 +233,17 @@ class Templater:
         temp_file.close()
         return temp_render
 
+with open(LOGGING_CONFIG, 'r') as logging_config:
+    # read config from file and store it as module global variable
+    config.dictConfig(yaml.load(logging_config))
+    LOGGER = logging.getLogger("CF")
+
+def configure_logging(level):
+    # redefine default logging level
+    LOGGER.setLevel(level)
 
 def get_log(name):
-    LOG = logging.getLogger(name)
-    LOG.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s : %(message)s')
-    hdlr = logging.FileHandler(NAME_LOG_FILE)
-    hdlr.setFormatter(formatter)
-    LOG.addHandler(hdlr)
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
-    formatter_out = logging.Formatter('%(asctime)s: %(message)s')
-    ch.setFormatter(formatter_out)
-    LOG.addHandler(ch)
-    return LOG
-
+    return LOGGER
 
 class StackCallFunctions(object):
     def __init__(self):
@@ -298,8 +296,7 @@ def log_step(log):
     return decorator
 
 
-class forward_agent:
-
+class forward_agent(object):
     """
         Forwarding ssh-key for access on to source and destination clouds via ssh
     """
@@ -307,18 +304,36 @@ class forward_agent:
     def __init__(self, key_file):
         self.key_file = key_file
 
+    def _agent_already_running(self):
+        with settings(hide('warnings', 'running', 'stdout', 'stderr'),
+                      warn_only=True):
+            res = local("ssh-add -l", capture=True)
+
+            if res.succeeded:
+                present_keys = res.split(os.linesep)
+                for key in present_keys:
+                    # TODO: this will break for path with whitespaces
+                    key_path = key.split(' ')[2]
+                    if key_path == os.path.expanduser(self.key_file):
+                        return True
+
+        return False
+
     def __enter__(self):
-        info_agent = local("eval `ssh-agent` && echo $SSH_AUTH_SOCK && ssh-add %s" %
-                           (self.key_file), capture=True).split("\n")
+        if self._agent_already_running():
+            return
+        start_ssh_agent = ("eval `ssh-agent` && echo $SSH_AUTH_SOCK && "
+                           "ssh-add %s") % self.key_file
+        info_agent = local(start_ssh_agent, capture=True).split("\n")
         self.pid = info_agent[0].split(" ")[-1]
         self.ssh_auth_sock = info_agent[1]
         os.environ["SSH_AGENT_PID"] = self.pid
         os.environ["SSH_AUTH_SOCK"] = self.ssh_auth_sock
 
     def __exit__(self, type, value, traceback):
-        local("kill -9 %s"%(self.pid))
-        del os.environ["SSH_AGENT_PID"]
-        del os.environ["SSH_AUTH_SOCK"]
+        # never kill previously started ssh-agent, so that user only has to
+        # enter private key password once
+        pass
 
 
 class wrapper_singletone_ssh_tunnel:
@@ -402,12 +417,14 @@ def write_info(rendered_info, info_file = "source_info.html"):
         ifile.write(rendered_info)
 
 
-def get_libvirt_block_info(libvirt_name, init_host, compute_host):
-    with settings(host_string=init_host):
-        with forward_agent(env.key_filename):
-            out = run("ssh -oStrictHostKeyChecking=no %s 'virsh domblklist %s'" %
-                      (compute_host, libvirt_name))
-            libvirt_output = out.split()
+def get_libvirt_block_info(libvirt_name, init_host, compute_host, ssh_user,
+                           ssh_sudo_password):
+    with settings(host_string=compute_host,
+                  user=ssh_user,
+                  password=ssh_sudo_password,
+                  gateway=init_host):
+        out = sudo("virsh domblklist %s" % libvirt_name)
+        libvirt_output = out.split()
     return libvirt_output
 
 
@@ -437,36 +454,74 @@ def get_disk_path(instance, blk_list, is_ceph_ephemeral=False, disk=DISK):
                 disk_path = i
     return disk_path
 
-def get_ips(init_host, compute_host):
-    with settings(host_string=init_host):
-        with forward_agent(env.key_filename):
-            cmd = "ifconfig | awk -F \"[: ]+\" \'/inet addr:/ " +\
-                  "{ if ($4 != \"127.0.0.1\") print $4 }\'"
-            out = run("ssh -oStrictHostKeyChecking=no %s %s" %
-                      (compute_host, cmd))
-            list_ips = []
-            for info in out.split():
-                try:
-                    ip = ipaddr.IPAddress(info)
-                except ValueError:
-                    continue
-                list_ips.append(info)
+
+def get_ips(init_host, compute_host, ssh_user):
+    with settings(host_string=compute_host,
+                  user=ssh_user,
+                  gateway=init_host):
+        cmd = ("ifconfig | awk -F \"[: ]+\" \'/inet addr:/ "
+               "{ if ($4 != \"127.0.0.1\") print $4 }\'")
+        out = run(cmd)
+        list_ips = []
+        for info in out.split():
+            try:
+                ip = ipaddr.IPAddress(info)
+            except ValueError:
+                continue
+            list_ips.append(info)
     return list_ips
 
-def get_ext_ip(ext_cidr, init_host, compute_host):
-    list_ips = get_ips(init_host, compute_host)
+
+def get_ext_ip(ext_cidr, init_host, compute_host, ssh_user):
+    list_ips = get_ips(init_host, compute_host, ssh_user)
     for ip_str in list_ips:
         ip_addr = ipaddr.IPAddress(ip_str)
         if ipaddr.IPNetwork(ext_cidr).Contains(ip_addr):
             return ip_str
     return None
 
+
 def check_file(file_path):
     return os.path.isfile(file_path)
 
-def get_filter_config(file_path):
-    if check_file(file_path):
-        return yaml.load(open(file_path, 'r'))
-    else:
-        return None
 
+def read_yaml_file(yaml_file_path):
+    if not check_file(yaml_file_path):
+        return None
+    with open(yaml_file_path) as yfile:
+        return yaml.load(yfile)
+
+
+def write_yaml_file(file_name, content):
+    with open(file_name, 'w') as yfile:
+        yaml.dump(content, yfile)
+
+
+def timer(func, *args, **kwargs):
+    t = timeit.Timer(lambda: func(*args, **kwargs))
+    elapsed = t.timeit(number=1)
+    return elapsed
+
+
+def import_class_by_string(name):
+    """ This function takes string in format
+        'cloudferrylib.os.storage.cinder_storage.CinderStorage'
+        And returns class object"""
+    module, class_name = name.split('.')[:-1], name.split('.')[-1]
+    mod = __import__(".".join(module))
+    for comp in module[1:]:
+        mod = getattr(mod, comp)
+    return getattr(mod, class_name)
+
+
+def get_remote_file_size(host, file_path, ssh_user, ssh_sudo_password):
+    """ Return file size in bytes on the remote host.
+
+    :param host: Remote host,
+    :param file_path: Full file path,
+    :return: File size in bytes.
+    """
+
+    with settings(host_string=host, user=ssh_user):
+        size = run('stat --printf="%s" {}'.format(file_path))
+        return int(size)

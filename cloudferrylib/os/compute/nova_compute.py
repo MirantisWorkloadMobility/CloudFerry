@@ -14,12 +14,17 @@
 
 
 import copy
+from operator import attrgetter
 import time
 from sqlalchemy import exc
 
 from novaclient.v1_1 import client as nova_client
+from novaclient import exceptions as nova_exc
 
+import cfglib
 from cloudferrylib.base import compute
+from cloudferrylib.os.compute import keypairs
+from cloudferrylib.os.compute import instances
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils as utl
@@ -32,6 +37,9 @@ DISK = "disk"
 LOCAL = ".local"
 LEN_UUID_INSTANCE = 36
 INTERFACES = "interfaces"
+DEFAULT_QUOTA_VALUE = -1
+
+INSTANCE_HOST_ATTRIBUTE = 'OS-EXT-SRV-ATTR:host'
 
 
 class NovaCompute(compute.Compute):
@@ -54,28 +62,35 @@ class NovaCompute(compute.Compute):
         return nova_client.Client(params.cloud.user,
                                   params.cloud.password,
                                   params.cloud.tenant,
-                                  "http://%s:35357/v2.0/" % params.cloud.host)
+                                  params.cloud.auth_url)
 
-    def _read_info_quotas(self, info):
-        user_quotas_cmd = ("SELECT user_id, project_id, resource, "
-                           "hard_limit FROM project_user_quotas WHERE "
-                           "deleted = 0")
-        for quota in self.mysql_connector.execute(user_quotas_cmd):
-            info['user_quotas'].append(
-                {'quota': {'user_id': quota[0],
-                           'project_id': quota[1],
-                           'resource': quota[2],
-                           'hard_limit': quota[3]},
-                 'meta': {}})
+    def _read_info_quotas(self):
+        service_tenant_id = self.identity.get_tenant_id_by_name(
+            self.config.cloud.service_tenant)
+        tenant_ids = [tenant.id for tenant in self.identity.get_tenants_list()
+                      if tenant.id != service_tenant_id]
+        user_ids = [user.id for user in self.identity.get_users_list()]
+        project_quotas = list()
+        user_quotas = list()
 
-        project_quotas_cmd = ("SELECT project_id, resource, hard_limit "
-                              "FROM quotas WHERE deleted = 0")
-        for quota in self.mysql_connector.execute(project_quotas_cmd):
-            info['project_quotas'].append(
-                {'quota': {'project_id': quota[0],
-                           'resource': quota[1],
-                           'hard_limit': quota[2]},
-                 'meta': {}})
+        for tenant_id in tenant_ids:
+            project_quota = self.get_quotas(tenant_id=tenant_id)
+            project_quota_info = self.convert_resources(project_quota,
+                                                        None)
+            project_quota_info['tenant_id'] = tenant_id
+            project_quotas.append(project_quota_info)
+            if self.config.migrate.migrate_user_quotas:
+                for user_id in user_ids:
+                    if self.identity.roles_for_user(user.id, tenant_id):
+                        user_quota = self.get_quotas(tenant_id=tenant_id,
+                                                     user_id=user_id)
+                        user_quota_info = self.convert_resources(
+                            user_quota, None)
+                        user_quota_info['tenant_id'] = tenant_id
+                        user_quota_info['user_id'] = user_id
+                        user_quotas.append(user_quota_info)
+
+        return project_quotas, user_quotas
 
     def _read_info_resources(self, **kwargs):
         """
@@ -86,14 +101,16 @@ class NovaCompute(compute.Compute):
                 'user_quotas': [],
                 'project_quotas': []}
 
-        for keypair in self.get_keypair_list():
-            info['keypairs'][keypair.id] = self.convert(keypair)
+        kps = keypairs.DBBroker.get_all_keypairs(self.cloud)
+        for keypair in kps:
+            info['keypairs'][keypair.id] = keypair.to_dict()
 
-        for flavor in self.get_flavor_list():
-            info['flavors'][flavor.id] = self.convert(flavor)
+        for flavor in self.get_flavor_list(is_public=None):
+            info['flavors'][flavor.id] = self.convert(flavor, cloud=self.cloud)
 
         if self.config.migrate.migrate_quotas:
-            self._read_info_quotas(info)
+            info['project_quotas'], info['user_quotas'] = \
+                self._read_info_quotas()
 
         return info
 
@@ -113,12 +130,18 @@ class NovaCompute(compute.Compute):
             raise ValueError('Only "resources" or "instances" values allowed')
 
         search_opts = kwargs.get('search_opts')
+
+        if self.config.migrate.all_vms:
+            search_opts = search_opts if search_opts else {}
+            search_opts.update(all_tenants=True)
+
         info = {'instances': {}}
 
         for instance in self.get_instances_list(search_opts=search_opts):
-            info['instances'][instance.id] = self.convert(instance,
-                                                          self.config,
-                                                          self.cloud)
+            if instance.status != 'ERROR':
+                info['instances'][instance.id] = self.convert(instance,
+                                                              self.config,
+                                                              self.cloud)
 
         return info
 
@@ -128,12 +151,12 @@ class NovaCompute(compute.Compute):
         compute_res = cloud.resources[utl.COMPUTE_RESOURCE]
 
         instance_name = getattr(instance, "OS-EXT-SRV-ATTR:instance_name")
-        instance_host = getattr(instance, 'OS-EXT-SRV-ATTR:host')
+        instance_host = getattr(instance, INSTANCE_HOST_ATTRIBUTE)
 
         get_tenant_name = identity_res.get_tenants_func()
 
         security_groups = []
-        for security_group in instance.security_groups:
+        for security_group in getattr(instance, 'security_groups', []):
             security_groups.append(security_group['name'])
 
         interfaces = compute_res.get_networks(instance)
@@ -150,11 +173,14 @@ class NovaCompute(compute.Compute):
         is_ceph = cfg.compute.backend.lower() == utl.CEPH
         direct_transfer = cfg.migrate.direct_compute_transfer
 
+        ssh_user = cfg.cloud.ssh_user
+
         if direct_transfer:
             ext_cidr = cfg.cloud.ext_cidr
             host = utl.get_ext_ip(ext_cidr,
                                   cloud.getIpSsh(),
-                                  instance_host)
+                                  instance_host,
+                                  ssh_user)
         elif is_ceph:
             host = cfg.compute.host_eph_drv
         else:
@@ -163,7 +189,9 @@ class NovaCompute(compute.Compute):
         instance_block_info = utl.get_libvirt_block_info(
             instance_name,
             cloud.getIpSsh(),
-            instance_host)
+            instance_host,
+            ssh_user,
+            cfg.cloud.ssh_sudo_password)
 
         ephemeral_path = {
             'path_src': None,
@@ -215,7 +243,8 @@ class NovaCompute(compute.Compute):
                              'interfaces': interfaces,
                              'host': instance_host,
                              'is_ephemeral': is_ephemeral,
-                             'volumes': volumes
+                             'volumes': volumes,
+                             'user_id': instance.user_id
                              },
                 'ephemeral': ephemeral_path,
                 'diff': diff,
@@ -225,13 +254,18 @@ class NovaCompute(compute.Compute):
         return inst
 
     @staticmethod
-    def convert_resources(compute_obj):
-        if isinstance(compute_obj, nova_client.keypairs.Keypair):
-            return {'keypair': {'name': compute_obj.name,
-                                'public_key': compute_obj.public_key},
-                    'meta': {}}
+    def convert_resources(compute_obj, cloud):
 
-        elif isinstance(compute_obj, nova_client.flavors.Flavor):
+        if isinstance(compute_obj, nova_client.flavors.Flavor):
+
+            compute_res = cloud.resources[utl.COMPUTE_RESOURCE]
+            tenants = None
+
+            if not compute_obj.is_public:
+                flavor_access_list = compute_res.get_flavor_access_list(
+                    compute_obj.id)
+                tenants = [flv_acc.tenant_id for flv_acc in flavor_access_list]
+
             return {'flavor': {'name': compute_obj.name,
                                'ram': compute_obj.ram,
                                'vcpus': compute_obj.vcpus,
@@ -239,20 +273,37 @@ class NovaCompute(compute.Compute):
                                'ephemeral': compute_obj.ephemeral,
                                'swap': compute_obj.swap,
                                'rxtx_factor': compute_obj.rxtx_factor,
-                               'is_public': compute_obj.is_public},
+                               'is_public': compute_obj.is_public,
+                               'tenants': tenants},
+                    'meta': {}}
+
+        elif isinstance(compute_obj, nova_client.quotas.QuotaSet):
+            return {'quota': {'cores': compute_obj.cores,
+                              'fixed_ips': compute_obj.fixed_ips,
+                              'floating_ips': compute_obj.floating_ips,
+                              'instances': compute_obj.instances,
+                              'key_pairs': compute_obj.key_pairs,
+                              'ram': compute_obj.ram,
+                              'security_group_rules':
+                                  compute_obj.security_group_rules,
+                              'security_groups': compute_obj.security_groups,
+                              'injected_file_content_bytes':
+                                  compute_obj.injected_file_content_bytes,
+                              'injected_file_path_bytes':
+                                  compute_obj.injected_file_path_bytes,
+                              'injected_files': compute_obj.injected_files,
+                              'metadata_items': compute_obj.metadata_items},
                     'meta': {}}
 
     @staticmethod
     def convert(obj, cfg=None, cloud=None):
-        res_tuple = (nova_client.keypairs.Keypair, nova_client.flavors.Flavor)
-
         if isinstance(obj, nova_client.servers.Server):
             return NovaCompute.convert_instance(obj, cfg, cloud)
-        elif isinstance(obj, res_tuple):
-            return NovaCompute.convert_resources(obj)
+        elif isinstance(obj, nova_client.flavors.Flavor):
+            return NovaCompute.convert_resources(obj, cloud)
 
         LOG.error('NovaCompute converter has received incorrect value. Please '
-                  'pass to it only instance, keypair or flavor objects.')
+                  'pass to it only instance or flavor objects.')
         return None
 
     def _deploy_resources(self, info, **kwargs):
@@ -270,13 +321,10 @@ class NovaCompute(compute.Compute):
         user_map = {user['user']['id']: user['meta']['new_id'] for user in
                     identity_info['users']}
 
-        self._deploy_keypair(info['keypairs'])
-        self._deploy_flavors(info['flavors'])
+        self._deploy_flavors(info['flavors'], tenant_map)
         if self.config['migrate']['migrate_quotas']:
-            self._deploy_project_quotas(info['project_quotas'],
-                                        tenant_map)
-            self._deploy_user_quotas(info['user_quotas'],
-                                     tenant_map, user_map)
+            self._deploy_quotas(info['project_quotas'], tenant_map)
+            self._deploy_quotas(info['user_quotas'], tenant_map, user_map)
 
         new_info = self.read_info(target='resources')
 
@@ -302,69 +350,9 @@ class NovaCompute(compute.Compute):
 
         return info
 
-    def _deploy_user_quotas(self, quotas, tenant_map, user_map):
-        insert_cmd = ("INSERT INTO project_user_quotas (user_id, project_id, "
-                      "resource, hard_limit, deleted) VALUES ('%s', '%s', '%s'"
-                      ", %s, 0)")
-
-        update_cmd = ("UPDATE project_user_quotas SET hard_limit=%s WHERE "
-                      "user_id='%s' AND project_id='%s' AND resource='%s' AND "
-                      "deleted=0")
-
-        for _quota in quotas:
-            quota = _quota['quota']
-            try:
-                self.mysql_connector.execute(insert_cmd % (
-                    user_map[quota['user_id']],
-                    tenant_map[quota['project_id']],
-                    quota['resource'],
-                    quota['hard_limit']))
-            except exc.IntegrityError as e:
-                if 'Duplicate entry' in e.message:
-                    self.mysql_connector.execute(update_cmd % (
-                        quota['hard_limit'],
-                        user_map[quota['user_id']],
-                        tenant_map[quota['project_id']],
-                        quota['resource'],
-                    ))
-                else:
-                    raise
-
-    def _deploy_project_quotas(self, quotas, tenant_map):
-        insert_cmd = ("INSERT INTO quotas (project_id, resource, "
-                      "hard_limit, deleted) VALUES ('%s', '%s', %s, 0)")
-
-        update_cmd = ("UPDATE quotas SET hard_limit=%s WHERE project_id='%s' "
-                      "AND resource='%s' AND deleted=0")
-
-        for _quota in quotas:
-            quota = _quota['quota']
-            try:
-                self.mysql_connector.execute(insert_cmd % (
-                    tenant_map[quota['project_id']],
-                    quota['resource'],
-                    quota['hard_limit']))
-            except exc.IntegrityError as e:
-                if 'Duplicate entry' in e.message:
-                    self.mysql_connector.execute(update_cmd % (
-                        quota['hard_limit'],
-                        tenant_map[quota['project_id']],
-                        quota['resource'],
-                    ))
-                else:
-                    raise
-
-    def _deploy_keypair(self, keypairs):
-        dest_keypairs = [keypair.name for keypair in self.get_keypair_list()]
-        for _keypair in keypairs.itervalues():
-            keypair = _keypair['keypair']
-            if keypair['name'] in dest_keypairs:
-                continue
-            self.create_keypair(keypair['name'], keypair['public_key'])
-
-    def _deploy_flavors(self, flavors):
+    def _deploy_flavors(self, flavors, tenant_map):
         dest_flavors = {flavor.name: flavor.id for flavor in
-                        self.get_flavor_list()}
+                        self.get_flavor_list(is_public=None)}
         for flavor_id, _flavor in flavors.iteritems():
             flavor = _flavor['flavor']
             if flavor['name'] in dest_flavors:
@@ -381,23 +369,43 @@ class NovaCompute(compute.Compute):
                 swap=int(flavor['swap']) if flavor['swap'] else 0,
                 rxtx_factor=flavor['rxtx_factor'],
                 is_public=flavor['is_public']).id
+            if not flavor['is_public']:
+                for tenant in flavor['tenants']:
+                    self.add_flavor_access(_flavor['meta']['id'],
+                                           tenant_map[tenant])
+
+    def _deploy_quotas(self, quotas, tenant_map, user_map=None):
+        for _quota in quotas:
+            old_tenant_id = _quota['tenant_id']
+            tenant_id = tenant_map[old_tenant_id]
+            user_id = None
+            if user_map:
+                old_user_id = _quota['user_id']
+                user_id = user_map[old_user_id]
+            quota = _quota['quota']
+            quota_info = dict()
+
+            for quota_name, quota_value in quota.iteritems():
+                if quota_value != DEFAULT_QUOTA_VALUE:
+                    quota_info[quota_name] = quota_value
+
+            quota_info['force'] = True
+
+            self.update_quota(tenant_id=tenant_id, user_id=user_id,
+                              **quota_info)
 
     def _deploy_instances(self, info_compute):
         new_ids = {}
         nova_tenants_clients = {
             self.config['cloud']['tenant']: self.nova_client}
 
-        params = {'user': self.config['cloud']['user'],
-                  'password': self.config['cloud']['password'],
-                  'tenant': self.config['cloud']['tenant'],
-                  'host': self.config['cloud']['host']}
+        params = copy.deepcopy(self.config)
 
         for _instance in info_compute['instances'].itervalues():
             tenant_name = _instance['instance']['tenant_name']
             if tenant_name not in nova_tenants_clients:
-                params['tenant'] = tenant_name
-                nova_tenants_clients[tenant_name] = self.get_nova_client(
-                    params)
+                params.cloud.tenant = tenant_name
+                nova_tenants_clients[tenant_name] = self.get_client(params)
 
         for _instance in info_compute['instances'].itervalues():
             instance = _instance['instance']
@@ -406,10 +414,10 @@ class NovaCompute(compute.Compute):
             create_params = {'name': instance['name'],
                              'flavor': instance['flavor_id'],
                              'key_name': instance['key_name'],
-                             'availability_zone': instance[
-                                 'availability_zone'],
                              'nics': instance['nics'],
-                             'image': instance['image_id']}
+                             'image': instance['image_id'],
+                             # user_id matches user_id on source
+                             'user_id': instance.get('user_id')}
             if instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
                 volume_id = instance['volumes'][0]['id']
                 create_params["block_device_mapping_v2"] = [{
@@ -426,21 +434,66 @@ class NovaCompute(compute.Compute):
         return new_ids
 
     def create_instance(self, **kwargs):
-        return self.nova_client.servers.create(**kwargs).id
+        # do not provide key pair as boot argument, it will be updated with the
+        # low level SQL update. See
+        # `cloudferrylib.os.actions.transport_compute_resources` for more
+        # information
+        ignored_instance_args = ['key_name', 'user_id']
 
-    def get_instances_list(self, detailed=True, search_opts=None,
-                           marker=None,
+        boot_args = {k: v for k, v in kwargs.items()
+                     if k not in ignored_instance_args}
+
+        created_instance = self.nova_client.servers.create(**boot_args)
+
+        instances.update_user_ids_for_instance(self.mysql_connector,
+                                               created_instance.id,
+                                               kwargs['user_id'])
+
+        return created_instance.id
+
+    def get_instances_list(self, detailed=True, search_opts=None, marker=None,
                            limit=None):
+        """
+        Get a list of servers.
+
+        :param detailed: Whether to return detailed server info (optional).
+        :param search_opts: Search options to filter out servers (optional).
+        :param marker: Begin returning servers that appear later in the server
+                       list than that represented by this server id (optional).
+        :param limit: Maximum number of servers to return (optional).
+
+        :rtype: list of :class:`Server`
+        """
         ids = search_opts.get('id', None) if search_opts else None
         if not ids:
-            return self.nova_client.servers.list(detailed=detailed,
-                                                 search_opts=search_opts,
-                                                 marker=marker, limit=limit)
+            instances = self.nova_client.servers.list(
+                detailed=detailed, search_opts=search_opts, marker=marker,
+                limit=limit)
         else:
             if type(ids) is list:
-                return [self.nova_client.servers.get(i) for i in ids]
+                instances = [self.nova_client.servers.get(i) for i in ids]
             else:
-                return [self.nova_client.servers.get(ids)]
+                instances = [self.nova_client.servers.get(ids)]
+
+        instances = filter_down_hosts(
+            down_hosts(self.get_client()), instances,
+            hostname_attribute=INSTANCE_HOST_ATTRIBUTE)
+
+        return instances
+
+    def is_nova_instance(self, object_id):
+        """
+        Define OpenStack Nova Server instance by id.
+
+        :param object_id: ID of supposed Nova Server instance
+        :return: True - if it is Nova Server instance, False - if it is not
+        """
+        try:
+            self.get_instance(object_id)
+        except nova_exc.NotFound:
+            LOG.error("%s is not a Nova Server instance", object_id)
+            return False
+        return True
 
     def get_instance(self, instance_id):
         return self.get_instances_list(search_opts={'id': instance_id})[0]
@@ -534,14 +587,18 @@ class NovaCompute(compute.Compute):
     def delete_flavor(self, flavor_id):
         self.nova_client.flavors.delete(flavor_id)
 
-    def get_keypair_list(self):
-        return self.nova_client.keypairs.list()
+    def get_flavor_access_list(self, flavor_id):
+        return self.nova_client.flavor_access.list(flavor=flavor_id)
 
-    def get_keypair(self, name):
-        return self.nova_client.keypairs.get(name)
+    def add_flavor_access(self, flavor_id, tenant_id):
+        self.nova_client.flavor_access.add_tenant_access(flavor_id, tenant_id)
 
-    def create_keypair(self, name, public_key=None):
-        return self.nova_client.keypairs.create(name, public_key)
+    def get_quotas(self, tenant_id, user_id=None):
+        return self.nova_client.quotas.get(tenant_id, user_id)
+
+    def update_quota(self, tenant_id, user_id=None, **quota_items):
+        return self.nova_client.quotas.update(tenant_id=tenant_id,
+                                              user_id=user_id, **quota_items)
 
     def get_interface_list(self, server_id):
         return self.nova_client.servers.interface_list(server_id)
@@ -583,5 +640,53 @@ class NovaCompute(compute.Compute):
             volume['volume']['id'],
             volume['volume']['device'])
 
+    def detach_volume(self, instance_id, volume_id):
+        self.nova_client.volumes.delete_server_volume(instance_id, volume_id)
+
     def dissociate_floatingip(self, instance_id, floatingip):
         self.nova_client.servers.remove_floating_ip(instance_id, floatingip)
+
+    def get_hypervisor_statistics(self):
+        return self.nova_client.hypervisors.statistics()
+
+    def get_hypervisors(self):
+        hypervisors = [hypervisor.hypervisor_hostname for hypervisor in
+                       self.nova_client.hypervisors.list()]
+        return filter_down_hosts(down_hosts(self.get_client()), hypervisors)
+
+    def get_free_vcpus(self):
+        hypervisor_statistics = self.get_hypervisor_statistics()
+        return (hypervisor_statistics.vcpus *
+                self.config.compute.cpu_allocation_ratio -
+                hypervisor_statistics.vcpus_used)
+
+    def get_free_ram(self):
+        hypervisor_statistics = self.get_hypervisor_statistics()
+        return (hypervisor_statistics.memory_mb *
+                self.config.compute.ram_allocation_ratio -
+                hypervisor_statistics.memory_mb_used)
+
+    def get_free_disk(self):
+        hypervisor_statistics = self.get_hypervisor_statistics()
+        return (hypervisor_statistics.local_gb *
+                self.config.compute.disk_allocation_ratio -
+                hypervisor_statistics.local_gb_used)
+
+    def delete_vm_by_id(self, vm_id):
+        self.nova_client.servers.delete(vm_id)
+
+
+def down_hosts(novaclient):
+    services = novaclient.services.list()
+    return set(map(attrgetter('host'),
+                   filter(lambda h: h.state != 'up', services)))
+
+
+def filter_down_hosts(hosts_down, elements, hostname_attribute=''):
+    """Removes elements which run on hosts in down state according to nova
+    service-list"""
+    if cfglib.CONF.migrate.skip_down_hosts:
+        elements = filter(
+            lambda e: getattr(e, hostname_attribute, e) not in hosts_down,
+            elements)
+    return elements

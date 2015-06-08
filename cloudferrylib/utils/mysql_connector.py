@@ -29,6 +29,9 @@ class MysqlConnector():
                                          self.config['host'],
                                          self.db)
 
+    def get_engine(self):
+        return sqlalchemy.create_engine(self.connection_url)
+
     def execute(self, command, **kwargs):
         with sqlalchemy.create_engine(
                 self.connection_url).begin() as connection:

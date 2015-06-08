@@ -1,0 +1,170 @@
+# Do not modify. This is template file. To change parameters please use 'config.ini'.
+
+[migrate]
+scenario = <scenario_file>
+tasks_mapping = <tasks_file>
+
+keep_user_passwords = False
+ssh_transfer_port = 9990-9999
+key_filename = <migrate_key_filename>
+keep_ip = yes
+keep_floatingip = yes
+keep_volume_storage = False
+speed_limit = 100MB
+instances = key_name-qwerty
+file_compression = gzip
+level_compression = 9
+overwrite_user_passwords = False
+migrate_quotas = True
+migrate_users = True
+direct_compute_transfer = True
+filter_path = configs/filter.yaml
+keep_lbaas = no
+ssh_chunk_size = 100
+retry = 5
+migrate_extnets = True
+time_wait = 5
+all_vms = True
+all_images = True
+all_networks = True
+all_volumes = True
+cinder_migration_strategy = cloudferrylib.os.storage.cinder_database.CinderStorage
+skip_down_hosts = True
+migrate_user_quotas = False
+
+[src]
+type = os
+auth_url = http://<grizzly_ip>:35357/v2.0
+host = <grizzly_ip>
+ssh_host = <grizzly_ip>
+ext_cidr = <src_ext_cidr>
+user = <src_user>
+password = <src_password>
+tenant = <src_tenant>
+temp = <src_temp>
+
+[src_mysql]
+user = <src_mysql_user>
+password = <src_mysql_password>
+host = <grizzly_ip>
+connection = mysql+mysqlconnector
+
+[src_rabbit]
+password = <src_rabbit_password> 
+hosts = <grizzly_ip>
+
+[src_compute]
+service = nova
+backend = iscsi
+convert_diff_file = qcow2
+convert_ephemeral_disk = qcow2
+host_eph_drv = <grizzly_ip>
+
+[src_storage]
+service = cinder
+backend = ceph
+host = <grizzly_ip>
+connection = mysql+mysqlconnector
+user = <src_mysql_user>
+password = <src_mysql_password>
+database_name = cinder
+protocol_transfer = <src_storage_protocol_transfer>
+disk_format = qcow2
+
+[src_image]
+service = glance
+backend = swift
+disk_format = qcow2
+user = <src_mysql_user>
+password = <src_mysql_password>
+host = <grizzly_ip>
+connection = mysql+mysqlconnector
+database_name = glance
+
+[src_identity]
+service = keystone
+
+[src_network]
+service = auto
+interfaces_for_instance = <src_network_interfaces_for_instance>
+
+[src_objstorage]
+service =
+
+[dst]
+type = os
+auth_url = http://<icehouse_ip>:35357/v2.0
+host = <icehouse_ip>
+ssh_host = <icehouse_ip>
+ext_cidr = <dst_ext_cidr> 
+user = <dst_user>
+password = <dst_password> 
+tenant = <dst_tenant>
+temp = <dst_temp> 
+
+[dst_mysql]
+user = <dst_mysql_user> 
+password = <dst_mysql_password> 
+host = <icehouse_ip>
+connection = mysql+mysqlconnector
+
+[dst_compute]
+service = nova
+backend = iscsi
+convert_diff_file = qcow2
+convert_ephemeral_disk = qcow2
+host_eph_drv = <icehouse_ip>
+
+[dst_rabbit]
+password = <dst_rabbit_password>
+hosts = <icehouse_ip>
+
+[dst_storage]
+service = cinder
+backend = ceph
+host = <icehouse_ip>
+protocol_transfer = <dst_storage_protocol_transfer>
+connection = mysql+mysqlconnector
+user = <dst_mysql_user>
+password = <dst_mysql_password>
+database_name = cinder
+
+[dst_image]
+service = glance
+convert_to_raw = False
+backend = swift
+user = <dst_mysql_user>
+password = <dst_mysql_password>
+host = <icehouse_ip>
+connection = mysql+mysqlconnector
+database_name = glance
+
+[dst_identity]
+service = keystone
+
+[dst_network]
+service=auto
+interfaces_for_instance = <dst_network_interfaces_for_instance>
+
+[import_rules]
+key = {name:dest-key-1}
+
+[dst_objstorage]
+service =
+
+[snapshot]
+snapshot_path = <snapshot_snapshot_path>
+
+[initial_check]
+claimed_bandwidth = 100
+factor = 0.5
+test_file_size = 10
+
+[condense]
+nova_file=
+group_file=
+node_file=
+
+[database]
+host=
+port=

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-import action
+from cloudferrylib.base.action import action
 
 
 class Converter(action.Action):

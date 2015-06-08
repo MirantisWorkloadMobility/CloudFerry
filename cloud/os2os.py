@@ -15,7 +15,7 @@
 
 import cloud
 import cloud_ferry
-from cloudferrylib.base.action import copy_var, rename_info, merge, is_end_iter, get_info_iter, create_reference
+from cloudferrylib.base.action import copy_var, rename_info, merge, is_end_iter, get_info_iter
 from cloudferrylib.os.actions import identity_transporter
 from cloudferrylib.scheduler import scheduler
 from cloudferrylib.scheduler import namespace
@@ -37,7 +37,6 @@ from cloudferrylib.os.actions import convert_compute_to_image
 from cloudferrylib.os.actions import convert_compute_to_volume
 from cloudferrylib.os.actions import convert_volume_to_image
 from cloudferrylib.os.actions import convert_volume_to_compute
-from cloudferrylib.os.actions import attach_used_volumes
 from cloudferrylib.os.actions import networks_transporter
 from cloudferrylib.base.action import create_reference
 from cloudferrylib.os.actions import prepare_volumes_data_map
@@ -46,6 +45,7 @@ from cloudferrylib.os.actions import prepare_networks
 from cloudferrylib.os.actions import dissociate_floatingip_via_compute
 from cloudferrylib.os.actions import map_compute_info
 from cloudferrylib.os.actions import deploy_volumes
+from cloudferrylib.os.actions import check_instances
 from cloudferrylib.os.actions import start_vm
 from cloudferrylib.os.actions import load_compute_image_to_file
 from cloudferrylib.os.actions import merge_base_and_diff
@@ -64,6 +64,7 @@ from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
 from cloudferrylib.utils.drivers import ssh_ceph_to_file
 from cloudferrylib.utils.drivers import ssh_file_to_file
 from cloudferrylib.utils.drivers import ssh_file_to_ceph
+from cloudferrylib.utils.drivers import ssh_chunks
 from cloudferrylib.os.actions import get_filter
 from cloudferrylib.os.actions import deploy_snapshots
 from cloudferrylib.base.action import is_option
@@ -71,6 +72,11 @@ from cloudferrylib.os.actions import get_info_volumes
 from cloudferrylib.os.actions import get_info_objects
 from cloudferrylib.os.actions import copy_object2object
 from cloudferrylib.os.actions import fake_action
+from cloudferrylib.os.actions import check_needed_compute_resources
+from cloudferrylib.os.actions import check_ssh
+from cloudferrylib.os.actions import check_sql
+from cloudferrylib.os.actions import check_rabbitmq
+from cloudferrylib.os.actions import check_bandwidth
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
@@ -79,7 +85,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         super(OS2OSFerry, self). __init__(config)
         resources = {'identity': keystone.KeystoneIdentity,
                      'image': glance_image.GlanceImage,
-                     'storage': cinder_storage.CinderStorage,
+                     'storage': utl.import_class_by_string(
+                         config.migrate.cinder_migration_strategy),
                      'network': neutron.NeutronNetwork,
                      'compute': nova_compute.NovaCompute,
                      'objstorage': swift_storage.SwiftStorage}
@@ -92,7 +99,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             'SSHCephToCeph': ssh_ceph_to_ceph.SSHCephToCeph,
             'SSHCephToFile': ssh_ceph_to_file.SSHCephToFile,
             'SSHFileToFile': ssh_file_to_file.SSHFileToFile,
-            'SSHFileToCeph': ssh_file_to_ceph.SSHFileToCeph
+            'SSHFileToCeph': ssh_file_to_ceph.SSHFileToCeph,
+            'SSHChunksTransfer': ssh_chunks.SSHChunksTransfer,
         }
 
     def migrate(self, scenario=None):
@@ -102,20 +110,54 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                 utl.INSTANCES_TYPE: {}
             }
         })
+        # "process_migration" is dict with 3 keys:
+        #    "preparation" - is cursor that points to tasks must be processed
+        #                    before migration i.e - taking snapshots,
+        #                    figuring out all services are up
+        #    "migration" - is cursor that points to the first
+        #                  task in migration process
+        #    "rollback" - is cursor that points to tasks must be processed
+        #                 in case of "migration" failure
         if not scenario:
-            process_migration = self.process_migrate()
+            process_migration = {"migration": cursor.Cursor(self.process_migrate())}
         else:
             scenario.init_tasks(self.init)
             scenario.load_scenario()
-            process_migration = scenario.get_net()
-        process_migration = cursor.Cursor(process_migration)
-        scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, cursor=process_migration)
+            process_migration = {k: cursor.Cursor(v) for k, v in scenario.get_net().items()}
+        scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler, **process_migration)
         scheduler_migr.start()
 
     def process_migrate(self):
+        check_environment = self.check_environment()
         task_resources_transporting = self.transport_resources()
         transport_instances_and_dependency_resources = self.migrate_instances()
-        return task_resources_transporting >> transport_instances_and_dependency_resources
+        return (check_environment >> 
+                task_resources_transporting >> 
+                transport_instances_and_dependency_resources)
+
+    def check_environment(self):
+        check_src_cloud = self.check_cloud('src_cloud')
+        check_dst_cloud = self.check_cloud('dst_cloud')
+        return check_src_cloud >> check_dst_cloud
+
+    def check_cloud(self, cloud):
+        read_instances = get_info_instances.GetInfoInstances(self.init,
+                                                             cloud=cloud)
+        read_images = get_info_images.GetInfoImages(self.init, cloud=cloud)
+        read_objects = get_info_objects.GetInfoObjects(self.init, cloud=cloud)
+        read_volumes = get_info_volumes.GetInfoVolumes(self.init, cloud=cloud)
+        check_ssh_access = check_ssh.CheckSSH(self.init, cloud=cloud)
+        sql_check = check_sql.CheckSQL(self.init, cloud=cloud)
+        rabbit_check = check_rabbitmq.CheckRabbitMQ(self.init, cloud=cloud)
+        bandwidh_check = check_bandwidth.CheckBandwidth(self.init, cloud=cloud)
+        return (read_instances >>
+                read_images >>
+                read_objects >>
+                read_volumes >>
+                check_ssh_access >>
+                sql_check >>
+                rabbit_check >>
+                bandwidh_check)
 
     def migrate_instances(self):
         name_data = 'info'
@@ -125,10 +167,12 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         save_result = self.save_result(name_data, name_result, name_result, 'instances')
         trans_one_inst = self.migrate_process_instance()
         init_iteration_instance = self.init_iteration_instance(name_data, name_backup, name_iter)
+        act_check_needed_compute_resources = check_needed_compute_resources.CheckNeededComputeResources(self.init)
         act_get_filter = get_filter.GetFilter(self.init)
         act_get_info_inst = get_info_instances.GetInfoInstances(self.init, cloud='src_cloud')
         act_cleanup_images = cleanup_images.CleanupImages(self.init)
         get_next_instance = get_info_iter.GetInfoIter(self.init)
+        check_for_instance = check_instances.CheckInstances(self.init)
         rename_info_iter = rename_info.RenameInfo(self.init, name_result, name_data)
         is_instances = is_end_iter.IsEndIter(self.init)
 
@@ -136,6 +180,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             act_get_filter >> \
             act_get_info_inst >> \
             init_iteration_instance >> \
+            act_check_needed_compute_resources >> \
+            (check_for_instance | rename_info_iter) >> \
             get_next_instance >> \
             trans_one_inst >> \
             save_result >> \

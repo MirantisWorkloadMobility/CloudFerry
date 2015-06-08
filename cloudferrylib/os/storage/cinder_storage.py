@@ -15,9 +15,6 @@
 
 import time
 
-from fabric.api import run
-from fabric.api import settings
-
 from cinderclient.v1 import client as cinder_client
 
 from cloudferrylib.base import storage
@@ -55,7 +52,7 @@ class CinderStorage(storage.Storage):
             params.cloud.user,
             params.cloud.password,
             params.cloud.tenant,
-            "http://%s:35357/v2.0/" % params.cloud.host)
+            params.cloud.auth_url)
 
     def read_info(self, **kwargs):
         info = {utl.VOLUMES_TYPE: {}}
@@ -65,7 +62,10 @@ class CinderStorage(storage.Storage):
             if self.config.migrate.keep_volume_snapshots:
                 search_opts = {'volume_id': volume['id']}
                 for snap in self.get_snapshots_list(search_opts=search_opts):
-                    snapshot = self.convert_snapshot(snap, volume, self.config, self.cloud)
+                    snapshot = self.convert_snapshot(snap,
+                                                     volume,
+                                                     self.config,
+                                                     self.cloud)
                     snapshots[snapshot['id']] = snapshot
             info[utl.VOLUMES_TYPE][vol.id] = {utl.VOLUME_BODY: volume,
                                               'snapshots': snapshots,
@@ -74,7 +74,7 @@ class CinderStorage(storage.Storage):
         if self.config.migrate.keep_volume_storage:
             info['volumes_db'] = {utl.VOLUMES_TYPE: '/tmp/volumes'}
 
-             #cleanup db
+            # cleanup db
             self.cloud.ssh_util.execute('rm -rf /tmp/volumes',
                                         host_exec=self.mysql_host)
 
@@ -96,6 +96,8 @@ class CinderStorage(storage.Storage):
                     volume_info[utl.VOLUME_BODY]['device'])
 
     def get_volumes_list(self, detailed=True, search_opts=None):
+        if self.config.migrate.all_volumes:
+            search_opts['all_tenants'] = 1
         return self.cinder_client.volumes.list(detailed, search_opts)
 
     def get_snapshots_list(self, detailed=True, search_opts=None):
@@ -228,7 +230,9 @@ class CinderStorage(storage.Storage):
             list_disk = utl.get_libvirt_block_info(
                 instance_info['instance_name'],
                 cloud.getIpSsh(),
-                instance_info['host'])
+                instance_info['host'],
+                cfg.cloud.ssh_user,
+                cfg.cloud.ssh_sudo_password)
             volume['path'] = utl.find_element_by_in(list_disk, vol.id)
         return volume
 
@@ -247,8 +251,10 @@ class CinderStorage(storage.Storage):
         }
 
         if cfg.storage.backend == utl.CEPH:
-            snapshot['name'] = "%s%s" % (cfg.storage.snapshot_name_template, snap.id)
-            snapshot['path'] = "%s@%s" % (snapshot['vol_path'], snapshot['name'])
+            snapshot['name'] = "%s%s" % (cfg.storage.snapshot_name_template,
+                                         snap.id)
+            snapshot['path'] = "%s@%s" % (snapshot['vol_path'],
+                                          snapshot['name'])
             snapshot['host'] = (cfg.storage.host
                                 if cfg.storage.host
                                 else cfg.cloud.host)
@@ -270,18 +276,10 @@ class CinderStorage(storage.Storage):
         return info
 
     def __patch_option_bootable_of_volume(self, volume_id, bootable):
-        cmd = ('use cinder;update volumes set volumes.bootable=%s where '
+        cmd = ('UPDATE volumes SET volumes.bootable=%s WHERE '
                'volumes.id="%s"') % (int(bootable), volume_id)
-        self.__cmd_mysql_on_dest_controller(cmd)
-
-    def __cmd_mysql_on_dest_controller(self, cmd):
-        with settings(host_string=self.mysql_host):
-            run('mysql %s %s -e \'%s\'' % (
-                ("-u " + self.config['mysql']['user'])
-                if self.config['mysql']['user'] else "",
-                "-p" + self.config['mysql']['password']
-                if self.config['mysql']['password'] else "",
-                cmd))
+        connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
+        connector.execute(cmd)
 
     def download_table_from_db_to_file(self, table_name, file_name):
         connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')

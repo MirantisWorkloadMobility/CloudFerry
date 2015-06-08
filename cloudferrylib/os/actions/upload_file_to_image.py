@@ -42,13 +42,13 @@ class UploadFileToImage(action.Action):
             # action
             with settings(host_string=cfg.host):
                 out = run(("glance --os-username=%s --os-password=%s --os-tenant-name=%s " +
-                           "--os-auth-url=http://%s:35357/v2.0 " +
+                           "--os-auth-url=%s " +
                            "image-create --name %s --disk-format=%s --container-format=bare --file %s| " +
                            "grep id") %
                           (cfg.user,
                            cfg.password,
                            cfg.tenant,
-                           cfg.host,
+                           cfg.auth_url,
                            image_name,
                            image_format,
                            base_file))

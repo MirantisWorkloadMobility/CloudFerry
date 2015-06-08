@@ -43,21 +43,19 @@ class Cloud(object):
                                       cloud=utils.ext_dict(),
                                       import_rules=utils.ext_dict(),
                                       mail=utils.ext_dict(),
-                                      mysql=utils.ext_dict())
-        for k, v in config.migrate.iteritems():
-            cloud_config['migrate'][k] = v
+                                      snapshot=utils.ext_dict(),
+                                      mysql=utils.ext_dict(),
+                                      rabbit=utils.ext_dict(),
+                                      initial_check=utils.ext_dict())
 
-        for k, v in getattr(config, position).iteritems():
-            cloud_config['cloud'][k] = v
-
-        for k, v in config.import_rules.iteritems():
-            cloud_config['import_rules'][k] = v
-
-        for k, v in config.mail.iteritems():
-            cloud_config['mail'][k] = v
-
-        for k, v in getattr(config, position + '_mysql').iteritems():
-            cloud_config['mysql'][k] = v
+        cloud_config['migrate'].update(config.migrate)
+        cloud_config['cloud'].update(getattr(config, position))
+        cloud_config['import_rules'].update(config.import_rules)
+        cloud_config['mail'].update(config.mail)
+        cloud_config['mysql'].update(getattr(config, position + '_mysql'))
+        cloud_config['rabbit'].update(getattr(config, position + '_rabbit'))
+        cloud_config['snapshot'].update(config.snapshot)
+        cloud_config['initial_check'].update(config.initial_check)
 
         return cloud_config
 
@@ -86,8 +84,11 @@ class Cloud(object):
             self)
         self.resources['identity'] = identity
 
+        skip_initialization = ['identity']
+        if not self.config.src_objstorage.service:
+            skip_initialization.append('objstorage')
         for resource in resources:
-            if resource != 'identity':
+            if resource not in skip_initialization:
                 resource_config = self.make_resource_config(self.config,
                                                             self.position,
                                                             cloud_config,

@@ -25,14 +25,16 @@ from cloudferrylib.utils import utils
 from tests import test
 
 
-FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
-                                                   'password': 'fake_password',
-                                                   'tenant': 'fake_tenant',
-                                                   'host': '1.1.1.1',
-                                                   }),
-                             migrate=utils.ext_dict({'speed_limit': '10MB',
-                                                     'retry': '7',
-                                                     'time_wait': '5'}))
+FAKE_CONFIG = utils.ext_dict(
+    cloud=utils.ext_dict({'user': 'fake_user',
+                          'password': 'fake_password',
+                          'tenant': 'fake_tenant',
+                          'auth_url': 'http://1.1.1.1:35357/v2.0/',
+                          'service_tenant': 'services'}),
+    migrate=utils.ext_dict({'ext_net_map': 'fake_ext_net_map.yaml',
+                            'speed_limit': '10MB',
+                            'retry': '7',
+                            'time_wait': 5}))
 
 
 class NeutronTestCase(test.TestCase):
@@ -463,12 +465,17 @@ class NeutronTestCase(test.TestCase):
             'network': {'name': 'fake_network_name_1',
                         'admin_state_up': True,
                         'tenant_id': 'fake_tenant_id_1',
-                        'shared': False}}
+                        'shared': False,
+                        'router:external': False,
+                        'provider:physical_network': None,
+                        'provider:network_type': 'gre'
+                        }}
 
         self.neutron_network_client.upload_networks([self.net_1_info])
 
-        self.neutron_mock_client().create_network.\
-            assert_called_once_with(network_info)
+        if network_info['network']['provider:physical_network']:
+            self.neutron_mock_client().create_network.\
+                assert_called_once_with(network_info)
 
     def test_upload_subnets(self):
 
@@ -575,13 +582,13 @@ class NeutronTestCase(test.TestCase):
                       'subnet_ids': ['fake_subnet_id_1'],
                       'external_gateway_info': None}
         src_subnets = [{'id': 'fake_subnet_id_1',
-                        'external':False,
+                        'external': False,
                         'res_hash': 'fake_subnet_hash'}]
         dst_router = {'id': 'fake_router_id_2',
                       'subnet_ids': ['fake_subnet_id_2'],
                       'external_gateway_info': None}
         dst_subnets = [{'id': 'fake_subnet_id_2',
-                        'external':False,
+                        'external': False,
                         'res_hash': 'fake_subnet_hash'}]
         self.neutron_network_client.add_router_interfaces(src_router,
                                                           dst_router,

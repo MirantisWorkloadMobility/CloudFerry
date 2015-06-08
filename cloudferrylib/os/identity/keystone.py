@@ -13,8 +13,12 @@
 # limitations under the License.
 
 
+import pika
+
+import keystoneclient
 from keystoneclient.v2_0 import client as keystone_client
 
+import cfglib
 from cloudferrylib.base import identity
 from cloudferrylib.utils import GeneratorPassword
 from cloudferrylib.utils import Postman
@@ -24,8 +28,6 @@ from cloudferrylib.utils import utils as utl
 
 LOG = utl.get_log(__name__)
 
-NOVA_SERVICE = 'nova'
-
 
 class KeystoneIdentity(identity.Identity):
     """The main class for working with OpenStack Keystone Identity Service."""
@@ -33,6 +35,7 @@ class KeystoneIdentity(identity.Identity):
     def __init__(self, config, cloud):
         super(KeystoneIdentity, self).__init__()
         self.config = config
+        self._ks_client_creds = self.proxy(self._get_client_by_creds(), config)
         self.keystone_client = self.proxy(self.get_client(), config)
         self.mysql_connector = cloud.mysql_connector
         self.cloud = cloud
@@ -83,13 +86,18 @@ class KeystoneIdentity(identity.Identity):
                 'users': [],
                 'roles': []}
 
+        service_tenant_id = \
+            self.get_tenant_id_by_name(self.config.cloud.service_tenant)
+
         for tenant in self.get_tenants_list():
-            tnt = self.convert(tenant, self.config)
-            info['tenants'].append(tnt)
+            if tenant.id != service_tenant_id:
+                tnt = self.convert(tenant, self.config)
+                info['tenants'].append(tnt)
 
         for user in self.get_users_list():
-            usr = self.convert(user, self.config)
-            info['users'].append(usr)
+            if user.tenantId != service_tenant_id:
+                usr = self.convert(user, self.config)
+                info['users'].append(usr)
 
         for role in self.get_roles_list():
             rl = self.convert(role, self.config)
@@ -109,6 +117,8 @@ class KeystoneIdentity(identity.Identity):
         self._deploy_tenants(tenants)
         self._deploy_roles(info['roles'])
         self._deploy_users(users, tenants)
+        if not self.config.migrate.migrate_users:
+            users = info['users'] = self._update_users_info(users)
         if self.config['migrate']['keep_user_passwords']:
             passwords = info['user_passwords']
             self._upload_user_passwords(users, passwords)
@@ -116,45 +126,38 @@ class KeystoneIdentity(identity.Identity):
         print 'Finished'
 
     def get_client(self):
-        """ Getting keystone client """
+        """ Getting keystone client using authentication with admin auth token.
 
-        ks_client_for_token = keystone_client.Client(
-            username=self.config.cloud.user,
-            password=self.config.cloud.password,
-            tenant_name=self.config.cloud.tenant,
-            auth_url="http://%s:35357/v2.0/" % self.config.cloud.host)
+        :return: OpenStack Keystone Client instance
+        """
 
         return keystone_client.Client(
-            token=ks_client_for_token.auth_ref['token']['id'],
-            endpoint="http://%s:35357/v2.0/" % self.config.cloud.host)
+            token=self._ks_client_creds.auth_ref['token']['id'],
+            endpoint=self.config.cloud.auth_url)
 
-    def get_service_name_by_type(self, service_type):
-        """Getting service_name from keystone. """
+    def _get_client_by_creds(self):
+        """Authenticating with a user name and password.
 
-        for service in self.get_services_list():
-            if service.type == service_type:
-                return service.name
-        return NOVA_SERVICE
+        :return: OpenStack Keystone Client instance
+        """
 
-    def get_public_endpoint_service_by_id(self, service_id):
-        """Getting endpoint public URL from keystone. """
+        return keystone_client.Client(username=self.config.cloud.user,
+                                      password=self.config.cloud.password,
+                                      tenant_name=self.config.cloud.tenant,
+                                      auth_url=self.config.cloud.auth_url)
 
-        for endpoint in self.keystone_client.endpoints.list():
-            if endpoint.service_id == service_id:
-                return endpoint.publicurl
+    def get_endpoint_by_service_type(self, service_type, endpoint_type):
+        """Getting endpoint URL by service type.
 
-    def get_service_id(self, service_name):
-        """Getting service_id from keystone. """
+        :param service_type: OpenStack service type (image, compute etc.)
+        :param endpoint_type: publicURL or internalURL
 
-        for service in self.get_services_list():
-            if service.name == service_name:
-                return service.id
+        :return: String endpoint of specified OpenStack service
+        """
 
-    def get_endpoint_by_service_name(self, service_name):
-        """ Getting endpoint public URL by service name from keystone. """
-
-        service_id = self.get_service_id(service_name)
-        return self.get_public_endpoint_service_by_id(service_id)
+        return self._ks_client_creds.service_catalog.url_for(
+            service_type=service_type,
+            endpoint_type=endpoint_type)
 
     def get_tenants_func(self):
         tenants = {tenant.id: tenant.name for tenant in
@@ -183,6 +186,16 @@ class KeystoneIdentity(identity.Identity):
 
         return self.keystone_client.tenants.get(tenant_id)
 
+    def try_get_tenant_name_by_id(self, tenant_id, default=None):
+        """ Same as `get_tenant_by_id` but returns `default` in case tenant
+        ID is not present """
+        try:
+            return self.keystone_client.tenants.get(tenant_id).name
+        except keystoneclient.exceptions.NotFound:
+            LOG.warning("Tenant '%s' not found, returning default value = "
+                        "'%s'", tenant_id, default)
+            return default
+
     def get_services_list(self):
         """ Getting list of available services from keystone. """
 
@@ -202,6 +215,12 @@ class KeystoneIdentity(identity.Identity):
         """ Getting list of available roles from keystone. """
 
         return self.keystone_client.roles.list()
+
+    def try_get_username_by_id(self, user_id, default=None):
+        try:
+            return self.keystone_client.users.get(user_id).name
+        except keystoneclient.exceptions.NotFound:
+            return default
 
     def roles_for_user(self, user_id, tenant_id):
         """ Getting list of user roles for tenant """
@@ -269,17 +288,23 @@ class KeystoneIdentity(identity.Identity):
 
         keep_passwd = self.config['migrate']['keep_user_passwords']
         overwrite_passwd = self.config['migrate']['overwrite_user_passwords']
+
         for _user in users:
             user = _user['user']
             password = self._generate_password()
 
             if user['name'] in dst_users:
+                # Create users mapping
                 _user['meta']['new_id'] = dst_users[user['name']]
+
                 if overwrite_passwd and not keep_passwd:
                     self.update_user(_user['meta']['new_id'],
                                      password=password)
                     self._passwd_notification(user['email'], user['name'],
                                               password)
+                continue
+
+            if not self.config.migrate.migrate_users:
                 continue
 
             tenant_id = tenant_mapped_ids[user['tenantId']]
@@ -291,6 +316,28 @@ class KeystoneIdentity(identity.Identity):
             else:
                 self._passwd_notification(user['email'], user['name'],
                                           password)
+
+    @staticmethod
+    def _update_users_info(users):
+        """
+        Update users info.
+
+        This method is needed for skip users, that have not been migrated to
+        destination cloud and that do not exist there. So we leave information
+        only about users with mapping and skip those, who don't have the same
+        user on the destination cloud. This is done, because another tasks can
+        use users mapping.
+
+        :param users: OpenStack Keystone users info;
+        :return: List with actual users info.
+        """
+
+        users_info = []
+        for user in users:
+            if user['meta'].get('new_id'):
+                users_info.append(user)
+
+        return users_info
 
     def _passwd_notification(self, email, name, password):
         if not self.postman:
@@ -344,12 +391,15 @@ class KeystoneIdentity(identity.Identity):
 
     def _upload_user_tenant_roles(self, user_tenants_roles, users, tenants):
         roles_id = {role.name: role.id for role in self.get_roles_list()}
+        dst_users = {user.name: user.id for user in self.get_users_list()}
 
         for _user in users:
             user = _user['user']
             # FIXME should be deleted after determining how
             # to change self role without logout
             if user['name'] == self.keystone_client.username:
+                continue
+            if user['name'] not in dst_users:
                 continue
             for _tenant in tenants:
                 tenant = _tenant['tenant']
@@ -377,3 +427,33 @@ class KeystoneIdentity(identity.Identity):
             return self.templater.render(name_file, args)
         else:
             return None
+
+    def check_rabbitmq(self):
+        credentials = pika.PlainCredentials(self.config.rabbit.user,
+                                            self.config.rabbit.password)
+        for host in self.config.rabbit.hosts.split(","):
+            pika.BlockingConnection(pika.ConnectionParameters(
+                host=host.strip(), credentials=credentials))
+
+
+def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
+                                  fallback_to_admin=True):
+    """Returns user from destination with the same name as on source. None if
+    user does not exist"""
+    try:
+        src_user = src_keystone.keystone_client.users.find(id=src_user_id)
+        src_user_name = src_user.name
+    except keystoneclient.exceptions.NotFound:
+        LOG.warning("User '%s' not found on source!", src_user_id)
+        if fallback_to_admin:
+            LOG.warning("Replacing user '%s' with admin", src_user_id)
+            src_user_name = cfglib.CONF.src.user
+        else:
+            return
+
+    try:
+        dst_user = dst_keystone.keystone_client.users.find(name=src_user_name)
+        return dst_user
+    except keystoneclient.exceptions.NotFound:
+        LOG.warning("User '%s' not found on DST!", src_user_name)
+        return
