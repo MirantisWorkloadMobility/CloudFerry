@@ -171,21 +171,21 @@ class GlanceImage(image.Image):
     def get_tags(self):
         return {}
 
-    def get_members(self):
+    def get_members(self, images):
         # members structure {image_id: {tenant_name: can_share}}
         result = {}
 
-        for img in self.get_image_list():
-            for entry in self.glance_client.image_members.list(image=img.id):
-                if img.id not in result:
-                    result[img.id] = {}
+        for img in images:
+            for entry in self.glance_client.image_members.list(image=img):
+                if img not in result:
+                    result[img] = {}
 
                 # change tenant_id to tenant_name
                 tenant_name = self.identity_client.try_get_tenant_name_by_id(
                     entry.member_id,
                     default=self.config.cloud.tenant)
 
-                result[img.id][tenant_name] = entry.can_share
+                result[img][tenant_name] = entry.can_share
         return result
 
     def create_member(self, image_id, tenant_name, can_share):
@@ -249,7 +249,7 @@ class GlanceImage(image.Image):
 
         info.update({
             "tags": self.get_tags(),
-            "members": self.get_members()
+            "members": self.get_members(info['images'])
         })
 
         return info
