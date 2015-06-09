@@ -71,7 +71,9 @@ git clone https://github.com/MirantisWorkloadMobility/CloudFerry.git
 cd CloudFerry
 virtualenv .venv
 source .venv/bin/activate
-pip --upgrade pip
+
+# for some reason fabric has dependency resolution problems with pip>=7.0.0
+pip install pip==6.1.1
 pip install --allow-all-external -r requirements.txt
 pip install -r test-requirements.txt
 ```
