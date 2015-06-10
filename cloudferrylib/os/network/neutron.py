@@ -796,7 +796,7 @@ class NeutronNetwork(network.Network):
                             'direction': rule['direction'],
                             'protocol': rule['protocol'],
                             'port_range_min': rule['port_range_min'],
-                            'port_range_max': rule['port_range_min'],
+                            'port_range_max': rule['port_range_max'],
                             'ethertype': rule['ethertype'],
                             'remote_ip_prefix': rule['remote_ip_prefix'],
                             'security_group_id': ex_secgr['id'],
