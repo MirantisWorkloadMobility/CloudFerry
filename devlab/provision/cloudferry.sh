@@ -17,7 +17,7 @@ error_exit() {
 
 run() {
     echo "Running '$*' as '$VAGRANT_USER'"
-    sudo -u $VAGRANT_USER $*
+    sudo -H -u $VAGRANT_USER $*
 }
 
 while [[ $# -ge 1 ]]; do
@@ -31,18 +31,11 @@ done
 [[ -z $CF_PATH ]] && error_exit "Missing --cloudferry-path option"
 [[ -z $VAGRANT_USER ]] && error_exit "Missing --user option"
 
-CF_PATH=/home/${VAGRANT_USER}/${CF_PATH}
 pushd $CF_PATH
 
 apt-get install redis-server -y
 service redis-server start
 
-if [[ ! -d CloudFerry && ! -f CloudFerry/requirements.txt ]]; then
-    echo "Cloning CloudFerry repo to $CF_PATH"
-    run git clone https://github.com/MirantisWorkloadMobility/CloudFerry.git
-fi
-
-pushd CloudFerry
 if [[ ! -d .ubuntu-venv ]]; then
     echo "Setting up CloudFerry virtual environment"
 
@@ -58,8 +51,5 @@ else
     echo "CloudFerry venv is already present, skipping"
 fi
 
-source generate_config.sh
-
 popd
 
-popd

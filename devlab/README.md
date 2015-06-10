@@ -24,8 +24,6 @@ options:
 
  - `public_key_path` -- public key CloudFerry uses to ssh into SRC and DST
    migration environments;
- - `cloudferry_path` -- Path to CloudFerry sources. If sources are not present,
-   this is the path where the sources will be cloned to.
 
 ## Prerequisites
 
