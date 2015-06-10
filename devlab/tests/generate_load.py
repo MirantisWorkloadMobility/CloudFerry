@@ -320,6 +320,16 @@ class Prerequisites():
         with open(file_name, 'w') as outfile:
             json.dump(data, outfile, sort_keys=True, indent=4, ensure_ascii=False)
 
+    def delete_flavor(self, flavor='del_flvr'):
+        """
+        Method for flavor deletion.
+        """
+        try:
+            self.novaclient.flavors.delete(
+                self.get_flavor_id(flavor))
+        except Exception as e:
+            print "Flavor %s failed to delete: %s" % (flavor, repr(e))
+
     def run_preparation_scenario(self):
         self.create_tenants()
         self.create_users()
@@ -335,6 +345,7 @@ class Prerequisites():
         self.create_cinder_objects()
         self.emulate_vm_states()
         self.generate_vm_state_list()
+        self.delete_flavor()
 
     def clean_objects(self):
         for flavor in config.flavors:

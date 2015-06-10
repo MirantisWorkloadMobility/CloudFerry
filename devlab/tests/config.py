@@ -26,7 +26,8 @@ tenants = [
      'vms': [
          {'name': 'tn1server1', 'image': 'image1', 'flavor': 'flavorname2',
           'key_name': 'key1'},
-         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1'}],
+         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1'},
+         {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr'}],
      'networks': [{'name': 'tenantnet1', 'admin_state_up': True}],
      'subnets': [{'cidr': '10.5.2.0/24', 'ip_version': 4}],
      'security_groups': [
@@ -99,7 +100,8 @@ flavors = [
     # Disabled for now, but in the future we need to generate non-pubic flavors
     # {'name': 'flavorname3', 'disk': '10', 'ram': '32', 'vcpus': '1',
     #  'is_public': False},
-    {'name': 'flavorname2', 'disk': '5', 'ram': '48', 'vcpus': '2'}
+    {'name': 'flavorname2', 'disk': '5', 'ram': '48', 'vcpus': '2'},
+    {'name': 'del_flvr', 'disk': '5', 'ram': '64', 'vcpus': '1'}
 ]
 
 # Networks to create/delete
