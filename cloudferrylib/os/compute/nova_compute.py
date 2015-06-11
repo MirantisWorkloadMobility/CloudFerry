@@ -41,6 +41,29 @@ DEFAULT_QUOTA_VALUE = -1
 
 INSTANCE_HOST_ATTRIBUTE = 'OS-EXT-SRV-ATTR:host'
 
+ACTIVE = 'ACTIVE'
+STOPPED = 'STOPPED'
+SHUTOFF = 'SHUTOFF'
+RESIZED = 'RESIZED'
+SUSPENDED = 'SUSPENDED'
+PAUSED = 'PAUSED'
+SHELVED = 'SHELVED'
+SHELVED_OFFLOADED = 'SHELVED_OFFLOADED'
+
+ALLOWED_VM_STATUSES = [ACTIVE, STOPPED, SHUTOFF, RESIZED, SUSPENDED,
+                       PAUSED, SHELVED, SHELVED_OFFLOADED]
+
+# Describe final VM status on destination based on source VM status
+# dict( <source VM status> , <destination VM status> )
+STATUSES_AFTER_MIGRATION = {ACTIVE: ACTIVE,
+                            STOPPED: SHUTOFF,
+                            SHUTOFF: SHUTOFF,
+                            RESIZED: ACTIVE,
+                            SUSPENDED: SHUTOFF,
+                            PAUSED: SHUTOFF,
+                            SHELVED: SHUTOFF,
+                            SHELVED_OFFLOADED: SHUTOFF}
+
 
 class NovaCompute(compute.Compute):
     """The main class for working with Openstack Nova Compute Service. """
@@ -138,7 +161,7 @@ class NovaCompute(compute.Compute):
         info = {'instances': {}}
 
         for instance in self.get_instances_list(search_opts=search_opts):
-            if instance.status != 'ERROR':
+            if instance.status in ALLOWED_VM_STATUSES:
                 info['instances'][instance.id] = self.convert(instance,
                                                               self.config,
                                                               self.cloud)
@@ -497,6 +520,16 @@ class NovaCompute(compute.Compute):
 
     def get_instance(self, instance_id):
         return self.get_instances_list(search_opts={'id': instance_id})[0]
+
+    def change_status_if_needed(self, instance):
+        """
+        Take VM status on source. Calculate result status on destination
+        according STATUSES_AFTER_MIGRATION map. And try to change it.
+        """
+        needed_status = STATUSES_AFTER_MIGRATION[
+            instance['meta']['source_status']]
+        self.change_status(needed_status,
+                           instance_id=instance['instance']['id'])
 
     def change_status(self, status, instance=None, instance_id=None):
         if instance_id:
