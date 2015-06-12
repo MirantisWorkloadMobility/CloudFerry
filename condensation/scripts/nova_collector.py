@@ -13,8 +13,103 @@
 # limitations under the License.
 
 from novaclient import client
-import json
+from cloudferrylib.utils import utils
 from cloudferrylib.os.compute import nova_compute
+from condensation import utils as condensation_utils
+
+
+LOG = utils.get_log(__name__)
+
+
+def get_flavors_vms_and_nodes(conf):
+    """Returns information about flavors and VMs in the source cloud.
+
+    Return format:
+    ({
+        <VM ID>: {
+            "id": <VM ID>,
+            "flavor": <VM flavor>,
+            "host": <host VM is running on>,
+        }
+    },
+    {
+        <flavor ID>: {
+            "fl_id": <flavor ID>,
+            "core": <number of cores for flavor>,
+            "name": <flavor name>,
+            "ram": <amount of RAM required for flavor>,
+            "ephemeral": <amount of ephemeral storage required for flavor>,
+            "swap": <swap space needed for flavor>
+        }
+    },
+    {
+        <hostname>: {
+            'core': <number of cores/CPUs>,
+            'ram': <amount of RAM>,
+            'core_ratio': <CPU allocation ratio>,
+            'ram_ratio': <RAM allocation ratio>,
+        }
+    })"""
+    src = conf['src']
+    username = src['user']
+    password = src['password']
+    tenant = src['tenant']
+    auth_url = src['auth_url']
+
+    dst_comp = conf['dst_compute']
+    core_ratio = dst_comp['cpu_allocation_ratio']
+    ram_ratio = dst_comp['ram_allocation_ratio']
+
+    cli = client.Client(2, username, password, tenant, auth_url)
+    servers = cli.servers.list(search_opts={"all_tenants": True})
+    nova_flavors = cli.flavors.list()
+
+    flavors = {
+        i.id: {
+            "fl_id": i.id,
+            "core": i.vcpus,
+            "name": i.name,
+            "ram": i.ram,
+            "ephemeral": i.ephemeral,
+            "swap": i.swap
+        } for i in nova_flavors
+    }
+
+    hypervisors = {}
+
+    down_hosts = set([service.host for service in cli.services.findall(
+        binary='nova-compute', state='down')])
+
+    def vm_host_is_up(vm):
+        host_is_up = (getattr(vm, nova_compute.INSTANCE_HOST_ATTRIBUTE)
+                      not in down_hosts)
+        if not host_is_up:
+            LOG.warning("VM '%s' is running on a down host! Skipping.", vm.id)
+
+        return host_is_up
+
+    def vm_is_in_valid_state(vm):
+        return vm.status in nova_compute.ALLOWED_VM_STATUSES
+
+    vms = {
+        vm.id: {
+            "id": vm.id,
+            "flavor": vm.flavor.get("id"),
+            "host": getattr(vm,
+                            nova_compute.INSTANCE_HOST_ATTRIBUTE)
+        } for vm in servers if vm_host_is_up(vm) and vm_is_in_valid_state(vm)
+    }
+
+    for hypervisor in cli.hypervisors.list():
+        host = hypervisor.hypervisor_hostname
+        if host not in down_hosts:
+            hypervisors[host] = {
+                'core': hypervisor.vcpus,
+                'ram': hypervisor.memory_mb,
+                'core_ratio': core_ratio,
+                'ram_ratio': ram_ratio}
+
+    return flavors, vms, hypervisors
 
 
 def run_it(conf):
@@ -24,49 +119,5 @@ def run_it(conf):
      - about flavors and instances and store it into 'configs/nova.json'
      - about compute nodes and store it into 'configs/nodes_info.json'
     """
-    src = conf['src']
-    username = src['user']
-    password = src['password']
-    tenant = src['tenant']
-    auth_url = src['auth_url']
-    dst_comp = conf['dst_compute']
-    core_ratio = dst_comp['cpu_allocation_ratio']
-    ram_ratio = dst_comp['ram_allocation_ratio']
-
-    cli = client.Client(2, username, password, tenant, auth_url)
-    servers = cli.servers.list(search_opts={"all_tenants": True})
-    flavors = cli.flavors.list()
-    result = {"vms": {i.id:
-                      {"id": i.id,
-                       "flavor": i.flavor.get("id"),
-                       "host": getattr(i, nova_compute.INSTANCE_HOST_ATTRIBUTE)
-                       } for i in servers
-                      },
-              "flavors": {i.id:
-                          {"fl_id": i.id,
-                              "core": i.vcpus,
-                              "name": i.name,
-                              "ram": i.ram,
-                              "ephemeral": i.ephemeral,
-                              "swap": i.swap
-                           } for i in flavors}}
-
-    with open("configs/nova.json", "w") as descriptor:
-        json.dump(result, descriptor)
-
-    result_dict = {}
-
-    down_hosts = set([service.host for service in cli.services.findall(
-        binary='nova-compute', state='down')])
-
-    for hypervisor in cli.hypervisors.list():
-        host = hypervisor.hypervisor_hostname
-        if host not in down_hosts:
-            result_dict[host] = {
-                    'core': hypervisor.vcpus,
-                    'ram': hypervisor.memory_mb,
-                    'core_ratio': core_ratio,
-                    'ram_ratio': ram_ratio}
-
-    with open('configs/nodes_info.json', 'w') as nodes_descriptor:
-        json.dump(result_dict, nodes_descriptor)
+    flavors, vms, nodes = get_flavors_vms_and_nodes(conf)
+    condensation_utils.store_condense_data(flavors, nodes, vms)

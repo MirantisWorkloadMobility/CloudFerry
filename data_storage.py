@@ -13,7 +13,9 @@
 # limitations under the License.
 
 from cfglib import CONF
+from cloudferrylib.utils import utils
 
+LOG = utils.get_log(__name__)
 
 # we don't want to create connection to database on module import - so that
 # we will create it only on first database call
@@ -27,11 +29,44 @@ def redis_socket_to_kwargs(function):
     def wrapper(*args, **kwargs):
         if not CONNECTION[0]:
             import redis
+            check_redis_config()
             CONNECTION[0] = redis.StrictRedis(
                 host=CONF.database.host,
                 port=CONF.database.port)
         return function(*args, connection=CONNECTION[0], **kwargs)
     return wrapper
+
+
+def check_redis_config():
+    errors_found = False
+    host = CONF.database.host
+    port = CONF.database.port
+
+    if host is None or host == "" or not isinstance(host, basestring):
+        message = ("Invalid configuration value set for Redis DB host. "
+                   "Please check 'host' option value in [database] group.")
+        LOG.error(message)
+        errors_found = True
+
+    if (port is None or
+            not isinstance(port, basestring) and
+            not isinstance(port, int) or port == ""):
+        message = ("Invalid configuration value for Redis DB port. "
+                   "Please check 'port' option value in [database] group.")
+        LOG.error(message)
+        errors_found = True
+
+    import redis
+    from redis import exceptions as redis_exceptions
+    try:
+        r = redis.StrictRedis(host=host, port=port)
+        r.ping()
+    except redis_exceptions.RedisError as e:
+        LOG.error("Redis connection failed: %s", e)
+        errors_found = True
+
+    if errors_found:
+        raise ValueError("Invalid configuration of Redis DB.")
 
 
 @redis_socket_to_kwargs
