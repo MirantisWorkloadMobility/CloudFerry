@@ -31,6 +31,12 @@ def normalize(string):
     return unicodedata.normalize('NFKD', string).encode('ascii', 'ignore')
 
 
+def get_key(iteration, name):
+    # iteration - number of iteration
+    # name - cloud name
+    return "_".join([str(iteration), name])
+
+
 class Actions(object):
 
     """
@@ -60,7 +66,7 @@ class Actions(object):
         """
             unique key to store data in key-value database
         """
-        return "_".join([str(self.iteration), self.name])
+        return get_key(self.iteration, self.name)
 
     def dump_actions(self):
         """
@@ -95,6 +101,15 @@ class Actions(object):
                                                               source_node.name,
                                                               target_node.name)
                   )
-        payload = map(normalize, [vm_obj.vm_id, source_node.name,
-                                  target_node.name])
+        payload = map(normalize, [vm_obj.vm_id, target_node.name])
         self.data[CONDENSE].append(payload)
+
+
+def get_freed_nodes(iteration):
+    try:
+        condense_data = json.loads(
+            data_storage.get(get_key(iteration, 'source')))
+        return condense_data.get(TRANSFER, [])
+    except (TypeError, ValueError):
+        LOG.error("Something went wrong while retrieving freed nodes from DB, "
+                  "check iteration value passed")

@@ -17,6 +17,8 @@ from condensation import cloud
 from condensation import utils as condense_utils
 from cloudferrylib.utils import utils as utl
 LOG = utl.get_log(__name__)
+SOURCE = "source"
+DESTINATION = "destination"
 
 
 def process(nodes, flavors, vms, groups):

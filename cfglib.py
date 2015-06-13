@@ -148,6 +148,9 @@ migrate_opts = [
                 help='Migrate user quotas. If it set in "false" only tenant '
                      'quotas will be migrated. Use this in case when '
                      'OpenStack does not support user quotas (e.g. Grizzly)'),
+    cfg.StrOpt('incloud_live_migration', default='nova',
+               help='Live migration type used for in-cloud live migration. '
+                    'Possible values: "nova", "cobalt".')
 ]
 
 mail = cfg.OptGroup(name='mail',
@@ -203,6 +206,10 @@ src_compute_opts = [
                help='convert diff file to'),
     cfg.StrOpt('convert_ephemeral_disk', default='qcow2',
                help='convert ephemeral disk to'),
+    cfg.BoolOpt('disk_overcommit', default=False,
+                help='live-migration allow disk overcommit'),
+    cfg.BoolOpt('block_migration', default=False,
+                help='live-migration without shared_storage'),
     cfg.StrOpt('host_eph_drv', default='-',
                help='host ephemeral drive')
 ]
@@ -323,6 +330,10 @@ dst_compute_opts = [
                help='convert diff file to'),
     cfg.StrOpt('convert_ephemeral_disk', default='qcow2',
                help='convert ephemeral disk to'),
+    cfg.BoolOpt('disk_overcommit', default=False,
+               help='live-migration allow disk overcommit'),
+    cfg.BoolOpt('block_migration', default=False,
+               help='live-migration without shared_storage'),
     cfg.StrOpt('host_eph_drv', default='-',
                help='host ephemeral drive'),
     cfg.FloatOpt('cpu_allocation_ratio', default='16',

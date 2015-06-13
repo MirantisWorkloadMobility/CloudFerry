@@ -708,6 +708,11 @@ class NovaCompute(compute.Compute):
     def delete_vm_by_id(self, vm_id):
         self.nova_client.servers.delete(vm_id)
 
+    def live_migrate_vm(self, vm_id, destination_host):
+        # VM source host is taken from VM properties
+        instances.incloud_live_migrate(self.nova_client, self.config, vm_id,
+                                       destination_host)
+
 
 def down_hosts(novaclient):
     services = novaclient.services.list()
@@ -723,3 +728,4 @@ def filter_down_hosts(hosts_down, elements, hostname_attribute=''):
             lambda e: getattr(e, hostname_attribute, e) not in hosts_down,
             elements)
     return elements
+
