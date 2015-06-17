@@ -1,4 +1,5 @@
 import unittest
+import json
 
 from generate_load import Prerequisites
 
@@ -19,11 +20,23 @@ class VmMigration(unittest.TestCase):
         for src_vm in self.src_vms:
             self.dst_vm_indexes.append([x['name'] for x in self.dst_vms].index(
                 src_vm['name']))
+        with open('pre_migration_vm_states.json') as data_file:
+            self.before_migr_states = json.load(data_file)
 
     def test_cold_migrate_vm_state(self):
+        original_states = self.before_migr_states
         for src_vm, vm_index in zip(self.src_vms, self.dst_vm_indexes):
-            self.assertTrue(src_vm['status'] == 'SHUTOFF' and
-                            self.dst_vms[vm_index]['status'] == 'ACTIVE')
+            if src_vm['name'] in original_states.keys():
+                if original_states[src_vm['name']] == 'ACTIVE' or \
+                        original_states[src_vm['name']] == 'VERIFY_RESIZE':
+                    self.assertTrue(src_vm['status'] == 'SHUTOFF' and
+                                    self.dst_vms[vm_index]['status'] == 'ACTIVE')
+                else:
+                    self.assertTrue(src_vm['status'] == 'SHUTOFF' and
+                                    self.dst_vms[vm_index]['status'] == 'SHUTOFF')
+            else:
+                self.assertTrue(src_vm['status'] == 'SHUTOFF' and
+                                self.dst_vms[vm_index]['status'] == 'ACTIVE')
 
     def test_cold_migrate_vm_ip(self):
         for src_vm, vm_index in zip(self.src_vms, self.dst_vm_indexes):

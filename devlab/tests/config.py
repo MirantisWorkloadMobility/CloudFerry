@@ -155,8 +155,11 @@ cinder_snapshots = [
 
 # Emulate different VM states
 vm_states = [
-    {'name': 'server3', 'state': 'error'},
-    {'name': 'server4', 'state': 'error'}
+    {'name': 'server1', 'state': 'error'},
+    {'name': 'server2', 'state': 'stop'},
+    {'name': 'server3', 'state': 'suspend'},
+    {'name': 'server4', 'state': 'pause'},
+    {'name': 'server5', 'state': 'resize'}
 ]
 
 # Client's versions
