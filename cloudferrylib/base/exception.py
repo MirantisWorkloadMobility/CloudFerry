@@ -15,3 +15,7 @@
 
 class OutOfResources(Exception):
     pass
+
+
+class ImageDownloadError(Exception):
+    pass
