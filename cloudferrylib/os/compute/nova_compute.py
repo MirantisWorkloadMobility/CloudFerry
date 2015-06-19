@@ -44,6 +44,7 @@ INSTANCE_HOST_ATTRIBUTE = 'OS-EXT-SRV-ATTR:host'
 ACTIVE = 'ACTIVE'
 STOPPED = 'STOPPED'
 SHUTOFF = 'SHUTOFF'
+VERIFY_RESIZE = 'VERIFY_RESIZE'
 RESIZED = 'RESIZED'
 SUSPENDED = 'SUSPENDED'
 PAUSED = 'PAUSED'
@@ -51,7 +52,7 @@ SHELVED = 'SHELVED'
 SHELVED_OFFLOADED = 'SHELVED_OFFLOADED'
 
 ALLOWED_VM_STATUSES = [ACTIVE, STOPPED, SHUTOFF, RESIZED, SUSPENDED,
-                       PAUSED, SHELVED, SHELVED_OFFLOADED]
+                       PAUSED, SHELVED, SHELVED_OFFLOADED, VERIFY_RESIZE]
 
 # Describe final VM status on destination based on source VM status
 # dict( <source VM status> , <destination VM status> )
@@ -62,7 +63,8 @@ STATUSES_AFTER_MIGRATION = {ACTIVE: ACTIVE,
                             SUSPENDED: SHUTOFF,
                             PAUSED: SHUTOFF,
                             SHELVED: SHUTOFF,
-                            SHELVED_OFFLOADED: SHUTOFF}
+                            SHELVED_OFFLOADED: SHUTOFF,
+                            VERIFY_RESIZE: ACTIVE}
 
 
 class NovaCompute(compute.Compute):
@@ -542,7 +544,8 @@ class NovaCompute(compute.Compute):
             'resume': lambda instance: instance.resume(),
             'paused': lambda instance: instance.pause(),
             'unpaused': lambda instance: instance.unpause(),
-            'suspend': lambda instance: instance.suspend(),
+            'suspended': lambda instance: instance.suspend(),
+            'confirm_resize': lambda instance: instance.confirm_resize(),
             'status': lambda status: lambda instance: self.wait_for_status(
                 instance_id,
                 status)
@@ -551,17 +554,21 @@ class NovaCompute(compute.Compute):
             'paused': {
                 'active': (func_restore['unpaused'],
                            func_restore['status']('active')),
-                'shutoff': (func_restore['stop'],
-                            func_restore['status']('shutoff')),
-                'suspend': (func_restore['unpaused'],
+                'shutoff': (func_restore['unpaused'],
                             func_restore['status']('active'),
-                            func_restore['suspend'],
-                            func_restore['status']('suspend'))
+                            func_restore['stop'],
+                            func_restore['status']('shutoff')),
+                'suspended': (func_restore['unpaused'],
+                              func_restore['status']('active'),
+                              func_restore['suspended'],
+                              func_restore['status']('suspended'))
             },
-            'suspend': {
+            'suspended': {
                 'active': (func_restore['resume'],
                            func_restore['status']('active')),
-                'shutoff': (func_restore['stop'],
+                'shutoff': (func_restore['resume'],
+                            func_restore['status']('active'),
+                            func_restore['stop'],
                             func_restore['status']('shutoff')),
                 'paused': (func_restore['resume'],
                            func_restore['status']('active'),
@@ -571,8 +578,8 @@ class NovaCompute(compute.Compute):
             'active': {
                 'paused': (func_restore['paused'],
                            func_restore['status']('paused')),
-                'suspend': (func_restore['suspend'],
-                            func_restore['status']('suspend')),
+                'suspended': (func_restore['suspended'],
+                              func_restore['status']('suspended')),
                 'shutoff': (func_restore['stop'],
                             func_restore['status']('shutoff'))
             },
@@ -583,10 +590,16 @@ class NovaCompute(compute.Compute):
                            func_restore['status']('active'),
                            func_restore['paused'],
                            func_restore['status']('paused')),
-                'suspend': (func_restore['start'],
+                'suspended': (func_restore['start'],
+                              func_restore['status']('active'),
+                              func_restore['suspended'],
+                              func_restore['status']('suspended'))
+            },
+            'verify_resize': {
+                'shutoff': (func_restore['confirm_resize'],
                             func_restore['status']('active'),
-                            func_restore['suspend'],
-                            func_restore['status']('suspend'))
+                            func_restore['stop'],
+                            func_restore['status']('shutoff'))
             }
         }
         if curr != will:
