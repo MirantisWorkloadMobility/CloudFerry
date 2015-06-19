@@ -23,8 +23,10 @@ from fabric.api import run
 from fabric.api import settings
 
 from glanceclient import client as glance_client
+from glanceclient import exc
 from glanceclient.v1.images import CREATE_PARAMS
 
+from cloudferrylib.base import exception
 from cloudferrylib.base import image
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import file_like_proxy
@@ -126,7 +128,12 @@ class GlanceImage(image.Image):
         return self.get_image_by_id(image_id).status
 
     def get_ref_image(self, image_id):
-        return self.glance_client.images.data(image_id)._resp
+        try:
+            return self.glance_client.images.data(image_id)._resp
+        except exc.HTTPInternalServerError as e:
+            LOG.error("There is an error occurred while trying to reach "
+                      "image's data. (id = %s)\n %s", image_id, e)
+            raise exception.ImageDownloadError
 
     def get_image_checksum(self, image_id):
         return self.get_image_by_id(image_id).checksum
@@ -328,19 +335,27 @@ class GlanceImage(image.Image):
                 # glance-client cannot create image without this
                 # properties, we need to create them artificially
                 # and then - delete from database
-                migrate_image = self.create_image(
-                    name=gl_image['image']['name'],
-                    container_format=gl_image['image']['container_format'] or "bare",
-                    disk_format=gl_image['image']['disk_format'] or "qcow2",
-                    is_public=gl_image['image']['is_public'],
-                    protected=gl_image['image']['protected'],
-                    owner=gl_image['image']['owner'],
-                    size=gl_image['image']['size'],
-                    properties=gl_image['image']['properties'],
-                    data=file_like_proxy.FileLikeProxy(
-                        gl_image['image'],
-                        callback,
-                        self.config['migrate']['speed_limit']))
+
+                try:
+                    migrate_image = self.create_image(
+                        name=gl_image['image']['name'],
+                        container_format=(gl_image['image']['container_format']
+                                          or "bare"),
+                        disk_format=gl_image['image']['disk_format'] or "qcow2",
+                        is_public=gl_image['image']['is_public'],
+                        protected=gl_image['image']['protected'],
+                        owner=gl_image['image']['owner'],
+                        size=gl_image['image']['size'],
+                        properties=gl_image['image']['properties'],
+                        data=file_like_proxy.FileLikeProxy(
+                            gl_image['image'],
+                            callback,
+                            self.config['migrate']['speed_limit']))
+                except exception.ImageDownloadError:
+                    LOG.warning("Unable to reach image's data. (id = %s)",
+                                gl_image["image"]["id"])
+                    continue
+
                 migrate_images_list.append((migrate_image, meta))
                 if not gl_image["image"]["container_format"]:
                     delete_container_format.append(migrate_image.id)
