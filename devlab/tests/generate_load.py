@@ -2,6 +2,7 @@ import argparse
 import itertools
 import os
 import time
+import json
 
 from glanceclient import Client as glance
 from novaclient import client as nova
@@ -287,9 +288,37 @@ class Prerequisites():
 
     def emulate_vm_states(self):
         for vm_state in config.vm_states:
-            self.novaclient.servers.reset_state(
-                server=self.get_vm_id(vm_state['name']),
-                state=vm_state['state'])
+            # emulate error state:
+            if vm_state['state'] == u'error':
+                self.novaclient.servers.reset_state(
+                    server=self.get_vm_id(vm_state['name']),
+                    state=vm_state['state'])
+            # emulate suspend state:
+            elif vm_state['state'] == u'suspend':
+                self.novaclient.servers.suspend(self.get_vm_id(vm_state['name']))
+            # emulate resize state:
+            elif vm_state['state'] == u'pause':
+                self.novaclient.servers.pause(self.get_vm_id(vm_state['name']))
+            # emulate stop/shutoff state:
+            elif vm_state['state'] == u'stop':
+                self.novaclient.servers.stop(self.get_vm_id(vm_state['name']))
+            # emulate resize state:
+            elif vm_state['state'] == u'resize':
+                self.novaclient.servers.resize(self.get_vm_id(vm_state['name']),
+                                               '1')
+
+    def generate_vm_state_list(self):
+        data = {}
+        for vm in self.novaclient.servers.list():
+            vm_name = vm.name
+            index = self.novaclient.servers.list().index(vm)
+            while self.novaclient.servers.list()[index].status == u'RESIZE':
+                time.sleep(2)
+            vm_state = self.novaclient.servers.list()[index].status
+            data[vm_name] = vm_state
+        file_name = 'pre_migration_vm_states.json'
+        with open(file_name, 'w') as outfile:
+            json.dump(data, outfile, sort_keys=True, indent=4, ensure_ascii=False)
 
     def run_preparation_scenario(self):
         self.create_tenants()
@@ -305,6 +334,7 @@ class Prerequisites():
         self.create_security_groups()
         self.create_cinder_objects()
         self.emulate_vm_states()
+        self.generate_vm_state_list()
 
     def clean_objects(self):
         for flavor in config.flavors:
