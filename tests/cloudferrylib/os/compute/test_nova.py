@@ -130,7 +130,7 @@ class NovaComputeTestCase(test.TestCase):
     @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
     def test_change_status_resume(self, mock_get, mock_sleep):
-        mock_get.return_value = 'suspend'
+        mock_get.return_value = 'suspended'
         self.nova_client.change_status('active', instance=self.fake_instance_0)
         self.fake_instance_0.resume.assert_called_once_with()
         mock_sleep.assert_called_with(2)
@@ -156,7 +156,7 @@ class NovaComputeTestCase(test.TestCase):
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
     def test_change_status_suspend(self, mock_get, mock_sleep):
         mock_get.return_value = 'active'
-        self.nova_client.change_status('suspend',
+        self.nova_client.change_status('suspended',
                                        instance=self.fake_instance_0)
         self.fake_instance_0.suspend.assert_called_once_with()
         mock_sleep.assert_called_with(2)
