@@ -16,14 +16,12 @@
 import copy
 from operator import attrgetter
 import time
-from sqlalchemy import exc
 
 from novaclient.v1_1 import client as nova_client
 from novaclient import exceptions as nova_exc
 
 import cfglib
 from cloudferrylib.base import compute
-from cloudferrylib.os.compute import keypairs
 from cloudferrylib.os.compute import instances
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import timeout_exception
@@ -121,14 +119,10 @@ class NovaCompute(compute.Compute):
         """
         Read info about compute resources except instances from the cloud.
         """
-        info = {'keypairs': {},
-                'flavors': {},
+
+        info = {'flavors': {},
                 'user_quotas': [],
                 'project_quotas': []}
-
-        kps = keypairs.DBBroker.get_all_keypairs(self.cloud)
-        for keypair in kps:
-            info['keypairs'][keypair.id] = keypair.to_dict()
 
         for flavor in self.get_flavor_list(is_public=None):
             info['flavors'][flavor.id] = self.convert(flavor, cloud=self.cloud)
@@ -741,4 +735,3 @@ def filter_down_hosts(hosts_down, elements, hostname_attribute=''):
             lambda e: getattr(e, hostname_attribute, e) not in hosts_down,
             elements)
     return elements
-
