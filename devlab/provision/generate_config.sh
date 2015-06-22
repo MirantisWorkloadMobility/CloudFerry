@@ -1,5 +1,21 @@
 #!/bin/bash
 
+SCRIPT=$(basename $0)
+
+error_exit() {
+    local message=$1
+
+    if [[ -n $message ]]; then
+        echo $message &>2
+        echo &>2
+    fi
+
+    echo "Usage: ${SCRIPT} --cloudferry-path <path>"
+
+    exit 1
+}
+
+
 while [[ $# -ge 1 ]]; do
     case $1 in
         --cloudferry-path) shift; CF_PATH=$1; shift;;
