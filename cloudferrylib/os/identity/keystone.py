@@ -444,9 +444,9 @@ def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
         src_user = src_keystone.keystone_client.users.find(id=src_user_id)
         src_user_name = src_user.name
     except keystoneclient.exceptions.NotFound:
-        LOG.warning("User '%s' not found on source!", src_user_id)
+        LOG.warning("User '%s' not found on SRC!", src_user_id)
         if fallback_to_admin:
-            LOG.warning("Replacing user '%s' with admin", src_user_id)
+            LOG.warning("Replacing user '%s' with SRC admin", src_user_id)
             src_user_name = cfglib.CONF.src.user
         else:
             return
@@ -456,4 +456,8 @@ def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
         return dst_user
     except keystoneclient.exceptions.NotFound:
         LOG.warning("User '%s' not found on DST!", src_user_name)
-        return
+        if fallback_to_admin:
+            LOG.warning("Replacing user '%s' with DST admin", src_user_name)
+            dst_user = dst_keystone.keystone_client.users.find(
+                name=cfglib.CONF.dst.user)
+            return dst_user
