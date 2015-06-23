@@ -51,6 +51,7 @@ class NovaComputeTestCase(test.TestCase):
 
         self.fake_cloud = mock.Mock()
         self.fake_cloud.resources = dict(identity=self.identity_mock)
+        self.fake_cloud.position = 'src'
 
         with mock.patch(
                 'cloudferrylib.os.compute.nova_compute.mysql_connector'):
