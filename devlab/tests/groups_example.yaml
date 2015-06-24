@@ -1,0 +1,9 @@
+group_by:
+    - [tenant, network]
+# User defined groups should be a list of instance IDs. These instances will
+# be then considered as a single group regardless of grouping criteria
+user_defined_group_1:
+    - server1
+    - server2
+user_defined_group_2:
+    - server3
