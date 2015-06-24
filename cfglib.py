@@ -211,7 +211,17 @@ src_compute_opts = [
     cfg.BoolOpt('block_migration', default=False,
                 help='live-migration without shared_storage'),
     cfg.StrOpt('host_eph_drv', default='-',
-               help='host ephemeral drive')
+               help='host ephemeral drive'),
+    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+               help='driver for db connection'),
+    cfg.StrOpt('host', default='',
+               help='compute mysql node ip address'),
+    cfg.StrOpt('database_name', default='',
+               help='compute database name'),
+    cfg.StrOpt('user', default='',
+               help='user for db access'),
+    cfg.StrOpt('password', default='',
+               help='password for db access'),
 ]
 
 
@@ -341,7 +351,17 @@ dst_compute_opts = [
     cfg.FloatOpt('ram_allocation_ratio', default='1',
                  help='ram allocation ratio'),
     cfg.FloatOpt('disk_allocation_ratio', default='0.9',
-                 help='disk allocation ratio')
+                 help='disk allocation ratio'),
+    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+               help='driver for db connection'),
+    cfg.StrOpt('host', default='',
+               help='compute mysql node ip address'),
+    cfg.StrOpt('database_name', default='',
+               help='compute database name'),
+    cfg.StrOpt('user', default='',
+               help='user for db access'),
+    cfg.StrOpt('password', default='',
+               help='password for db access'),
 ]
 
 

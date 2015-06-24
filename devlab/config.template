@@ -60,6 +60,11 @@ backend = iscsi
 convert_diff_file = qcow2
 convert_ephemeral_disk = qcow2
 host_eph_drv = <grizzly_ip>
+connection = mysql+mysqlconnector
+host = <grizzly_ip>
+database_name = nova
+user = <src_mysql_user>
+password = <src_mysql_password>
 
 [src_storage]
 service = cinder
@@ -115,6 +120,11 @@ backend = iscsi
 convert_diff_file = qcow2
 convert_ephemeral_disk = qcow2
 host_eph_drv = <icehouse_ip>
+connection = mysql+mysqlconnector
+host = <icehouse_ip>
+database_name = nova
+user = <dst_mysql_user>
+password = <dst_mysql_password>
 
 [dst_rabbit]
 password = <dst_rabbit_password>

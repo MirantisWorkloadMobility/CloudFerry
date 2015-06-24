@@ -73,8 +73,7 @@ class NovaCompute(compute.Compute):
         self.config = config
         self.cloud = cloud
         self.identity = cloud.resources['identity']
-        self.mysql_connector = mysql_connector.MysqlConnector(config.mysql,
-                                                              'nova')
+        self.mysql_connector = self.get_db_connection()
         self.nova_client = self.proxy(self.get_client(), config)
 
     def get_client(self, params=None):
@@ -86,6 +85,17 @@ class NovaCompute(compute.Compute):
                                   params.cloud.password,
                                   params.cloud.tenant,
                                   params.cloud.auth_url)
+
+    def get_db_connection(self):
+        if not hasattr(self.cloud.config, self.cloud.position + '_compute'):
+            LOG.debug('Running on default mysql settings')
+            return mysql_connector.MysqlConnector(self.config.mysql, 'nova')
+        else:
+            LOG.debug('Running on custom mysql settings')
+            my_settings = getattr(self.cloud.config,
+                                  self.cloud.position + '_compute')
+            return mysql_connector.MysqlConnector(my_settings,
+                                                  my_settings.database_name)
 
     def _read_info_quotas(self):
         service_tenant_id = self.identity.get_tenant_id_by_name(
