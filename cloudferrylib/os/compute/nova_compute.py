@@ -244,6 +244,10 @@ class NovaCompute(compute.Compute):
                 instance,
                 instance_block_info,
                 is_ceph_ephemeral=is_ceph)
+        flav_details = instances.get_flav_details(compute_res.mysql_connector,
+                                                  instance.id)
+        flav_name = compute_res.get_flavor_from_id(instance.flavor['id']).name
+        flav_details.update({'name': flav_name})
 
         inst = {'instance': {'name': instance.name,
                              'instance_name': instance_name,
@@ -253,6 +257,7 @@ class NovaCompute(compute.Compute):
                                  instance.tenant_id),
                              'status': instance.status,
                              'flavor_id': instance.flavor['id'],
+                             'flav_details': flav_details,
                              'image_id': instance.image[
                                  'id'] if instance.image else None,
                              'boot_mode': (utl.BOOT_FROM_IMAGE

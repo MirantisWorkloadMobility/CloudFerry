@@ -29,6 +29,20 @@ def update_user_ids_for_instance(db, instance_id, user_id):
     db.execute(sql)
 
 
+def get_flav_details(db, instance_id):
+    sql = ("SELECT vcpus,memory_mb,root_gb,ephemeral_gb "
+           "FROM nova.instances "
+           "WHERE nova.instances.uuid = '{instance_id}' "
+           "AND NOT nova.instances.vm_state = 'deleted';").format(
+        instance_id=instance_id)
+    res = db.execute(sql)
+    for row in res:
+        return {'vcpus': row['vcpus'],
+                'memory_mb': row['memory_mb'],
+                'root_gb': row['root_gb'],
+                'ephemeral_gb': row['ephemeral_gb']}
+
+
 def nova_live_migrate_vm(nova_client, config, vm_id, dest_host):
     LOG.info("migrating {vm} to {host} using nova live migrate".format(
         vm=vm_id,
