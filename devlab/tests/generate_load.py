@@ -84,6 +84,10 @@ class Prerequisites():
         return self.neutronclient.list_networks(
             name=net, all_tenants=True)['networks'][0]['id']
 
+    def get_sg_id(self, sg):
+        return self.neutronclient.list_security_groups(
+            name=sg, all_tenants=True)['security_groups'][0]['id']
+
     def get_volume_id(self, volume_name):
         volumes = self.cinderclient.volumes.list(
             search_opts={'all_tenants': 1})
@@ -396,6 +400,15 @@ class Prerequisites():
             except Exception as e:
                 print "Tenant %s failed to delete: %s" % (tenant['name'],
                                                           repr(e))
+        sgs = self.neutronclient.list_security_groups()['security_groups']
+        for sg in sgs:
+            try:
+                print "delete sg {}".format(sg['name'])
+                self.neutronclient.delete_security_group(self.get_sg_id(
+                                                         sg['name']))
+            except Exception as e:
+                print "Security group %s failed to delete: %s" % (sg['name'],
+                                                                  repr(e))
         for user in config.users:
             try:
                 self.keystoneclient.users.delete(
@@ -433,13 +446,14 @@ class Prerequisites():
 
 
 if __name__ == '__main__':
-    preqs = Prerequisites()
     parser = argparse.ArgumentParser(
         description='Script to generate load for Openstack and delete '
                     'generated objects')
     parser.add_argument('--clean', help='clean objects described in '
                                         'config.ini', action='store_true')
+    parser.add_argument('--env', default='SRC', help='choose cloud: SRC or DST')
     args = parser.parse_args()
+    preqs = Prerequisites(cloud_prefix=args.env)
     if args.clean:
         preqs.clean_objects()
     else:
