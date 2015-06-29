@@ -55,21 +55,24 @@ class GroupingTestCase(test.TestCase):
         self.fake_network_1 = {'name': 'net1'}
         self.fake_network_2 = {'name': 'net3'}
 
-        self.network.get_networks_list.return_value = [self.fake_network_1,
-                                                       self.fake_network_2]
+        network_ip_to_network = {'1.1.1.1': {'id': 'net1_id'},
+                                 '1.1.1.2': {'id': 'net1_id'},
+                                 '1.1.3.1': {'id': 'net3_id'}}
+        self.network.get_network = lambda ip, tenant_id, keep: \
+            network_ip_to_network[ip['ip']]
 
         self.fake_instance1 = mock.Mock()
         self.fake_instance1.id = 's1'
-        self.fake_instance1.networks = ['net1']
+        self.fake_instance1.networks = {'net1': ['1.1.1.1']}
         self.fake_instance1.tenant_id = 't1'
         self.fake_instance2 = mock.Mock()
         self.fake_instance2.id = 's2'
-        self.fake_instance2.networks = ['net3']
+        self.fake_instance2.networks = {'net3': ['1.1.3.1']}
         self.fake_instance2.tenant_id = 't2'
         self.fake_instance3 = mock.Mock()
         self.fake_instance3.id = 's3'
         self.fake_instance3.tenant_id = 't1'
-        self.fake_instance3.networks = ['net1']
+        self.fake_instance3.networks = {'net1': ['1.1.1.2']}
 
         self.cloud = mock.Mock()
         self.cloud().resources = {'network': self.network,
@@ -122,7 +125,7 @@ class GroupingTestCase(test.TestCase):
                                                          self.fake_instance3]
         group.group()
 
-        expected_result = {'net1': ['s1', 's3'], 'net3': ['s2']}
+        expected_result = {'net1_id': ['s1', 's3'], 'net3_id': ['s2']}
 
         result = utils.read_yaml_file(RESULT_FILE)
         self.assertEquals(expected_result, result)

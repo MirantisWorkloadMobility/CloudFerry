@@ -494,7 +494,7 @@ def read_yaml_file(yaml_file_path):
 
 def write_yaml_file(file_name, content):
     with open(file_name, 'w') as yfile:
-        yaml.dump(content, yfile)
+        yaml.safe_dump(content, yfile)
 
 
 def timer(func, *args, **kwargs):
