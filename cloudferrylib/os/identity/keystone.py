@@ -222,6 +222,14 @@ class KeystoneIdentity(identity.Identity):
         except keystoneclient.exceptions.NotFound:
             return default
 
+    def try_get_user_by_name(self, username, default=None):
+        try:
+            return self.keystone_client.users.find(username=username)
+        except keystoneclient.exceptions.NotFound:
+            LOG.warning("User '%s' has not been found, returning default "
+                        "value = '%s'", username, default)
+            return self.keystone_client.users.find(username=default)
+
     def roles_for_user(self, user_id, tenant_id):
         """ Getting list of user roles for tenant """
 
