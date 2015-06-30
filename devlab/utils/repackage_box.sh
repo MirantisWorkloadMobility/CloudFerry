@@ -44,6 +44,10 @@ ssh_opts='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLeve
 insecure_pub_key=~/.vagrant.d/vagrant.pub
 insecure_private_key=~/.vagrant.d/insecure_private_key
 
+if [[ ! -f $insecure_pub_key ]]; then
+    ssh-keygen -f $insecure_private_key -y > $insecure_pub_key
+fi
+
 ssh_cmd() {
     local private_key="$1"
     local cmd="$2"
