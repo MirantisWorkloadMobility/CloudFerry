@@ -334,6 +334,13 @@ class Prerequisites():
         except Exception as e:
             print "Flavor %s failed to delete: %s" % (flavor, repr(e))
 
+    def modify_admin_tenant_quotas(self):
+        for tenant in config.tenants:
+            if 'quota' in tenant:
+                self.novaclient.quotas.update(tenant_id=self.get_tenant_id(
+                    'admin'), **tenant['quota'])
+                break
+
     def run_preparation_scenario(self):
         self.create_tenants()
         self.create_users()
@@ -350,6 +357,7 @@ class Prerequisites():
         self.emulate_vm_states()
         self.generate_vm_state_list()
         self.delete_flavor()
+        self.modify_admin_tenant_quotas()
 
     def clean_objects(self):
         for flavor in config.flavors:

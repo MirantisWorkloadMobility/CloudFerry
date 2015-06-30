@@ -191,3 +191,27 @@ class ResourceMigrationTests(unittest.TestCase):
         self.validate_resource_parameter_in_dst(
             src_volume_list, dst_volume_list, resource_name='volume',
             parameter='size')
+
+    def test_migrate_tenant_quotas(self):
+        """
+        Validate tenant's quotas were migrated to correct tenant
+        """
+        def _delete_id_from_dict(_dict):
+            for key in _dict:
+                del _dict[key]['id']
+
+        src_quotas = {i.name: self.src_cloud.novaclient.quotas.get(i.id)._info
+                      for i in self.src_cloud.keystoneclient.tenants.list()}
+        dst_quotas = {i.name: self.dst_cloud.novaclient.quotas.get(i.id)._info
+                      for i in self.dst_cloud.keystoneclient.tenants.list()}
+
+        # Delete tenant's ids
+        _delete_id_from_dict(src_quotas)
+        _delete_id_from_dict(dst_quotas)
+
+        for tenant in src_quotas:
+            self.assertIn(tenant, dst_quotas,
+                          'Tenant %s is missing on dst' % tenant)
+            self.assertDictEqual(
+                src_quotas[tenant], dst_quotas[tenant],
+                'Quotas for tenant %s on src and dst are different' % tenant)
