@@ -786,8 +786,11 @@ class NeutronNetwork(network.Network):
         for sec_gr in sec_groups:
             ex_secgr = \
                 self.get_res_by_hash(ex_secgrs, sec_gr['res_hash'])
-            exrules_hlist = \
-                [r['rule_hash'] for r in ex_secgr['security_group_rules']]
+            if ex_secgr:
+                exrules_hlist = \
+                    [r['rule_hash'] for r in ex_secgr['security_group_rules']]
+            else:
+                exrules_hlist = []
             for rule in sec_gr['security_group_rules']:
                 if rule['protocol'] \
                         and (rule['rule_hash'] not in exrules_hlist):
