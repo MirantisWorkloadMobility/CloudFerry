@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from fabric.api import sudo
+from fabric.api import run
 from fabric.api import settings
 
 import cfglib
@@ -27,11 +28,13 @@ class RemoteExecutionError(RuntimeError):
 
 
 class RemoteRunner(object):
-    def __init__(self, host, user, key=None, ignore_errors=False):
+    def __init__(self, host, user, password=None, sudo=False, key=None, ignore_errors=False):
         self.host = host
         if key is None:
             key = cfglib.CONF.migrate.key_filename
         self.user = user
+        self.password = password
+        self.sudo = sudo
         self.key = key
         self.ignore_errors = ignore_errors
 
@@ -43,12 +46,16 @@ class RemoteRunner(object):
         with settings(warn_only=self.ignore_errors,
                       host_string=self.host,
                       user=self.user,
+                      password=self.password,
                       abort_exception=abort_exception,
                       reject_unkown_hosts=False):
             with forward_agent(self.key):
                 LOG.debug("running '%s' on '%s' host as user '%s'",
                           cmd, self.host, self.user)
-                return sudo(cmd)
+                if self.sudo:
+                    return sudo(cmd)
+                else:
+                    return run(cmd)
 
     def run_ignoring_errors(self, cmd):
         ignore_errors_original = self.ignore_errors

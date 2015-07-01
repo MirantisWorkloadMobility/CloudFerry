@@ -21,6 +21,8 @@ from fabric.api import env
 
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import cmd_cfg
+from cloudferrylib.utils import files
+from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import utils
 
 
@@ -29,6 +31,12 @@ LOG = utils.get_log(__name__)
 
 class CheckBandwidth(action.Action):
     def run(self, **kwargs):
+        cfg = self.cloud.cloud_config.cloud
+        runner = remote_runner.RemoteRunner(cfg.host, cfg.ssh_user)
+
+        temp_dir_name = os.popen('mktemp -dt check_band_XXXX').read().rstrip()
+        temp_file_name = str(uuid.uuid4())
+
         claimed_bandw = self.cloud.cloud_config.initial_check.claimed_bandwidth
         test_file_size = self.cloud.cloud_config.initial_check.test_file_size
 
@@ -36,45 +44,45 @@ class CheckBandwidth(action.Action):
 
         factor = self.cloud.cloud_config.initial_check.factor
         req_bandwidth = claimed_bandw * factor
-        temp_file_name = str(uuid.uuid4())
 
-        local_file_path = os.path.join('/tmp', temp_file_name)
-        remote_file_path = os.path.join(self.cloud.cloud_config.cloud.temp,
+        local_file_path = os.path.join(temp_dir_name, temp_file_name)
+        remote_file_path = os.path.join(temp_dir_name,
                                         temp_file_name)
 
         scp_upload = cmd_cfg.scp_cmd('',
                                      ssh_user,
                                      self.cloud.cloud_config.cloud.ssh_host,
                                      remote_file_path,
-                                     '/tmp/')
+                                     temp_dir_name)
 
         scp_download = cmd_cfg.scp_cmd(local_file_path,
                                        ssh_user,
                                        self.cloud.cloud_config.cloud.ssh_host,
-                                       self.cloud.cloud_config.cloud.temp,
+                                       temp_dir_name,
                                        '')
 
-        check_dir_cmd = cmd_cfg.mkdir_cmd(self.cloud.cloud_config.cloud.temp)
-        self.cloud.ssh_util.execute(check_dir_cmd)
+        with files.RemoteDir(runner, temp_dir_name):
+            try:
+                with utils.forward_agent(env.key_filename):
+                    dd_command = cmd_cfg.dd_full('/dev/zero', remote_file_path, 1,
+                                                 0, test_file_size)
+                    self.cloud.ssh_util.execute(dd_command)
 
-        try:
-            with utils.forward_agent(env.key_filename):
-                dd_command = cmd_cfg.dd_full('/dev/zero', remote_file_path, 1,
-                                             0, test_file_size)
-                self.cloud.ssh_util.execute(dd_command)
+                    LOG.info("Checking upload speed... Wait please.")
+                    period_upload = utils.timer(subprocess.call,
+                                                str(scp_upload),
+                                                shell=True)
 
-                LOG.info("Checking upload speed... Wait please.")
-                period_upload = utils.timer(subprocess.call,
-                                            str(scp_upload),
-                                            shell=True)
-
-                LOG.info("Checking download speed... Wait please.")
-                period_download = utils.timer(subprocess.call,
-                                              str(scp_download),
-                                              shell=True)
-        finally:
-            self.cloud.ssh_util.execute(cmd_cfg.rm_cmd(remote_file_path))
-            subprocess.call(str(cmd_cfg.rm_cmd(local_file_path)), shell=True)
+                    LOG.info("Checking download speed... Wait please.")
+                    period_download = utils.timer(subprocess.call,
+                                                  str(scp_download),
+                                                  shell=True)
+            finally:
+                if len(temp_dir_name) > 1:
+                    os.system("rm -rf {}".format(temp_dir_name))
+                else:
+                    raise RuntimeError('Wrong dirname %s, stopping' %
+                                       temp_dir_name)
 
         # To have Megabits per second
         upload_speed = test_file_size / period_upload * 8

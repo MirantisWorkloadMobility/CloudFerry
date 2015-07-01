@@ -20,7 +20,7 @@ from tests import test
 
 class RemoteRunnerTestCase(test.TestCase):
     def test_remote_runner_raises_error_if_errors_are_not_ignored(self):
-        rr = remote_runner.RemoteRunner('host', 'user', 'key',
+        rr = remote_runner.RemoteRunner('host', 'user', 'password', 'key',
                                         ignore_errors=False)
 
         self.assertRaises(remote_runner.RemoteExecutionError, rr.run,
@@ -30,7 +30,7 @@ class RemoteRunnerTestCase(test.TestCase):
     @mock.patch('cloudferrylib.utils.remote_runner.sudo')
     def test_errors_are_suppressed_for_run_ignoring_errors(
             self, forward_agent, sudo):
-        rr = remote_runner.RemoteRunner('host', 'user', 'key',
+        rr = remote_runner.RemoteRunner('host', 'user', 'password', 'key',
                                         ignore_errors=False)
 
         try:

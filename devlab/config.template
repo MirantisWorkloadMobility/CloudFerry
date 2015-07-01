@@ -42,7 +42,6 @@ ext_cidr = <src_ext_cidr>
 user = <src_user>
 password = <src_password>
 tenant = <src_tenant>
-temp = <src_temp>
 
 [src_mysql]
 user = <src_mysql_user>
@@ -106,7 +105,6 @@ ext_cidr = <dst_ext_cidr>
 user = <dst_user>
 password = <dst_password> 
 tenant = <dst_tenant>
-temp = <dst_temp> 
 
 [dst_mysql]
 user = <dst_mysql_user> 
