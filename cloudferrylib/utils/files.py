@@ -43,7 +43,8 @@ class RemoteTempFile(object):
         self.text = text
 
     def __enter__(self):
-        cmd = "echo '{text}' > {file}".format(text=self.text, file=self.filename)
+        cmd = "echo '{text}' > {file}".format(text=self.text,
+                                              file=self.filename)
         self.runner.run(cmd)
         return self
 
@@ -52,5 +53,24 @@ class RemoteTempFile(object):
         return self
 
 
+class RemoteDir(object):
+    def __init__(self, runner, dirname):
+        self.runner = runner
+        self.dirname = dirname
+
+    def __enter__(self):
+        cmd = "mkdir -p {dir}".format(dir=self.dirname)
+        self.runner.run(cmd)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.runner.run_ignoring_errors(_unlink_dir(self.dirname))
+        return self
+
+
 def _unlink(filename):
     return "rm -f {file}".format(file=filename)
+
+
+def _unlink_dir(dirname):
+    return "rm -rf {dir}".format(dir=dirname)

@@ -45,3 +45,15 @@ class RemoteTempFileTestCase(test.TestCase):
 
         rm_file = "rm -f /tmp/{}".format(filename)
         runner.run_ignoring_errors.assert_called_once_with(rm_file)
+
+
+class RemoteDirTestCase(test.TestCase):
+    def test_temp_dir_is_deleted_on_scope_exit(self):
+        runner = mock.Mock()
+        dirname = 'dir'
+
+        with files.RemoteDir(runner, dirname):
+            pass
+
+        rm_dir = "rm -rf {}".format(dirname)
+        runner.run_ignoring_errors.assert_called_once_with(rm_dir)
