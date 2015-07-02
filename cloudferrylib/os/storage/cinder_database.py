@@ -197,9 +197,10 @@ class CinderStorage(cinder_storage.CinderStorage):
                         self.identity_client.get_tenant_by_name(
                             entry[TENANT_ID]).id)
                 if USER_ID in entry:
-                    entry[USER_ID] = (
-                        self.identity_client.keystone_client.users.find(
-                            username=entry[USER_ID]).id)
+                    user = self.identity_client.try_get_user_by_name(
+                        username=entry[USER_ID],
+                        default=self.config.cloud.user)
+                    entry[USER_ID] = user.id
                 if HOST in entry:
                     entry[HOST] = self.get_volume_host()
 
