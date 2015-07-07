@@ -198,6 +198,9 @@ class Prerequisites():
                 for vm in tenant['vms']:
                     vm['image'] = self.get_image_id(vm['image'])
                     vm['flavor'] = self.get_flavor_id(vm['flavor'])
+                    if 'nics' in vm:
+                        for nic in vm['nics']:
+                            nic['net-id'] = self.get_net_id(nic['net-id'])
                     self.check_vm_state(self.novaclient.servers.create(**vm))
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
@@ -260,6 +263,21 @@ class Prerequisites():
                 self.create_security_group(tenant['security_groups'])
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
+
+    def get_sec_group_id_by_tenant_id(self, tenant_id):
+        sec_group_list = self.neutronclient.list_security_groups()
+        return [i['id'] for i in sec_group_list['security_groups']
+                if i['tenant_id'] == tenant_id]
+
+    def create_security_group_rule(self, group_id, tenant_id, protocol='tcp',
+                                   port_range_min=22, port_range_max=22,
+                                   direction ='ingress'):
+        sec_rule = {'security_group_rule':
+                        {"security_group_id":group_id, "protocol":protocol,
+                         "direction" : direction, 'tenant_id': tenant_id,
+                         "port_range_min":port_range_min,
+                         "port_range_max":port_range_max}}
+        self.neutronclient.create_security_group_rule(sec_rule)
 
     def create_cinder_volumes(self, volumes_list):
         for volume in volumes_list:
