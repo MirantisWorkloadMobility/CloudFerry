@@ -81,3 +81,5 @@ tasks:
    transport_key_pairs: ["TransportKeyPairs"]
    add_key_pairs_to_instances: ["SetKeyPairsForInstances"]
    set_volume_id_for_attaching: ["SetVolumeId"]
+   create_image_snapshot_dst: ["ImageSnapshot", "dst_cloud"]
+   image_rollback_dst: ["ImageRollback", "dst_cloud"]
