@@ -34,9 +34,7 @@ while read key value
 do
     value=($value)
     value=${value[1]}
-    if [[ -n ${value} ]]; then
-      sed -i "s|<${key}>|${value}|g" ${result_config}
-    fi
+    sed -i "s|<${key}>|${value}|g" ${result_config}
 done < ${CF_PATH}/devlab/config.ini
 
 echo "CloudFerry config is saved in ${result_config}"
