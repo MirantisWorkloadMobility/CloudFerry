@@ -200,6 +200,10 @@ class ResourceMigrationTests(unittest.TestCase):
             for key in _dict:
                 del _dict[key]['id']
 
+        def check_and_delete_keys(tenant):
+            return {key: dst_quotas[tenant][key] for key in dst_quotas[tenant]
+                    if key in src_quotas[tenant]}
+
         src_quotas = {i.name: self.src_cloud.novaclient.quotas.get(i.id)._info
                       for i in self.src_cloud.keystoneclient.tenants.list()}
         dst_quotas = {i.name: self.dst_cloud.novaclient.quotas.get(i.id)._info
@@ -212,6 +216,8 @@ class ResourceMigrationTests(unittest.TestCase):
         for tenant in src_quotas:
             self.assertIn(tenant, dst_quotas,
                           'Tenant %s is missing on dst' % tenant)
+            # Delete quotas which we have on dst but do not have on src
+            _dst_quotas = check_and_delete_keys(tenant)
             self.assertDictEqual(
-                src_quotas[tenant], dst_quotas[tenant],
+                src_quotas[tenant], _dst_quotas,
                 'Quotas for tenant %s on src and dst are different' % tenant)
