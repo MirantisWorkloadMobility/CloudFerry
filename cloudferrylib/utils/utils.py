@@ -191,7 +191,6 @@ class GeneratorPassword:
         return self.__generate_password()
 
     def __generate_password(self):
-        random.seed = (os.urandom(1024))
         return ''.join(random.choice(self.chars) for i in range(self.length))
 
 
