@@ -86,22 +86,36 @@ keypairs = [
 
 # Images to create/delete
 images = [
-    {'name': 'image1', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/ci'
-                                    'rros-0.3.3-x86_64-disk.img',
+    {'name': 'image1', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
      'is_public': True},
-    {'name': 'image2', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/ci'
-                                    'rros-0.3.3-x86_64-disk.img',
+    {'name': 'image2', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
+     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False},
+    {'name': 'image3', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
+     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False},
+    {'name': 'image4', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
+     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False},
+    {'name': 'image5', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
      'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False}
 ]
 
+# Images not to be migrated:
+images_not_included_in_filter = ['image4', 'image5']
+
+# Instances not to be included in filter:
+vms_not_in_filter = ['not_in_filter']
+
+# Images that should have few specific members:
+members = ['tenant1', 'admin']
+img_to_add_members = ['image3', 'image4']
+
 # Flavors to create/delete
 flavors = [
-    {'name': 'flavorname1', 'disk': '7', 'ram': '64', 'vcpus': '1'},
+    {'name': 'flavorname1', 'disk': '1', 'ram': '64', 'vcpus': '1'},
     # Disabled for now, but in the future we need to generate non-pubic flavors
     # {'name': 'flavorname3', 'disk': '10', 'ram': '32', 'vcpus': '1',
     #  'is_public': False},
-    {'name': 'flavorname2', 'disk': '5', 'ram': '48', 'vcpus': '2'},
-    {'name': 'del_flvr', 'disk': '5', 'ram': '64', 'vcpus': '1'}
+    {'name': 'flavorname2', 'disk': '2', 'ram': '48', 'vcpus': '2'},
+    {'name': 'del_flvr', 'disk': '1', 'ram': '64', 'vcpus': '1'}
 ]
 
 # Networks to create/delete
@@ -125,7 +139,8 @@ vms = [
     {'name': 'server2', 'image': 'image2', 'flavor': 'flavorname1'},
     {'name': 'server3', 'image': 'image1', 'flavor': 'flavorname2'},
     {'name': 'server4', 'image': 'image2', 'flavor': 'flavorname2'},
-    {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1'}
+    {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1'},
+    {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'}
 ]
 
 routers = [
