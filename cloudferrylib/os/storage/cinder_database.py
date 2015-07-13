@@ -27,6 +27,7 @@ TENANT_ID = 'tenant_id'
 USER_ID = 'user_id'
 DELETED = 'deleted'
 HOST = 'host'
+IGNORED_TBL_LIST = ('quota_usages')
 
 
 class CinderStorage(cinder_storage.CinderStorage):
@@ -78,11 +79,21 @@ class CinderStorage(cinder_storage.CinderStorage):
             params.cloud.tenant,
             params.cloud.auth_url)
 
-    def _update_tenant_names(self, result, tenant_id_key):
-        for entry in result:
-            tenant_name = self.identity_client.try_get_tenant_name_by_id(
-                entry[tenant_id_key], self.config.cloud.tenant)
+    def _check_update_tenant_names(self, entry, tenant_id_key):
+        tenant_id = entry[tenant_id_key]
+        tenant_name = self.identity_client.try_get_tenant_name_by_id(
+            tenant_id, self.config.cloud.tenant)
+        if self.table in IGNORED_TBL_LIST:
+            tmp_tenant_id = self.identity_client.get_tenant_id_by_name(
+                tenant_name)
+        else:
+            tmp_tenant_id = tenant_id
+        if tmp_tenant_id == tenant_id:
             entry[tenant_id_key] = tenant_name
+            return True
+        else:
+            LOG.debug('Ignored missed tenant {}'.format(tenant_id))
+            return False
 
     def list_of_dicts_for_table(self, table):
         """ Performs SQL query and returns rows as dict """
@@ -91,13 +102,14 @@ class CinderStorage(cinder_storage.CinderStorage):
         query = self.connector.execute(sql)
         column_names = query.keys()
         result = [dict(zip(column_names, row)) for row in query]
+        self.table = table
         # check if result has "deleted" column
         if DELETED in column_names:
             result = filter(lambda a: a.get(DELETED) == 0, result)
         if PROJECT_ID in column_names:
-            self._update_tenant_names(result, PROJECT_ID)
+            result = filter(lambda e: self._check_update_tenant_names(e, PROJECT_ID), result)
         if TENANT_ID in column_names:
-            self._update_tenant_names(result, TENANT_ID)
+            result = filter(lambda e: self._check_update_tenant_names(e, TENANT_ID), result)
         if STATUS in column_names:
             result = filter(lambda e: 'error' not in e[STATUS], result)
         if USER_ID in column_names:
