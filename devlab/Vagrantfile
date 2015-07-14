@@ -28,6 +28,15 @@ nodes = {
     "memory" => 4096,
     "role" => "openstack"
   },
+  "juno" => {
+    "box" => "openstack-user/juno",
+    "ip" => "#{options['juno_ip']}",
+    "memory" => 4096,
+    "role" => "openstack",
+    "devstack" => {
+      "branch" => 'stable/juno' 
+        }
+  },
   "cloudferry" => {
     "box" => "hashicorp/precise64",
     "ip" => "#{options['cloudferry_ip']}",
@@ -68,6 +77,15 @@ Vagrant.configure(2) do |config|
           thisnode.vm.provision "shell",
             path: "./provision/keys.sh",
             args: [ "--public-key", File.read("#{ENV["HOME"]}/#{options['public_key_path']}").strip() ]
+          if nodedata.has_key?('devstack')
+            thisnode.vm.provision "file",
+              source: "./provision/devstack/local_#{nodename}.conf", 
+              destination: "/tmp/local.conf"
+            thisnode.vm.provision "shell",
+              privileged: false,
+              path: "./provision/devstack/devstack.sh",
+              args: [ "--branch", "#{nodedata['devstack']['branch']}" ]
+          end
         when "dev"
           thisnode.vm.provision "shell",
             path: "./provision/user.sh",
@@ -89,6 +107,7 @@ Vagrant.configure(2) do |config|
       thisnode.vm.provider "virtualbox" do |v|
         v.memory = nodedata.fetch("memory", 1024)
         v.cpus = nodedata.fetch("cpus", 2)
+        v.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
       end
     end
   end
