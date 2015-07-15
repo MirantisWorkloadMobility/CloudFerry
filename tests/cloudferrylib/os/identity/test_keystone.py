@@ -31,7 +31,7 @@ FAKE_CONFIG = utils.ext_dict(
                           'password': 'fake_password',
                           'tenant': 'fake_tenant',
                           'auth_url': 'http://1.1.1.1:35357/v2.0/',
-                          'service_tenant': 'services'}),
+                          'service_tenant': 'service'}),
     migrate=utils.ext_dict({'speed_limit': '10MB',
                             'retry': '7',
                             'time_wait': 5,

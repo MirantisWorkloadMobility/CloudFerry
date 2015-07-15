@@ -32,6 +32,7 @@ class GetInfoImages(action.Action):
         :rtype: Dictionary with image data
         """
         search_opts = kwargs.get('search_opts_img', self.search_opts)
+        search_opts.update(kwargs.get('search_opts_tenant', {}))
         image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
         images_info = image_resource.read_info(**search_opts)
         return {'images_info': images_info}

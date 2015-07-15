@@ -22,9 +22,10 @@ class GetInfoInstances(action.Action):
         super(GetInfoInstances, self).__init__(init, cloud)
 
     def run(self, **kwargs):
-        search_opts = kwargs.get('search_opts', None)
+        search_opts = {'search_opts': kwargs.get('search_opts', {})}
+        search_opts.update(kwargs.get('search_opts_tenant', {}))
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
-        info = compute_resource.read_info(search_opts=search_opts)
+        info = compute_resource.read_info(**search_opts)
         return {
             'info': info
         }

@@ -86,6 +86,7 @@ IMAGES_TYPE = 'images'
 IMAGE_BODY = 'image'
 
 IDENTITY_RESOURCE = 'identity'
+TENANTS_TYPE = 'tenants'
 IGNORE = 'ignore'
 
 META_INFO = 'meta'
