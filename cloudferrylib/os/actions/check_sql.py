@@ -13,10 +13,19 @@
 # limitations under the License.
 
 from cloudferrylib.base.action import action
+from cloudferrylib.utils import utils
 
 
 class CheckSQL(action.Action):
 
     def run(self, info=None, **kwargs):
-        self.cloud.mysql_connector.execute("SELECT TABLE_NAME FROM "
-                                           "INFORMATION_SCHEMA.TABLES LIMIT 1")
+        SQL = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES LIMIT 1"
+
+        nova = self.cloud.resources[utils.COMPUTE_RESOURCE]
+        nova.mysql_connector.execute(SQL)
+
+        cinder = self.cloud.resources[utils.STORAGE_RESOURCE]
+        cinder.mysql_connector.execute(SQL)
+
+        glance = self.cloud.resources[utils.IMAGE_RESOURCE]
+        glance.mysql_connector.execute(SQL)
