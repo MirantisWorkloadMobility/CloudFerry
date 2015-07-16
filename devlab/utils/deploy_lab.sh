@@ -7,7 +7,25 @@
 
 set -e
 
-cfg=devlab/config.ini
+cfg="devlab/config.ini"
+dftl_ip="192.168.1.2"
+
+usage() {
+    echo
+    echo "Script to destroy old lab and to create a new one"
+    echo
+    echo "If you want to do it for default options, please, use -f"
+    echo "  bash $0 -f"
+    echo "In other case the script uses $cfg"
+    echo "Make sure you have update it properly for all IPs"
+    echo
+}
+
+if [[ "$1" != "-f" ]] && [[ `grep -q $dftl_ip $cfg && echo $?` == "0" ]]; then
+    echo "Warning! Default config detected"
+    usage
+    exit 1
+fi
 
 SRC=`grep grizzly_ip $cfg | awk '{print $3}'`
 DST=`grep icehouse_ip $cfg | awk '{print $3}'`
@@ -35,6 +53,7 @@ echo "Destroy the lab"
 vagrant destroy -f grizzly icehouse
 
 echo "Create the lab"
+vagrant box update
 vagrant up grizzly icehouse
 sleep 10
 
