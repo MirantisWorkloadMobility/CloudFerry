@@ -186,29 +186,8 @@ class CinderStorage(cinder_storage.CinderStorage):
             LOG.debug(query)
             cursor.executemany(query, [i.values() for i in entries])
 
-        def fix_entries(table_list_of_dicts):
-            # this function corrects entries to be injected to db
-            # because we change src tenant-ids for tenant-names
-            # to get correct dst tenant-ids by name
-            for entry in table_list_of_dicts:
-                if PROJECT_ID in entry:
-                    entry[PROJECT_ID] = (
-                        self.identity_client.get_tenant_by_name(
-                            entry[PROJECT_ID]).id)
-                if TENANT_ID in entry:
-                    entry[TENANT_ID] = (
-                        self.identity_client.get_tenant_by_name(
-                            entry[TENANT_ID]).id)
-                if USER_ID in entry:
-                    user = self.identity_client.try_get_user_by_name(
-                        username=entry[USER_ID],
-                        default=self.config.cloud.user)
-                    entry[USER_ID] = user.id
-                if HOST in entry:
-                    entry[HOST] = self.get_volume_host()
-
         # create raw connection to db driver to get the most awesome features
-        fix_entries(table_list_of_dicts)
+        self.fix_entries(table_list_of_dicts, table_name)
         sql_engine = self.mysql_connector.get_engine()
         connection = sql_engine.raw_connection()
         cursor = connection.cursor(dictionary=True)
@@ -224,6 +203,35 @@ class CinderStorage(cinder_storage.CinderStorage):
         cursor.close()
         connection.commit()
         connection.close()
+
+    def fix_entries(self, table_list_of_dicts, table_name):
+        """ Fix entries for Cinder Database.
+
+        This method corrects entries to be injected to the database because we
+        change SRC tenant-ids for tenant-names to get correct DST tenant-ids by
+        names.
+
+        :param table_list_of_dicts: list with database entries
+        :param table_name: name of the database table
+        :rtype: None
+        """
+
+        for entry in table_list_of_dicts:
+            if PROJECT_ID in entry:
+                entry[PROJECT_ID] = (
+                    self.identity_client.get_tenant_by_name(
+                        entry[PROJECT_ID]).id)
+            if TENANT_ID in entry:
+                entry[TENANT_ID] = (
+                    self.identity_client.get_tenant_by_name(
+                        entry[TENANT_ID]).id)
+            if USER_ID in entry:
+                user = self.identity_client.try_get_user_by_name(
+                    username=entry[USER_ID],
+                    default=self.config.cloud.user)
+                entry[USER_ID] = user.id
+            if HOST in entry:
+                entry[HOST] = self.get_volume_host()
 
     def deploy(self, data):
         """ Reads serialized data and writes it to database """
