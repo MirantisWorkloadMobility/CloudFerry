@@ -3,4 +3,6 @@
 #        - <server_id1>
 #        - <server_id2>
 #images:
-#    date: 2015-03-25
+#    images_list:
+#        - <image_id1>
+#        - <image_id2>

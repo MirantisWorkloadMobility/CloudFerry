@@ -36,6 +36,7 @@ process:
           - check_dst_rabbit: True
   - task_resources_transporting:
       - act_identity_trans: True
+      - act_get_filter: True
       - task_images_trans:
           - act_get_info_images: True
           - act_deploy_images: True
@@ -45,7 +46,6 @@ process:
       - write_volumes_db_data: True
       - transport_key_pairs: True
   - transport_instances_and_dependency_resources:
-      - act_get_filter: True
       - act_get_info_inst: True
       - init_iteration_instance:
           - init_iteration_instance_copy_var: True
