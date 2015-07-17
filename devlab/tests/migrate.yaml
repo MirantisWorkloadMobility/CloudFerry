@@ -3,6 +3,25 @@ namespace:
       instances: {}
 
 preparation:
+  - pre_migration_test:
+      - src_test:
+          - check_src_ssh_access: True
+          - act_check_bandwidth_src: True
+          - check_src_sql: True
+          - check_src_rabbit: True
+          - act_get_info_images_src: True
+          - act_get_info_inst_src: True
+          - act_get_info_volumes_src: True
+          - act_get_info_objects_src: False
+      - dst_test:
+          - check_dst_ssh_access: True
+          - act_check_bandwidth_dst: True
+          - check_dst_sql: True
+          - check_dst_rabbit: True
+          - act_get_info_images_dst: True
+          - act_get_info_inst_dst: True
+          - act_get_info_volumes_dst: True
+          - act_get_info_objects_dst: False
   - create_snapshot: True
   - create_vm_snapshot_src: True
   - create_vm_snapshot_dst: True
@@ -15,25 +34,6 @@ rollback:
   - restore_from_snapshot: True
 
 process:
-  - pre_migration_test:
-      - src_test:
-          - act_get_info_images_src: True
-          - act_get_info_inst_src: True
-          - act_get_info_volumes_src: True
-          - act_get_info_objects_src: False
-          - act_check_bandwidth_src: True
-          - check_src_ssh_access: True
-          - check_src_sql: True
-          - check_src_rabbit: True
-      - dst_test:
-          - act_get_info_images_dst: True
-          - act_get_info_inst_dst: True
-          - act_get_info_volumes_dst: True
-          - act_get_info_objects_dst: False
-          - act_check_bandwidth_dst: True
-          - check_dst_ssh_access: True
-          - check_dst_sql: True
-          - check_dst_rabbit: True
   - task_resources_transporting:
       - act_identity_trans: True
       - act_get_filter: True
