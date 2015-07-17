@@ -21,6 +21,7 @@ from cloudferrylib.base import storage
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import utils as utl
 
+LOG = utl.get_log(__name__)
 
 AVAILABLE = 'available'
 IN_USE = "in-use"
@@ -39,6 +40,7 @@ class CinderStorage(storage.Storage):
             if config.mysql.host else self.host
         self.cloud = cloud
         self.identity_client = cloud.resources[utl.IDENTITY_RESOURCE]
+        self.mysql_connector = self.get_db_connection()
         self.cinder_client = self.proxy(self.get_client(config), config)
         super(CinderStorage, self).__init__(config)
 
@@ -53,6 +55,17 @@ class CinderStorage(storage.Storage):
             params.cloud.password,
             params.cloud.tenant,
             params.cloud.auth_url)
+
+    def get_db_connection(self):
+        if not hasattr(self.cloud.config, self.cloud.position + '_storage'):
+            LOG.debug('Running on default storage settings')
+            return mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
+        else:
+            LOG.debug('Running on custom storage settings')
+            my_settings = getattr(self.cloud.config,
+                                  self.cloud.position + '_storage')
+            return mysql_connector.MysqlConnector(my_settings,
+                                                  my_settings.database_name)
 
     def read_info(self, **kwargs):
         info = {utl.VOLUMES_TYPE: {}}
@@ -278,30 +291,26 @@ class CinderStorage(storage.Storage):
     def __patch_option_bootable_of_volume(self, volume_id, bootable):
         cmd = ('UPDATE volumes SET volumes.bootable=%s WHERE '
                'volumes.id="%s"') % (int(bootable), volume_id)
-        connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
-        connector.execute(cmd)
+        self.mysql_connector.execute(cmd)
 
     def download_table_from_db_to_file(self, table_name, file_name):
-        connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
-        connector.execute("SELECT * FROM %s INTO OUTFILE '%s';" % (table_name,
-                                                                   file_name))
+        self.mysql_connector.execute("SELECT * FROM %s INTO OUTFILE '%s';" %
+                                     (table_name, file_name))
 
     def upload_table_to_db(self, table_name, file_name):
-        connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
-        connector.execute("LOAD DATA INFILE '%s' INTO TABLE %s" % (file_name,
-                                                                   table_name))
+        self.mysql_connector.execute("LOAD DATA INFILE '%s' INTO TABLE %s" %
+                                     (file_name, table_name))
 
     def update_column_with_condition(self, table_name, column,
                                      old_value, new_value):
 
-        connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
-        connector.execute("UPDATE %s SET %s='%s' WHERE %s='%s'" %
-                          (table_name, column, new_value, column, old_value))
+        self.mysql_connector.execute("UPDATE %s SET %s='%s' WHERE %s='%s'" %
+                                     (table_name, column, new_value, column,
+                                         old_value))
 
     def update_column(self, table_name, column_name, new_value):
-        connector = mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
-        connector.execute("UPDATE %s SET %s='%s'" % (table_name, column_name,
-                                                     new_value))
+        self.mysql_connector.execute("UPDATE %s SET %s='%s'" %
+                                     (table_name, column_name, new_value))
 
     def get_volume_path_iscsi(self, vol_id):
         cmd = "SELECT provider_location FROM volumes WHERE id='%s';" % vol_id

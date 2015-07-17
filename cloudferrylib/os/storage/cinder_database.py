@@ -16,7 +16,6 @@
 import jsondate
 from cinderclient.v1 import client as cinder_client
 from cloudferrylib.utils import utils as utl
-from cloudferrylib.utils import mysql_connector
 from cloudferrylib.os.storage import cinder_storage
 
 CINDER_VOLUME = "cinder-volume"
@@ -47,15 +46,7 @@ class CinderStorage(cinder_storage.CinderStorage):
         self.cloud = cloud
         self.identity_client = cloud.resources['identity']
         self.cinder_client = self.proxy(self.get_client(config), config)
-        if not hasattr(cloud.config, cloud.position + '_storage'):
-            LOG.debug('running on default mysql settings')
-            self.connector = mysql_connector.MysqlConnector(
-                self.config.mysql, 'cinder')
-        else:
-            LOG.debug('running on custom mysql settings')
-            settings = getattr(cloud.config, cloud.position + '_storage')
-            self.connector = mysql_connector.MysqlConnector(
-                settings, settings.database_name)
+        self.mysql_connector = self.get_db_connection()
 
         # FIXME This class holds logic for all these tables. These must be
         # split into separate classes
@@ -99,7 +90,7 @@ class CinderStorage(cinder_storage.CinderStorage):
         """ Performs SQL query and returns rows as dict """
         # ignore deleted and errored volumes
         sql = ("SELECT * from {table}").format(table=table)
-        query = self.connector.execute(sql)
+        query = self.mysql_connector.execute(sql)
         column_names = query.keys()
         result = [dict(zip(column_names, row)) for row in query]
         self.table = table
@@ -218,7 +209,7 @@ class CinderStorage(cinder_storage.CinderStorage):
 
         # create raw connection to db driver to get the most awesome features
         fix_entries(table_list_of_dicts)
-        sql_engine = self.connector.get_engine()
+        sql_engine = self.mysql_connector.get_engine()
         connection = sql_engine.raw_connection()
         cursor = connection.cursor(dictionary=True)
         primary_key, auto_increment = get_key_and_auto_increment(

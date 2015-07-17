@@ -49,6 +49,7 @@ class GlanceImage(image.Image):
         self.cloud = cloud
         self.identity_client = cloud.resources['identity']
         # get mysql settings
+        self.mysql_connector = self.get_db_connection()
         self.glance_client = self.proxy(self.get_client(), config)
         super(GlanceImage, self).__init__(config)
 
@@ -399,7 +400,7 @@ class GlanceImage(image.Image):
                        field=field,
                        id_list=",".join(
                            [" '{0}' ".format(i) for i in list_of_ids])))
-        self.get_db_connection().execute(command)
+        self.mysql_connector.execute(command)
 
     def wait_for_status(self, id_res, status):
         while self.glance_client.images.get(id_res).status != status:
