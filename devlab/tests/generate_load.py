@@ -3,6 +3,7 @@ import itertools
 import os
 import time
 import json
+import yaml
 
 from glanceclient import Client as glance
 from novaclient import client as nova
@@ -11,6 +12,7 @@ from keystoneclient.v2_0 import client as keystone
 from cinderclient import client as cinder
 
 import config
+from filtering_utils import FilteringUtils
 
 NOVA_CLIENT_VERSION = config.NOVA_CLIENT_VERSION
 GLANCE_CLIENT_VERSION = config.GLANCE_CLIENT_VERSION
@@ -20,6 +22,7 @@ CINDER_CLIENT_VERSION = config.CINDER_CLIENT_VERSION
 
 class Prerequisites():
     def __init__(self, cloud_prefix='SRC'):
+        self.filtering_utils = FilteringUtils()
         self.username = os.environ['%s_OS_USERNAME' % cloud_prefix]
         self.password = os.environ['%s_OS_PASSWORD' % cloud_prefix]
         self.tenant = os.environ['%s_OS_TENANT_NAME' % cloud_prefix]
@@ -178,6 +181,65 @@ class Prerequisites():
             while img.status != 'active':
                 time.sleep(2)
                 img = self.glanceclient.images.get(img.id)
+        src_cloud = Prerequisites(cloud_prefix='SRC')
+        src_img = [x.__dict__ for x in
+                   src_cloud.glanceclient.images.list()]
+        for image in src_img:
+            if image['name'] in config.img_to_add_members:
+                image_id = image['id']
+                tenant_list = self.keystoneclient.tenants.list()
+                for tenant in tenant_list:
+                    tenant = tenant.__dict__
+                    if tenant['name'] in config.members:
+                        member_id = tenant['id']
+                        self.glanceclient.image_members.create(image_id, member_id)
+
+    def update_filtering_file(self):
+        src_cloud = Prerequisites(cloud_prefix='SRC')
+        src_img = [x.__dict__ for x in
+                   src_cloud.glanceclient.images.list()]
+        src_vms = [x.__dict__ for x in
+                   src_cloud.novaclient.servers.list(
+                       search_opts={'all_tenants': 1})]
+        image_dict = {}
+        for image in src_img:
+            img_members = self.glanceclient.image_members.list(image['id'])
+            if len(img_members) > 1:
+                img_mem_list = []
+                for img_member in img_members:
+                    img_member = img_member.__dict__
+                    img_mem_list.append(img_member['member_id'])
+                image_dict[image['id']] = img_mem_list
+        vm_id_list = []
+        for vm in src_vms:
+            vm_id = vm['id']
+            vm_id_list.append(vm_id)
+        loaded_data = self.filtering_utils.load_file()
+        filter_dict = loaded_data[0]
+        if filter_dict is None:
+            filter_dict = {'images': {'images_list': {}}, 'instances': {'id': {}}}
+        all_img_ids = []
+        img_list = []
+        not_incl_img = []
+        vm_list = []
+        for image in src_img:
+            all_img_ids.append(image['id'])
+        for img in config.images_not_included_in_filter:
+            not_incl_img.append(self.get_image_id(img))
+        for key in filter_dict.keys():
+            if key == 'images':
+                for img_id in all_img_ids:
+                    if img_id not in not_incl_img:
+                        img_list.append(img_id)
+                filter_dict[key]['images_list'] = img_list
+            elif key == 'instances':
+                for vm in vm_id_list:
+                    if vm != self.get_vm_id('not_in_filter'):
+                        vm_list.append(vm)
+                filter_dict[key]['id'] = vm_list
+        file_path = loaded_data[1]
+        with open(file_path, "w") as f:
+            yaml.dump(filter_dict, f, default_flow_style=False)
 
     def create_flavors(self):
         for flavor in config.flavors:
@@ -360,21 +422,39 @@ class Prerequisites():
                 break
 
     def run_preparation_scenario(self):
+        print('>>> Creating tenants:')
         self.create_tenants()
+        print('>>> Creating users:')
         self.create_users()
+        print('>>> Creating roles:')
         self.create_roles()
+        print('>>> Creating keypairs:')
         self.create_keypairs()
+        print('>>> Modifying quotas:')
         self.modify_quotas()
+        print('>>> Creating flavors:')
         self.create_flavors()
+        print('>>> Uploading images:')
         self.upload_image()
+        print('>>> Creating networking:')
         self.create_all_networking()
+        print('>>> Creating vms:')
         self.create_vms()
+        print('>>> Updating filtering:')
+        self.update_filtering_file()
+        print('>>> Creating vm snapshots:')
         self.create_vm_snapshots()
+        print('>>> Creating security groups:')
         self.create_security_groups()
+        print('>>> Creating cinder objects:')
         self.create_cinder_objects()
+        print('>>> Emulating vm states:')
         self.emulate_vm_states()
+        print('>>> Generating vm states list:')
         self.generate_vm_state_list()
+        print('>>> Deleting flavor:')
         self.delete_flavor()
+        print('>>> Modifying admin tenant quotas:')
         self.modify_admin_tenant_quotas()
 
     def clean_objects(self):

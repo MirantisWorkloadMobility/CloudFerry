@@ -5,31 +5,44 @@ import subprocess
 
 from time import sleep
 from generate_load import Prerequisites
-
+from filtering_utils import FilteringUtils
 
 class ResourceMigrationTests(unittest.TestCase):
 
     def setUp(self):
         self.src_cloud = Prerequisites(cloud_prefix='SRC')
         self.dst_cloud = Prerequisites(cloud_prefix='DST')
+        self.filtering_utils = FilteringUtils()
+
+    def validator(self, source_resources, dest_resources, resource_name):
+        if not source_resources <= dest_resources:
+            missing = source_resources - dest_resources
+            self.fail("Not all {resources} migrated. Missing resources on dest: {missing}".format(
+                resources=resource_name, missing=missing))
+
+    def validate_resource_parameter_in_dst_dict(self, src_list, dst_list,
+                                                resource_name='resource',
+                                                parameter='name'):
+        # Validating only uniq parameter's value
+        source_resources = set([x[parameter] for x in src_list])
+        dest_resources = set([x[parameter] for x in dst_list])
+        self.validator(source_resources, dest_resources, resource_name)
 
     def validate_resource_parameter_in_dst(self, src_list, dst_list,
                                            resource_name='resource',
                                            parameter='name'):
         # Validating only uniq parameter's value
-        self.assertTrue(
-            set([x.__dict__[parameter] for x in src_list]).issubset(
-                set([x.__dict__[parameter] for x in dst_list])),
-            'Not all %ss migrated correctly' % resource_name
-        )
+        source_resources = set([x.__dict__[parameter] for x in src_list])
+        dest_resources = set([x.__dict__[parameter] for x in dst_list])
+        self.validator(source_resources, dest_resources, resource_name)
 
     def validate_neutron_resource_parameter_in_dst(self, src_list, dst_list,
                                                    resource_name='networks',
                                                    parameter='name'):
-        self.assertTrue(
-            set([x[parameter] for x in src_list[resource_name]]).issubset(
-                set([x[parameter] for x in dst_list[resource_name]])),
-            'Not all %s migrated correctly' % resource_name)
+        # Validating only uniq parameter's value
+        source_resources = set([x[parameter] for x in src_list[resource_name]])
+        dest_resources = set([x[parameter] for x in dst_list[resource_name]])
+        self.validator(source_resources, dest_resources, resource_name)
 
     def test_migrate_keystone_users(self):
         src_users = self.src_cloud.keystoneclient.users.list()
@@ -107,23 +120,39 @@ class ResourceMigrationTests(unittest.TestCase):
 
     def test_migrate_glance_images(self):
         src_images = self.src_cloud.glanceclient.images.list()
-        dst_images = self.dst_cloud.glanceclient.images.list()
+        dst_images_gen = self.dst_cloud.glanceclient.images.list()
+        dst_images = [x.__dict__ for x in dst_images_gen]
 
-        self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                resource_name='image',
-                                                parameter='name')
-        self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                resource_name='image',
-                                                parameter='disk_format')
-        self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                resource_name='image',
-                                                parameter='container_format')
-        self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                resource_name='image',
-                                                parameter='size')
-        self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                resource_name='image',
-                                                parameter='checksum')
+        filtering_data = self.filtering_utils.filter_images(src_images)
+        src_images = filtering_data[0]
+
+        self.validate_resource_parameter_in_dst_dict(src_images, dst_images,
+                                                     resource_name='image',
+                                                     parameter='name')
+        self.validate_resource_parameter_in_dst_dict(src_images, dst_images,
+                                                     resource_name='image',
+                                                     parameter='disk_format')
+        self.validate_resource_parameter_in_dst_dict(src_images, dst_images,
+                                                     resource_name='image',
+                                                     parameter='container_format')
+        self.validate_resource_parameter_in_dst_dict(src_images, dst_images,
+                                                     resource_name='image',
+                                                     parameter='size')
+        self.validate_resource_parameter_in_dst_dict(src_images, dst_images,
+                                                     resource_name='image',
+                                                     parameter='checksum')
+
+    def test_glance_images_not_in_filter_did_not_migrate(self):
+        src_images = self.src_cloud.glanceclient.images.list()
+        filtering_data = self.filtering_utils.filter_images(src_images)
+        dst_images_gen = self.dst_cloud.glanceclient.images.list()
+        dst_images = [x.__dict__['name'] for x in dst_images_gen]
+        images_filtered_out = filtering_data[1]
+        for image in images_filtered_out:
+            self.assertTrue(image['name'] not in dst_images, 'Image migrated despite '
+                                                             'that it was not '
+                                                             'included in filter, '
+                                                             'Image info: \n{}'.format(image))
 
     def test_migrate_neutron_networks(self):
         src_nets = self.src_cloud.neutronclient.list_networks()
@@ -154,18 +183,23 @@ class ResourceMigrationTests(unittest.TestCase):
             src_routers, dst_routers, resource_name='routers')
 
     def test_migrate_vms_parameters(self):
-        src_vms = self.src_cloud.novaclient.servers.list(
+        src_vms_names = self.src_cloud.novaclient.servers.list(
             search_opts={'all_tenants': 1})
-        dst_vms = self.dst_cloud.novaclient.servers.list(
+        dst_vms_names = self.dst_cloud.novaclient.servers.list(
             search_opts={'all_tenants': 1})
+        src_vms = [x.__dict__ for x in src_vms_names]
+        dst_vms = [x.__dict__ for x in dst_vms_names]
 
-        src_vms = [vm for vm in src_vms if vm.__dict__['status'] != 'ERROR']
+        filtering_data = self.filtering_utils.filter_vms(src_vms)
+        src_vms = filtering_data[0]
 
-        self.validate_resource_parameter_in_dst(
+        src_vms = [vm for vm in src_vms if vm['status'] != 'ERROR']
+
+        self.validate_resource_parameter_in_dst_dict(
             src_vms, dst_vms, resource_name='VM', parameter='name')
-        self.validate_resource_parameter_in_dst(
+        self.validate_resource_parameter_in_dst_dict(
             src_vms, dst_vms, resource_name='VM', parameter='config_drive')
-        self.validate_resource_parameter_in_dst(
+        self.validate_resource_parameter_in_dst_dict(
             src_vms, dst_vms, resource_name='VM', parameter='key_name')
 
     def test_migrate_cinder_volumes(self):
