@@ -1,10 +1,11 @@
 import unittest
 import json
+import functional_test
 
 from generate_load import Prerequisites
 
 
-class VmMigration(unittest.TestCase):
+class VmMigration(functional_test.FunctionalTest):
 
     def setUp(self):
         self.src_cloud = Prerequisites(cloud_prefix='SRC')
