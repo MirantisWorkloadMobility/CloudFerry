@@ -127,7 +127,8 @@ class NeutronNetwork(network.Network):
         if keep_ip:
             instance_addr = ipaddr.IPAddress(network_info['ip'])
             for snet in self.neutron_client.list_subnets()['subnets']:
-                if snet['tenant_id'] == tenant_id:
+                network = self.get_network({"id": snet['network_id']}, None)
+                if snet['tenant_id'] == tenant_id or network['shared']:
                     if ipaddr.IPNetwork(snet['cidr']).Contains(instance_addr):
                         return self.neutron_client.\
                             list_networks(id=snet['network_id'])['networks'][0]
