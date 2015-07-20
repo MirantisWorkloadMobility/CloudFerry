@@ -504,10 +504,13 @@ class NovaCompute(compute.Compute):
                 detailed=detailed, search_opts=search_opts, marker=marker,
                 limit=limit)
         else:
-            if type(ids) is list:
-                instances = [self.nova_client.servers.get(i) for i in ids]
-            else:
-                instances = [self.nova_client.servers.get(ids)]
+            ids = ids if type(ids) is list else [ids]
+            instances = []
+            for i in ids:
+                try:
+                    instances.append(self.nova_client.servers.get(i))
+                except nova_exc.NotFound:
+                    LOG.warning("No server with ID of '%s' exists." % i)
 
         instances = filter_down_hosts(
             down_hosts(self.get_client()), instances,
