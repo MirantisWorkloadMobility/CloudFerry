@@ -8,7 +8,18 @@
 # bash devlab/utils/os_cli.sh clean src
 # bash devlab/utils/os_cli.sh clean dst
 
-cfg=devlab/config.ini
+cfg="devlab/config.ini"
+
+usage() {
+    echo
+    echo "Script to operate in OpenStack"
+    echo "Current usage of this script is to clean lab"
+    echo "(remove all VMs, flavors, images, networks, volumes)"
+    echo "  bash $0 clean {dst|src}"
+    echo "The script uses $cfg for getting access to environment"
+    echo "Make sure you have update it properly for all IPs"
+    echo
+}
 
 src=`grep grizzly_ip $cfg | awk '{print $3}'`
 dst=`grep icehouse_ip $cfg | awk '{print $3}'`
@@ -98,7 +109,7 @@ function get_image_id {
 }
 
 function get_image_list {
-  ${ssh} glance image-list | grep bare | cut -d ' ' -f 2
+  ${ssh} glance image-list --all-tenants | grep bare | cut -d ' ' -f 2
 }
 
 #arg1 - project name
@@ -321,23 +332,23 @@ function mask2cidr {
     echo "$nbits"
 }
 
-if [ "$1" == "clean" ]; then
-if [ "$2" == "dst" ]; then ssh=${dst_ssh}; fi
-if [ "$2" == "src" ]; then ssh=${src_ssh}; fi
-res=`${ssh} ${net_service} --help &>/dev/null` || net_service="quantum"
-echo cleaning environment
-for x in `get_float_list`; do echo "delete float ip $x"; float_ip_del $x; done
-for x in `get_vm_list`; do echo "delete vm $x"; delete_vm $x; done
-for x in `get_flavor_list`; do echo "delete flavor $x"; delete_flavor $x; done
-for x in `get_volume_list`; do echo "delete volume $x"; delete_volume $x; done
-for x in `get_image_list`; do echo "delete image $x"; delete_image $x; done
-for x in `get_router_list`; do echo "delete router $x"; delete_router $x; done
-for x in `get_port_list`; do echo "delete port $x"; delete_port $x; done
-for x in `get_net_list`
-do
-#  echo "delete subnet in network $x"
-  for y in `get_subnet_list ${x}`; do echo "delete subnet $y"; delete_subnet $y; done
-  echo "delete network $x"
-  delete_net $x
-done
+if [[ "$#" -lt "2" ]]; then usage; exit 1; fi
+if [[ "$1" == "clean" ]]; then
+    if [[ "$2" == "dst" ]]; then ssh=${dst_ssh}; fi
+    if [[ "$2" == "src" ]]; then ssh=${src_ssh}; fi
+    res=`${ssh} ${net_service} --help &>/dev/null` || net_service="quantum"
+    echo cleaning environment
+    for x in `get_float_list`; do echo "delete float ip $x"; float_ip_del $x; done
+    for x in `get_vm_list`; do echo "delete vm $x"; delete_vm $x; done
+    for x in `get_flavor_list`; do echo "delete flavor $x"; delete_flavor $x; done
+    for x in `get_volume_list`; do echo "delete volume $x"; delete_volume $x; done
+    for x in `get_image_list`; do echo "delete image $x"; delete_image $x; done
+    for x in `get_router_list`; do echo "delete router $x"; delete_router $x; done
+    for x in `get_port_list`; do echo "delete port $x"; delete_port $x; done
+    for x in `get_net_list`; do
+        echo "delete subnet in network $x"
+        for y in `get_subnet_list ${x}`; do echo "delete subnet $y"; delete_subnet $y; done
+        echo "delete network $x"
+        delete_net $x
+    done
 fi

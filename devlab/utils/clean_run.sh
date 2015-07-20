@@ -8,7 +8,25 @@
 set -e
 
 cur_pwd=`pwd`
-cfg=devlab/config.ini
+cfg="devlab/config.ini"
+dftl_ip="192.168.1.2"
+
+usage() {
+    echo
+    echo "Script to run clean migration"
+    echo "It uses $cfg for getting access to environment"
+    echo "If you want to do it for default options, please, use -f"
+    echo "  bash $0 -f"
+    echo "In other case the script uses $cfg"
+    echo "Make sure you have update it properly for all IPs"
+    echo
+}
+
+if [[ "$1" != "-f" ]] && [[ `grep -q $dftl_ip $cfg && echo $?` == "0" ]]; then
+    echo "Warning! Default config detected"
+    usage
+    exit 1
+fi
 
 SRC=`grep grizzly_ip $cfg | awk '{print $3}'`
 DST=`grep icehouse_ip $cfg | awk '{print $3}'`
@@ -34,7 +52,8 @@ python generate_load.py --clean --env DST
 python generate_load.py --clean --env DST
 ssh root@$DST \
 "mysql -u $dst_mysql_user -p$dst_mysql_password cinder -e \"delete from cinder.volume_admin_metadata;
-delete from cinder.volumes;\""
+delete from cinder.volumes;delete from cinder.reservations;delete from cinder.quota_usages;\""
 
 cd $cur_pwd
+bash devlab/utils/os_cli.sh clean dst
 fab migrate:configuration.ini
