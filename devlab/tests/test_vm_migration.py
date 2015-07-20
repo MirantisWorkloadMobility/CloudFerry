@@ -1,12 +1,13 @@
 import unittest
 import json
+import functional_test
 
 from generate_load import Prerequisites
 from filtering_utils import FilteringUtils
 import config
 
 
-class VmMigration(unittest.TestCase):
+class VmMigration(functional_test.FunctionalTest):
 
     def setUp(self):
         self.migration_utils = FilteringUtils()

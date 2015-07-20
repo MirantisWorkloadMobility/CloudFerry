@@ -2,12 +2,13 @@ import re
 import config
 import unittest
 import subprocess
+import functional_test
 
 from time import sleep
 from generate_load import Prerequisites
 from filtering_utils import FilteringUtils
 
-class ResourceMigrationTests(unittest.TestCase):
+class ResourceMigrationTests(functional_test.FunctionalTest):
 
     def setUp(self):
         self.src_cloud = Prerequisites(cloud_prefix='SRC')
