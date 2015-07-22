@@ -109,7 +109,7 @@ class KeystoneIdentity(identity.Identity):
         return info
 
     def deploy(self, info):
-        print 'Deploy started'
+        LOG.info("Identity objects deployment started")
         tenants = info['tenants']
         users = info['users']
         roles = info['user_tenants_roles']
@@ -123,7 +123,7 @@ class KeystoneIdentity(identity.Identity):
             passwords = info['user_passwords']
             self._upload_user_passwords(users, passwords)
         self._upload_user_tenant_roles(roles, users, tenants)
-        print 'Finished'
+        LOG.info("Done")
 
     def get_client(self):
         """ Getting keystone client using authentication with admin auth token.
