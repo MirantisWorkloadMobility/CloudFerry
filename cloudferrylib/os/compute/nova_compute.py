@@ -114,7 +114,7 @@ class NovaCompute(compute.Compute):
             project_quotas.append(project_quota_info)
             if self.config.migrate.migrate_user_quotas:
                 for user_id in user_ids:
-                    if self.identity.roles_for_user(user.id, tenant_id):
+                    if self.identity.roles_for_user(user_id, tenant_id):
                         user_quota = self.get_quotas(tenant_id=tenant_id,
                                                      user_id=user_id)
                         user_quota_info = self.convert_resources(
@@ -131,6 +131,7 @@ class NovaCompute(compute.Compute):
         """
 
         info = {'flavors': {},
+                'default_quotas': {},
                 'user_quotas': [],
                 'project_quotas': []}
 
@@ -138,6 +139,7 @@ class NovaCompute(compute.Compute):
             info['flavors'][flavor.id] = self.convert(flavor, cloud=self.cloud)
 
         if self.config.migrate.migrate_quotas:
+            info['default_quotas'] = self.get_default_quotas()
             info['project_quotas'], info['user_quotas'] = \
                 self._read_info_quotas()
 
@@ -311,7 +313,9 @@ class NovaCompute(compute.Compute):
                                'tenants': tenants},
                     'meta': {}}
 
-        elif isinstance(compute_obj, nova_client.quotas.QuotaSet):
+        elif isinstance(compute_obj,
+                        (nova_client.quotas.QuotaSet,
+                         nova_client.quota_classes.QuotaClassSet)):
             return {'quota': {'cores': compute_obj.cores,
                               'fixed_ips': compute_obj.fixed_ips,
                               'floating_ips': compute_obj.floating_ips,
@@ -357,6 +361,7 @@ class NovaCompute(compute.Compute):
 
         self._deploy_flavors(info['flavors'], tenant_map)
         if self.config['migrate']['migrate_quotas']:
+            self.update_default_quotas(info['default_quotas'])
             self._deploy_quotas(info['project_quotas'], tenant_map)
             self._deploy_quotas(info['user_quotas'], tenant_map, user_map)
 
@@ -657,6 +662,27 @@ class NovaCompute(compute.Compute):
     def update_quota(self, tenant_id, user_id=None, **quota_items):
         return self.nova_client.quotas.update(tenant_id=tenant_id,
                                               user_id=user_id, **quota_items)
+
+    def get_default_quotas(self):
+        default_quotas = self.nova_client.quota_classes.get('default')
+        default_quotas_info = self.convert_resources(default_quotas, None)
+        return default_quotas_info['quota']
+
+    def update_default_quotas(self, quota_items):
+        existing_default_quotas = self.get_default_quotas()
+
+        # To avoid redundant records in database
+        for i in existing_default_quotas:
+            if quota_items[i] == existing_default_quotas[i]:
+                quota_items.pop(i)
+
+        # FIXME: There is no availability to provide 'fixed_ips' argument to
+        # nova_client.quota_classes.update in python-novaclient==2.15.0
+        # Fixed in 2.16.0
+        if 'fixed_ips' in quota_items:
+            quota_items.pop('fixed_ips')
+
+        return self.nova_client.quota_classes.update('default', **quota_items)
 
     def get_interface_list(self, server_id):
         return self.nova_client.servers.interface_list(server_id)
