@@ -25,7 +25,7 @@ class GetFilter(action.Action):
             filter_config = utl.read_yaml_file(filter_path)
             if utl.INSTANCES_TYPE in filter_config:
                 search_opts = filter_config[utl.INSTANCES_TYPE]
-            if utl.IMAGES_TYPE:
+            if utl.IMAGES_TYPE in filter_config:
                 search_opts_img = filter_config[utl.IMAGES_TYPE]
         return {
             'search_opts': search_opts,
