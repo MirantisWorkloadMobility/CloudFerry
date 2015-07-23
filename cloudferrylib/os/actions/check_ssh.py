@@ -26,7 +26,7 @@ class CheckSSH(action.Action):
             self.check_access(node)
 
     def get_compute_nodes(self):
-        return self.cloud.resources[utl.COMPUTE_RESOURCE].get_hypervisors()
+        return self.cloud.resources[utl.COMPUTE_RESOURCE].get_compute_hosts()
 
     def check_access(self, node):
         cfg = self.cloud.cloud_config.cloud
