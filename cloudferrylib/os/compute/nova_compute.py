@@ -733,10 +733,10 @@ class NovaCompute(compute.Compute):
     def get_hypervisor_statistics(self):
         return self.nova_client.hypervisors.statistics()
 
-    def get_hypervisors(self):
-        hypervisors = [hypervisor.hypervisor_hostname for hypervisor in
-                       self.nova_client.hypervisors.list()]
-        return filter_down_hosts(down_hosts(self.get_client()), hypervisors)
+    def get_compute_hosts(self):
+        computes = self.nova_client.services.list(binary='nova-compute')
+        compute_hosts = map(attrgetter('host'), computes)
+        return filter_down_hosts(down_hosts(self.get_client()), compute_hosts)
 
     def get_free_vcpus(self):
         hypervisor_statistics = self.get_hypervisor_statistics()
