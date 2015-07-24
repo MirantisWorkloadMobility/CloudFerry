@@ -43,6 +43,8 @@ class MapComputeInfo(action.Action):
             if _instance['flavor_id'] in src_flavors_dict:
                 flavor_name = src_flavors_dict[_instance['flavor_id']]
                 _instance['flavor_id'] = dst_flavors_dict[flavor_name]
+            #TODO: path_dst is probably non used code, need functional testing
+            self.dst_cloud.cloud_config.cloud.temp = '-'
             path_dst = "%s/%s" % (self.dst_cloud.cloud_config.cloud.temp,
                                   "temp%s_base" % instance_id)
             instance[DIFF][PATH_DST] = path_dst

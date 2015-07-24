@@ -85,4 +85,8 @@ def _unlink(filename):
 
 
 def _unlink_dir(dirname):
-    return "rm -rf {dir}".format(dir=dirname)
+    if len(dirname) > 1:
+        return "rm -rf {dir}".format(dir=dirname)
+    else:
+        raise RuntimeError('Wrong dirname %s, stopping' % dirname)
+    return
