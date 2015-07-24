@@ -50,8 +50,11 @@ class GlanceImage(image.Image):
         self.identity_client = cloud.resources['identity']
         # get mysql settings
         self.mysql_connector = self.get_db_connection()
-        self.glance_client = self.proxy(self.get_client(), config)
         super(GlanceImage, self).__init__(config)
+
+    @property
+    def glance_client(self):
+        return self.proxy(self.get_client(), self.config)
 
     def get_db_connection(self):
         if not hasattr(

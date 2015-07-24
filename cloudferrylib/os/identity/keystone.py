@@ -35,16 +35,27 @@ class AddAdminUserToNonAdminTenant(object):
     Use when any openstack object must be created in specific tenant. If
     admin user is already added to the tenant as tenant's member - nothing
     happens. Otherwise admin user is added to a tenant on block entrance, and
-    removed on exit
+    removed on exit.
+
+    When this class is in use, make sure *all* your openstack clients generate
+    new auth token on *each* openstack API call, because when user gets added
+    to a tenant as a member, all it's tokens get revoked.
 
     Usage:
      with AddAdminUserToNonAdminTenant():
         your_operation_from_admin_user()
     """
 
-    def __init__(self, keystone, admin_user, tenant, member_role='Member'):
+    def __init__(self, keystone, admin_user, tenant, member_role='admin'):
+        """
+        :tenant: can be either tenant name or tenant ID
+        """
+
         self.keystone = keystone
-        self.tenant = self.keystone.tenants.find(name=tenant)
+        try:
+            self.tenant = self.keystone.tenants.find(name=tenant)
+        except keystoneclient.exceptions.NotFound:
+            self.tenant = self.keystone.tenants.find(id=tenant)
         self.user = self.keystone.users.find(name=admin_user)
         self.role = self.keystone.roles.find(name=member_role)
         self.already_member = False
@@ -58,13 +69,16 @@ class AddAdminUserToNonAdminTenant(object):
                 # do nothing if user is already member of a tenant
                 self.already_member = True
                 return
-
+        LOG.debug("Adding %s user to tenant %s as %s",
+                  self.user.name, self.tenant.name, self.role.name)
         self.keystone.roles.add_user_role(user=self.user,
                                           role=self.role,
                                           tenant=self.tenant)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not self.already_member:
+            LOG.debug("Removing %s user from tenant %s",
+                      self.user.name, self.tenant.name)
             self.keystone.roles.remove_user_role(user=self.user,
                                                  role=self.role,
                                                  tenant=self.tenant)
@@ -76,8 +90,6 @@ class KeystoneIdentity(identity.Identity):
     def __init__(self, config, cloud):
         super(KeystoneIdentity, self).__init__()
         self.config = config
-        self._ks_client_creds = self.proxy(self._get_client_by_creds(), config)
-        self.keystone_client = self.proxy(self.get_client(), config)
         self.mysql_connector = cloud.mysql_connector
         self.cloud = cloud
         self.postman = None
@@ -88,6 +100,10 @@ class KeystoneIdentity(identity.Identity):
                                    self.config['mail']['server'])
         self.templater = Templater()
         self.generator = GeneratorPassword()
+
+    @property
+    def keystone_client(self):
+        return self.proxy(self._get_client_by_creds(), self.config)
 
     @staticmethod
     def convert(identity_obj, cfg):
@@ -172,9 +188,7 @@ class KeystoneIdentity(identity.Identity):
         :return: OpenStack Keystone Client instance
         """
 
-        return keystone_client.Client(
-            token=self._ks_client_creds.auth_ref['token']['id'],
-            endpoint=self.config.cloud.auth_url)
+        return self.keystone_client
 
     def _get_client_by_creds(self):
         """Authenticating with a user name and password.
@@ -196,7 +210,7 @@ class KeystoneIdentity(identity.Identity):
         :return: String endpoint of specified OpenStack service
         """
 
-        return self._ks_client_creds.service_catalog.url_for(
+        return self.keystone_client.service_catalog.url_for(
             service_type=service_type,
             endpoint_type=endpoint_type)
 
@@ -316,7 +330,8 @@ class KeystoneIdentity(identity.Identity):
         return self.keystone_client.users.update(user, **kwargs)
 
     def get_auth_token_from_user(self):
-        return self.keystone_client.auth_token_from_user
+        self.keystone_client.authenticate()
+        return self.keystone_client.auth_token
 
     def _deploy_tenants(self, tenants):
         dst_tenants = {tenant.name: tenant.id for tenant in

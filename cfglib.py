@@ -284,7 +284,19 @@ src_network = cfg.OptGroup(name='src_network',
 src_network_opts = [
     cfg.StrOpt('service', default='auto',
                help='name service for network, '
-                    'auto - detect avaiable service')
+                    'auto - detect avaiable service'),
+    cfg.StrOpt('host', default='localhost',
+               help='Neutron DB node host'),
+    cfg.IntOpt('port', default='3306',
+               help='port for mysql connection'),
+    cfg.StrOpt('password', default='',
+               help='Neutron DB password'),
+    cfg.StrOpt('database_name', default='neutron',
+               help='Neutron database name'),
+    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+               help='Neutron DB connection type'),
+    cfg.StrOpt('user', default="root",
+               help="DB user for the networking backend")
 ]
 
 src_objstorage = cfg.OptGroup(name='src_objstorage',
@@ -436,7 +448,19 @@ dst_network_opts = [
                help='name service for network, '
                     'auto - detect available service'),
     cfg.ListOpt('interfaces_for_instance', default='net04',
-                help='list interfaces for connection to instance')
+                help='list interfaces for connection to instance'),
+    cfg.StrOpt('host', default='localhost',
+               help='Neutron DB node host'),
+    cfg.IntOpt('port', default='3306',
+               help='port for mysql connection'),
+    cfg.StrOpt('password', default='',
+               help='Neutron DB password'),
+    cfg.StrOpt('database_name', default='neutron',
+               help='Neutron database name'),
+    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+               help='Neutron DB connection type'),
+    cfg.StrOpt('user', default="root",
+               help="DB user for the networking backend")
 ]
 
 dst_objstorage = cfg.OptGroup(name='dst_objstorage',

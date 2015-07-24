@@ -94,6 +94,11 @@ service = keystone
 [src_network]
 service = auto
 interfaces_for_instance = <src_network_interfaces_for_instance>
+user = <src_mysql_user>
+password = <src_mysql_password>
+host = <grizzly_ip>
+connection = mysql+mysqlconnector
+database_name = quantum
 
 [src_objstorage]
 service =
@@ -162,6 +167,11 @@ service = keystone
 [dst_network]
 service=auto
 interfaces_for_instance = <dst_network_interfaces_for_instance>
+user = <dst_mysql_user>
+password = <dst_mysql_password>
+host = <icehouse_ip>
+connection = mysql+mysqlconnector
+database_name = neutron
 
 [import_rules]
 key = {name:dest-key-1}
