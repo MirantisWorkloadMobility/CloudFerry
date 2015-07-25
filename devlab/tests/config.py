@@ -73,7 +73,7 @@ tenants = [
           'key_name': 'key2'},
          {'name': 'keypair_test_server', 'image': 'image1',
           'flavor': 'flavorname2', 'key_name': 'key2', 'nics': [
-              {'net-id': 'tenantnet2'}]}],
+              {'net-id': 'tenantnet2'}], 'fip': True}],
      'networks': [{'name': 'tenantnet2', 'admin_state_up': True}],
      'subnets': [{'cidr': '22.2.2.0/24', 'ip_version': 4, 'name': 't2_s1'}],
      'cinder_volumes': [

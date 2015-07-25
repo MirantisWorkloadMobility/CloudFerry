@@ -323,7 +323,8 @@ class Prerequisites(object):
             return {'image': self.get_image_id(_vm['image']),
                     'flavor': self.get_flavor_id(_vm['flavor']),
                     'nics': get_vm_nics(_vm),
-                    'name': _vm['name']
+                    'name': _vm['name'],
+                    'key_name': _vm.get('key_name')
                     }
 
         def wait_vm_nic_created(vm_id):
@@ -378,10 +379,10 @@ class Prerequisites(object):
             return vms
 
         vms = create_vms(self.config.vms)
-        for tenant in self.config.tenants:
+        for tenant, user in zip(self.config.tenants, self.config.users):
             if not tenant.get('vms'):
                 continue
-            self.switch_user(user=self.username, password=self.password,
+            self.switch_user(user=user['name'], password=user['password'],
                              tenant=tenant['name'])
             vms.extend(create_vms(tenant['vms']))
         self.switch_user(user=self.username, password=self.password,
@@ -419,6 +420,8 @@ class Prerequisites(object):
             net = self.neutronclient.create_network({'network': network})
             subnet['network_id'] = net['network']['id']
             subnet = self.neutronclient.create_subnet({'subnet': subnet})
+            self.neutronclient.create_port(
+                {"port": {"network_id": net['network']['id']}})
             self.neutronclient.add_interface_router(
                 ext_router_id, {"subnet_id": subnet['subnet']['id']})
 
@@ -772,7 +775,8 @@ class Prerequisites(object):
 
         ports = self.neutronclient.list_ports()['ports']
         ports = [port for port in ports[:]
-                 if port['device_owner'] == 'network:dhcp']
+                 if port['device_owner'] == 'network:dhcp'
+                 or not port['device_owner']]
 
         for port in ports:
             self.neutronclient.delete_port(port['id'])
