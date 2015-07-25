@@ -117,8 +117,6 @@ migrate_opts = [
                help='Size of one chunk to transfer via SSH'),
     cfg.StrOpt('group_file_path', default="vm_groups.yaml",
                help='Path to file with the groups of VMs'),
-    cfg.BoolOpt('all_networks', default=False,
-                help="Migrate all network resources from all tenants"),
     cfg.BoolOpt('skip_down_hosts', default=True,
                 help="If set to True, removes unreachable compute hosts from "
                      "nova hypervisor list. Otherwise migration process fails "
