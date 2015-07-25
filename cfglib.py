@@ -119,8 +119,6 @@ migrate_opts = [
                help='Path to file with the groups of VMs'),
     cfg.BoolOpt('all_networks', default=False,
                 help="Migrate all network resources from all tenants"),
-    cfg.BoolOpt('all_volumes', default=False,
-                help="Migrate all volume resources from all tenants"),
     cfg.BoolOpt('skip_down_hosts', default=True,
                 help="If set to True, removes unreachable compute hosts from "
                      "nova hypervisor list. Otherwise migration process fails "
