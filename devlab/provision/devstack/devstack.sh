@@ -46,7 +46,7 @@ function gen_openrc {
 gen_openrc "../openrc_admin" "admin" "admin"
 gen_openrc "../openrc_demo" "demo" "demo"
 
-#clean public and privet networks and router1
+#clean public and private networks and router1
 source ../openrc_admin
 neutron router-gateway-clear router1
 neutron router-port-list router1 | grep -v mac_address | grep -v  +- \
