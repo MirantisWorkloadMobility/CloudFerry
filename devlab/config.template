@@ -24,7 +24,6 @@ ssh_chunk_size = 100
 retry = 5
 migrate_extnets = True
 time_wait = 5
-all_images = True
 all_networks = True
 all_volumes = True
 cinder_migration_strategy = cloudferrylib.os.storage.cinder_database.CinderStorage

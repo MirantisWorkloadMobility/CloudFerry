@@ -92,7 +92,7 @@ class GlanceImage(image.Image):
     def get_image_list(self):
         # by some reason - guys from community decided to create that strange
         # option to get images of all tenants
-        filters = {"is_public": None} if self.config.migrate.all_images else {}
+        filters = {"is_public": None}
         return self.glance_client.images.list(filters=filters)
 
     def create_image(self, **kwargs):
