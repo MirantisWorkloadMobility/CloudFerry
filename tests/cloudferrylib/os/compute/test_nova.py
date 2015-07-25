@@ -34,8 +34,7 @@ FAKE_CONFIG = utils.ext_dict(
     migrate=utils.ext_dict({'migrate_quotas': True,
                             'speed_limit': '10MB',
                             'retry': '7',
-                            'time_wait': 5,
-                            'all_vms': False}))
+                            'time_wait': 5}))
 
 
 class NovaComputeTestCase(test.TestCase):

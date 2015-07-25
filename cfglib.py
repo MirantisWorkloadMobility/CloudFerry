@@ -121,10 +121,6 @@ migrate_opts = [
                 help="Migrate all network resources from all tenants"),
     cfg.BoolOpt('all_volumes', default=False,
                 help="Migrate all volume resources from all tenants"),
-    cfg.BoolOpt('all_vms', default=False,
-                help="Migrate all VM's from all tenants. User, specified in "
-                     "the 'dst' section of config also should have admin role "
-                     "in all tenants."),
     cfg.BoolOpt('all_images', default=False,
                 help='Migrate images of all tenants'),
     cfg.BoolOpt('skip_down_hosts', default=True,

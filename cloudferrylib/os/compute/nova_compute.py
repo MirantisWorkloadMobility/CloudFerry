@@ -161,10 +161,8 @@ class NovaCompute(compute.Compute):
             raise ValueError('Only "resources" or "instances" values allowed')
 
         search_opts = kwargs.get('search_opts')
-
-        if self.config.migrate.all_vms:
-            search_opts = search_opts if search_opts else {}
-            search_opts.update(all_tenants=True)
+        search_opts = search_opts if search_opts else {}
+        search_opts.update(all_tenants=True)
 
         info = {'instances': {}}
 
