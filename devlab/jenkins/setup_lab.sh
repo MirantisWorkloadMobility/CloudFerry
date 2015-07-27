@@ -2,10 +2,9 @@
 set -e
 set -x
 
-WORKSPACE="${WORKSPACE:-$( cd $( dirname "$0" ) && cd ../../../ && pwd)}"
-
-CF_DIR=$WORKSPACE/cloudferry
-JOB_NAME="${JOB_NAME:-cloudferry-functional-tests}"
+export WORKSPACE="${WORKSPACE:-$( cd $( dirname "$0" ) && cd ../../../ && pwd)}"
+export CF_DIR=$WORKSPACE/cloudferry
+export JOB_NAME="${JOB_NAME:-cloudferry-functional-tests}"
 
 trap 'clean_exit $LINENO $BASH_COMMAND; exit' SIGHUP SIGINT SIGQUIT SIGTERM EXIT
 clean_exit()
@@ -21,17 +20,13 @@ echo "Preparing environment"
 pushd $CF_DIR
 
 if [ "$JOB_NAME" = "cloudferry-functional-tests" ]; then
-    git checkout devel
     git remote update
     # cloudferry source dir is not deleted after job finish, so if
     # pull request cannot be automatically rebased, we must abort it explicitly and
     # exit with failure. In case rebase succeeded, functional test should # move on.
     git pull --rebase origin devel || ( git rebase --abort && exit 1 )
-elif  [ "$JOB_NAME" = "cloudferry-release-builder"]; then
-    git checkout master
-    git remote update
-    git pull --rebase origin master || ( git rebase --abort && exit 1 )
-    git pull --rebase origin devel || ( git rebase --abort && exit 1 )
+elif  [ "$JOB_NAME" = "cloudferry-release-builder" ]; then
+    echo "Job ${JOB_NAME} is running, 'git remote update' and 'git pull --rebase origin devel' was performed previously"
 else
     echo "JOB_NAME defined incorrectly"
     exit 1
@@ -43,12 +38,11 @@ pip install pip==6.1.1
 pip install --allow-all-external -r requirements.txt -r test-requirements.txt
 
 echo "Preparing lab"
-
 pushd devlab
 echo 'Removing old VMs if exist, first try with vagrant...'
 vagrant destroy --force
-echo 'then with vboxmanage...'
-for v in `vboxmanage list vms | awk '{print $1}'`; do vboxmanage unregistervm --delete $v; done
+echo 'then unregister VMs...'
+for v in `vboxmanage list vms | awk '{print $2}' | sed 's/^{*//;s/}*$//'`; do vboxmanage unregistervm --delete $v; done
 list=$(vboxmanage list vms); if [[ -n $list ]]; then echo "Need to clean VMs"; exit 1; fi
 
 echo 'Removing old hostinerfaces...'
@@ -80,12 +74,3 @@ popd
 
 echo "Preparing configuration for CloudFerry"
 devlab/provision/generate_config.sh --cloudferry-path "$CF_DIR"
-
-fab migrate:configuration.ini,debug=True
-
-pushd devlab/tests
-echo 'Running tests'
-nosetests -d -v --with-xunit
-popd
-
-popd
