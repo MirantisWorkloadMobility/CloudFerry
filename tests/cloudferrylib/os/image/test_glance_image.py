@@ -29,7 +29,6 @@ FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
                                                    'host': '1.1.1.1',
                                                    }),
                              migrate=utils.ext_dict({'speed_limit': '10MB',
-                                                     'all_images': True,
                                                      'retry': '7',
                                                      'time_wait': 5}))
 
@@ -126,7 +125,9 @@ class GlanceImageTestCase(test.TestCase):
         fake_images = [self.fake_image_1, self.fake_image_2]
         self.glance_mock_client().images.list.return_value = fake_images
 
-        self.assertEquals(fake_images, self.glance_image.get_image_list())
+        images_list = self.glance_image.get_image_list()
+        self.glance_mock_client().images.list.assert_called_once_with(filters={'is_public': None})
+        self.assertEquals(fake_images, images_list)
 
     def test_create_image(self):
         self.glance_image.create_image(name='fake_image_name',

@@ -35,9 +35,7 @@ class VmSnapshotBasic(action.Action):
         return '_'.join([VM_STATUSES, self.cloud.position])
 
     def get_list_of_vms(self):
-        search_opts = {}
-        if self.cloud.config.migrate.all_vms:
-            search_opts.update(all_tenants=True)
+        search_opts = {'all_tenants': 'True'}
         return self.get_compute_resource().get_instances_list(
             search_opts=search_opts)
 

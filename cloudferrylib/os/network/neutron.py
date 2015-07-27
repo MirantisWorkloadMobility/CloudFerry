@@ -53,9 +53,6 @@ class NeutronNetwork(network.Network):
         """
 
         tenant_id = ''
-        if not self.config.migrate.all_networks:
-            tenant_name = self.config.cloud.tenant
-            tenant_id = self.identity_client.get_tenant_id_by_name(tenant_name)
 
         info = {'networks': self.get_networks(tenant_id),
                 'subnets': self.get_subnets(tenant_id),

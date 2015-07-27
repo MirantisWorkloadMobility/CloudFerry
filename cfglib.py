@@ -117,16 +117,6 @@ migrate_opts = [
                help='Size of one chunk to transfer via SSH'),
     cfg.StrOpt('group_file_path', default="vm_groups.yaml",
                help='Path to file with the groups of VMs'),
-    cfg.BoolOpt('all_networks', default=False,
-                help="Migrate all network resources from all tenants"),
-    cfg.BoolOpt('all_volumes', default=False,
-                help="Migrate all volume resources from all tenants"),
-    cfg.BoolOpt('all_vms', default=False,
-                help="Migrate all VM's from all tenants. User, specified in "
-                     "the 'dst' section of config also should have admin role "
-                     "in all tenants."),
-    cfg.BoolOpt('all_images', default=False,
-                help='Migrate images of all tenants'),
     cfg.BoolOpt('skip_down_hosts', default=True,
                 help="If set to True, removes unreachable compute hosts from "
                      "nova hypervisor list. Otherwise migration process fails "
