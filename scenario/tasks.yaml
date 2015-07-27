@@ -83,3 +83,4 @@ tasks:
    set_volume_id_for_attaching: ["SetVolumeId"]
    create_image_snapshot_dst: ["ImageSnapshot", "dst_cloud"]
    image_rollback_dst: ["ImageRollback", "dst_cloud"]
+   fail_migration: ["DivisionByZero"]
