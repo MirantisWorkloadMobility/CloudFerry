@@ -2,12 +2,8 @@
 users = [
     {'name': 'user1', 'password': 'passwd1', 'email': 'mail@example.com',
      'tenant': 'tenant1', 'enabled': True},
-    {'name': 'user2', 'password': 'passwd2', 'email': 'aa@example.com',
-     'tenant': 'tenant2', 'enabled': True},
     {'name': 'user3', 'password': 'paafdssswd1', 'email': 'mdsail@example.com',
-     'tenant': 'tenant1', 'enabled': False},
-    {'name': 'user4', 'password': 'asaasdf', 'email': 'asdasd@example.com',
-     'tenant': 'tenant2', 'enabled': False}
+     'tenant': 'tenant1', 'enabled': False}
 ]
 
 # Roles to create/delete
@@ -43,27 +39,13 @@ tenants = [
           },
          {'name': 'sg12', 'description': 'Blah blah group2'}],
      'cinder_volumes': [
-         {'name': 'tn1_volume1', 'size': 1, 'server_to_attach': 'tn1server1',
+         {'name': 'cinder_volume1', 'size': 1, 'server_to_attach': 'tn1server1',
           'device': '/dev/vdb'},
-         {'name': 'tn1_volume2', 'size': 1}
+         {'name': 'cinder_volume2', 'size': 1}
      ],
      'cinder_snapshots': [
          # Commented because of unimplemented error in nfs driver for grizzly.
          # {'name': 'tn1snapsh', 'volume_id': 'tn1_volume2'}
-     ]
-     },
-    {'name': 'tenant2', 'description': 'Bljakslhf ajsdfh', 'enabled': True,
-     'vms': [
-         {'name': 'tn2server1', 'image': 'image1', 'flavor': 'flavorname2',
-          'key_name': 'key2'},
-         {'name': 'keypair_test_server', 'image': 'image1',
-          'flavor': 'flavorname2', 'key_name': 'key2', 'nics':[
-             {'net-id':'tenantnet2'}]}],
-     'networks': [{'name': 'tenantnet2', 'admin_state_up': True}],
-     'subnets': [{'cidr': '22.2.2.0/24', 'ip_version': 4}],
-     'cinder_volumes': [
-         {'name': 'tn_volume1', 'size': 1, 'server_to_attach': 'tn2server1',
-          'device': '/dev/vdb'}
      ]
      }
 ]
@@ -72,18 +54,14 @@ tenants = [
 images = [
     {'name': 'image1', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
      'is_public': True},
-    {'name': 'image2', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False},
     {'name': 'image3', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
      'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False},
     {'name': 'image4', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False},
-    {'name': 'image5', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
      'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False}
 ]
 
 # Images not to be migrated:
-images_not_included_in_filter = ['image4', 'image5']
+images_not_included_in_filter = []
 
 # Instances not to be included in filter:
 vms_not_in_filter = ['not_in_filter']
@@ -119,21 +97,11 @@ subnets = [
 
 # VM's to create/delete
 vms = [
-    {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
-    {'name': 'server2', 'image': 'image2', 'flavor': 'flavorname1'},
-    {'name': 'server3', 'image': 'image1', 'flavor': 'flavorname2'},
-    {'name': 'server4', 'image': 'image2', 'flavor': 'flavorname2'},
-    {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1'},
-    {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'}
+
 ]
 
 routers = [
-    {
-        'router': {
-            'external_gateway_info': {
-                'network_id': 'shared_net'},
-            'name': 'ext_router',
-            'admin_state_up': True}}
+
 ]
 
 # VM's snapshots to create/delete
@@ -219,16 +187,3 @@ private_key = {'name': 'key2',
     '-----END RSA PRIVATE KEY-----'}
 
 dst_prv_key_path = '~/.ssh/id_rsa'
-
-# Parameters required for rollback verification procedure:
-rollback_params = {'data_file_names': {'PRE': 'data_before_migration.yaml',
-                                       'POST': 'data_after_migration.yaml'},
-
-                   'param_dict': {'Nova': ['servers', 'security_groups',
-                                           'flavors', 'keypairs', 'quotas'],
-                                  'Neutron': ['networks', 'routers', 'subnets',
-                                              'ports', 'quotas'],
-                                  'Keystone': ['users', 'tenants', 'roles'],
-                                  'Glance': ['images', 'members'],
-                                  'Cinder': ['volume_snapshots', 'volumes',
-                                             'quotas']}}
