@@ -25,6 +25,8 @@ options:
 
  - `public_key_path` -- public key CloudFerry uses to ssh into SRC and DST
    migration environments;
+ - `ENV['VIRTUALBOX_NETWORK_NAME']` -- Optional variable which allows you to
+   specify private virtual vbox network.
 
 ## Prerequisites
 

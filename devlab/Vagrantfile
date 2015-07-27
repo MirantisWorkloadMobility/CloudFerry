@@ -12,6 +12,14 @@ File.foreach(config_file) { |line|
   end
 }
 
+
+# If you want to deploy your vm's in isolated particular network, you should specify environment variable:
+# export VIRTUALBOX_NETWORK_NAME=test_net1
+# vagrant up grizzly juno cloudferry
+
+options['virtualbox_network_name'] = ENV['VIRTUALBOX_NETWORK_NAME'] unless ENV['VIRTUALBOX_NETWORK_NAME'].nil?
+
+
 user = %x(id -un).strip()
 uid = %x(id -u #{user}).strip()
 
@@ -101,7 +109,8 @@ Vagrant.configure(2) do |config|
       end
 
       if nodedata.has_key?("ip") then
-        thisnode.vm.network "private_network", ip: nodedata['ip']
+        thisnode.vm.network "private_network", ip: nodedata['ip'],
+          virtualbox__intnet: options['virtualbox_network_name']
       end
 
       thisnode.vm.provider "virtualbox" do |v|
