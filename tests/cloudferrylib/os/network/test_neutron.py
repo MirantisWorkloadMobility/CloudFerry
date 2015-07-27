@@ -586,7 +586,8 @@ class NeutronTestCase(test.TestCase):
                         'res_hash': 'fake_subnet_hash'}]
         dst_router = {'id': 'fake_router_id_2',
                       'subnet_ids': ['fake_subnet_id_2'],
-                      'external_gateway_info': None}
+                      'external_gateway_info': None,
+                      'name': 'r1'}
         dst_subnets = [{'id': 'fake_subnet_id_2',
                         'external': False,
                         'res_hash': 'fake_subnet_hash'}]
