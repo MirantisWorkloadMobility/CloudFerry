@@ -427,3 +427,31 @@ class KeystoneIdentityTestCase(test.TestCase):
                                                       'fake_same_id',
                                                       fallback_to_admin=True)
         self.assertEquals(self.fake_same_user, user)
+
+
+class AddAdminToNonAdminTenantTestCase(test.TestCase):
+    def test_user_role_is_removed_on_scope_exit(self):
+        ksclient = mock.MagicMock()
+
+        with keystone.AddAdminUserToNonAdminTenant(ksclient, 'adm', 'tenant'):
+            pass
+
+        assert ksclient.roles.add_user_role.called
+        assert ksclient.roles.remove_user_role.called
+
+    def test_nothing_happens_if_admin_is_already_member_of_a_tenant(self):
+        ksclient = mock.MagicMock()
+        role_name = 'member'
+        member_role = mock.Mock()
+        member_role.name = role_name
+        ksclient.roles.roles_for_user.return_value = [member_role]
+        ksclient.roles.find.return_value = member_role
+
+        with keystone.AddAdminUserToNonAdminTenant(ksclient,
+                                                   'adm',
+                                                   'tenant',
+                                                   member_role=role_name):
+            pass
+
+        assert not ksclient.roles.add_user_role.called
+        assert not ksclient.roles.remove_user_role.called

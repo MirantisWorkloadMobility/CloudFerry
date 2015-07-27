@@ -29,6 +29,47 @@ from cloudferrylib.utils import utils as utl
 LOG = utl.get_log(__name__)
 
 
+class AddAdminUserToNonAdminTenant(object):
+    """Temporarily adds admin user to non-admin tenant when necessary.
+
+    Use when any openstack object must be created in specific tenant. If
+    admin user is already added to the tenant as tenant's member - nothing
+    happens. Otherwise admin user is added to a tenant on block entrance, and
+    removed on exit
+
+    Usage:
+     with AddAdminUserToNonAdminTenant():
+        your_operation_from_admin_user()
+    """
+
+    def __init__(self, keystone, admin_user, tenant, member_role='Member'):
+        self.keystone = keystone
+        self.tenant = self.keystone.tenants.find(name=tenant)
+        self.user = self.keystone.users.find(name=admin_user)
+        self.role = self.keystone.roles.find(name=member_role)
+        self.already_member = False
+
+    def __enter__(self):
+        roles = self.keystone.roles.roles_for_user(user=self.user,
+                                                   tenant=self.tenant)
+
+        for role in roles:
+            if role.name == self.role.name:
+                # do nothing if user is already member of a tenant
+                self.already_member = True
+                return
+
+        self.keystone.roles.add_user_role(user=self.user,
+                                          role=self.role,
+                                          tenant=self.tenant)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self.already_member:
+            self.keystone.roles.remove_user_role(user=self.user,
+                                                 role=self.role,
+                                                 tenant=self.tenant)
+
+
 class KeystoneIdentity(identity.Identity):
     """The main class for working with OpenStack Keystone Identity Service."""
 
