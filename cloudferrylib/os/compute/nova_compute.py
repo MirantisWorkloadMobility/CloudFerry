@@ -676,12 +676,6 @@ class NovaCompute(compute.Compute):
             if quota_items[i] == existing_default_quotas[i]:
                 quota_items.pop(i)
 
-        # FIXME: There is no availability to provide 'fixed_ips' argument to
-        # nova_client.quota_classes.update in python-novaclient==2.15.0
-        # Fixed in 2.16.0
-        if 'fixed_ips' in quota_items:
-            quota_items.pop('fixed_ips')
-
         return self.nova_client.quota_classes.update('default', **quota_items)
 
     def get_interface_list(self, server_id):
