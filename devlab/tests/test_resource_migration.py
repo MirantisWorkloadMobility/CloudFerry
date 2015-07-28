@@ -1,4 +1,5 @@
 import re
+import pprint
 import config
 import unittest
 import subprocess
@@ -324,3 +325,19 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             retry_cmd_execute(cmd % cmd_ssh_to_vm)
         finally:
             subprocess.check_output(cmd % 'rm ' + dst_key_name, shell=True)
+
+    def test_floating_ips_migrated(self):
+        def get_fips(client):
+            return set([fip['floating_ip_address']
+                for fip in client.list_floatingips()['floatingips']])
+
+        src_fips = get_fips(self.src_cloud.neutronclient)
+        dst_fips = get_fips(self.dst_cloud.neutronclient)
+
+        missing_fips = src_fips - dst_fips
+
+        if missing_fips:
+            self.fail("{num} floating IPs did not migrate to destination: "
+                      "{fips}".format(num=len(missing_fips),
+                      fips=pprint.pformat(missing_fips)))
+
