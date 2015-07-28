@@ -39,7 +39,7 @@ service redis-server start
 if [[ ! -d .ubuntu-venv ]]; then
     echo "Setting up CloudFerry virtual environment"
 
-    apt-get install python-dev libffi-dev -y
+    apt-get install build-essential libssl-dev libffi-dev python-dev -y
     run virtualenv .ubuntu-venv
     # pip>=7.0.0 causes fabric to fail dependency resolution (paramiko)
     run PATH=$(pwd)/.ubuntu-venv/bin:$PATH env pip install pip==6.1.1

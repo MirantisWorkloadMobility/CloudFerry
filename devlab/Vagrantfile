@@ -24,19 +24,19 @@ user = %x(id -un).strip()
 uid = %x(id -u #{user}).strip()
 
 nodes = {
-  "grizzly" => {
+  "grizzly#{ENV["BUILD_NAME"]}" => {
     "box" => "openstack-user/precise-grizzly",
     "ip" => "#{options['grizzly_ip']}",
     "memory" => 4096,
     "role" => "openstack"
   },
-  "icehouse" => {
+  "icehouse#{ENV["BUILD_NAME"]}" => {
     "box" => "openstack-user/precise-icehouse",
     "ip" => "#{options['icehouse_ip']}",
     "memory" => 4096,
     "role" => "openstack"
   },
-  "juno" => {
+  "juno#{ENV["BUILD_NAME"]}" => {
     "box" => "openstack-user/juno",
     "ip" => "#{options['juno_ip']}",
     "memory" => 4096,
@@ -45,11 +45,11 @@ nodes = {
       "branch" => 'stable/juno' 
         }
   },
-  "cloudferry" => {
+  "cloudferry#{ENV["BUILD_NAME"]}" => {
     "box" => "hashicorp/precise64",
     "ip" => "#{options['cloudferry_ip']}",
     "memory" => 2048,
-    "role" => "dev"
+    "role" => "lab"
   },
   "grizzlycompute" => {
     "box" => "openstack-user/precise-grizzlycompute",
@@ -85,6 +85,9 @@ Vagrant.configure(2) do |config|
           thisnode.vm.provision "shell",
             path: "./provision/keys.sh",
             args: [ "--public-key", File.read("#{ENV["HOME"]}/#{options['public_key_path']}").strip() ]
+          thisnode.vm.provision "shell",
+            path: "./provision/keys.sh",
+            args: [ "--public-key", File.read("provision/cf_keys/id_rsa.pub").strip() ] unless not File.exist?("provision/cf_keys/id_rsa.pub")
           if nodedata.has_key?('devstack')
             thisnode.vm.provision "file",
               source: "./provision/devstack/local_#{nodename}.conf", 
@@ -106,11 +109,27 @@ Vagrant.configure(2) do |config|
           thisnode.vm.provision "shell",
             path: "./provision/generate_config.sh",
             args: [ "--cloudferry-path", ubuntu_cf_repo ]
+        when "lab"
+          thisnode.vm.provision "shell",
+            path: "./provision/keys.sh",
+            args: [ "--public-key", File.read("#{ENV["HOME"]}/#{options['public_key_path']}").strip() ]
+          thisnode.vm.provision "shell",
+            path: "./provision/pythoncrypto.sh"
+          thisnode.vm.provision "file",
+            source: "./provision/cf_keys/id_rsa", 
+            destination: "/home/vagrant/.ssh/id_rsa" unless not File.exist?("provision/cf_keys/id_rsa")
+          thisnode.vm.provision "file",
+            source: "./provision/cf_keys/id_rsa.pub", 
+            destination: "/home/vagrant/.ssh/id_rsa.pub" unless not File.exist?("provision/cf_keys/id_rsa.pub")
       end
 
       if nodedata.has_key?("ip") then
         thisnode.vm.network "private_network", ip: nodedata['ip'],
           virtualbox__intnet: options['virtualbox_network_name']
+      end
+      if nodename.start_with?("icehouse-cf-") then
+        thisnode.vm.provision "shell",
+          path: "./provision/restart_nova_neutron.sh"
       end
 
       thisnode.vm.provider "virtualbox" do |v|
