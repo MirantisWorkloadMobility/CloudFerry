@@ -40,6 +40,7 @@ INTERFACES = "interfaces"
 DEFAULT_QUOTA_VALUE = -1
 
 INSTANCE_HOST_ATTRIBUTE = 'OS-EXT-SRV-ATTR:host'
+INSTANCE_LIBVIRT_NAME_ATTRIBUTE = 'OS-EXT-SRV-ATTR:instance_name'
 
 ACTIVE = 'ACTIVE'
 STOPPED = 'STOPPED'
@@ -807,6 +808,9 @@ class NovaCompute(compute.Compute):
     def detach_volume(self, instance_id, volume_id):
         self.nova_client.volumes.delete_server_volume(instance_id, volume_id)
 
+    def associate_floatingip(self, instance_id, floatingip):
+        self.nova_client.servers.add_floating_ip(instance_id, floatingip)
+
     def dissociate_floatingip(self, instance_id, floatingip):
         self.nova_client.servers.remove_floating_ip(instance_id, floatingip)
 
@@ -844,6 +848,26 @@ class NovaCompute(compute.Compute):
         instances.incloud_live_migrate(self.nova_client, self.config, vm_id,
                                        destination_host)
 
+    def get_instance_sql_id_by_uuid(self, uuid):
+        sql = "select id from instances where uuid='%s'" % uuid
+        libvirt_instance_id = self.mysql_connector.execute(sql).fetchone()[0]
+
+        LOG.debug("Libvirt instance ID of VM '%s' is '%s'", uuid,
+                  libvirt_instance_id)
+
+        return libvirt_instance_id
+
+    def update_instance_auto_increment(self, mysql_id):
+        LOG.debug("Updating nova.instances auto_increment value to %s",
+                  mysql_id)
+        sql = ("alter table instances change id id INT (11) not null default "
+               "{libvirt_id}").format(libvirt_id=mysql_id)
+
+        self.mysql_connector.execute(sql)
+
+    def reset_state(self, vm_id):
+        self.get_instance(vm_id).reset_state()
+
 
 def down_hosts(novaclient):
     services = novaclient.services.list()
@@ -859,3 +883,14 @@ def filter_down_hosts(hosts_down, elements, hostname_attribute=''):
             lambda e: getattr(e, hostname_attribute, e) not in hosts_down,
             elements)
     return elements
+
+
+# TODO: move these to a Instance class, which would represent internal instance
+# data in cloudferry regardless of the backend used (openstack, vmware,
+# cloudstack, etc)
+def instance_libvirt_name(instance):
+    return getattr(instance, INSTANCE_LIBVIRT_NAME_ATTRIBUTE)
+
+
+def instance_host(instance):
+    return getattr(instance, INSTANCE_HOST_ATTRIBUTE)
