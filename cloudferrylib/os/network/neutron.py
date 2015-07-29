@@ -14,6 +14,7 @@
 import pprint
 
 import ipaddr
+import netaddr
 from neutronclient.common import exceptions as neutron_exc
 from neutronclient.v2_0 import client as neutron_client
 
@@ -1178,6 +1179,9 @@ class NeutronNetwork(network.Network):
         list_info = list()
         for arg in args:
             if type(neutron_resource[arg]) is not list:
+                if arg == 'cidr':
+                    cidr = str(netaddr.IPNetwork(neutron_resource[arg]).cidr)
+                    neutron_resource[arg] = cidr
                 list_info.append(neutron_resource[arg])
             else:
                 for argitem in arg:
