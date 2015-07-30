@@ -20,7 +20,8 @@ def suppress_dependency_logging():
     suppressed_logs = ['iso8601.iso8601',
                        'keystoneclient.session',
                        'neutronclient.client',
-                       'requests.packages.urllib3.connectionpool']
+                       'requests.packages.urllib3.connectionpool',
+                       'glanceclient.common.http']
 
     for l in suppressed_logs:
         logging.getLogger(l).setLevel(logging.WARNING)
