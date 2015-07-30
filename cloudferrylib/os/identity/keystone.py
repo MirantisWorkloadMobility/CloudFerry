@@ -480,9 +480,13 @@ class KeystoneIdentity(identity.Identity):
     def check_rabbitmq(self):
         credentials = pika.PlainCredentials(self.config.rabbit.user,
                                             self.config.rabbit.password)
-        for host in self.config.rabbit.hosts.split(","):
-            pika.BlockingConnection(pika.ConnectionParameters(
-                host=host.strip(), credentials=credentials))
+
+        for host_with_port in self.config.rabbit.hosts.split(","):
+            host, port = host_with_port.split(':')
+            pika.BlockingConnection(
+                pika.ConnectionParameters(host=host.strip(),
+                                          port=int(port),
+                                          credentials=credentials))
 
 
 def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,

@@ -23,11 +23,12 @@ class MysqlConnector():
         self.connection_url = self.compose_connection_url()
 
     def compose_connection_url(self):
-        return '{}://{}:{}@{}/{}'.format(self.config['connection'],
-                                         self.config['user'],
-                                         self.config['password'],
-                                         self.config['host'],
-                                         self.db)
+        return '{}://{}:{}@{}:{}/{}'.format(self.config['connection'],
+                                            self.config['user'],
+                                            self.config['password'],
+                                            self.config['host'],
+                                            self.config['port'],
+                                            self.db)
 
     def get_engine(self):
         return sqlalchemy.create_engine(self.connection_url)
