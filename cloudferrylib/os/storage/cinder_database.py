@@ -45,7 +45,6 @@ class CinderStorage(cinder_storage.CinderStorage):
         self.config = config
         self.cloud = cloud
         self.identity_client = cloud.resources['identity']
-        self.cinder_client = self.proxy(self.get_client(config), config)
         self.mysql_connector = self.get_db_connection()
 
         # FIXME This class holds logic for all these tables. These must be

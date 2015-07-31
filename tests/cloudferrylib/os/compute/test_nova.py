@@ -80,9 +80,11 @@ class NovaComputeTestCase(test.TestCase):
         self.assertEqual(self.mock_client(), client)
 
     def test_create_instance(self):
-        self.mock_client().servers.create.return_value = self.fake_instance_0
+        ncli = mock.Mock()
+        ncli.servers.create.return_value = self.fake_instance_0
 
-        instance_id = self.nova_client.create_instance(name='fake_instance',
+        instance_id = self.nova_client.create_instance(nclient=ncli,
+                                                       name='fake_instance',
                                                        image='fake_image',
                                                        flavor='fake_flavor',
                                                        user_id='some-id')

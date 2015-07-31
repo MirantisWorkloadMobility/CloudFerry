@@ -99,18 +99,10 @@ class KeystoneIdentityTestCase(test.TestCase):
         self.fake_same_user.id = 'fake_same_id'
         self.fake_same_user.name = 'fake_same_name'
 
-    def test_get_client(self):
-        self.mock_client().auth_ref = {'token': {'id': 'fake_id'}}
-
-        client = self.keystone_client.get_client()
-
-        mock_calls = [
-            mock.call(username='fake_user', tenant_name='fake_tenant',
-                      password='fake_password',
-                      auth_url='http://1.1.1.1:35357/v2.0/'),
-            mock.call(token='fake_id', endpoint='http://1.1.1.1:35357/v2.0/')]
-        self.mock_client.assert_has_calls(mock_calls, any_order=True)
-        self.assertEqual(self.mock_client(), client)
+    def test_get_client_generates_new_token(self):
+        client1 = self.keystone_client.keystone_client
+        client2 = self.keystone_client.keystone_client
+        self.assertFalse(client1 == client2)
 
     def test_get_tenants_list(self):
         fake_tenants_list = [self.fake_tenant_0, self.fake_tenant_1]
@@ -207,7 +199,7 @@ class KeystoneIdentityTestCase(test.TestCase):
 
     def test_auth_token_from_user(self):
         fake_auth_token = 'fake_auth_token'
-        self.mock_client().auth_token_from_user = fake_auth_token
+        self.mock_client().auth_token = fake_auth_token
 
         self.assertEquals(fake_auth_token,
                           self.keystone_client.get_auth_token_from_user())

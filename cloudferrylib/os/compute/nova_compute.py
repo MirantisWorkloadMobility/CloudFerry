@@ -23,6 +23,7 @@ from novaclient import exceptions as nova_exc
 import cfglib
 from cloudferrylib.base import compute
 from cloudferrylib.os.compute import instances
+from cloudferrylib.os.identity import keystone
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils as utl
@@ -74,17 +75,22 @@ class NovaCompute(compute.Compute):
         self.cloud = cloud
         self.identity = cloud.resources['identity']
         self.mysql_connector = self.get_db_connection()
-        self.nova_client = self.proxy(self.get_client(), config)
+
+    @property
+    def nova_client(self):
+        return self.proxy(self.get_client(), self.config)
 
     def get_client(self, params=None):
         """Getting nova client. """
 
         params = self.config if not params else params
 
-        return nova_client.Client(params.cloud.user,
-                                  params.cloud.password,
-                                  params.cloud.tenant,
-                                  params.cloud.auth_url)
+        client = nova_client.Client(params.cloud.user, params.cloud.password,
+                                    params.cloud.tenant, params.cloud.auth_url)
+        LOG.debug("Authenticating as '%s' in tenant '%s'",
+                  params.cloud.user, params.cloud.tenant)
+        client.authenticate()
+        return client
 
     def get_db_connection(self):
         if not hasattr(self.cloud.config, self.cloud.position + '_compute'):
@@ -433,21 +439,11 @@ class NovaCompute(compute.Compute):
 
     def _deploy_instances(self, info_compute):
         new_ids = {}
-        nova_tenants_clients = {
-            self.config['cloud']['tenant']: self.nova_client}
 
         params = copy.deepcopy(self.config)
 
         for _instance in info_compute['instances'].itervalues():
-            tenant_name = _instance['instance']['tenant_name']
-            if tenant_name not in nova_tenants_clients:
-                params.cloud.tenant = tenant_name
-                nova_tenants_clients[tenant_name] = self.get_client(params)
-
-        for _instance in info_compute['instances'].itervalues():
             instance = _instance['instance']
-            meta = _instance['meta']
-            self.nova_client = nova_tenants_clients[instance['tenant_name']]
             create_params = {'name': instance['name'],
                              'flavor': instance['flavor_id'],
                              'key_name': instance['key_name'],
@@ -465,12 +461,18 @@ class NovaCompute(compute.Compute):
                     "boot_index": 0
                 }]
                 create_params['image'] = None
-            new_id = self.create_instance(**create_params)
+            params.cloud.tenant = _instance['instance']['tenant_name']
+
+            with keystone.AddAdminUserToNonAdminTenant(
+                    self.identity.keystone_client,
+                    params.cloud.user,
+                    params.cloud.tenant):
+                nclient = self.get_client(params)
+                new_id = self.create_instance(nclient, **create_params)
             new_ids[new_id] = instance['id']
-        self.nova_client = nova_tenants_clients[self.config['cloud']['tenant']]
         return new_ids
 
-    def create_instance(self, **kwargs):
+    def create_instance(self, nclient, **kwargs):
         # do not provide key pair as boot argument, it will be updated with the
         # low level SQL update. See
         # `cloudferrylib.os.actions.transport_compute_resources` for more
@@ -480,7 +482,7 @@ class NovaCompute(compute.Compute):
         boot_args = {k: v for k, v in kwargs.items()
                      if k not in ignored_instance_args}
 
-        created_instance = self.nova_client.servers.create(**boot_args)
+        created_instance = nclient.servers.create(**boot_args)
 
         instances.update_user_ids_for_instance(self.mysql_connector,
                                                created_instance.id,

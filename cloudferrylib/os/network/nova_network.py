@@ -27,8 +27,11 @@ from cloudferrylib.utils.utils import forward_agent
 class NovaNetwork(network.Network):
     def __init__(self, config, cloud):
         super(NovaNetwork, self).__init__(config)
-        self.nova_client = self.proxy(self.get_client(), config)
         self.cloud = cloud
+
+    @property
+    def nova_client(self):
+        return self.proxy(self.get_client(), self.config)
 
     def get_client(self):
         return nova_client.Client(

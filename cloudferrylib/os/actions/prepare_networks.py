@@ -14,9 +14,12 @@
 
 
 import copy
+from neutronclient.common import exceptions as neutronclient_exceptions
 
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
+
+LOG = utl.get_log(__name__)
 
 
 class PrepareNetworks(action.Action):
@@ -61,19 +64,31 @@ class PrepareNetworks(action.Action):
                     if sg['tenant_id'] == tenant_id:
                         if sg['name'] in security_groups:
                             sg_ids.append(sg['id'])
-                port = network_resource.create_port(dst_net['id'],
-                                                    src_net['mac'],
-                                                    src_net['ip'],
-                                                    tenant_id,
-                                                    keep_ip,
-                                                    sg_ids)
+                try:
+                    port = network_resource.create_port(dst_net['id'],
+                                                        src_net['mac'],
+                                                        src_net['ip'],
+                                                        tenant_id,
+                                                        keep_ip,
+                                                        sg_ids)
+                except neutronclient_exceptions.IpAddressInUseClient:
+                    LOG.warning("IP address '%s' on destination net '%s (%s)' "
+                                "already exists!",
+                                src_net['ip'], dst_net['name'], dst_net['id'])
+                    continue
                 if self.cfg.migrate.keep_floatingip:
                     if src_net['floatingip']:
                         dst_flotingips = network_resource.get_floatingips()
-                        dst_flotingips_map = \
-                            {fl_ip['floating_ip_address']: fl_ip['id'] for fl_ip in dst_flotingips}
-                        dst_floatingip_id = dst_flotingips_map[src_net['floatingip']]
-                        floating_ip = network_resource.update_floatingip(dst_floatingip_id, port['id'])
+                        dst_flotingips_map = {
+                            fl_ip['floating_ip_address']: fl_ip['id']
+                            for fl_ip in dst_flotingips
+                        }
+                        # floating IP may be filtered and not exist on dest
+                        dst_floatingip_id = dst_flotingips_map.get(
+                            src_net['floatingip'])
+                        if dst_floatingip_id is not None:
+                            network_resource.update_floatingip(
+                                dst_floatingip_id, port['id'])
                 params.append({'net-id': dst_net['id'], 'port-id': port['id']})
             instances[id_inst][utl.INSTANCE_BODY]['nics'] = params
         info_compute[utl.INSTANCES_TYPE] = instances

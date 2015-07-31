@@ -41,8 +41,11 @@ class CinderStorage(storage.Storage):
         self.cloud = cloud
         self.identity_client = cloud.resources[utl.IDENTITY_RESOURCE]
         self.mysql_connector = self.get_db_connection()
-        self.cinder_client = self.proxy(self.get_client(config), config)
         super(CinderStorage, self).__init__(config)
+
+    @property
+    def cinder_client(self):
+        return self.proxy(self.get_client(self.config), self.config)
 
     def get_client(self, params=None):
 

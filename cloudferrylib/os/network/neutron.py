@@ -18,6 +18,8 @@ from neutronclient.common import exceptions as neutron_exc
 from neutronclient.v2_0 import client as neutron_client
 
 from cloudferrylib.base import network
+from cloudferrylib.os.identity import keystone as ksresource
+from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import utils as utl
 
 
@@ -34,10 +36,13 @@ class NeutronNetwork(network.Network):
     def __init__(self, config, cloud):
         super(NeutronNetwork, self).__init__(config)
         self.cloud = cloud
-        self.identity_client = cloud.resources['identity']
-        self.neutron_client = self.proxy(self.get_client(), config)
+        self.identity_client = cloud.resources[utl.IDENTITY_RESOURCE]
         self.ext_net_map = \
             utl.read_yaml_file(self.config.migrate.ext_net_map) or {}
+
+    @property
+    def neutron_client(self):
+        return self.proxy(self.get_client(), self.config)
 
     def get_client(self):
         return neutron_client.Client(
@@ -45,6 +50,17 @@ class NeutronNetwork(network.Network):
             password=self.config.cloud.password,
             tenant_name=self.config.cloud.tenant,
             auth_url=self.config.cloud.auth_url)
+
+    def get_db_connection(self):
+        if not hasattr(self.cloud.config, self.cloud.position + '_network'):
+            LOG.debug('Running on default mysql settings')
+            return mysql_connector.MysqlConnector(self.config.mysql, 'neutron')
+        else:
+            my_settings = getattr(self.cloud.config,
+                                  self.cloud.position + '_network')
+            LOG.debug('Running on custom mysql settings')
+            return mysql_connector.MysqlConnector(my_settings,
+                                                  my_settings.database_name)
 
     def read_info(self, **kwargs):
 
@@ -113,8 +129,14 @@ class NeutronNetwork(network.Network):
             param_create_port['security_groups'] = sg_ids
         if keep_ip:
             param_create_port['fixed_ips'] = [{"ip_address": ip}]
-        return self.neutron_client.create_port({
-            'port': param_create_port})['port']
+        with ksresource.AddAdminUserToNonAdminTenant(
+                self.identity_client.keystone_client,
+                self.config.cloud.user,
+                self.config.cloud.tenant):
+            LOG.debug("Creating port IP '%s', MAC '%s' on net '%s'",
+                      ip, mac, net_id)
+            return self.neutron_client.create_port(
+                {'port': param_create_port})['port']
 
     def delete_port(self, port_id):
         return self.neutron_client.delete_port(port_id)
@@ -878,6 +900,13 @@ class NeutronNetwork(network.Network):
             LOG.debug("Trying to create network '%s'", net['name'])
             tenant_id = identity.get_tenant_id_by_name(net['tenant_name'])
 
+            if tenant_id is None:
+                LOG.warning("Tenant '%s' is not available on destination! "
+                            "Make sure you migrated identity (keystone) "
+                            "resources! Skipping network '%s'.",
+                            net['tenant_name'], net['name'])
+                continue
+
             # create dict, representing basic info about network
             network_info = {
                 'network': {
@@ -1078,81 +1107,74 @@ class NeutronNetwork(network.Network):
                 dst_router['id'],
                 {"subnet_id": ex_snet['id']})
 
+    def _filtered_tenant(self, tenant_id):
+        # Placeholder for single tenant migration feature.
+        # filtered_tenant_id must be changed to tenant config option once the
+        # feature is implemented.
+        # TODO: Replace with value from filters file once #299 is implemented
+        filtered_tenant_id = None
+        if filtered_tenant_id is not None:
+            t = self.identity_client.get_tenant_by_name(filtered_tenant_id)
+            return t.get('id') == tenant_id
+        return False
+
     def upload_floatingips(self, networks, src_floats):
-        LOG.info("Creating floating IPs")
-        existing_nets = self.get_networks()
-        ext_nets_ids = []
-        # getting list of external networks with allocated floating ips
-        for src_float in src_floats:
-            ext_net_id = self.get_new_extnet_id(src_float['floating_network_id'],
-                                                networks, existing_nets)
-            if ext_net_id not in ext_nets_ids:
-                ext_nets_ids.append(ext_net_id)
-                self.allocate_floatingips(ext_net_id)
-        existing_floatingips = self.get_floatingips()
-        self.recreate_floatingips(src_floats, networks,
-                                  existing_nets, existing_floatingips)
-        self.delete_redundant_floatingips(src_floats, existing_floatingips)
+        """Creates floating IPs on destination
 
-    def allocate_floatingips(self, ext_net_id):
-        num_allocated_fips = 0
-        try:
-            while True:
-                LOG.debug("Creating floating IP %d on network '%s'",
-                          num_allocated_fips, ext_net_id)
-                self.neutron_client.create_floatingip({
-                    'floatingip': {'floating_network_id': ext_net_id}})
-                num_allocated_fips += 1
-        except neutron_exc.NeutronClientException as e:
-            if e.status_code == 409:  # 409 - Conflict
-                LOG.info("{0:d} floating IPs were allocated on network {1:s}"
-                         .format(num_allocated_fips, ext_net_id))
-            else:
-                raise
+        Process:
+         1. Create floating IP on destination using neutron APIs in particular
+            tenant. This allocates first IP address available in external
+            network.
+         2. If keep_floating_ips option is set:
+         2.1. Modify IP address of a floating IP to be the same as on
+              destination. This is done from the DB level.
+         2.2. Else - do not modify floating IP address
+        """
+        LOG.info("Uploading floating IPs...")
+        existing_networks = self.get_networks()
+        for fip in src_floats:
+            # keystone auth fails if done with token for some reason
+            with ksresource.AddAdminUserToNonAdminTenant(
+                    self.identity_client.keystone_client,
+                    self.config.cloud.user,
+                    fip['tenant_name']):
 
-    def recreate_floatingips(self, src_floats, src_nets,
-                             existing_nets,
-                             existing_floatingips):
+                ext_net_id = self.get_new_extnet_id(
+                    fip['floating_network_id'], networks, existing_networks)
 
-        """ We recreate floating ips with the same parameters as on src cloud,
-        because we can't determine floating ip address
-        during allocation process. """
+                if ext_net_id is None:
+                    LOG.info("No external net for floating IP, make sure all "
+                             "external networks migrated. Skipping floating "
+                             "IP '%s'", fip['floating_ip_address'])
+                    continue
 
-        for src_float in src_floats:
-            tname = src_float['tenant_name']
-            tenant_id = \
-                self.identity_client.get_tenant_id_by_name(tname)
-            ext_net_id = self.get_new_extnet_id(src_float['floating_network_id'],
-                                                src_nets, existing_nets)
-            for floating in existing_floatingips:
-                tenants_on_src_and_dst_dont_match = (
-                    floating['floating_ip_address'] == src_float['floating_ip_address'] and
-                    floating['floating_network_id'] == ext_net_id and
-                    floating['tenant_id'] != tenant_id)
+                tenant = self.identity_client.keystone_client.tenants.find(
+                    name=fip['tenant_name'])
 
-                if tenants_on_src_and_dst_dont_match:
-                    fl_id = floating['id']
+                if self._filtered_tenant(tenant.id):
+                    LOG.info("Skipping floating IP '%s' based on filter rules",
+                             fip['floating_ip_address'])
+                    continue
 
-                    LOG.debug("Moving FIP '%s' to tenant '%s (%s)'",
-                              floating['floating_ip_address'],
-                              tname, tenant_id)
-                    self.neutron_client.delete_floatingip(fl_id)
-                    self.neutron_client.create_floatingip({
-                        'floatingip':
-                        {
-                            'floating_network_id': ext_net_id,
-                            'tenant_id': tenant_id
-                        }
-                    })
+                new_fip = {
+                    'floatingip': {
+                        'floating_network_id': ext_net_id,
+                        'tenant_id': tenant.id
+                    }
+                }
+                LOG.debug("Creating FIP on net '%s'", ext_net_id)
+                created_fip = self.neutron_client.create_floatingip(new_fip)
 
-    def delete_redundant_floatingips(self, src_floats, existing_floatingips):
-        src_floatingips = \
-            [src_float['floating_ip_address'] for src_float in src_floats]
-        for floatingip in existing_floatingips:
-            if floatingip['floating_ip_address'] not in src_floatingips:
-                LOG.debug("Removing floating IP '%s' which does not exist on "
-                          "source", floatingip['floating_ip_address'])
-                self.neutron_client.delete_floatingip(floatingip['id'])
+            dst_mysql = self.get_db_connection()
+            sql = ('UPDATE floatingips '
+                   'SET floating_ip_address="{ip}" '
+                   'WHERE id="{fip_id}"').format(
+                ip=fip['floating_ip_address'],
+                fip_id=created_fip['floatingip']['id'])
+            LOG.debug(sql)
+            dst_mysql.execute(sql)
+
+        LOG.info("Done")
 
     def update_floatingip(self, floatingip_id, port_id=None):
         update_dict = {'floatingip': {'port_id': port_id}}
