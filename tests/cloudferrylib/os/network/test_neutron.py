@@ -599,3 +599,10 @@ class NeutronTestCase(test.TestCase):
         self.neutron_mock_client().add_interface_router.\
             assert_called_once_with('fake_router_id_2',
                                     {'subnet_id': 'fake_subnet_id_2'})
+
+    def test_hash_is_equal_for_nets_with_different_cidrs(self):
+        net1 = {'cidr': "192.168.1.11/22"}
+        net2 = {'cidr': "192.168.1.0/22"}
+        net1_hash = neutron.NeutronNetwork.get_resource_hash(net1, 'cidr')
+        net2_hash = neutron.NeutronNetwork.get_resource_hash(net2, 'cidr')
+        self.assertEqual(net1_hash, net2_hash)
