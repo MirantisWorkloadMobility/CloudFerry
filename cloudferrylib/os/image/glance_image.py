@@ -134,9 +134,7 @@ class GlanceImage(image.Image):
     def get_ref_image(self, image_id):
         try:
             return self.glance_client.images.data(image_id)._resp
-        except exc.HTTPInternalServerError as e:
-            LOG.error("There is an error occurred while trying to reach "
-                      "image's data. (id = %s)\n %s", image_id, e)
+        except exc.HTTPInternalServerError:
             raise exception.ImageDownloadError
 
     def get_image_checksum(self, image_id):
@@ -290,6 +288,10 @@ class GlanceImage(image.Image):
         migrate_images_list = []
         delete_container_format, delete_disk_format = [], []
         empty_image_list = {}
+
+        # List for obsolete/broken images IDs, that will not be migrated
+        obsolete_images_ids_list = []
+
         for image_id_src, gl_image in info['images'].iteritems():
             if gl_image['image']:
                 dst_img_checksums = {x.checksum: x for x in
@@ -356,8 +358,10 @@ class GlanceImage(image.Image):
                             callback,
                             self.config['migrate']['speed_limit']))
                 except exception.ImageDownloadError:
-                    LOG.warning("Unable to reach image's data. (id = %s)",
-                                gl_image["image"]["id"])
+                    LOG.warning("Unable to reach image's data due to "
+                                "Glance HTTPInternalServerError. Skipping "
+                                "image: (id = %s)", gl_image["image"]["id"])
+                    obsolete_images_ids_list.append(gl_image["image"]["id"])
                     continue
 
                 migrate_images_list.append((migrate_image, meta))
@@ -367,6 +371,10 @@ class GlanceImage(image.Image):
                     delete_disk_format.append(migrate_image.id)
             else:
                 empty_image_list[image_id_src] = gl_image
+
+        # Remove obsolete/broken images from info
+        [info['images'].pop(img_id) for img_id in obsolete_images_ids_list]
+
         if migrate_images_list:
             im_name_list = [(im.name, meta) for (im, meta) in
                             migrate_images_list]
