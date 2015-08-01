@@ -153,7 +153,13 @@ class NovaCompute(compute.Compute):
                 'project_quotas': []}
 
         for flavor in self.get_flavor_list(is_public=None):
-            info['flavors'][flavor.id] = self.convert(flavor, cloud=self.cloud)
+            try:
+                info['flavors'][flavor.id] = self.convert(flavor,
+                                                          cloud=self.cloud)
+            except nova_exc.NotFound:
+                # In case Nova failed with flavor-access-list obtaining
+                # particular flavor it crashes with NotFound exception
+                LOG.warning('Skipping invalid flavor %s', flavor.name)
 
         if self.config.migrate.migrate_quotas:
             info['default_quotas'] = self.get_default_quotas()
@@ -331,6 +337,8 @@ class NovaCompute(compute.Compute):
                                'swap': compute_obj.swap,
                                'rxtx_factor': compute_obj.rxtx_factor,
                                'is_public': compute_obj.is_public,
+                               'filtered_tenant_id':
+                                   compute_res.filter_tenant_id,
                                'tenants': tenants},
                     'meta': {}}
 
@@ -416,23 +424,112 @@ class NovaCompute(compute.Compute):
         for flavor_id, _flavor in flavors.iteritems():
             flavor = _flavor['flavor']
             if flavor['name'] in dest_flavors:
-                # _flavor['meta']['dest_id'] = dest_flavors[flavor['name']]
-                _flavor['meta']['id'] = dest_flavors[flavor['name']]
+                LOG.debug('Flavor "%s" already exists on destination',
+                          flavor['name'])
+                dst_flavor_id = dest_flavors[flavor['name']]
+                _flavor['meta']['id'] = flavor_id
+
+                if not flavor['is_public']:
+                    LOG.debug("Flavor '%s' is NOT public", flavor['name'])
+                    access_list = [al.tenant_id
+                                   for al in
+                                   self.get_flavor_access_list(dst_flavor_id)]
+                    filtered_tenant_has_access_to_flavor = (
+                        flavor['filtered_tenant_id'] is not None and
+                        flavor['filtered_tenant_id'] not in access_list and
+                        flavor['filtered_tenant_id'] in flavor['tenants']
+                    )
+
+                    if filtered_tenant_has_access_to_flavor:
+                        LOG.debug("Adding access for filtered tenant '%s' to "
+                                  "flavor '%s'",
+                                  tenant_map[flavor['filtered_tenant_id']],
+                                  flavor['name'])
+                        try:
+                            self.add_flavor_access(
+                                dst_flavor_id,
+                                tenant_map[flavor['filtered_tenant_id']])
+                        except nova_exc.Conflict:
+                            LOG.debug("Tenant '%s' already has access to "
+                                      "flavor '%s'",
+                                      flavor['filtered_tenant_id'],
+                                      flavor['name'])
+
+                    elif flavor['filtered_tenant_id'] is None:
+                        for tenant in flavor['tenants']:
+                            try:
+                                LOG.debug("Adding access for tenant '%s' to "
+                                          "flavor '%s'", tenant_map[tenant],
+                                          flavor['name'])
+
+                                self.add_flavor_access(_flavor['meta']['id'],
+                                                       tenant_map[tenant])
+                            except nova_exc.Conflict:
+                                LOG.debug("Tenant '%s' already has access to "
+                                          "flavor '%s'", tenant_map[tenant],
+                                          flavor['name'])
+
                 continue
-            _flavor['meta']['id'] = self.create_flavor(
-                name=flavor['name'],
-                flavorid=flavor_id,
-                ram=flavor['ram'],
-                vcpus=flavor['vcpus'],
-                disk=flavor['disk'],
-                ephemeral=flavor['ephemeral'],
-                swap=int(flavor['swap']) if flavor['swap'] else 0,
-                rxtx_factor=flavor['rxtx_factor'],
-                is_public=flavor['is_public']).id
+
             if not flavor['is_public']:
-                for tenant in flavor['tenants']:
+                filtered_tenant_has_access_to_flavor = (
+                    flavor['filtered_tenant_id'] is not None and
+                    flavor['filtered_tenant_id'] in flavor['tenants']
+                )
+                if filtered_tenant_has_access_to_flavor:
+                    LOG.debug('Creating flavor %s', flavor['name'])
+
+                    _flavor['meta']['id'] = self.create_flavor(
+                        name=flavor['name'],
+                        flavorid=flavor_id,
+                        ram=flavor['ram'],
+                        vcpus=flavor['vcpus'],
+                        disk=flavor['disk'],
+                        ephemeral=flavor['ephemeral'],
+                        swap=int(flavor['swap']) if flavor['swap'] else 0,
+                        rxtx_factor=flavor['rxtx_factor'],
+                        is_public=flavor['is_public']).id
+
+                    LOG.debug("Adding access for filtered tenant '%s' to "
+                              "flavor '%s'",
+                              tenant_map[flavor['filtered_tenant_id']],
+                              flavor['name'])
                     self.add_flavor_access(_flavor['meta']['id'],
-                                           tenant_map[tenant])
+                                           tenant_map[
+                                               flavor['filtered_tenant_id']])
+
+                elif flavor['filtered_tenant_id'] is None:
+                    LOG.debug('Creating flavor %s', flavor['name'])
+                    _flavor['meta']['id'] = self.create_flavor(
+                        name=flavor['name'],
+                        flavorid=flavor_id,
+                        ram=flavor['ram'],
+                        vcpus=flavor['vcpus'],
+                        disk=flavor['disk'],
+                        ephemeral=flavor['ephemeral'],
+                        swap=int(flavor['swap']) if flavor['swap'] else 0,
+                        rxtx_factor=flavor['rxtx_factor'],
+                        is_public=flavor['is_public']).id
+                    for tenant in flavor['tenants']:
+                        LOG.debug("Adding access for tenant '%s' to "
+                                  "flavor '%s'", tenant_map[tenant],
+                                  flavor['name'])
+
+                        self.add_flavor_access(_flavor['meta']['id'],
+                                               tenant_map[tenant])
+
+            else:
+                LOG.debug('Creating flavor %s', flavor['name'])
+                _flavor['meta']['id'] = self.create_flavor(
+                    name=flavor['name'],
+                    flavorid=flavor_id,
+                    ram=flavor['ram'],
+                    vcpus=flavor['vcpus'],
+                    disk=flavor['disk'],
+                    ephemeral=flavor['ephemeral'],
+                    swap=int(flavor['swap']) if flavor['swap'] else 0,
+                    rxtx_factor=flavor['rxtx_factor'],
+                    is_public=flavor['is_public']).id
 
     def _deploy_quotas(self, quotas, tenant_map, user_map=None):
         for _quota in quotas:
