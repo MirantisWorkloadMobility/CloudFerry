@@ -33,6 +33,10 @@ FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
                                                      'time_wait': 5}))
 
 
+class FakeUser():
+    def __init__(self):
+        self.name = 'fake_user_name'
+
 class GlanceImageTestCase(test.TestCase):
 
     def setUp(self):
@@ -49,6 +53,9 @@ class GlanceImageTestCase(test.TestCase):
         self.identity_mock = mock.Mock()
         self.identity_mock.get_endpoint_by_service_type = mock.Mock(
             return_value="http://192.168.1.2:9696/v2")
+        fake_user = FakeUser()
+        self.identity_mock.try_get_user_by_id = mock.Mock(
+            return_value=fake_user)
         self.identity_mock.try_get_tenant_name_by_id = mock.Mock(
             return_value="fake_tenant_name")
         self.identity_mock.keystone_client.users.list = mock.Mock(
@@ -101,7 +108,7 @@ class GlanceImageTestCase(test.TestCase):
                                               'protected': False,
                                               'size': 1024,
                                               'resource': self.image_mock,
-                                              'properties': {}},
+                                              'properties': {'user_name': 'fake_user_name'}},
                                     'meta': {}}},
             'tags': {},
             'members': {}

@@ -26,11 +26,13 @@ class TransportComputeResources(action.Action):
     def run(self, info=None, identity_info=None, **kwargs):
         info = copy.deepcopy(info)
         target = 'resources'
+        search_opts = {'target': target}
+        search_opts.update(kwargs.get('search_opts_tenant', {}))
 
         src_compute = self.src_cloud.resources[utl.COMPUTE_RESOURCE]
         dst_compute = self.dst_cloud.resources[utl.COMPUTE_RESOURCE]
 
-        info_res = src_compute.read_info(target=target)
+        info_res = src_compute.read_info(**search_opts)
         new_info = dst_compute.deploy(info_res, target=target,
                                       identity_info=identity_info)
 

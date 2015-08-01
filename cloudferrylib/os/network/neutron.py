@@ -38,6 +38,7 @@ class NeutronNetwork(network.Network):
         super(NeutronNetwork, self).__init__(config)
         self.cloud = cloud
         self.identity_client = cloud.resources[utl.IDENTITY_RESOURCE]
+        self.filter_tenant_id = None
         self.ext_net_map = \
             utl.read_yaml_file(self.config.migrate.ext_net_map) or {}
 
@@ -69,10 +70,35 @@ class NeutronNetwork(network.Network):
         :rtype: Dictionary with all necessary neutron info
         """
 
-        tenant_id = ''
+        if kwargs.get('tenant_id'):
+            tenant_id = self.filter_tenant_id = kwargs['tenant_id'][0]
+        else:
+            tenant_id = ''
 
-        info = {'networks': self.get_networks(tenant_id),
-                'subnets': self.get_subnets(tenant_id),
+        nets = self.get_networks(tenant_id)
+        subnets = self.get_subnets(tenant_id)
+
+        if self.filter_tenant_id:
+            # getting all admin nets
+            admin_tenant_id = self.identity_client.get_tenant_id_by_name(
+                self.config.cloud.tenant)
+            admin_nets = self.get_networks(admin_tenant_id)
+            # getting admin shared nets
+            for net in admin_nets:
+                if net['shared'] or net['router:external']:
+                    LOG.debug("append network ID {}".format(net['id']))
+                    nets.append(net)
+            # getting all admin subnets
+            admin_subnets = self.get_subnets(admin_tenant_id)
+            # getting subnets for shared and tenant nets
+            for subnet in admin_subnets:
+                for net in nets:
+                    if subnet['network_id'] == net['id']:
+                        LOG.debug("append subnet ID {}".format(subnet['id']))
+                        subnets.append(subnet)
+
+        info = {'networks': nets,
+                'subnets': subnets,
                 'routers': self.get_routers(tenant_id),
                 'floating_ips': self.get_floatingips(tenant_id),
                 'security_groups': self.get_sec_gr_and_rules(tenant_id),
@@ -597,8 +623,9 @@ class NeutronNetwork(network.Network):
 
     def get_sec_gr_and_rules(self, tenant_id=''):
         LOG.info("Getting security groups and rules")
+        service_tenant_name = self.config.cloud.service_tenant
         service_tenant_id = \
-            self.identity_client.get_tenant_id_by_name(self.config.cloud.service_tenant)
+            self.identity_client.get_tenant_id_by_name(service_tenant_name)
         sec_grs = self.get_security_groups(tenant_id)
         sec_groups_info = []
 
@@ -1108,17 +1135,6 @@ class NeutronNetwork(network.Network):
                 dst_router['id'],
                 {"subnet_id": ex_snet['id']})
 
-    def _filtered_tenant(self, tenant_id):
-        # Placeholder for single tenant migration feature.
-        # filtered_tenant_id must be changed to tenant config option once the
-        # feature is implemented.
-        # TODO: Replace with value from filters file once #299 is implemented
-        filtered_tenant_id = None
-        if filtered_tenant_id is not None:
-            t = self.identity_client.get_tenant_by_name(filtered_tenant_id)
-            return t.get('id') == tenant_id
-        return False
-
     def upload_floatingips(self, networks, src_floats):
         """Creates floating IPs on destination
 
@@ -1152,7 +1168,8 @@ class NeutronNetwork(network.Network):
                 tenant = self.identity_client.keystone_client.tenants.find(
                     name=fip['tenant_name'])
 
-                if self._filtered_tenant(tenant.id):
+                if self.filter_tenant_id and \
+                        (self.filter_tenant_id != tenant.id):
                     LOG.info("Skipping floating IP '%s' based on filter rules",
                              fip['floating_ip_address'])
                     continue

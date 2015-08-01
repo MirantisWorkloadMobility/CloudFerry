@@ -44,6 +44,7 @@ class CinderStorage(cinder_storage.CinderStorage):
     def __init__(self, config, cloud):
         self.config = config
         self.cloud = cloud
+        self.filter_tenant_id = None
         self.identity_client = cloud.resources['identity']
         self.mysql_connector = self.get_db_connection()
 
@@ -71,6 +72,8 @@ class CinderStorage(cinder_storage.CinderStorage):
 
     def _check_update_tenant_names(self, entry, tenant_id_key):
         tenant_id = entry[tenant_id_key]
+        if self.filter_tenant_id and (tenant_id != self.filter_tenant_id):
+            return False
         tenant_name = self.identity_client.try_get_tenant_name_by_id(
             tenant_id, self.config.cloud.tenant)
         if self.table in IGNORED_TBL_LIST:
@@ -108,8 +111,11 @@ class CinderStorage(cinder_storage.CinderStorage):
                     entry[USER_ID], default=self.config.cloud.user)
         return result
 
-    def read_db_info(self):
+    def read_db_info(self, **kwargs):
         """ Returns serialized data from database """
+        if kwargs.get('tenant_id'):
+            self.filter_tenant_id = kwargs['tenant_id'][0]
+
         return jsondate.dumps(
             {i: self.list_of_dicts_for_table(i) for i in self.list_of_tables})
 

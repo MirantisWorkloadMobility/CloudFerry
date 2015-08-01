@@ -35,8 +35,8 @@ rollback:
 
 process:
   - task_resources_transporting:
-      - act_identity_trans: True
       - act_get_filter: True
+      - act_identity_trans: True
       - task_images_trans:
           - act_get_info_images: True
           - act_deploy_images: True

@@ -20,8 +20,9 @@ from cloudferrylib.utils import utils as utl
 class IdentityTransporter(transporter.Transporter):
 
     def run(self, **kwargs):
+        search_opts = kwargs.get('search_opts_tenant', {})
         src_resource = self.src_cloud.resources[utl.IDENTITY_RESOURCE]
         dst_resource = self.dst_cloud.resources[utl.IDENTITY_RESOURCE]
-        info = src_resource.read_info()
+        info = src_resource.read_info(**search_opts)
         dst_resource.deploy(info)
         return {'identity_info': info}

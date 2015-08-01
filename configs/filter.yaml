@@ -1,3 +1,7 @@
+#tenants:
+#    tenant_id:
+#        - <tenant_id1>
+#        - <tenant_id2>
 #instances:
 #    id:
 #        - <server_id1>
