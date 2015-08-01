@@ -487,6 +487,7 @@ class NovaCompute(compute.Compute):
                     params.cloud.tenant):
                 nclient = self.get_client(params)
                 new_id = self.create_instance(nclient, **create_params)
+                self.wait_for_status(new_id, 'active')
             new_ids[new_id] = instance['id']
         return new_ids
 
