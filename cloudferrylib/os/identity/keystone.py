@@ -485,10 +485,6 @@ class KeystoneIdentity(identity.Identity):
 
         for _user in users:
             user = _user['user']
-            # FIXME should be deleted after determining how
-            # to change self role without logout
-            if user['name'] == self.keystone_client.username:
-                continue
             if user['name'] not in dst_users:
                 continue
             for _tenant in tenants:
