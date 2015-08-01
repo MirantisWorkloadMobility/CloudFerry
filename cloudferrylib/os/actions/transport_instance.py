@@ -90,8 +90,6 @@ class TransportInstance(action.Action):
         dst_compute = dst_cloud.resources[COMPUTE]
 
         new_ids = dst_compute.deploy(info)
-        for i in new_ids.iterkeys():
-            dst_compute.wait_for_status(i, 'active')
         new_info = dst_compute.read_info(search_opts={'id': new_ids.keys()})
         for i in new_ids.iterkeys():
             dst_compute.change_status('shutoff', instance_id=i)
