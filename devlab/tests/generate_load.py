@@ -20,7 +20,7 @@ NEUTRON_CLIENT_VERSION = config.NEUTRON_CLIENT_VERSION
 CINDER_CLIENT_VERSION = config.CINDER_CLIENT_VERSION
 
 
-class Prerequisites():
+class Prerequisites(object):
     def __init__(self, cloud_prefix='SRC'):
         self.filtering_utils = FilteringUtils()
         self.username = os.environ['%s_OS_USERNAME' % cloud_prefix]
@@ -192,7 +192,8 @@ class Prerequisites():
                     tenant = tenant.__dict__
                     if tenant['name'] in config.members:
                         member_id = tenant['id']
-                        self.glanceclient.image_members.create(image_id, member_id)
+                        self.glanceclient.image_members.create(image_id,
+                                                               member_id)
 
     def update_filtering_file(self):
         src_cloud = Prerequisites(cloud_prefix='SRC')
@@ -214,10 +215,11 @@ class Prerequisites():
         for vm in src_vms:
             vm_id = vm['id']
             vm_id_list.append(vm_id)
-        loaded_data = self.filtering_utils.load_file()
+        loaded_data = self.filtering_utils.load_file('configs/filter.yaml')
         filter_dict = loaded_data[0]
         if filter_dict is None:
-            filter_dict = {'images': {'images_list': {}}, 'instances': {'id': {}}}
+            filter_dict = {'images': {'images_list': {}},
+                           'instances': {'id': {}}}
         all_img_ids = []
         img_list = []
         not_incl_img = []
@@ -333,12 +335,13 @@ class Prerequisites():
 
     def create_security_group_rule(self, group_id, tenant_id, protocol='tcp',
                                    port_range_min=22, port_range_max=22,
-                                   direction ='ingress'):
-        sec_rule = {'security_group_rule':
-                        {"security_group_id":group_id, "protocol":protocol,
-                         "direction" : direction, 'tenant_id': tenant_id,
-                         "port_range_min":port_range_min,
-                         "port_range_max":port_range_max}}
+                                   direction='ingress'):
+        sec_rule = {'security_group_rule': {"security_group_id": group_id,
+                                            "protocol": protocol,
+                                            "direction": direction,
+                                            'tenant_id': tenant_id,
+                                            "port_range_min": port_range_min,
+                                            "port_range_max": port_range_max}}
         self.neutronclient.create_security_group_rule(sec_rule)
 
     def create_cinder_volumes(self, volumes_list):
@@ -379,7 +382,8 @@ class Prerequisites():
                     state=vm_state['state'])
             # emulate suspend state:
             elif vm_state['state'] == u'suspend':
-                self.novaclient.servers.suspend(self.get_vm_id(vm_state['name']))
+                self.novaclient.servers.suspend(self.get_vm_id(
+                    vm_state['name']))
             # emulate resize state:
             elif vm_state['state'] == u'pause':
                 self.novaclient.servers.pause(self.get_vm_id(vm_state['name']))
@@ -402,7 +406,8 @@ class Prerequisites():
             data[vm_name] = vm_state
         file_name = 'pre_migration_vm_states.json'
         with open(file_name, 'w') as outfile:
-            json.dump(data, outfile, sort_keys=True, indent=4, ensure_ascii=False)
+            json.dump(data, outfile, sort_keys=True, indent=4,
+                      ensure_ascii=False)
 
     def delete_flavor(self, flavor='del_flvr'):
         """

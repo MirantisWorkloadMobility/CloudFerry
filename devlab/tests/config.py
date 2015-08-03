@@ -220,3 +220,15 @@ private_key = {'name': 'key2',
 
 dst_prv_key_path = '~/.ssh/id_rsa'
 
+# Parameters required for rollback verification procedure:
+rollback_params = {'data_file_names': {'PRE': 'data_before_migration.yaml',
+                                       'POST': 'data_after_migration.yaml'},
+
+                   'param_dict': {'Nova': ['servers', 'security_groups',
+                                           'flavors', 'keypairs', 'quotas'],
+                                  'Neutron': ['networks', 'routers', 'subnets',
+                                              'ports', 'quotas'],
+                                  'Keystone': ['users', 'tenants', 'roles'],
+                                  'Glance': ['images', 'members'],
+                                  'Cinder': ['volume_snapshots', 'volumes',
+                                             'quotas']}}
