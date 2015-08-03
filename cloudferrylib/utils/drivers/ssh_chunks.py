@@ -170,14 +170,14 @@ class SSHChunksTransfer(driver_transporter.DriverTransporter):
                                 # Because of password
                                 run(ssh_command %
                                     (ssh_user_dst, host_dst,
-                                     'echo %s | sudo -S %s' % (ssh_sudo_pass_dst,
-                                                               command)))
+                                     'echo \'%s\' | sudo -S %s' % (ssh_sudo_pass_dst,
+                                                                   command)))
 
                                 LOG.info(
                                     'Running: %s', ssh_command %
                                     (ssh_user_dst, host_dst,
-                                     'echo %s | sudo -S %s' % ('<password>',
-                                                               command)))
+                                     'echo \'%s\' | sudo -S %s' % ('<password>',
+                                                                   command)))
 
     def _calculate_parts_count(self, data):
         part_size = self.cfg.migrate.ssh_chunk_size
