@@ -22,7 +22,7 @@ class NetworkTransporter(transporter.Transporter):
     def run(self, **kwargs):
         src_resource = self.src_cloud.resources[utl.NETWORK_RESOURCE]
         dst_resource = self.dst_cloud.resources[utl.NETWORK_RESOURCE]
-        info = src_resource.read_info()
+        search_opts = kwargs.get('search_opts_tenant', {})
+        info = src_resource.read_info(**search_opts)
         dst_resource.deploy(info)
         return {}
-

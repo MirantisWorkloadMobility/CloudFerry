@@ -92,6 +92,7 @@ class KeystoneIdentity(identity.Identity):
         self.config = config
         self.mysql_connector = cloud.mysql_connector
         self.cloud = cloud
+        self.filter_tenant_id = None
         self.postman = None
         if self.config.mail.server != "-":
             self.postman = Postman(self.config['mail']['username'],
@@ -143,24 +144,25 @@ class KeystoneIdentity(identity.Identity):
                 'users': [],
                 'roles': []}
 
-        service_tenant_id = \
-            self.get_tenant_id_by_name(self.config.cloud.service_tenant)
+        if kwargs.get('tenant_id'):
+            self.filter_tenant_id = kwargs['tenant_id'][0]
 
-        for tenant in self.get_tenants_list():
-            if tenant.id != service_tenant_id:
-                tnt = self.convert(tenant, self.config)
-                info['tenants'].append(tnt)
+        tenant_list = self.get_tenants_list()
+        for tenant in tenant_list:
+            tnt = self.convert(tenant, self.config)
+            info['tenants'].append(tnt)
 
-        for user in self.get_users_list():
-            if user.tenantId != service_tenant_id:
-                usr = self.convert(user, self.config)
-                info['users'].append(usr)
+        user_list = self.get_users_list()
+        for user in user_list:
+            usr = self.convert(user, self.config)
+            info['users'].append(usr)
 
         for role in self.get_roles_list():
             rl = self.convert(role, self.config)
             info['roles'].append(rl)
 
-        info['user_tenants_roles'] = self._get_user_tenants_roles()
+        info['user_tenants_roles'] = \
+             self._get_user_tenants_roles(tenant_list, user_list)
         if self.config['migrate']['keep_user_passwords']:
             info['user_passwords'] = self._get_user_passwords()
         return info
@@ -224,10 +226,9 @@ class KeystoneIdentity(identity.Identity):
         return func
 
     def get_tenant_id_by_name(self, name):
-        for tenant in self.get_tenants_list():
-            if tenant.name == name:
-                return tenant.id
-        return None
+        """ Getting tenant ID by name from keystone. """
+
+        return self.keystone_client.tenants.find(name=name).id
 
     def get_tenant_by_name(self, tenant_name):
         """ Getting tenant by name from keystone. """
@@ -259,12 +260,22 @@ class KeystoneIdentity(identity.Identity):
     def get_tenants_list(self):
         """ Getting list of tenants from keystone. """
 
-        return self.keystone_client.tenants.list()
+        result = []
+        ks_tenants = self.keystone_client.tenants
+        if self.filter_tenant_id:
+            result.append(ks_tenants.find(id=self.filter_tenant_id))
+        else:
+            result = ks_tenants.list()
+        return result
 
     def get_users_list(self):
         """ Getting list of users from keystone. """
 
-        return self.keystone_client.users.list()
+        if self.filter_tenant_id:
+            tenant_id = self.filter_tenant_id
+        else:
+            tenant_id = None
+        return self.keystone_client.users.list(tenant_id=tenant_id)
 
     def get_roles_list(self):
         """ Getting list of available roles from keystone. """
@@ -277,13 +288,25 @@ class KeystoneIdentity(identity.Identity):
         except keystoneclient.exceptions.NotFound:
             return default
 
+    def try_get_user_by_id(self, user_id, default=None):
+        if default is None:
+            admin_usr = \
+                self.try_get_user_by_name(username=self.config.cloud.user)
+            default = admin_usr.id
+        try:
+            return self.keystone_client.users.find(id=user_id)
+        except keystoneclient.exceptions.NotFound:
+            LOG.warning("User '%s' has not been found, returning default "
+                        "value = '%s'", user_id, default)
+            return self.keystone_client.users.find(id=default)
+
     def try_get_user_by_name(self, username, default=None):
         try:
-            return self.keystone_client.users.find(username=username)
+            return self.keystone_client.users.find(name=username)
         except keystoneclient.exceptions.NotFound:
             LOG.warning("User '%s' has not been found, returning default "
                         "value = '%s'", username, default)
-            return self.keystone_client.users.find(username=default)
+            return self.keystone_client.users.find(name=default)
 
     def roles_for_user(self, user_id, tenant_id):
         """ Getting list of user roles for tenant """
@@ -431,12 +454,15 @@ class KeystoneIdentity(identity.Identity):
 
         return info
 
-    def _get_user_tenants_roles(self):
+    def _get_user_tenants_roles(self, tenant_list=None, user_list=None):
+        if tenant_list is None:
+            tenant_list = []
+        if user_list is None:
+            user_list = []
         user_tenants_roles = {}
-        tenants = self.get_tenants_list()
-        for user in self.get_users_list():
+        for user in user_list:
             user_tenants_roles[user.name] = {}
-            for tenant in tenants:
+            for tenant in tenant_list:
                 roles = []
                 for role in self.roles_for_user(user.id, tenant.id):
                     roles.append({'role': {'name': role.name, 'id': role.id}})
@@ -459,10 +485,6 @@ class KeystoneIdentity(identity.Identity):
 
         for _user in users:
             user = _user['user']
-            # FIXME should be deleted after determining how
-            # to change self role without logout
-            if user['name'] == self.keystone_client.username:
-                continue
             if user['name'] not in dst_users:
                 continue
             for _tenant in tenants:
