@@ -791,12 +791,8 @@ class NovaCompute(compute.Compute):
         for i in existing_default_quotas:
             if quota_items[i] == existing_default_quotas[i]:
                 quota_items.pop(i)
-        try:
-            return self.nova_client.quota_classes.update('default', **quota_items)
-        except nova_exc.BadRequest:
-            # FIXME temporary fix for default quotas migration in case those
-            # already exist on destination
-            pass
+
+        return self.nova_client.quota_classes.update('default', **quota_items)
 
     def get_interface_list(self, server_id):
         return self.nova_client.servers.interface_list(server_id)
