@@ -4,6 +4,8 @@ namespace:
 
 preparation:
   - pre_migration_test:
+      - act_get_filter: True
+      - act_check_filter: True
       - src_test:
           - check_src_ssh_access: True
           - act_check_bandwidth_src: True
@@ -35,7 +37,6 @@ rollback:
 
 process:
   - task_resources_transporting:
-      - act_get_filter: True
       - act_identity_trans: True
       - task_images_trans:
           - act_get_info_images: True
