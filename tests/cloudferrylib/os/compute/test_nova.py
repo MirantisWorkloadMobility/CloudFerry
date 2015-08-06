@@ -263,3 +263,133 @@ class NovaComputeTestCase(test.TestCase):
             hostname_attribute=nova_compute.INSTANCE_HOST_ATTRIBUTE)
 
         self.assertEqual(len(filtered), num_instances_up)
+
+
+class FlavorDeploymentTestCase(test.TestCase):
+    def test_flavor_is_updated_with_destination_id(self):
+        config = mock.Mock()
+        cloud = mock.MagicMock()
+        cloud.position = 'dst'
+
+        expected_id = 'flavor1'
+        existing_flavor = mock.Mock()
+        existing_flavor.id = 'non-public-flavor'
+        existing_flavor.name = 'non-public-flavor'
+        created_flavor = mock.Mock()
+        created_flavor.id = expected_id
+        nc = nova_compute.NovaCompute(config, cloud)
+        nc.get_flavor_list = mock.MagicMock()
+        nc.get_flavor_list.return_value = [existing_flavor]
+        nc.add_flavor_access = mock.MagicMock()
+        nc._create_flavor_if_not_exists = mock.MagicMock()
+        nc._create_flavor_if_not_exists.return_value = created_flavor
+
+        flavors = {
+            expected_id: {
+                'flavor': {
+                    'is_public': True,
+                    'name': 'flavor1',
+                    'tenants': []
+                },
+                'meta': {}
+            },
+            existing_flavor.id: {
+                'flavor': {
+                    'is_public': False,
+                    'name': existing_flavor.name,
+                    'tenants': ['t1', 't2']
+                },
+                'meta': {}
+            }
+
+        }
+
+        tenant_map = {
+            't1': 't1dest',
+            't2': 't2dest',
+        }
+        nc._deploy_flavors(flavors, tenant_map)
+
+        for f in flavors:
+            self.assertTrue('id' in flavors[f]['meta'])
+            self.assertEqual(flavors[f]['meta']['id'], f)
+
+    def test_flavor_is_not_created_if_already_exists_on_dest(self):
+        existing_flavor = mock.Mock()
+        existing_flavor.id = 'existing-id'
+        existing_flavor.name = 'existing-name'
+
+        flavors = {
+            existing_flavor.id: {
+                'flavor': {
+                    'is_public': True,
+                    'name': existing_flavor.name,
+                    'tenants': []
+                },
+                'meta': {}
+            }
+        }
+
+        config = mock.Mock()
+        cloud = mock.MagicMock()
+        cloud.position = 'dst'
+
+        nc = nova_compute.NovaCompute(config, cloud)
+        nc._create_flavor_if_not_exists = mock.Mock()
+        nc.get_flavor_list = mock.Mock()
+        nc.get_flavor_list.return_value = [existing_flavor]
+        nc._deploy_flavors(flavors, tenant_map={})
+
+        assert not nc._create_flavor_if_not_exists.called
+
+    def test_access_not_updated_for_public_flavors(self):
+        flavors = {
+            'flavor1': {
+                'flavor': {
+                    'is_public': True,
+                    'name': 'flavor1',
+                    'tenants': []
+                },
+                'meta': {}
+            }
+        }
+        tenant_map = {}
+        config = mock.Mock()
+        cloud = mock.MagicMock()
+        cloud.position = 'dst'
+
+        nc = nova_compute.NovaCompute(config, cloud)
+        nc._create_flavor_if_not_exists = mock.Mock()
+        nc._add_flavor_access_for_tenants = mock.Mock()
+        nc.get_flavor_list = mock.Mock()
+        nc.get_flavor_list.return_value = []
+
+        nc._deploy_flavors(flavors, tenant_map)
+
+        assert not nc._add_flavor_access_for_tenants.called
+
+    def test_access_list_is_updated_for_non_public_flavors(self):
+        flavors = {
+            'flavor1': {
+                'flavor': {
+                    'is_public': True,
+                    'name': 'flavor1',
+                    'tenants': []
+                },
+                'meta': {}
+            }
+        }
+        tenant_map = {}
+        config = mock.Mock()
+        cloud = mock.MagicMock()
+        cloud.position = 'dst'
+
+        nc = nova_compute.NovaCompute(config, cloud)
+        nc._create_flavor_if_not_exists = mock.Mock()
+        nc._add_flavor_access_for_tenants = mock.Mock()
+        nc.get_flavor_list = mock.Mock()
+        nc.get_flavor_list.return_value = []
+
+        nc._deploy_flavors(flavors, tenant_map)
+
+        assert not nc._add_flavor_access_for_tenants.called
