@@ -33,6 +33,7 @@ tasks:
    init_iteration_instance_copy_var: ['CopyVar', 'info', 'info_backup', 'True']
    init_iteration_instance_ref: ['CreateReference', 'info', 'info_iter']
    act_get_filter: ['GetFilter']
+   act_check_filter: ['CheckFilter', 'src_cloud']
    act_get_info_inst: ['GetInfoInstances', 'src_cloud']
    act_cleanup_images: ['CleanupImages']
    get_next_instance: ['GetInfoIter']

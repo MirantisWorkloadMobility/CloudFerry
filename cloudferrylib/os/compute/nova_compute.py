@@ -109,7 +109,7 @@ class NovaCompute(compute.Compute):
             self.config.cloud.tenant)
         service_tenant_id = self.identity.get_tenant_id_by_name(
             self.config.cloud.service_tenant)
-        if self.filter_tenant_id:
+        if self.cloud.position == 'src' and self.filter_tenant_id:
             tmp_list = \
                 [admin_tenant_id, service_tenant_id, self.filter_tenant_id]
             tenant_ids = \
@@ -195,8 +195,12 @@ class NovaCompute(compute.Compute):
 
         for instance in self.get_instances_list(search_opts=search_opts):
             if instance.status in ALLOWED_VM_STATUSES:
-                if not self.filter_tenant_id or \
-                        (self.filter_tenant_id == instance.tenant_id):
+                if (self.cloud.position == 'dst' or
+                        (self.cloud.position == 'src' and
+                            self.filter_tenant_id is not None and
+                            self.filter_tenant_id == instance.tenant_id) or
+                        (self.cloud.position == 'src' and
+                            self.filter_tenant_id is None)):
                     info['instances'][instance.id] = self.convert(instance,
                                                                   self.config,
                                                                   self.cloud)
