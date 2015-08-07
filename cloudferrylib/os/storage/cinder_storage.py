@@ -169,8 +169,14 @@ class CinderStorage(storage.Storage):
         return self.cinder_client.volumes.get(resource_id).status
 
     def wait_for_status(self, resource_id, status, limit_retry=60):
-        while self.get_status(resource_id) != status:
+        counter = 0
+        while self.get_status(resource_id) != status and counter < limit_retry:
             time.sleep(1)
+            counter += 1
+
+        if counter == limit_retry:
+            LOG.warning("Volume '%s' has not changed status to '%s'",
+                        resource_id, status)
 
     def deploy_volumes(self, info):
         new_ids = {}
