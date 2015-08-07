@@ -106,6 +106,8 @@ class RollbackScenarioGeneration(object):
         list_of_steps = self._get_list_of_tasks(data)
         random_step = random.choice(list_of_steps)
         self._insert_break_point(data, random_step)
+        print('\n\nBreak point was set after:\n{}, index: {}\n\n'.format(
+            random_step, list_of_steps.index(random_step)))
         try:
             assert(self._find_break_point(migration_data,
                                           self.exception_task.keys()[0])
