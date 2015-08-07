@@ -10,22 +10,26 @@ error_exit() {
         echo &>2
     fi
 
-    echo "Usage: ${SCRIPT} --cloudferry-path <path>"
+    echo "Usage: ${SCRIPT} --cloudferry-path <path> [--destination <path>]"
 
     exit 1
 }
 
-
-while [[ $# -ge 1 ]]; do
+while [[ $# -ge 2 ]]; do
     case $1 in
         --cloudferry-path) shift; CF_PATH=$1; shift;;
+        --destination) shift; S_PATH=$1; shift;;
         *) error_exit "Invalid arg $1";;
     esac
 done
 
 [[ -z $CF_PATH ]] && error_exit "Missing --cloudferry-path option"
 
-result_config=${CF_PATH}/configuration.ini
+if [ -z $S_PATH ]; then
+    S_PATH=$CF_PATH
+fi
+
+result_config=${S_PATH}/configuration.ini
 
 echo "Preparing configuration for CloudFerry"
 cp ${CF_PATH}/devlab/config.template ${result_config}
