@@ -68,7 +68,6 @@ class RemoteDir(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.runner.run_ignoring_errors(_unlink_dir(self.dirname))
-        return self
 
 
 class GetTempDir(object):

@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import mock
-
 from cloudferrylib.utils import files
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils.drivers import ssh_chunks
-
 from tests import test
 
 
@@ -137,3 +135,13 @@ class VerifiedFileCopyTestCase(test.TestCase):
                                           num_retries)
         except ssh_chunks.FileCopyFailure:
             assert scp.call_count == num_retries + 1
+    def test_temp_dir_exception_inside_with(self):
+        runner = mock.Mock()
+        dirname = 'dir'
+
+        try:
+            with files.RemoteDir(runner, dirname):
+                raise Exception
+        except Exception:
+            res = True
+        self.assertTrue(res)
