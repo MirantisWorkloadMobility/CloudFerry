@@ -233,7 +233,7 @@ class NovaCompute(compute.Compute):
                             instance.id))]
 
         is_ephemeral = compute_res.get_flavor_from_id(
-            instance.flavor['id']).ephemeral > 0
+            instance.flavor['id'], include_deleted=True).ephemeral > 0
 
         is_ceph = cfg.compute.backend.lower() == utl.CEPH
         direct_transfer = cfg.migrate.direct_compute_transfer
@@ -286,7 +286,8 @@ class NovaCompute(compute.Compute):
                 is_ceph_ephemeral=is_ceph)
         flav_details = instances.get_flav_details(compute_res.mysql_connector,
                                                   instance.id)
-        flav_name = compute_res.get_flavor_from_id(instance.flavor['id']).name
+        flav_name = compute_res.get_flavor_from_id(instance.flavor['id'],
+                                                   include_deleted=True).name
         flav_details.update({'name': flav_name})
 
         inst = {'instance': {'name': instance.name,
@@ -455,7 +456,8 @@ class NovaCompute(compute.Compute):
                          flavor['rxtx_factor'] == dest_flavor.rxtx_factor and
                          flavor['swap'] == dest_flavor.swap)
             if identical:
-                LOG.debug("Identical flavor already exists, skipping.")
+                LOG.debug("Identical flavor '%s' already exists, skipping.",
+                          flavor['name'])
                 return dest_flavor
             else:
                 LOG.info("Flavor with the same ID exists ('%s'), but it "
@@ -463,6 +465,7 @@ class NovaCompute(compute.Compute):
                          "destination.", flavor_id, flavor_id)
                 self.delete_flavor(flavor_id)
         except nova_exc.NotFound:
+            LOG.info("Flavor %s does not exist", flavor['name'])
             pass
 
         LOG.info("Creating flavor '%s'", flavor['name'])
@@ -716,8 +719,11 @@ class NovaCompute(compute.Compute):
                 raise timeout_exception.TimeoutException(
                     getter.get(id_obj).status.lower(), status, "Timeout exp")
 
-    def get_flavor_from_id(self, flavor_id):
-        return self.nova_client.flavors.get(flavor_id)
+    def get_flavor_from_id(self, flavor_id, include_deleted=False):
+        if include_deleted:
+            return self.nova_client.flavors.get(flavor_id)
+        else:
+            return self.nova_client.flavors.find(id=flavor_id)
 
     def get_flavor_list(self, **kwargs):
         return self.nova_client.flavors.list(**kwargs)

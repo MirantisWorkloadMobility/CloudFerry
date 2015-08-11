@@ -170,7 +170,7 @@ class NovaComputeTestCase(test.TestCase):
         self.assertFalse(self.fake_instance_0.stop.called)
 
     def test_get_flavor_from_id(self):
-        self.mock_client().flavors.get.return_value = self.fake_flavor_0
+        self.mock_client().flavors.find.return_value = self.fake_flavor_0
 
         flavor = self.nova_client.get_flavor_from_id('fake_flavor_id')
 

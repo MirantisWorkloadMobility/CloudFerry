@@ -35,7 +35,8 @@ class CheckNeededComputeResources(action.Action):
         needed_hdd = 0
         src_nova = self.src_cloud.resources[utl.COMPUTE_RESOURCE]
         for flavor_id, count in cnt_map.items():
-            flavor = src_nova.get_flavor_from_id(flavor_id)
+            flavor = src_nova.get_flavor_from_id(flavor_id,
+                                                 include_deleted=True)
             needed_cpu += flavor.vcpus * count
             needed_hdd += (flavor.disk + flavor.ephemeral) * count
             if flavor.swap:  # if flavor not specified '' is here
