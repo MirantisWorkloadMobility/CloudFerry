@@ -9,7 +9,9 @@ users = [
     {'name': 'user4', 'password': 'asaasdf', 'email': 'asdasd@example.com',
      'tenant': 'tenant2', 'enabled': False},
     {'name': 'test_volume_migration', 'password': 'passwd', 'enabled': True,
-     'email': 'volume_test@example.com', 'tenant': 'tenant1', 'deleted': True}
+     'email': 'volume_test@example.com', 'tenant': 'tenant1', 'deleted': True},
+    {'name': 'user5', 'password': 'passwd', 'email': 'asdasd@example.com',
+     'tenant': 'tenant3', 'enabled': True}
 ]
 
 # Roles to create/delete
@@ -67,7 +69,9 @@ tenants = [
          {'name': 'tn_volume1', 'size': 1, 'server_to_attach': 'tn2server1',
           'device': '/dev/vdb'}
      ]
-     }
+     },
+    {'name': 'tenant3', 'description': 'This tenant will be deleted',
+     'enabled': True, 'deleted': True}
 ]
 
 # Images to create/delete
