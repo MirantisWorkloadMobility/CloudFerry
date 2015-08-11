@@ -27,19 +27,19 @@ nodes = {
   "grizzly#{ENV["BUILD_NAME"]}" => {
     "box" => "openstack-user/precise-grizzly",
     "ip" => "#{options['grizzly_ip']}",
-    "memory" => 4096,
+    "memory" => 2560,
     "role" => "openstack"
   },
   "icehouse#{ENV["BUILD_NAME"]}" => {
     "box" => "openstack-user/precise-icehouse",
     "ip" => "#{options['icehouse_ip']}",
-    "memory" => 4096,
+    "memory" => 2560,
     "role" => "openstack"
   },
   "juno#{ENV["BUILD_NAME"]}" => {
     "box" => "openstack-user/juno",
     "ip" => "#{options['juno_ip']}",
-    "memory" => 4096,
+    "memory" => 2560,
     "role" => "openstack",
     "devstack" => {
       "branch" => 'stable/juno' 
@@ -48,19 +48,19 @@ nodes = {
   "cloudferry#{ENV["BUILD_NAME"]}" => {
     "box" => "hashicorp/precise64",
     "ip" => "#{options['cloudferry_ip']}",
-    "memory" => 2048,
+    "memory" => 1536,
     "role" => "lab"
   },
   "grizzlycompute" => {
     "box" => "openstack-user/precise-grizzlycompute",
     "ip" => "#{options['grizzly_compute_ip']}",
-    "memory" => 4096,
+    "memory" => 2560,
     "role" => "openstack"
   },
   "icehousecompute" => {
     "box" => "openstack-user/precise-icehousecompute",
     "ip" => "#{options['icehouse_compute_ip']}",
-    "memory" => 4096,
+    "memory" => 2560,
     "role" => "openstack"
   }
 }
