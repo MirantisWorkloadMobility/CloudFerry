@@ -7,7 +7,9 @@ users = [
     {'name': 'user3', 'password': 'paafdssswd1', 'email': 'mdsail@example.com',
      'tenant': 'tenant1', 'enabled': False},
     {'name': 'user4', 'password': 'asaasdf', 'email': 'asdasd@example.com',
-     'tenant': 'tenant2', 'enabled': False}
+     'tenant': 'tenant2', 'enabled': False},
+    {'name': 'test_volume_migration', 'password': 'passwd', 'enabled': True,
+     'email': 'volume_test@example.com', 'tenant': 'tenant1', 'deleted': True}
 ]
 
 # Roles to create/delete
@@ -145,7 +147,8 @@ snapshots = [
 cinder_volumes = [
     {'name': 'cinder_volume1', 'size': 1},
     {'name': 'cinder_volume2', 'size': 1,
-     'server_to_attach': 'server2', 'device': '/dev/vdb'}
+     'server_to_attach': 'server2', 'device': '/dev/vdb'},
+    {'name': 'cinder_volume3', 'size': 1, 'user': 'test_volume_migration'}
 ]
 
 # Cinder snapshots to create/delete
