@@ -20,7 +20,7 @@ from tests import test
 
 class RemoteRunnerTestCase(test.TestCase):
     def test_remote_runner_raises_error_if_errors_are_not_ignored(self):
-        rr = remote_runner.RemoteRunner('host', 'user', 'password', 'key',
+        rr = remote_runner.RemoteRunner('host', 'user', 'password',
                                         ignore_errors=False)
 
         self.assertRaises(remote_runner.RemoteExecutionError, rr.run,
@@ -28,9 +28,10 @@ class RemoteRunnerTestCase(test.TestCase):
 
     @mock.patch('cloudferrylib.utils.remote_runner.forward_agent')
     @mock.patch('cloudferrylib.utils.remote_runner.sudo')
+    @mock.patch('cloudferrylib.utils.remote_runner.settings')
     def test_errors_are_suppressed_for_run_ignoring_errors(
-            self, forward_agent, sudo):
-        rr = remote_runner.RemoteRunner('host', 'user', 'password', 'key',
+            self, fwd_agent, sudo, settings):
+        rr = remote_runner.RemoteRunner('host', 'user', 'password', sudo=True,
                                         ignore_errors=False)
 
         try:
@@ -39,3 +40,15 @@ class RemoteRunnerTestCase(test.TestCase):
             self.assertFalse(rr.ignore_errors)
         except Exception as e:
             self.fail("run_ignoring_errors must not raise exceptions: %s" % e)
+
+    @mock.patch('cloudferrylib.utils.remote_runner.forward_agent')
+    @mock.patch('cloudferrylib.utils.remote_runner.sudo')
+    @mock.patch('cloudferrylib.utils.remote_runner.run')
+    def test_root_user_does_not_sudo(self, fwd_agent, sudo, run):
+        rr = remote_runner.RemoteRunner('host', 'root',
+                                        key='key', sudo=True,
+                                        ignore_errors=False)
+        rr.run('cmd')
+
+        assert not sudo.called
+        assert run.called

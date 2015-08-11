@@ -48,11 +48,12 @@ class RemoteRunner(object):
                       user=self.user,
                       password=self.password,
                       abort_exception=abort_exception,
-                      reject_unkown_hosts=False):
+                      reject_unkown_hosts=False,
+                      combine_stderr=False):
             with forward_agent(self.key):
                 LOG.debug("running '%s' on '%s' host as user '%s'",
                           cmd, self.host, self.user)
-                if self.sudo:
+                if self.sudo and self.user != 'root':
                     return sudo(cmd)
                 else:
                     return run(cmd)

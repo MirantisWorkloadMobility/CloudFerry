@@ -82,7 +82,7 @@ process:
               - add_key_pairs_to_instances: True
               - act_is_not_copy_diff_file: ['act_transport_ephemeral']
               - act_trans_diff_file: False
-              - act_trans_diff_file_chunks : True
+              - copy_vm_data: True
               - act_transport_ephemeral: True
           - act_attaching: True
           - act_dissociate_floatingip: True
