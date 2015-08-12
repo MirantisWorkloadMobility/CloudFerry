@@ -33,13 +33,13 @@ nodes = {
   "icehouse#{ENV["BUILD_NAME"]}" => {
     "box" => "openstack-user/precise-icehouse",
     "ip" => "#{options['icehouse_ip']}",
-    "memory" => 2560,
+    "memory" => 3072,
     "role" => "openstack"
   },
   "juno#{ENV["BUILD_NAME"]}" => {
     "box" => "openstack-user/juno",
     "ip" => "#{options['juno_ip']}",
-    "memory" => 2560,
+    "memory" => 3072,
     "role" => "openstack",
     "devstack" => {
       "branch" => 'stable/juno' 
@@ -49,6 +49,7 @@ nodes = {
     "box" => "hashicorp/precise64",
     "ip" => "#{options['cloudferry_ip']}",
     "memory" => 1536,
+    "cpus" => 1,
     "role" => "lab"
   },
   "grizzlycompute" => {
@@ -136,6 +137,7 @@ Vagrant.configure(2) do |config|
         v.memory = nodedata.fetch("memory", 1024)
         v.cpus = nodedata.fetch("cpus", 2)
         v.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
+        v.customize ["modifyvm", :id, "--cpuexecutioncap", "80"]
       end
     end
   end
