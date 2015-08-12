@@ -169,6 +169,16 @@ class NovaComputeTestCase(test.TestCase):
         self.nova_client.change_status('stop', instance=self.fake_instance_0)
         self.assertFalse(self.fake_instance_0.stop.called)
 
+    @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.'
+                'wait_for_status')
+    def test_shutoff_to_verify_resize_brings_instance_active(self, _):
+        self.mock_client().servers.get('fake_instance_id').status = 'shutoff'
+
+        self.nova_client.change_status('verify_resize',
+                                       instance=self.fake_instance_0)
+
+        self.assertTrue(self.fake_instance_0.start.called)
+
     def test_get_flavor_from_id(self):
         self.mock_client().flavors.find.return_value = self.fake_flavor_0
 

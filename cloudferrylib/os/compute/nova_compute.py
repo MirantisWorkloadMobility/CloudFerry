@@ -691,7 +691,9 @@ class NovaCompute(compute.Compute):
                 'suspended': (func_restore['start'],
                               func_restore['status']('active'),
                               func_restore['suspended'],
-                              func_restore['status']('suspended'))
+                              func_restore['status']('suspended')),
+                'verify_resize': (func_restore['start'],
+                                  func_restore['status']('active'))
             },
             'verify_resize': {
                 'shutoff': (func_restore['confirm_resize'],
