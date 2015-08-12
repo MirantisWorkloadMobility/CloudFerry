@@ -255,6 +255,8 @@ class Prerequisites(object):
         for tenant in config.tenants:
             if 'vms' in tenant:
                 for user in config.users:
+                    if 'deleted' in user and user['deleted']:
+                        continue
                     if user['tenant'] == tenant['name'] and user['enabled']:
                         self.switch_user(user=user['name'],
                                          password=user['password'],
@@ -346,6 +348,11 @@ class Prerequisites(object):
 
     def create_cinder_volumes(self, volumes_list):
         for volume in volumes_list:
+            if 'user' in volume:
+                user = [u for u in config.users
+                        if u['name'] == volume['user']][0]
+                self.switch_user(user=user['name'], password=user['password'],
+                                 tenant=user['tenant'])
             vlm = self.cinderclient.volumes.create(display_name=volume['name'],
                                                    size=volume['size'])
             self.wait_for_volume(volume['name'])
@@ -426,6 +433,12 @@ class Prerequisites(object):
                     'admin'), **tenant['quota'])
                 break
 
+    def delete_users(self):
+        for user in config.users:
+            if user.get('deleted'):
+                self.keystoneclient.users.delete(
+                    self.get_user_id(user['name']))
+
     def run_preparation_scenario(self):
         print('>>> Creating tenants:')
         self.create_tenants()
@@ -461,6 +474,8 @@ class Prerequisites(object):
         self.delete_flavor()
         print('>>> Modifying admin tenant quotas:')
         self.modify_admin_tenant_quotas()
+        print('>>> Delete users which should be deleted:')
+        self.delete_users()
 
     def clean_objects(self):
         for flavor in config.flavors:
