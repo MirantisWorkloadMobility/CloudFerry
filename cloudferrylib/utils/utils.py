@@ -512,16 +512,3 @@ def import_class_by_string(name):
     for comp in module[1:]:
         mod = getattr(mod, comp)
     return getattr(mod, class_name)
-
-
-def get_remote_file_size(host, file_path, ssh_user, ssh_sudo_password):
-    """ Return file size in bytes on the remote host.
-
-    :param host: Remote host,
-    :param file_path: Full file path,
-    :return: File size in bytes.
-    """
-
-    with settings(host_string=host, user=ssh_user):
-        size = run('stat --printf="%s" {}'.format(file_path))
-        return int(size)

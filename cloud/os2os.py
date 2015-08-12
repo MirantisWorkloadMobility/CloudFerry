@@ -100,7 +100,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             'SSHCephToFile': ssh_ceph_to_file.SSHCephToFile,
             'SSHFileToFile': ssh_file_to_file.SSHFileToFile,
             'SSHFileToCeph': ssh_file_to_ceph.SSHFileToCeph,
-            'SSHChunksTransfer': ssh_chunks.SSHChunksTransfer,
+            'CopyFilesBetweenComputeHosts':
+                ssh_chunks.CopyFilesBetweenComputeHosts,
         }
 
     def migrate(self, scenario=None):

@@ -47,7 +47,7 @@ BACKING_FILE_DST = 'backing_file_dst'
 TEMP = 'temp'
 FLAVORS = 'flavors'
 
-SSH_CHUNKS = 'SSHChunksTransfer'
+SSH_CHUNKS = 'CopyFilesBetweenComputeHosts'
 
 TRANSPORTER_MAP = {CEPH: {CEPH: 'SSHCephToCeph',
                           ISCSI: 'SSHCephToFile'},

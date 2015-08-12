@@ -57,7 +57,7 @@ class RemoteDir(object):
     def __init__(self, runner, dirname):
         self.runner = runner
         if dirname == '/':
-           raise ValueError("The directory / is not allowed")
+            raise ValueError("The directory / is not allowed")
         else:
             self.dirname = dirname
 
@@ -80,6 +80,7 @@ class GetTempDir(object):
         cmd = "mktemp -udt %s_XXXX" % self.prefix
         return self.runner.run(cmd)
 
+
 def _unlink(filename):
     return "rm -f {file}".format(file=filename)
 
@@ -89,4 +90,19 @@ def _unlink_dir(dirname):
         return "rm -rf {dir}".format(dir=dirname)
     else:
         raise RuntimeError('Wrong dirname %s, stopping' % dirname)
-    return
+
+
+class RemoteTempDir(object):
+    """Creates remote temp dir using `mktemp` and removes it on scope exit"""
+
+    def __init__(self, runner):
+        self.runner = runner
+
+    def __enter__(self):
+        create_temp_dir = 'mktemp -d'
+        self.created_dir = self.runner.run(create_temp_dir)
+        return self.created_dir
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        remove_dir = 'rm -rf {dir}'.format(dir=self.created_dir)
+        self.runner.run_ignoring_errors(remove_dir)
