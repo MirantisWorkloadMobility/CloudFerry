@@ -21,7 +21,9 @@ from oslotest import mockpatch
 import cfglib
 
 from cloudferrylib.os.compute import nova_compute
+from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils
+
 from tests import test
 
 
@@ -273,6 +275,40 @@ class NovaComputeTestCase(test.TestCase):
             hostname_attribute=nova_compute.INSTANCE_HOST_ATTRIBUTE)
 
         self.assertEqual(len(filtered), num_instances_up)
+
+
+class DeployInstanceWithManualScheduling(test.TestCase):
+    def test_tries_to_boot_vm_on_all_nodes(self):
+        compute_hosts = ['host1', 'host2', 'host3']
+        num_computes = len(compute_hosts)
+        instance = {'availability_zone': 'somezone', 'name': 'vm1'}
+        create_params = {'name': 'vm1'}
+        client_conf = mock.Mock()
+
+        nc = mock.Mock()
+        nc.get_compute_hosts.return_value = compute_hosts
+        nc.deploy_instance.side_effect = timeout_exception.TimeoutException(
+            None, None, None)
+
+        deployer = nova_compute.RandomSchedulerVmDeployer(nc)
+        self.assertRaises(
+            nova_compute.DestinationCloudNotOperational,
+            deployer.deploy, instance, create_params, client_conf)
+        self.assertEqual(nc.deploy_instance.call_count, num_computes)
+
+    def test_runs_only_one_boot_if_node_is_good(self):
+        compute_hosts = ['host1', 'host2', 'host3']
+        instance = {'availability_zone': 'somezone'}
+        create_params = {'name': 'vm1'}
+        client_conf = mock.Mock()
+
+        nc = mock.Mock()
+        nc.get_compute_hosts.return_value = compute_hosts
+
+        deployer = nova_compute.RandomSchedulerVmDeployer(nc)
+        deployer.deploy(instance, create_params, client_conf)
+
+        self.assertEqual(nc.deploy_instance.call_count, 1)
 
 
 class FlavorDeploymentTestCase(test.TestCase):
