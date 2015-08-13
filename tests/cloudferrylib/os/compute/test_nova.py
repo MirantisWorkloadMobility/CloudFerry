@@ -382,7 +382,7 @@ class FlavorDeploymentTestCase(test.TestCase):
         flavors = {
             'flavor1': {
                 'flavor': {
-                    'is_public': True,
+                    'is_public': False,
                     'name': 'flavor1',
                     'tenants': []
                 },
@@ -402,4 +402,4 @@ class FlavorDeploymentTestCase(test.TestCase):
 
         nc._deploy_flavors(flavors, tenant_map)
 
-        assert not nc._add_flavor_access_for_tenants.called
+        assert nc._add_flavor_access_for_tenants.called
