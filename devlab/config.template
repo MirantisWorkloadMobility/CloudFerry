@@ -184,7 +184,7 @@ snapshot_path = <snapshot_snapshot_path>
 
 [initial_check]
 claimed_bandwidth = 100
-factor = 0.5
+factor = 0.1
 test_file_size = 10
 
 [condense]
