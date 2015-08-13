@@ -135,6 +135,7 @@ class NeutronNetwork(network.Network):
             self.upload_lb_vips(deploy_info['lb_vips'],
                                 deploy_info['lb_pools'],
                                 deploy_info['subnets'])
+        return deploy_info
 
     def get_func_mac_address(self, instance):
         return self.get_mac_by_ip
