@@ -55,6 +55,8 @@ class Prerequisites(object):
         self.cinderclient = cinder.Client(CINDER_CLIENT_VERSION, self.username,
                                           self.password, self.tenant,
                                           self.auth_url)
+        # will be filled during create all networking step
+        self.ext_net_id = None
 
     def get_tenant_id(self, tenant_name):
         tenants = self.keystoneclient.tenants.list()
@@ -248,14 +250,26 @@ class Prerequisites(object):
             self.novaclient.flavors.create(**flavor)
 
     def create_vms(self):
+        def get_vm_nics(_vm):
+            if 'nics' in _vm:
+                for _nic in _vm['nics']:
+                    _nic['net-id'] = self.get_net_id(_nic['net-id'])
+                return _vm['nics']
+            nets = self.neutronclient.list_networks()['networks']
+            _t = self.keystoneclient.tenant_id
+            nics = [{'net-id': net['id']} for net in nets
+                    if not net['router:external'] and net['tenant_id'] == _t]
+            return nics
+
         for vm in config.vms:
             vm['image'] = self.get_image_id(vm['image'])
             vm['flavor'] = self.get_flavor_id(vm['flavor'])
+            vm['nics'] = get_vm_nics(vm)
             self.check_vm_state(self.novaclient.servers.create(**vm))
         for tenant in config.tenants:
             if 'vms' in tenant:
                 for user in config.users:
-                    if 'deleted' in user and user['deleted']:
+                    if user.get('deleted'):
                         continue
                     if user['tenant'] == tenant['name'] and user['enabled']:
                         self.switch_user(user=user['name'],
@@ -264,9 +278,7 @@ class Prerequisites(object):
                 for vm in tenant['vms']:
                     vm['image'] = self.get_image_id(vm['image'])
                     vm['flavor'] = self.get_flavor_id(vm['flavor'])
-                    if 'nics' in vm:
-                        for nic in vm['nics']:
-                            nic['net-id'] = self.get_net_id(nic['net-id'])
+                    vm['nics'] = get_vm_nics(vm)
                     self.check_vm_state(self.novaclient.servers.create(**vm))
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
@@ -280,10 +292,15 @@ class Prerequisites(object):
                 image_name=snapshot['image_name'])
 
     def create_networks(self, network_list, subnet_list):
+        ext_router_id = self.get_router_id('ext_router')
         for network, subnet in zip(network_list, subnet_list):
+            if network.get('router:external'):
+                continue
             net = self.neutronclient.create_network({'network': network})
             subnet['network_id'] = net['network']['id']
-            self.neutronclient.create_subnet({'subnet': subnet})
+            subnet = self.neutronclient.create_subnet({'subnet': subnet})
+            self.neutronclient.add_interface_router(
+                ext_router_id, {"subnet_id": subnet['subnet']['id']})
 
     def create_router(self, router_list):
         for router in router_list:
@@ -292,21 +309,37 @@ class Prerequisites(object):
                     router['router']['external_gateway_info']['network_id'])
             self.neutronclient.create_router(router)
 
+    def create_external_network(self):
+        for network in config.networks:
+            if network.get('router:external'):
+                net = self.neutronclient.create_network({'network': network})
+                break
+        else:
+            raise RuntimeError('Please specify external network in config.py')
+        for subnet in config.subnets:
+            if subnet.get('name') == 'external_subnet':
+                subnet['network_id'] = net['network']['id']
+                self.neutronclient.create_subnet({'subnet': subnet})
+                break
+        else:
+            raise RuntimeError('Please specify subnet for external network in '
+                               'config.py (make sure subnet has field '
+                               '"name": "external_subnet").')
+        return net['network']['id']
+
     def create_all_networking(self):
+        self.ext_net_id = self.create_external_network()
+        self.create_router(config.routers)
         self.create_networks(config.networks, config.subnets)
-        ext_net_id = [self.get_net_id(net['name']) for net in config.networks
-                      if 'router:external' in net and net['router:external']
-                      ][0]
         for tenant in config.tenants:
             if tenant['networks']:
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
                 self.create_networks(tenant['networks'], tenant['subnets'])
                 self.neutronclient.create_floatingip(
-                    {"floatingip": {"floating_network_id": ext_net_id}})
+                     {"floatingip": {"floating_network_id": self.ext_net_id}})
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
-        self.create_router(config.routers)
 
     def create_security_group(self, sg_list):
         for security_group in sg_list:
@@ -478,6 +511,41 @@ class Prerequisites(object):
         self.delete_users()
 
     def clean_objects(self):
+        def clean_router_ports(router_id):
+            subnets = self.neutronclient.list_subnets()
+            for subnet in subnets['subnets']:
+                try:
+                    self.neutronclient.remove_interface_router(
+                        router_id, {'subnet_id': subnet['id']})
+                except Exception:
+                    pass
+
+        def delete_user_keypairs(_user):
+            if not _user.get('enabled'):
+                return
+            self.switch_user(user=_user['name'], password=_user['password'],
+                             tenant=_user['tenant'])
+
+            keypairs = [k.id for k in self.novaclient.keypairs.list()]
+            if keypairs:
+                map(self.novaclient.keypairs.delete, keypairs)
+            self.switch_user(user=self.username, password=self.password,
+                             tenant=self.tenant)
+
+        def wait_until_vms_all_deleted():
+            timeout = 120
+            for i in range(timeout):
+                servers = self.novaclient.servers.list(
+                    search_opts={'all_tenants': 1})
+                for server in servers:
+                    if server.status == 'DELETED':
+                        self.novaclient.servers.delete(server.id)
+                    time.sleep(1)
+                else:
+                    break
+            else:
+                raise RuntimeError('Next vms were not deleted')
+
         for flavor in config.flavors:
             try:
                 self.novaclient.flavors.delete(
@@ -493,6 +561,7 @@ class Prerequisites(object):
                 self.novaclient.servers.delete(self.get_vm_id(vm['name']))
             except Exception as e:
                 print "VM %s failed to delete: %s" % (vm['name'], repr(e))
+        wait_until_vms_all_deleted()
         for image in config.images:
             try:
                 self.glanceclient.images.delete(
@@ -510,12 +579,22 @@ class Prerequisites(object):
             except Exception as e:
                 print "Ip %s failed to delete: %s" % (
                     ip['floating_ip_address'], repr(e))
+
         for router in config.routers:
             try:
+                clean_router_ports(self.get_router_id(
+                    router['router']['name']))
                 self.neutronclient.delete_router(self.get_router_id(
                     router['router']['name']))
             except Exception as e:
                 print "Router failed to delete: %s" % repr(e)
+
+        ports = self.neutronclient.list_ports()['ports']
+        ports = [port for port in ports[:]
+                 if port['device_owner'] == 'network:dhcp']
+
+        for port in ports:
+            self.neutronclient.delete_port(port['id'])
         for network in nets:
             try:
                 self.neutronclient.delete_network(self.get_net_id(
@@ -530,24 +609,9 @@ class Prerequisites(object):
             except Exception as e:
                 print "Image %s failed to delete: %s" % (
                     snapshot['image_name'], repr(e))
-        for tenant in config.tenants:
-            try:
-                self.keystoneclient.tenants.delete(
-                    self.get_tenant_id(tenant['name']))
-            except Exception as e:
-                print "Tenant %s failed to delete: %s" % (tenant['name'],
-                                                          repr(e))
-        sgs = self.neutronclient.list_security_groups()['security_groups']
-        for sg in sgs:
-            try:
-                print "delete sg {}".format(sg['name'])
-                self.neutronclient.delete_security_group(self.get_sg_id(
-                                                         sg['name']))
-            except Exception as e:
-                print "Security group %s failed to delete: %s" % (sg['name'],
-                                                                  repr(e))
         for user in config.users:
             try:
+                delete_user_keypairs(user)
                 self.keystoneclient.users.delete(
                     self.get_user_id(user['name']))
             except Exception as e:
@@ -569,6 +633,22 @@ class Prerequisites(object):
             except Exception as e:
                 print "Snapshot %s failed to delete: %s" % (
                     snapshot['display_name'], repr(e))
+
+        for tenant in config.tenants:
+            try:
+                self.keystoneclient.tenants.delete(
+                    self.get_tenant_id(tenant['name']))
+            except Exception as e:
+                print "Tenant %s failed to delete: %s" % (tenant['name'],
+                                                          repr(e))
+        sgs = self.neutronclient.list_security_groups()['security_groups']
+        for sg in sgs:
+            try:
+                self.neutronclient.delete_security_group(sg['id'])
+            except Exception as e:
+                print "Security group %s failed to delete: %s" % (sg['name'],
+                                                                  repr(e))
+
         volumes = config.cinder_volumes
         volumes += itertools.chain(*[tenant['cinder_volumes'] for tenant
                                      in config.tenants if 'cinder_volumes'
