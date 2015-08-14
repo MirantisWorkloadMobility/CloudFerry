@@ -34,8 +34,7 @@ FAKE_CONFIG = utils.ext_dict(
     migrate=utils.ext_dict({'migrate_quotas': True,
                             'speed_limit': '10MB',
                             'retry': '7',
-                            'time_wait': 5,
-                            'all_vms': False}))
+                            'time_wait': 5}))
 
 
 class NovaComputeTestCase(test.TestCase):
@@ -51,6 +50,7 @@ class NovaComputeTestCase(test.TestCase):
 
         self.fake_cloud = mock.Mock()
         self.fake_cloud.resources = dict(identity=self.identity_mock)
+        self.fake_cloud.position = 'src'
 
         with mock.patch(
                 'cloudferrylib.os.compute.nova_compute.mysql_connector'):
@@ -80,9 +80,11 @@ class NovaComputeTestCase(test.TestCase):
         self.assertEqual(self.mock_client(), client)
 
     def test_create_instance(self):
-        self.mock_client().servers.create.return_value = self.fake_instance_0
+        ncli = mock.Mock()
+        ncli.servers.create.return_value = self.fake_instance_0
 
-        instance_id = self.nova_client.create_instance(name='fake_instance',
+        instance_id = self.nova_client.create_instance(nclient=ncli,
+                                                       name='fake_instance',
                                                        image='fake_image',
                                                        flavor='fake_flavor',
                                                        user_id='some-id')
@@ -130,7 +132,7 @@ class NovaComputeTestCase(test.TestCase):
     @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
     def test_change_status_resume(self, mock_get, mock_sleep):
-        mock_get.return_value = 'suspend'
+        mock_get.return_value = 'suspended'
         self.nova_client.change_status('active', instance=self.fake_instance_0)
         self.fake_instance_0.resume.assert_called_once_with()
         mock_sleep.assert_called_with(2)
@@ -156,7 +158,7 @@ class NovaComputeTestCase(test.TestCase):
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
     def test_change_status_suspend(self, mock_get, mock_sleep):
         mock_get.return_value = 'active'
-        self.nova_client.change_status('suspend',
+        self.nova_client.change_status('suspended',
                                        instance=self.fake_instance_0)
         self.fake_instance_0.suspend.assert_called_once_with()
         mock_sleep.assert_called_with(2)
@@ -167,8 +169,18 @@ class NovaComputeTestCase(test.TestCase):
         self.nova_client.change_status('stop', instance=self.fake_instance_0)
         self.assertFalse(self.fake_instance_0.stop.called)
 
+    @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.'
+                'wait_for_status')
+    def test_shutoff_to_verify_resize_brings_instance_active(self, _):
+        self.mock_client().servers.get('fake_instance_id').status = 'shutoff'
+
+        self.nova_client.change_status('verify_resize',
+                                       instance=self.fake_instance_0)
+
+        self.assertTrue(self.fake_instance_0.start.called)
+
     def test_get_flavor_from_id(self):
-        self.mock_client().flavors.get.return_value = self.fake_flavor_0
+        self.mock_client().flavors.find.return_value = self.fake_flavor_0
 
         flavor = self.nova_client.get_flavor_from_id('fake_flavor_id')
 
@@ -261,3 +273,133 @@ class NovaComputeTestCase(test.TestCase):
             hostname_attribute=nova_compute.INSTANCE_HOST_ATTRIBUTE)
 
         self.assertEqual(len(filtered), num_instances_up)
+
+
+class FlavorDeploymentTestCase(test.TestCase):
+    def test_flavor_is_updated_with_destination_id(self):
+        config = mock.Mock()
+        cloud = mock.MagicMock()
+        cloud.position = 'dst'
+
+        expected_id = 'flavor1'
+        existing_flavor = mock.Mock()
+        existing_flavor.id = 'non-public-flavor'
+        existing_flavor.name = 'non-public-flavor'
+        created_flavor = mock.Mock()
+        created_flavor.id = expected_id
+        nc = nova_compute.NovaCompute(config, cloud)
+        nc.get_flavor_list = mock.MagicMock()
+        nc.get_flavor_list.return_value = [existing_flavor]
+        nc.add_flavor_access = mock.MagicMock()
+        nc._create_flavor_if_not_exists = mock.MagicMock()
+        nc._create_flavor_if_not_exists.return_value = created_flavor
+
+        flavors = {
+            expected_id: {
+                'flavor': {
+                    'is_public': True,
+                    'name': 'flavor1',
+                    'tenants': []
+                },
+                'meta': {}
+            },
+            existing_flavor.id: {
+                'flavor': {
+                    'is_public': False,
+                    'name': existing_flavor.name,
+                    'tenants': ['t1', 't2']
+                },
+                'meta': {}
+            }
+
+        }
+
+        tenant_map = {
+            't1': 't1dest',
+            't2': 't2dest',
+        }
+        nc._deploy_flavors(flavors, tenant_map)
+
+        for f in flavors:
+            self.assertTrue('id' in flavors[f]['meta'])
+            self.assertEqual(flavors[f]['meta']['id'], f)
+
+    def test_flavor_is_not_created_if_already_exists_on_dest(self):
+        existing_flavor = mock.Mock()
+        existing_flavor.id = 'existing-id'
+        existing_flavor.name = 'existing-name'
+
+        flavors = {
+            existing_flavor.id: {
+                'flavor': {
+                    'is_public': True,
+                    'name': existing_flavor.name,
+                    'tenants': []
+                },
+                'meta': {}
+            }
+        }
+
+        config = mock.Mock()
+        cloud = mock.MagicMock()
+        cloud.position = 'dst'
+
+        nc = nova_compute.NovaCompute(config, cloud)
+        nc._create_flavor_if_not_exists = mock.Mock()
+        nc.get_flavor_list = mock.Mock()
+        nc.get_flavor_list.return_value = [existing_flavor]
+        nc._deploy_flavors(flavors, tenant_map={})
+
+        assert not nc._create_flavor_if_not_exists.called
+
+    def test_access_not_updated_for_public_flavors(self):
+        flavors = {
+            'flavor1': {
+                'flavor': {
+                    'is_public': True,
+                    'name': 'flavor1',
+                    'tenants': []
+                },
+                'meta': {}
+            }
+        }
+        tenant_map = {}
+        config = mock.Mock()
+        cloud = mock.MagicMock()
+        cloud.position = 'dst'
+
+        nc = nova_compute.NovaCompute(config, cloud)
+        nc._create_flavor_if_not_exists = mock.Mock()
+        nc._add_flavor_access_for_tenants = mock.Mock()
+        nc.get_flavor_list = mock.Mock()
+        nc.get_flavor_list.return_value = []
+
+        nc._deploy_flavors(flavors, tenant_map)
+
+        assert not nc._add_flavor_access_for_tenants.called
+
+    def test_access_list_is_updated_for_non_public_flavors(self):
+        flavors = {
+            'flavor1': {
+                'flavor': {
+                    'is_public': False,
+                    'name': 'flavor1',
+                    'tenants': []
+                },
+                'meta': {}
+            }
+        }
+        tenant_map = {}
+        config = mock.Mock()
+        cloud = mock.MagicMock()
+        cloud.position = 'dst'
+
+        nc = nova_compute.NovaCompute(config, cloud)
+        nc._create_flavor_if_not_exists = mock.Mock()
+        nc._add_flavor_access_for_tenants = mock.Mock()
+        nc.get_flavor_list = mock.Mock()
+        nc.get_flavor_list.return_value = []
+
+        nc._deploy_flavors(flavors, tenant_map)
+
+        assert nc._add_flavor_access_for_tenants.called

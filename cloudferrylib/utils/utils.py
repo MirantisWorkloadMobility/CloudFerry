@@ -86,6 +86,7 @@ IMAGES_TYPE = 'images'
 IMAGE_BODY = 'image'
 
 IDENTITY_RESOURCE = 'identity'
+TENANTS_TYPE = 'tenants'
 IGNORE = 'ignore'
 
 META_INFO = 'meta'
@@ -191,7 +192,6 @@ class GeneratorPassword:
         return self.__generate_password()
 
     def __generate_password(self):
-        random.seed = (os.urandom(1024))
         return ''.join(random.choice(self.chars) for i in range(self.length))
 
 
@@ -482,7 +482,7 @@ def get_ext_ip(ext_cidr, init_host, compute_host, ssh_user):
 
 
 def check_file(file_path):
-    return os.path.isfile(file_path)
+    return file_path is not None and os.path.isfile(file_path)
 
 
 def read_yaml_file(yaml_file_path):
@@ -494,7 +494,7 @@ def read_yaml_file(yaml_file_path):
 
 def write_yaml_file(file_name, content):
     with open(file_name, 'w') as yfile:
-        yaml.dump(content, yfile)
+        yaml.safe_dump(content, yfile)
 
 
 def timer(func, *args, **kwargs):
@@ -512,16 +512,3 @@ def import_class_by_string(name):
     for comp in module[1:]:
         mod = getattr(mod, comp)
     return getattr(mod, class_name)
-
-
-def get_remote_file_size(host, file_path, ssh_user, ssh_sudo_password):
-    """ Return file size in bytes on the remote host.
-
-    :param host: Remote host,
-    :param file_path: Full file path,
-    :return: File size in bytes.
-    """
-
-    with settings(host_string=host, user=ssh_user):
-        size = run('stat --printf="%s" {}'.format(file_path))
-        return int(size)

@@ -90,8 +90,6 @@ class TransportInstance(action.Action):
         dst_compute = dst_cloud.resources[COMPUTE]
 
         new_ids = dst_compute.deploy(info)
-        for i in new_ids.iterkeys():
-            dst_compute.wait_for_status(i, 'active')
         new_info = dst_compute.read_info(search_opts={'id': new_ids.keys()})
         for i in new_ids.iterkeys():
             dst_compute.change_status('shutoff', instance_id=i)
@@ -101,6 +99,8 @@ class TransportInstance(action.Action):
 
             new_instance['old_id'] = old_id
             new_instance['meta'] = old_instance['meta']
+            new_instance['meta']['source_status'] = \
+                old_instance['instance']['status']
             new_instance[utl.INSTANCE_BODY]['key_name'] = \
                 old_instance[utl.INSTANCE_BODY]['key_name']
         info = self.prepare_ephemeral_drv(info, new_info, new_ids)

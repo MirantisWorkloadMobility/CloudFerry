@@ -27,6 +27,10 @@ LOG = utils.get_log(__name__)
 class Grouping(object):
     def __init__(self, config, group_file, cloud_id):
         self.config = config
+        if group_file is None:
+            message = "Grouping config is not provided."
+            LOG.error(message)
+            raise ValueError(message)
         self.group_config = utils.read_yaml_file(group_file)
         resources = {'identity': keystone.KeystoneIdentity,
                      'network': neutron.NeutronNetwork,
@@ -86,14 +90,20 @@ class Grouping(object):
     def _group_nested_network(self, instances_list=None):
         groups = {}
 
-        network_list = self.network.get_networks_list()
         search_list = (instances_list if instances_list else
                        self.compute.get_instances_list(
                            search_opts={"all_tenants": True}))
-        for network in network_list:
-            LOG.info('Processing network %s', network['name'])
-            groups[str(network['name'])] = [vm for vm in search_list
-                                            if network['name'] in vm.networks]
+        for instance in search_list:
+            LOG.info('Processing instance %s', instance.name)
+            for (network_name, network_ips) in instance.networks.items():
+                network = self.network.get_network({'ip': network_ips[0]},
+                                                   instance.tenant_id,
+                                                   True)
+                network_id = network['id']
+                if network_id in groups:
+                    groups[network_id].append(instance)
+                else:
+                    groups[network_id] = [instance]
 
         return groups
 

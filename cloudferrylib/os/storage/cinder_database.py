@@ -16,7 +16,6 @@
 import jsondate
 from cinderclient.v1 import client as cinder_client
 from cloudferrylib.utils import utils as utl
-from cloudferrylib.utils import mysql_connector
 from cloudferrylib.os.storage import cinder_storage
 
 CINDER_VOLUME = "cinder-volume"
@@ -27,6 +26,7 @@ TENANT_ID = 'tenant_id'
 USER_ID = 'user_id'
 DELETED = 'deleted'
 HOST = 'host'
+IGNORED_TBL_LIST = ('quota_usages')
 
 
 class CinderStorage(cinder_storage.CinderStorage):
@@ -44,17 +44,9 @@ class CinderStorage(cinder_storage.CinderStorage):
     def __init__(self, config, cloud):
         self.config = config
         self.cloud = cloud
+        self.filter_tenant_id = None
         self.identity_client = cloud.resources['identity']
-        self.cinder_client = self.proxy(self.get_client(config), config)
-        if not hasattr(cloud.config, cloud.position + '_storage'):
-            LOG.debug('running on default mysql settings')
-            self.connector = mysql_connector.MysqlConnector(
-                self.config.mysql, 'cinder')
-        else:
-            LOG.debug('running on custom mysql settings')
-            settings = getattr(cloud.config, cloud.position + '_storage')
-            self.connector = mysql_connector.MysqlConnector(
-                settings, settings.database_name)
+        self.mysql_connector = self.get_db_connection()
 
         # FIXME This class holds logic for all these tables. These must be
         # split into separate classes
@@ -78,26 +70,39 @@ class CinderStorage(cinder_storage.CinderStorage):
             params.cloud.tenant,
             params.cloud.auth_url)
 
-    def _update_tenant_names(self, result, tenant_id_key):
-        for entry in result:
-            tenant_name = self.identity_client.try_get_tenant_name_by_id(
-                entry[tenant_id_key], self.config.cloud.tenant)
+    def _check_update_tenant_names(self, entry, tenant_id_key):
+        tenant_id = entry[tenant_id_key]
+        if self.filter_tenant_id and (tenant_id != self.filter_tenant_id):
+            return False
+        tenant_name = self.identity_client.try_get_tenant_name_by_id(
+            tenant_id, self.config.cloud.tenant)
+        if self.table in IGNORED_TBL_LIST:
+            tmp_tenant_id = self.identity_client.get_tenant_id_by_name(
+                tenant_name)
+        else:
+            tmp_tenant_id = tenant_id
+        if tmp_tenant_id == tenant_id:
             entry[tenant_id_key] = tenant_name
+            return True
+        else:
+            LOG.debug('Ignored missed tenant {}'.format(tenant_id))
+            return False
 
     def list_of_dicts_for_table(self, table):
         """ Performs SQL query and returns rows as dict """
         # ignore deleted and errored volumes
         sql = ("SELECT * from {table}").format(table=table)
-        query = self.connector.execute(sql)
+        query = self.mysql_connector.execute(sql)
         column_names = query.keys()
         result = [dict(zip(column_names, row)) for row in query]
+        self.table = table
         # check if result has "deleted" column
         if DELETED in column_names:
             result = filter(lambda a: a.get(DELETED) == 0, result)
         if PROJECT_ID in column_names:
-            self._update_tenant_names(result, PROJECT_ID)
+            result = filter(lambda e: self._check_update_tenant_names(e, PROJECT_ID), result)
         if TENANT_ID in column_names:
-            self._update_tenant_names(result, TENANT_ID)
+            result = filter(lambda e: self._check_update_tenant_names(e, TENANT_ID), result)
         if STATUS in column_names:
             result = filter(lambda e: 'error' not in e[STATUS], result)
         if USER_ID in column_names:
@@ -106,8 +111,11 @@ class CinderStorage(cinder_storage.CinderStorage):
                     entry[USER_ID], default=self.config.cloud.user)
         return result
 
-    def read_db_info(self):
+    def read_db_info(self, **kwargs):
         """ Returns serialized data from database """
+        if kwargs.get('tenant_id'):
+            self.filter_tenant_id = kwargs['tenant_id'][0]
+
         return jsondate.dumps(
             {i: self.list_of_dicts_for_table(i) for i in self.list_of_tables})
 
@@ -183,29 +191,9 @@ class CinderStorage(cinder_storage.CinderStorage):
             LOG.debug(query)
             cursor.executemany(query, [i.values() for i in entries])
 
-        def fix_entries(table_list_of_dicts):
-            # this function corrects entries to be injected to db
-            # because we change src tenant-ids for tenant-names
-            # to get correct dst tenant-ids by name
-            for entry in table_list_of_dicts:
-                if PROJECT_ID in entry:
-                    entry[PROJECT_ID] = (
-                        self.identity_client.get_tenant_by_name(
-                            entry[PROJECT_ID]).id)
-                if TENANT_ID in entry:
-                    entry[TENANT_ID] = (
-                        self.identity_client.get_tenant_by_name(
-                            entry[TENANT_ID]).id)
-                if USER_ID in entry:
-                    entry[USER_ID] = (
-                        self.identity_client.keystone_client.users.find(
-                            username=entry[USER_ID]).id)
-                if HOST in entry:
-                    entry[HOST] = self.get_volume_host()
-
         # create raw connection to db driver to get the most awesome features
-        fix_entries(table_list_of_dicts)
-        sql_engine = self.connector.get_engine()
+        self.fix_entries(table_list_of_dicts, table_name)
+        sql_engine = self.mysql_connector.get_engine()
         connection = sql_engine.raw_connection()
         cursor = connection.cursor(dictionary=True)
         primary_key, auto_increment = get_key_and_auto_increment(
@@ -220,6 +208,35 @@ class CinderStorage(cinder_storage.CinderStorage):
         cursor.close()
         connection.commit()
         connection.close()
+
+    def fix_entries(self, table_list_of_dicts, table_name):
+        """ Fix entries for Cinder Database.
+
+        This method corrects entries to be injected to the database because we
+        change SRC tenant-ids for tenant-names to get correct DST tenant-ids by
+        names.
+
+        :param table_list_of_dicts: list with database entries
+        :param table_name: name of the database table
+        :rtype: None
+        """
+
+        for entry in table_list_of_dicts:
+            if PROJECT_ID in entry:
+                entry[PROJECT_ID] = (
+                    self.identity_client.get_tenant_by_name(
+                        entry[PROJECT_ID]).id)
+            if TENANT_ID in entry:
+                entry[TENANT_ID] = (
+                    self.identity_client.get_tenant_by_name(
+                        entry[TENANT_ID]).id)
+            if USER_ID in entry:
+                user = self.identity_client.try_get_user_by_name(
+                    username=entry[USER_ID],
+                    default=self.config.cloud.user)
+                entry[USER_ID] = user.id
+            if HOST in entry:
+                entry[HOST] = self.get_volume_host()
 
     def deploy(self, data):
         """ Reads serialized data and writes it to database """

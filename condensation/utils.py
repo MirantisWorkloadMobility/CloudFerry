@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import json
-from cfglib import CONF
 import yaml
+import cfglib
 
 
 def read_file(path):
@@ -26,7 +26,7 @@ def read_file(path):
     extension = path.split(".")[-1]
 
     # check if extension is json or yml
-    extension_map = {"json": json, "yml": yaml}
+    extension_map = {"json": json, "yml": yaml, "yaml": yaml}
     if extension not in extension_map:
         raise RuntimeError(
             "File extension of {path} is not yaml/json".format(path=path))
@@ -36,10 +36,12 @@ def read_file(path):
         return extension_map.get(extension).load(descriptor)
 
 
-def read_initial_state():
-    nova = read_file(CONF.condense.nova_file)
-    flavors = nova.get("flavors")
-    vms = nova.get("vms")
-    return (read_file(CONF.condense.node_file),
-            flavors, vms,
-            read_file(CONF.condense.group_file))
+def store_condense_data(flavors, nodes, vms):
+    files = {
+        cfglib.CONF.condense.flavors_file: flavors,
+        cfglib.CONF.condense.vms_file: vms,
+        cfglib.CONF.condense.nodes_file: nodes
+    }
+    for f in files:
+        with open(f, 'w') as store:
+            store.write(json.dumps(files[f]))

@@ -23,8 +23,10 @@ from fabric.api import run
 from fabric.api import settings
 
 from glanceclient import client as glance_client
+from glanceclient import exc
 from glanceclient.v1.images import CREATE_PARAMS
 
+from cloudferrylib.base import exception
 from cloudferrylib.base import image
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import file_like_proxy
@@ -46,9 +48,15 @@ class GlanceImage(image.Image):
         self.host = config.cloud.host
         self.cloud = cloud
         self.identity_client = cloud.resources['identity']
+        self.filter_tenant_id = None
+        self.filter_image = []
         # get mysql settings
-        self.glance_client = self.proxy(self.get_client(), config)
+        self.mysql_connector = self.get_db_connection()
         super(GlanceImage, self).__init__(config)
+
+    @property
+    def glance_client(self):
+        return self.proxy(self.get_client(), self.config)
 
     def get_db_connection(self):
         if not hasattr(
@@ -87,10 +95,33 @@ class GlanceImage(image.Image):
             token=self.identity_client.get_auth_token_from_user())
 
     def get_image_list(self):
+        # let's get all public images and all tenant's images
+        get_img_list = self.glance_client.images.list
+        if self.cloud.position == 'src' and self.filter_tenant_id:
+            image_list = []
+            # getting images if tenant is owner
+            filters = {'is_public': None, 'owner': self.filter_tenant_id}
+            for img in get_img_list(filters=filters):
+                LOG.debug("append tenant's image ID {}".format(img.id))
+                image_list.append(img)
+            filters = {'is_public': None}
+            img_list = get_img_list(filters=filters)
+            # getting images if tenant is member
+            for img in self.glance_client.image_members.list(member=self.filter_tenant_id):
+                for i in img_list:
+                    if i.id == img.image_id:
+                        LOG.debug("append image(by member) ID {}".format(i.id))
+                        image_list.append(i)
+            # getting public images
+            for img in get_img_list(filters=filters):
+                if img.is_public or (img.id in self.filter_image):
+                    LOG.debug("append public image ID {}".format(img.id))
+                    image_list.append(img)
+            return list(set(image_list))
         # by some reason - guys from community decided to create that strange
         # option to get images of all tenants
-        filters = {"is_public": None} if self.config.migrate.all_images else {}
-        return self.glance_client.images.list(filters=filters)
+        filters = {"is_public": None}
+        return get_img_list(filters=filters)
 
     def create_image(self, **kwargs):
         return self.glance_client.images.create(**kwargs)
@@ -126,7 +157,10 @@ class GlanceImage(image.Image):
         return self.get_image_by_id(image_id).status
 
     def get_ref_image(self, image_id):
-        return self.glance_client.images.data(image_id)._resp
+        try:
+            return self.glance_client.images.data(image_id)._resp
+        except exc.HTTPInternalServerError:
+            raise exception.ImageDownloadError
 
     def get_image_checksum(self, image_id):
         return self.get_image_by_id(image_id).checksum
@@ -156,11 +190,10 @@ class GlanceImage(image.Image):
         if resource.is_snapshot(glance_image):
             # for snapshots we need to write snapshot username to namespace
             # to map it later to new user id
-            user_ids = [i.id for i in keystone.keystone_client.users.list()]
             user_id = gl_image["properties"].get("user_id")
-            if user_id in user_ids:
-                gl_image["properties"]["user_name"] = \
-                    keystone.keystone_client.users.get(user_id).name
+            usr = keystone.try_get_user_by_id(user_id=user_id)
+            if usr:
+                gl_image["properties"]["user_name"] = usr.name
         return gl_image
 
     def is_snapshot(self, img):
@@ -171,21 +204,21 @@ class GlanceImage(image.Image):
     def get_tags(self):
         return {}
 
-    def get_members(self):
+    def get_members(self, images):
         # members structure {image_id: {tenant_name: can_share}}
         result = {}
 
-        for img in self.get_image_list():
-            for entry in self.glance_client.image_members.list(image=img.id):
-                if img.id not in result:
-                    result[img.id] = {}
+        for img in images:
+            for entry in self.glance_client.image_members.list(image=img):
+                if img not in result:
+                    result[img] = {}
 
                 # change tenant_id to tenant_name
                 tenant_name = self.identity_client.try_get_tenant_name_by_id(
                     entry.member_id,
                     default=self.config.cloud.tenant)
 
-                result[img.id][tenant_name] = entry.can_share
+                result[img][tenant_name] = entry.can_share
         return result
 
     def create_member(self, image_id, tenant_name, can_share):
@@ -211,6 +244,9 @@ class GlanceImage(image.Image):
 
         info = {'images': {}}
 
+        if kwargs.get('tenant_id'):
+            self.filter_tenant_id = kwargs['tenant_id'][0]
+
         def image_valid(img, date):
             """ Check if image was updated recently """
             updated = datetime.datetime.strptime(
@@ -225,7 +261,8 @@ class GlanceImage(image.Image):
                     self.make_image_info(img, info)
 
         if kwargs.get('image_id'):
-            glance_image = self.get_image_by_id(kwargs['image_id'])
+            self.filter_image = kwargs['image_id']
+            glance_image = self.get_image_by_id(self.filter_image)
             info = self.make_image_info(glance_image, info)
 
         elif kwargs.get('image_name'):
@@ -233,7 +270,8 @@ class GlanceImage(image.Image):
             info = self.make_image_info(glance_image, info)
 
         elif kwargs.get('images_list'):
-            for im in kwargs['images_list']:
+            self.filter_image = kwargs['images_list']
+            for im in self.filter_image:
                 glance_image = self.get_image(im)
                 info = self.make_image_info(glance_image, info)
 
@@ -249,7 +287,7 @@ class GlanceImage(image.Image):
 
         info.update({
             "tags": self.get_tags(),
-            "members": self.get_members()
+            "members": self.get_members(info['images'])
         })
 
         return info
@@ -279,6 +317,10 @@ class GlanceImage(image.Image):
         migrate_images_list = []
         delete_container_format, delete_disk_format = [], []
         empty_image_list = {}
+
+        # List for obsolete/broken images IDs, that will not be migrated
+        obsolete_images_ids_list = []
+
         for image_id_src, gl_image in info['images'].iteritems():
             if gl_image['image']:
                 dst_img_checksums = {x.checksum: x for x in
@@ -328,19 +370,29 @@ class GlanceImage(image.Image):
                 # glance-client cannot create image without this
                 # properties, we need to create them artificially
                 # and then - delete from database
-                migrate_image = self.create_image(
-                    name=gl_image['image']['name'],
-                    container_format=gl_image['image']['container_format'] or "bare",
-                    disk_format=gl_image['image']['disk_format'] or "qcow2",
-                    is_public=gl_image['image']['is_public'],
-                    protected=gl_image['image']['protected'],
-                    owner=gl_image['image']['owner'],
-                    size=gl_image['image']['size'],
-                    properties=gl_image['image']['properties'],
-                    data=file_like_proxy.FileLikeProxy(
-                        gl_image['image'],
-                        callback,
-                        self.config['migrate']['speed_limit']))
+
+                try:
+                    migrate_image = self.create_image(
+                        name=gl_image['image']['name'],
+                        container_format=(gl_image['image']['container_format']
+                                          or "bare"),
+                        disk_format=gl_image['image']['disk_format'] or "qcow2",
+                        is_public=gl_image['image']['is_public'],
+                        protected=gl_image['image']['protected'],
+                        owner=gl_image['image']['owner'],
+                        size=gl_image['image']['size'],
+                        properties=gl_image['image']['properties'],
+                        data=file_like_proxy.FileLikeProxy(
+                            gl_image['image'],
+                            callback,
+                            self.config['migrate']['speed_limit']))
+                except exception.ImageDownloadError:
+                    LOG.warning("Unable to reach image's data due to "
+                                "Glance HTTPInternalServerError. Skipping "
+                                "image: (id = %s)", gl_image["image"]["id"])
+                    obsolete_images_ids_list.append(gl_image["image"]["id"])
+                    continue
+
                 migrate_images_list.append((migrate_image, meta))
                 if not gl_image["image"]["container_format"]:
                     delete_container_format.append(migrate_image.id)
@@ -348,8 +400,12 @@ class GlanceImage(image.Image):
                     delete_disk_format.append(migrate_image.id)
             else:
                 empty_image_list[image_id_src] = gl_image
+
+        # Remove obsolete/broken images from info
+        [info['images'].pop(img_id) for img_id in obsolete_images_ids_list]
+
         if migrate_images_list:
-            im_name_list = [(im.name, meta) for (im, meta) in
+            im_name_list = [(im.name, tmp_meta) for (im, tmp_meta) in
                             migrate_images_list]
             new_info = self.read_info(images_list_meta=im_name_list)
         new_info['images'].update(empty_image_list)
@@ -359,7 +415,8 @@ class GlanceImage(image.Image):
         dst_img_checksums = {x.checksum: x.id for x in self.get_image_list()}
         for image_id_src, gl_image in info['images'].iteritems():
             cur_image = gl_image["image"]
-            image_ids_map[cur_image["id"]] = dst_img_checksums[cur_image["checksum"]]
+            image_ids_map[cur_image["id"]] = \
+                dst_img_checksums[cur_image["checksum"]]
         LOG.debug("deploying image members")
         for image_id, data in info.get("members", {}).items():
             for tenant_name, can_share in data.items():
@@ -384,7 +441,7 @@ class GlanceImage(image.Image):
                        field=field,
                        id_list=",".join(
                            [" '{0}' ".format(i) for i in list_of_ids])))
-        self.get_db_connection().execute(command)
+        self.mysql_connector.execute(command)
 
     def wait_for_status(self, id_res, status):
         while self.glance_client.images.get(id_res).status != status:

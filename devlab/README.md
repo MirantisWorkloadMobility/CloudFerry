@@ -12,6 +12,7 @@ Vagrant sets up 5 nodes:
  - Openstack Grizzly compute node on Ubuntu 12.04;
  - Openstack Icehouse all-in-one node on Ubuntu 12.04;
  - Openstack Icehouse compute node on Ubuntu 12.04;
+ - Openstack Juno all-in-one node on Ubuntu 14.04;
  - CloudFerry node on Ubuntu 12.04
    - Creates a user with the same name as the one running vagrant;
    - Mounts user's $HOME in VMs $HOME so that user has familiar working
@@ -24,8 +25,8 @@ options:
 
  - `public_key_path` -- public key CloudFerry uses to ssh into SRC and DST
    migration environments;
- - `cloudferry_path` -- Path to CloudFerry sources. If sources are not present,
-   this is the path where the sources will be cloned to.
+ - `ENV['VIRTUALBOX_NETWORK_NAME']` -- Optional variable which allows you to
+   specify private virtual vbox network.
 
 ## Prerequisites
 
@@ -46,6 +47,10 @@ options:
  4. Start vagrant
     ```
     vagrant up
+    ```
+    or
+    ```
+    vagrant up grizzly juno
     ```
  5. At some point vagrant will ask you for the password, this is needed to
     configure NFS export on your host system.

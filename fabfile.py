@@ -13,22 +13,33 @@
 # limitations under the License.
 
 from fabric.api import task, env
+
+import cfglib
 from cloudferrylib.scheduler.namespace import Namespace
 from cloudferrylib.scheduler.scheduler import Scheduler
-import cfglib
-from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import utils
 from cloudferrylib.scheduler.scenario import Scenario
+
 from cloud import cloud_ferry
 from cloud import grouping
-from dry_run import chain
+
 from condensation import process
-from condensation.scripts import nova_collector as nova_collector_module
+from condensation import utils as condense_utils
+from condensation.action import get_freed_nodes
+from condensation.scripts import nova_collector
+
+import data_storage
+from dry_run import chain
+from evacuation import evacuation_chain
 from make_filters import make_filters
+
 
 env.forward_agent = True
 env.user = 'root'
-LOG = utl.get_log(__name__)
+LOG = utils.get_log(__name__)
+
+
+DEFAULT_FILTERS_FILES = 'configs/filters'
 
 
 @task
@@ -37,7 +48,7 @@ def migrate(name_config=None, name_instance=None, debug=False):
         :name_config - name of config yaml-file, example 'config.yaml'
     """
     if debug:
-        utl.configure_logging("DEBUG")
+        utils.configure_logging("DEBUG")
     cfglib.collector_configs_plugins()
     cfglib.init_config(name_config)
     utils.init_singletones(cfglib.CONF)
@@ -50,15 +61,39 @@ def migrate(name_config=None, name_instance=None, debug=False):
 @task
 def get_info(name_config, debug=False):
     if debug:
-        utl.configure_logging("DEBUG")
+        utils.configure_logging("DEBUG")
     LOG.info("Init getting information")
     namespace = Namespace({'name_config': name_config})
-    scheduler = Scheduler(namespace)
+    Scheduler(namespace)
 
 
 @task
 def dry_run():
     chain.process_test_chain()
+
+
+@task
+def evacuate(name_config=None, debug=False, iteration=False):
+    if debug:
+        utils.configure_logging("DEBUG")
+
+    try:
+        iteration = int(iteration)
+    except ValueError:
+        LOG.error("Invalid value provided as 'iteration' argument, it must be "
+                  "integer")
+        return
+    cfglib.collector_configs_plugins()
+    cfglib.init_config(name_config)
+    utils.init_singletones(cfglib.CONF)
+    env.key_filename = cfglib.CONF.migrate.key_filename
+    cloud = cloud_ferry.CloudFerry(cfglib.CONF)
+    LOG.info("running evacuation")
+    evacuation_chain.process_chain(cloud, iteration)
+
+    LOG.info("Following nodes will be freed once in-cloud migration finishes, "
+             "and can be moved from source to destination: %s",
+             get_freed_nodes(iteration))
 
 
 @task
@@ -81,24 +116,76 @@ def get_groups(name_config=None, group_file=None, cloud_id='src',
 
 
 @task
-def condense(name_config=None, debug=False):
+def condense(config=None, vm_grouping_config=None, debug=False):
+    """
+    When migration is done in-place (there's no spare hardware), cloud
+    migration admin would want to free as many hardware nodes as possible. This
+    task handles that case by analyzing source cloud and rearranging source
+    cloud load and generating migration scenario.
+
+    Condensation is a process of:
+     1. Retrieving groups of connected VMs (see `get_groups`)
+     2. Rearrangement of source cloud load in order to free up as many
+        hardware nodes as possible.
+     3. Generation filter files for CloudFerry, which only contain groups of
+        VMs identified in step 1 in the order identified in step 2.
+
+    Method arguments:
+     :config: - path to CloudFerry configuration file (based on
+                `configs/config.ini`)
+     :vm_grouping_config: - path to grouping config file (based on
+                `configs/groups.yaml`)
+     :debug: - boolean value, enables debugging messages if set to `True`
+    """
     if debug:
-        utl.configure_logging("DEBUG")
+        utils.configure_logging("DEBUG")
     cfglib.collector_configs_plugins()
-    cfglib.init_config(name_config)
-    process.process()
+    cfglib.init_config(config)
+    data_storage.check_redis_config()
+
+    LOG.info("Retrieving flavors, VMs and nodes from SRC cloud")
+    flavors, vms, nodes = nova_collector.get_flavors_vms_and_nodes(cfglib.CONF)
+
+    if cfglib.CONF.condense.keep_interim_data:
+        condense_utils.store_condense_data(flavors, nodes, vms)
+
+    LOG.info("Retrieving groups of VMs")
+
+    # get_groups stores results in group_file_path config
+    get_groups(config, vm_grouping_config)
+    groups = condense_utils.read_file(cfglib.CONF.migrate.group_file_path)
+    if groups is None:
+        message = ("Grouping information is missing. Make sure you have "
+                   "grouping file defined in config.")
+
+        LOG.critical(message)
+        raise RuntimeError(message)
+
+    LOG.info("Generating migration schedule based on grouping rules")
+    process.process(nodes=nodes, flavors=flavors, vms=vms, groups=groups)
+
+    LOG.info("Starting generation of filter files for migration")
+    create_filters(config)
+
+    LOG.info("Migration schedule generated. You may now want to start "
+             "evacuation job: 'fab evacuate'")
+
+    LOG.info("Condensation process finished. Checkout filters file: %s.",
+             DEFAULT_FILTERS_FILES)
 
 
 @task
-def nova_collector(name_config=None):
+def get_condensation_info(name_config=None):
     cfglib.collector_configs_plugins()
     cfglib.init_config(name_config)
-    nova_collector_module.run_it(cfglib.CONF)
+    nova_collector.run_it(cfglib.CONF)
 
 
 @task
-def create_filters(name_config=None, filter_folder='configs/filters',
+def create_filters(name_config=None, filter_folder=DEFAULT_FILTERS_FILES,
                    images_date='2000-01-01'):
+    """Generates filter files for CloudFerry based on the schedule prepared by
+    condensation/grouping."""
     cfglib.collector_configs_plugins()
     cfglib.init_config(name_config)
     make_filters.make(filter_folder, images_date)

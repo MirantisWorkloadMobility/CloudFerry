@@ -14,187 +14,189 @@
 
 
 import os
-
-from fabric.api import env
-from fabric.api import hide
-from fabric.api import run
-from fabric.api import settings
+import math
 
 from cloudferrylib.utils import driver_transporter
+from cloudferrylib.utils import files
+from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import utils
 
 
 LOG = utils.get_log(__name__)
 
 
-# Command templates
-dd_src_command = 'dd if=%s of=%slv_part_%s skip=%s bs=1M count=%s'
-dd_dst_command = 'dd if=%slv_part_%s of=%s seek=%s bs=1M count=%s'
-md5_command = "md5sum %slv_part_%s"
-gzip_command = "gzip -f %slv_part_%s"
-unzip_command = "gzip -f -d %slv_part_%s.gz"
-scp_command = 'scp -o StrictHostKeyChecking=no %slv_part_%s.gz %s@%s:%s'
-rm_command = 'rm -rf %slv_part_%s*'
-ssh_command = "ssh -o StrictHostKeyChecking=no %s@%s '%s'"
+class FileCopyFailure(RuntimeError):
+    pass
 
 
-class SSHChunksTransfer(driver_transporter.DriverTransporter):
+def splitter(total_size, block_size):
+    """Splits :total_size into :block_size smaller chunks
+
+    :returns generator with (start, end) tuple"""
+
+    start = 0
+    end = start
+    while start <= total_size:
+        end += block_size
+        if end > total_size:
+            end = total_size
+        yield start, end
+        start = end + 1
+
+
+def remote_file_size(runner, path):
+    return int(runner.run('stat --printf="%s" {path}'.format(path=path)))
+
+
+def remote_file_size_mb(runner, path):
+    return int(math.ceil(remote_file_size(runner, path) / (1024.0 * 1024.0)))
+
+
+def remote_md5_sum(runner, path):
+    get_md5 = "md5sum {file}".format(file=path)
+    md5 = str(runner.run(get_md5))
+    return md5.split(' ')[0]
+
+
+def remote_gzip(runner, path):
+    gzip_file = "gzip -f {split}".format(split=path)
+    runner.run(gzip_file)
+    zipped_file_name = path + ".gz"
+    return zipped_file_name
+
+
+def remote_scp(runner, dst_user, src_path, dst_host, dst_path):
+    scp_file_to_dest = "scp -o {opts} {file} {user}@{host}:{path}".format(
+        opts='StrictHostKeyChecking=no',
+        file=src_path,
+        user=dst_user,
+        path=dst_path,
+        host=dst_host)
+    runner.run(scp_file_to_dest)
+
+
+def verified_file_copy(src_runner, dst_runner, dst_user, src_path, dst_path,
+                       dst_host, num_retries):
+    """
+    Copies :src_path to :dst_path
+
+    Retries :num_retries until MD5 matches or copy ends without errors.
+    """
+    copy_failed = True
+    attempt = 0
+    while copy_failed and attempt < num_retries+1:
+        attempt += 1
+        try:
+            LOG.info("Copying file '%s' to '%s', attempt '%d'",
+                     src_path, dst_host, attempt)
+            src_md5 = remote_md5_sum(src_runner, src_path)
+            remote_scp(src_runner, dst_user, src_path, dst_host, dst_path)
+            dst_md5 = remote_md5_sum(dst_runner, dst_path)
+
+            if src_md5 == dst_md5:
+                LOG.debug("File '%s' copy succeeded", src_path)
+                copy_failed = False
+        except remote_runner.RemoteExecutionError as e:
+            LOG.warning("Remote command execution failed: %s. Retrying", e)
+            rm_file = "rm -f {file}".format(file=dst_path)
+            dst_runner.run_ignoring_errors(rm_file)
+
+    if copy_failed:
+        raise FileCopyFailure("Unable to copy file '%s' to '%s' host",
+                              src_path, dst_host)
+
+
+def remote_split_file(runner, input, output, start, end):
+    split_file = ('dd if={input} of={output} skip={start} bs={block_size} '
+                  'count={blocks_to_copy}').format(input=input, output=output,
+                                                   block_size='1M',
+                                                   start=start,
+                                                   blocks_to_copy=end-start)
+    runner.run(split_file)
+
+
+def remote_unzip(runner, path):
+    unzip = "gzip -f -d {file}".format(file=path)
+    runner.run(unzip)
+
+
+def remote_join_file(runner, dest_file, part, start, end):
+    join = ("dd if={part} of={dest} seek={start} bs={block_size} "
+            "count={blocks_to_copy}").format(part=part, dest=dest_file,
+                                             start=start,
+                                             block_size='1M',
+                                             blocks_to_copy=end-start)
+    runner.run(join)
+
+
+def remote_rm_file(runner, path):
+    rm = "rm -f {file}".format(file=path)
+    runner.run(rm)
+
+
+class CopyFilesBetweenComputeHosts(driver_transporter.DriverTransporter):
+    """Copies file splitting it into gzipped chunks.
+
+    If one chunk failed to copy, retries until succeeds or retry limit reached
+    """
+
     def transfer(self, data):
-        host_src = data['host_src']
-        host_dst = data['host_dst']
-        path_src = data['path_src']
-        path_dst = data['path_dst']
+        src_host = data['host_src']
+        src_path = data['path_src']
+        dst_host = data['host_dst']
+        dst_path = data['path_dst']
 
-        ssh_user_src = self.cfg.src.ssh_user
-        ssh_sudo_pass_src = self.cfg.src.ssh_sudo_password
+        src_user = self.cfg.src.ssh_user
+        dst_user = self.cfg.dst.ssh_user
+        block_size = self.cfg.migrate.ssh_chunk_size
+        num_retries = self.cfg.migrate.retry
+        src_password = self.cfg.src.ssh_sudo_password
+        dst_password = self.cfg.dst.ssh_sudo_password
 
-        ssh_user_dst = self.cfg.dst.ssh_user
-        ssh_sudo_pass_dst = self.cfg.dst.ssh_sudo_password
+        src_runner = remote_runner.RemoteRunner(src_host,
+                                                src_user,
+                                                password=src_password,
+                                                sudo=True)
+        dst_runner = remote_runner.RemoteRunner(dst_host,
+                                                dst_user,
+                                                password=dst_password,
+                                                sudo=True)
 
-        src_temp_dir = os.path.join(self.cfg.src.temp, '')
-        dst_temp_dir = os.path.join(self.cfg.dst.temp, '')
+        file_size = remote_file_size_mb(src_runner, src_path)
 
-        attempts_count = self.cfg.migrate.retry
-        part_size = self.cfg.migrate.ssh_chunk_size
+        with files.RemoteTempDir(src_runner) as src_temp_dir,\
+                files.RemoteTempDir(dst_runner) as dst_temp_dir:
+            partial_files = []
 
-        part_count, part_modulo = self._calculate_parts_count(data)
+            src_md5 = remote_md5_sum(src_runner, src_path)
 
-        with settings(host_string=host_src,
-                      user=ssh_user_src,
-                      password=ssh_sudo_pass_src), utils.forward_agent(
-                env.key_filename):
-            for part in range(part_count):
-                success = 0  # marker of successful transport operation
-                attempt = 0  # number of retry
+            for i, (start, end) in enumerate(splitter(file_size, block_size)):
+                part = os.path.basename(src_path) + '.part{i}'.format(i=i)
+                part_path = os.path.join(src_temp_dir, part)
+                remote_split_file(src_runner, src_path, part_path,
+                                  start, end)
+                gzipped_path = remote_gzip(src_runner, part_path)
+                gzipped_filename = os.path.basename(gzipped_path)
+                dst_path = os.path.join(dst_temp_dir, gzipped_filename)
 
-                # Create chunk
-                if part == range(part_count)[0]:
-                    # First chunk
-                    command = dd_src_command % (path_src,
-                                                src_temp_dir,
-                                                part,
-                                                0,
-                                                part_size)
-                elif part == range(part_count)[-1] and part_modulo:
-                    # Last chunk
-                    command = dd_src_command % (path_src,
-                                                src_temp_dir,
-                                                part,
-                                                part * part_size,
-                                                part_modulo)
-                else:
-                    # All middle chunks
-                    command = dd_src_command % (path_src,
-                                                src_temp_dir,
-                                                part,
-                                                part * part_size,
-                                                part_size)
+                verified_file_copy(src_runner, dst_runner, dst_user,
+                                   gzipped_path, dst_path, dst_host,
+                                   num_retries)
 
-                run(command)
+                remote_unzip(dst_runner, dst_path)
+                partial_files.append(os.path.join(dst_temp_dir, part))
 
-                # Calculate source chunk check md5 checksum
-                md5_src_out = run(md5_command % (src_temp_dir, part))
-                md5_src = md5_src_out.split()[-2]
+            for i, (start, end) in enumerate(splitter(file_size, block_size)):
+                remote_join_file(dst_runner, dst_path, partial_files[i],
+                                 start, end)
 
-                # Compress chunk
-                run(gzip_command % (src_temp_dir, part))
+            dst_md5 = remote_md5_sum(dst_runner, dst_path)
 
-                while success == 0:
-                    # Transport chunk to destination
-                    run(scp_command % (src_temp_dir,
-                                       part,
-                                       ssh_user_dst,
-                                       host_dst,
-                                       dst_temp_dir))
-
-                    # Unzip chunk (TODO: check exit code; if != 0: retry)
-                    run(ssh_command %
-                        (ssh_user_dst, host_dst, unzip_command % (dst_temp_dir,
-                                                                  part)))
-
-                    # Calculate md5sum on destination
-                    md5_dst_out = run(ssh_command %
-                                      (ssh_user_dst, host_dst,
-                                       md5_command % (dst_temp_dir, part)))
-                    md5_dst = md5_dst_out.split()[-2]
-
-                    # Compare source and destination md5 sums;
-                    # If not equal - retry with 'attempts_count' times
-                    if md5_src == md5_dst:
-                        success = 1
-
-                    if not success:
-                        attempt += 1
-                        LOG.critical("Unable to transfer part %s of %s. "
-                                     "Retrying... Attempt %s from %s.",
-                                     part, path_src, attempt, attempts_count)
-                        if attempt == attempts_count:
-                            LOG.error("SSH chunks transfer of %s failed.",
-                                      path_src)
-                            break
-                            # TODO: save state:
-                            # chunks count, volume info, and all metadata info
-                            # with timestamp and reason, errors info, error
-                            # codes
-                        continue
-
-                    #  Write chunk on destination
-                    if part == range(part_count)[0]:
-                        command = dd_dst_command % (dst_temp_dir,
-                                                    part,
-                                                    path_dst,
-                                                    0,
-                                                    part_size)
-                    elif part == range(part_count)[-1] and part_modulo:
-                        command = dd_dst_command % (dst_temp_dir,
-                                                    part,
-                                                    path_dst,
-                                                    part * part_size,
-                                                    part_modulo)
-                    else:
-                        command = dd_dst_command % (dst_temp_dir,
-                                                    part,
-                                                    path_dst,
-                                                    part * part_size,
-                                                    part_size)
-                    with hide('running'):
-                        # Because of password
-                        run(ssh_command %
-                            (ssh_user_dst, host_dst,
-                             'echo %s | sudo -S %s' % (ssh_sudo_pass_dst,
-                                                       command)))
-
-                        LOG.info(
-                            'Running: %s', ssh_command %
-                            (ssh_user_dst, host_dst,
-                             'echo %s | sudo -S %s' % ('<password>', command)))
-
-                    # Delete used chunk from both servers
-                    run(rm_command % (src_temp_dir, part))
-                    run(ssh_command % (ssh_user_dst, host_dst, rm_command %
-                                       (dst_temp_dir, part)))
-
-    def _calculate_parts_count(self, data):
-        part_size = self.cfg.migrate.ssh_chunk_size
-
-        byte_size = data.get(
-            'byte_size',
-            utils.get_remote_file_size(data['host_src'],
-                                       data['path_src'],
-                                       self.cfg.src.ssh_user,
-                                       self.cfg.src.ssh_sudo_password))
-
-        mbyte_size = float(byte_size) / (1024 * 1024)
-        part_int = int(mbyte_size / part_size)
-        part_modulo = mbyte_size % part_size
-        part_modulo = (int(part_modulo)
-                       if mbyte_size > part_size
-                       else part_modulo)
-
-        # Calculate count of chunks
-        if not part_modulo:
-            part_count = part_int
-        else:
-            part_count = (part_int + 1)
-
-        return part_count, part_modulo
+            if src_md5 != dst_md5:
+                message = ("Error copying file from '{src_file}@{src_host}' "
+                           "to '{dst_file}@{dst_host}'").format(
+                    src_file=src_path, src_host=src_host, dst_file=dst_path,
+                    dst_host=dst_host)
+                LOG.error(message)
+                remote_rm_file(dst_runner, dst_path)
+                raise FileCopyFailure(message)

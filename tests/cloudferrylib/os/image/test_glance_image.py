@@ -29,10 +29,13 @@ FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
                                                    'host': '1.1.1.1',
                                                    }),
                              migrate=utils.ext_dict({'speed_limit': '10MB',
-                                                     'all_images': True,
                                                      'retry': '7',
                                                      'time_wait': 5}))
 
+
+class FakeUser():
+    def __init__(self):
+        self.name = 'fake_user_name'
 
 class GlanceImageTestCase(test.TestCase):
 
@@ -50,6 +53,9 @@ class GlanceImageTestCase(test.TestCase):
         self.identity_mock = mock.Mock()
         self.identity_mock.get_endpoint_by_service_type = mock.Mock(
             return_value="http://192.168.1.2:9696/v2")
+        fake_user = FakeUser()
+        self.identity_mock.try_get_user_by_id = mock.Mock(
+            return_value=fake_user)
         self.identity_mock.try_get_tenant_name_by_id = mock.Mock(
             return_value="fake_tenant_name")
         self.identity_mock.keystone_client.users.list = mock.Mock(
@@ -57,12 +63,13 @@ class GlanceImageTestCase(test.TestCase):
         self.image_mock = mock.Mock()
 
         self.fake_cloud = mock.Mock()
-        self.fake_cloud.mysql_connector = mock.Mock()
-        self.fake_cloud.position = "dst"
+        self.fake_cloud.position = 'dst'
 
         self.fake_cloud.resources = dict(identity=self.identity_mock,
                                          image=self.image_mock)
-        self.glance_image = GlanceImage(FAKE_CONFIG, self.fake_cloud)
+        with mock.patch(
+                'cloudferrylib.os.image.glance_image.mysql_connector'):
+            self.glance_image = GlanceImage(FAKE_CONFIG, self.fake_cloud)
 
         self.fake_image_1 = mock.Mock()
 
@@ -101,7 +108,7 @@ class GlanceImageTestCase(test.TestCase):
                                               'protected': False,
                                               'size': 1024,
                                               'resource': self.image_mock,
-                                              'properties': {}},
+                                              'properties': {'user_name': 'fake_user_name'}},
                                     'meta': {}}},
             'tags': {},
             'members': {}
@@ -125,7 +132,9 @@ class GlanceImageTestCase(test.TestCase):
         fake_images = [self.fake_image_1, self.fake_image_2]
         self.glance_mock_client().images.list.return_value = fake_images
 
-        self.assertEquals(fake_images, self.glance_image.get_image_list())
+        images_list = self.glance_image.get_image_list()
+        self.glance_mock_client().images.list.assert_called_once_with(filters={'is_public': None})
+        self.assertEquals(fake_images, images_list)
 
     def test_create_image(self):
         self.glance_image.create_image(name='fake_image_name',

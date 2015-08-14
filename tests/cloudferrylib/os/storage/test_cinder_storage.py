@@ -33,8 +33,7 @@ FAKE_CONFIG = utils.ext_dict(
                             'retry': '7',
                             'time_wait': 5,
                             'keep_volume_storage': False,
-                            'keep_volume_snapshots': False,
-                            'all_volumes': False}),
+                            'keep_volume_snapshots': False}),
     mysql=utils.ext_dict({'host': '1.1.1.1'}),
     storage=utils.ext_dict({'backend': 'ceph',
                             'rbd_pool': 'volumes',
@@ -54,13 +53,15 @@ class CinderStorageTestCase(test.TestCase):
         self.compute_mock = mock.Mock()
 
         self.fake_cloud = mock.Mock()
-        self.fake_cloud.mysql_connector = mock.Mock()
+        self.fake_cloud.position = 'src'
 
         self.fake_cloud.resources = dict(identity=self.identity_mock,
                                          compute=self.compute_mock)
 
-        self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG,
-                                                          self.fake_cloud)
+        with mock.patch(
+                'cloudferrylib.os.storage.cinder_storage.mysql_connector'):
+            self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG,
+                                                              self.fake_cloud)
 
         self.fake_volume_0 = mock.Mock()
         self.fake_volume_1 = mock.Mock()
@@ -82,9 +83,9 @@ class CinderStorageTestCase(test.TestCase):
         fake_volume_list = [self.fake_volume_0, self.fake_volume_1]
         self.mock_client().volumes.list.return_value = fake_volume_list
 
-        volumes_list = self.cinder_client.get_volumes_list()
+        volumes_list = self.cinder_client.get_volumes_list(search_opts=dict())
 
-        self.mock_client().volumes.list.assert_called_once_with(True, None)
+        self.mock_client().volumes.list.assert_called_once_with(True, dict(all_tenants=True))
         self.assertEqual(volumes_list, fake_volume_list)
 
     def test_create_volume(self):

@@ -16,9 +16,11 @@
 
 import mock
 
+from keystoneclient import exceptions
 from keystoneclient.v2_0 import client as keystone_client
 from oslotest import mockpatch
 
+import cfglib
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.utils import utils
 from tests import test
@@ -29,7 +31,7 @@ FAKE_CONFIG = utils.ext_dict(
                           'password': 'fake_password',
                           'tenant': 'fake_tenant',
                           'auth_url': 'http://1.1.1.1:35357/v2.0/',
-                          'service_tenant': 'services'}),
+                          'service_tenant': 'service'}),
     migrate=utils.ext_dict({'speed_limit': '10MB',
                             'retry': '7',
                             'time_wait': 5,
@@ -79,18 +81,28 @@ class KeystoneIdentityTestCase(test.TestCase):
         self.fake_role_1.name = 'role_name_1'
         self.fake_role_1.id = 'role_id_1'
 
-    def test_get_client(self):
-        self.mock_client().auth_ref = {'token': {'id': 'fake_id'}}
+        self.fake_src_keystone = mock.Mock()
+        self.fake_dst_keystone = mock.Mock()
+        self.fake_src_keystone.keystone_client.users.find.side_effect = (
+            self.mock_user_find)
+        self.fake_dst_keystone.keystone_client.users.find.side_effect = (
+            self.mock_user_find)
 
-        client = self.keystone_client.get_client()
+        cfglib.init_config()
+        cfglib.CONF.src.user = 'src_admin_user'
+        cfglib.CONF.dst.user = 'dst_admin_user'
 
-        mock_calls = [
-            mock.call(username='fake_user', tenant_name='fake_tenant',
-                      password='fake_password',
-                      auth_url='http://1.1.1.1:35357/v2.0/'),
-            mock.call(token='fake_id', endpoint='http://1.1.1.1:35357/v2.0/')]
-        self.mock_client.assert_has_calls(mock_calls, any_order=True)
-        self.assertEqual(self.mock_client(), client)
+        self.fake_src_admin_user = mock.Mock()
+        self.fake_dst_admin_user = mock.Mock()
+
+        self.fake_same_user = mock.Mock()
+        self.fake_same_user.id = 'fake_same_id'
+        self.fake_same_user.name = 'fake_same_name'
+
+    def test_get_client_generates_new_token(self):
+        client1 = self.keystone_client.keystone_client
+        client2 = self.keystone_client.keystone_client
+        self.assertFalse(client1 == client2)
 
     def test_get_tenants_list(self):
         fake_tenants_list = [self.fake_tenant_0, self.fake_tenant_1]
@@ -187,7 +199,7 @@ class KeystoneIdentityTestCase(test.TestCase):
 
     def test_auth_token_from_user(self):
         fake_auth_token = 'fake_auth_token'
-        self.mock_client().auth_token_from_user = fake_auth_token
+        self.mock_client().auth_token = fake_auth_token
 
         self.assertEquals(fake_auth_token,
                           self.keystone_client.get_auth_token_from_user())
@@ -288,3 +300,150 @@ class KeystoneIdentityTestCase(test.TestCase):
                           'id': role},
                  'meta': {}})
         return fake_info
+
+    def mock_user_find(self, id=None, name=None):
+        map_dict = {'user_id_0': self.fake_user_0,
+                    'user_name_1': self.fake_user_1,
+                    'fake_same_id': self.fake_same_user,
+                    'fake_same_name': self.fake_same_user,
+                    'src_admin_user_id': self.fake_src_admin_user,
+                    'dst_admin_user': self.fake_dst_admin_user}
+        key = id or name
+        try:
+            return map_dict[key]
+        except KeyError:
+            raise exceptions.NotFound
+
+    def test_get_dst_user_from_src_user_id_0(self):
+        """
+        fallback_to_admin   0
+        src_user            0
+        dst_user            0
+        """
+
+        user = keystone.get_dst_user_from_src_user_id(self.fake_src_keystone,
+                                                      self.fake_dst_keystone,
+                                                      'fake_user_id',
+                                                      fallback_to_admin=False)
+        self.assertIsNone(user)
+
+    def test_get_dst_user_from_src_user_id_1(self):
+        """
+        fallback_to_admin   0
+        src_user            0
+        dst_user            1
+        """
+
+        user = keystone.get_dst_user_from_src_user_id(self.fake_src_keystone,
+                                                      self.fake_dst_keystone,
+                                                      'user_id_1',
+                                                      fallback_to_admin=False)
+        self.assertIsNone(user)
+
+    def test_get_dst_user_from_src_user_id_2(self):
+        """
+        fallback_to_admin   0
+        src_user            1
+        dst_user            0
+        """
+
+        user = keystone.get_dst_user_from_src_user_id(self.fake_src_keystone,
+                                                      self.fake_dst_keystone,
+                                                      'user_id_0',
+                                                      fallback_to_admin=False)
+        self.assertIsNone(user)
+
+    def test_get_dst_user_from_src_user_id_3(self):
+        """
+        fallback_to_admin   0
+        src_user            1
+        dst_user            1
+        """
+
+        user = keystone.get_dst_user_from_src_user_id(self.fake_src_keystone,
+                                                      self.fake_dst_keystone,
+                                                      'fake_same_id',
+                                                      fallback_to_admin=False)
+        self.assertEquals(self.fake_same_user, user)
+
+    def test_get_dst_user_from_src_user_id_4(self):
+        """
+        fallback_to_admin   1
+        src_user            0
+        dst_user            0
+        """
+
+        user = keystone.get_dst_user_from_src_user_id(self.fake_src_keystone,
+                                                      self.fake_dst_keystone,
+                                                      'fake_user_id',
+                                                      fallback_to_admin=True)
+
+        self.assertEquals(self.fake_dst_admin_user, user)
+
+    def test_get_dst_user_from_src_user_id_5(self):
+        """
+        fallback_to_admin   1
+        src_user            0
+        dst_user            1
+        """
+
+        user = keystone.get_dst_user_from_src_user_id(self.fake_src_keystone,
+                                                      self.fake_dst_keystone,
+                                                      'user_id_1',
+                                                      fallback_to_admin=True)
+        self.assertEquals(self.fake_dst_admin_user, user)
+
+    def test_get_dst_user_from_src_user_id_6(self):
+        """
+        fallback_to_admin   1
+        src_user            1
+        dst_user            0
+        """
+
+        user = keystone.get_dst_user_from_src_user_id(self.fake_src_keystone,
+                                                      self.fake_dst_keystone,
+                                                      'user_id_0',
+                                                      fallback_to_admin=True)
+
+        self.assertEquals(self.fake_dst_admin_user, user)
+
+    def test_get_dst_user_from_src_user_id_7(self):
+        """
+        fallback_to_admin   1
+        src_user            1
+        dst_user            1
+        """
+
+        user = keystone.get_dst_user_from_src_user_id(self.fake_src_keystone,
+                                                      self.fake_dst_keystone,
+                                                      'fake_same_id',
+                                                      fallback_to_admin=True)
+        self.assertEquals(self.fake_same_user, user)
+
+
+class AddAdminToNonAdminTenantTestCase(test.TestCase):
+    def test_user_role_is_removed_on_scope_exit(self):
+        ksclient = mock.MagicMock()
+
+        with keystone.AddAdminUserToNonAdminTenant(ksclient, 'adm', 'tenant'):
+            pass
+
+        assert ksclient.roles.add_user_role.called
+        assert ksclient.roles.remove_user_role.called
+
+    def test_nothing_happens_if_admin_is_already_member_of_a_tenant(self):
+        ksclient = mock.MagicMock()
+        role_name = 'member'
+        member_role = mock.Mock()
+        member_role.name = role_name
+        ksclient.roles.roles_for_user.return_value = [member_role]
+        ksclient.roles.find.return_value = member_role
+
+        with keystone.AddAdminUserToNonAdminTenant(ksclient,
+                                                   'adm',
+                                                   'tenant',
+                                                   member_role=role_name):
+            pass
+
+        assert not ksclient.roles.add_user_role.called
+        assert not ksclient.roles.remove_user_role.called

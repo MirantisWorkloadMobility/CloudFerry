@@ -29,13 +29,14 @@ class CheckNeededComputeResources(action.Action):
         cnt_map = collections.defaultdict(int)
         for instance in objs.values():
             cnt_map[instance['instance']['flavor_id']] += 1
-        self.check_in_use_flavor(objs)
+        self.check_in_use_flavor(objs, info)
         needed_cpu = 0
         needed_ram = 0
         needed_hdd = 0
         src_nova = self.src_cloud.resources[utl.COMPUTE_RESOURCE]
         for flavor_id, count in cnt_map.items():
-            flavor = src_nova.get_flavor_from_id(flavor_id)
+            flavor = src_nova.get_flavor_from_id(flavor_id,
+                                                 include_deleted=True)
             needed_cpu += flavor.vcpus * count
             needed_hdd += (flavor.disk + flavor.ephemeral) * count
             if flavor.swap:  # if flavor not specified '' is here
@@ -55,17 +56,26 @@ class CheckNeededComputeResources(action.Action):
                                                name, have, units, needed,
                                                units))
 
-    def check_in_use_flavor(self, objs):
+    def check_in_use_flavor(self, objs, info):
         # when a flavor is updated, the flavor id will change. If an instance
         # is in this flavor, it will keep the old flavor id, can not be matched
         # to existing flavors
         src_compute = self.src_cloud.resources[utl.COMPUTE_RESOURCE]
         src_flavors = [flavor.id for flavor in src_compute.get_flavor_list()]
+        dst_compute = self.dst_cloud.resources[utl.COMPUTE_RESOURCE]
+        dst_flavors = [flavor.id for flavor in dst_compute.get_flavor_list()]
 
         for instance in objs.values():
-            if instance['instance']['flavor_id'] not in src_flavors:
-                LOG.error("The flavor ID of instance %s does not match to any"
-                          " flavor. Please resize the instance.",
-                          instance['instance']['id'])
-                raise RuntimeError("Obsolete flavor ID",
-                                   instance['instance']['flavor_id'])
+            if instance['instance']['flavor_id'] not in src_flavors \
+                    and instance['instance']['flavor_id'] not in dst_flavors:
+                _instance = instance['instance']
+                instance_id = _instance['id']
+                flav_details = \
+                    info['instances'][instance_id]['instance']['flav_details']
+                dst_compute.create_flavor(name=flav_details['name'],
+                                          flavorid=_instance['flavor_id'],
+                                          ram=flav_details['memory_mb'],
+                                          vcpus=flav_details['vcpus'],
+                                          disk=flav_details['root_gb'],
+                                          ephemeral=flav_details['ephemeral_gb'])
+                src_flavors.append(_instance['flavor_id'])

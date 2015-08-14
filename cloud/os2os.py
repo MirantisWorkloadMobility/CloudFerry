@@ -42,7 +42,7 @@ from cloudferrylib.base.action import create_reference
 from cloudferrylib.os.actions import prepare_volumes_data_map
 from cloudferrylib.os.actions import get_info_instances
 from cloudferrylib.os.actions import prepare_networks
-from cloudferrylib.os.actions import dissociate_floatingip_via_compute
+from cloudferrylib.os.actions import instance_floatingip_actions
 from cloudferrylib.os.actions import map_compute_info
 from cloudferrylib.os.actions import deploy_volumes
 from cloudferrylib.os.actions import check_instances
@@ -100,7 +100,8 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             'SSHCephToFile': ssh_ceph_to_file.SSHCephToFile,
             'SSHFileToFile': ssh_file_to_file.SSHFileToFile,
             'SSHFileToCeph': ssh_file_to_ceph.SSHFileToCeph,
-            'SSHChunksTransfer': ssh_chunks.SSHChunksTransfer,
+            'CopyFilesBetweenComputeHosts':
+                ssh_chunks.CopyFilesBetweenComputeHosts,
         }
 
     def migrate(self, scenario=None):
@@ -372,6 +373,6 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         #transport_resource_inst = self.migrate_resources_by_instance_via_ssh()
         transport_resource_inst = self.migrate_resources_by_instance()
         transport_inst = self.migrate_instance()
-        act_dissociate_floatingip = dissociate_floatingip_via_compute.DissociateFloatingip(self.init, cloud='src_cloud')
+        act_dissociate_floatingip = instance_floatingip_actions.DisassociateAllFloatingips(self.init, cloud='src_cloud')
         return act_stop_vms >> transport_resource_inst >> transport_inst >> \
                act_attaching >> act_dissociate_floatingip >> act_start_vms

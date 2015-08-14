@@ -40,7 +40,9 @@ class CinderDatabaseInteraction(action.Action):
 class GetVolumesDb(CinderDatabaseInteraction):
 
     def run(self, *args, **kwargs):
-        return {NAMESPACE_CINDER_CONST: self.get_resource().read_db_info()}
+        search_opts = kwargs.get('search_opts_tenant', {})
+        return {NAMESPACE_CINDER_CONST: \
+            self.get_resource().read_db_info(**search_opts)}
 
 
 class WriteVolumesDb(CinderDatabaseInteraction):

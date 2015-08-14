@@ -45,8 +45,9 @@ class MysqlDump(action.Action):
             'user_src': self.cloud.cloud_config.cloud.ssh_user,
             'key': self.cloud.config.migrate.key_filename,
             'path_dst': self.cloud.cloud_config.snapshot.snapshot_path}
-        command = ("scp -i {key} {user_src}@{host_src}:{path_src} "
-                   "{path_dst}".format(**context))
+        command = (
+            "scp -o StrictHostKeyChecking=no -i {key} "
+            "{user_src}@{host_src}:{path_src} {path_dst}".format(**context))
         LOG.info("EXECUTING {command} local".format(command=command))
         local(command)
         return {}

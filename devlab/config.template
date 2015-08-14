@@ -24,34 +24,33 @@ ssh_chunk_size = 100
 retry = 5
 migrate_extnets = True
 time_wait = 5
-all_vms = True
-all_images = True
-all_networks = True
-all_volumes = True
 cinder_migration_strategy = cloudferrylib.os.storage.cinder_database.CinderStorage
 skip_down_hosts = True
 migrate_user_quotas = False
+incloud_live_migration = nova
 
 [src]
 type = os
 auth_url = http://<grizzly_ip>:35357/v2.0
 host = <grizzly_ip>
 ssh_host = <grizzly_ip>
+ssh_user = <src_ssh_user>
+ssh_sudo_password = <src_ssh_sudo_password>
 ext_cidr = <src_ext_cidr>
 user = <src_user>
 password = <src_password>
 tenant = <src_tenant>
-temp = <src_temp>
 
 [src_mysql]
 user = <src_mysql_user>
 password = <src_mysql_password>
 host = <grizzly_ip>
+port = 3306
 connection = mysql+mysqlconnector
 
 [src_rabbit]
-password = <src_rabbit_password> 
-hosts = <grizzly_ip>
+password = <src_rabbit_password>
+hosts = <grizzly_ip>:5672
 
 [src_compute]
 service = nova
@@ -59,11 +58,18 @@ backend = iscsi
 convert_diff_file = qcow2
 convert_ephemeral_disk = qcow2
 host_eph_drv = <grizzly_ip>
+connection = mysql+mysqlconnector
+host = <grizzly_ip>
+port = 3306
+database_name = nova
+user = <src_mysql_user>
+password = <src_mysql_password>
 
 [src_storage]
 service = cinder
 backend = ceph
 host = <grizzly_ip>
+port = 3306
 connection = mysql+mysqlconnector
 user = <src_mysql_user>
 password = <src_mysql_password>
@@ -78,6 +84,7 @@ disk_format = qcow2
 user = <src_mysql_user>
 password = <src_mysql_password>
 host = <grizzly_ip>
+port = 3306
 connection = mysql+mysqlconnector
 database_name = glance
 
@@ -87,6 +94,11 @@ service = keystone
 [src_network]
 service = auto
 interfaces_for_instance = <src_network_interfaces_for_instance>
+user = <src_mysql_user>
+password = <src_mysql_password>
+host = <grizzly_ip>
+connection = mysql+mysqlconnector
+database_name = quantum
 
 [src_objstorage]
 service =
@@ -96,16 +108,18 @@ type = os
 auth_url = http://<icehouse_ip>:35357/v2.0
 host = <icehouse_ip>
 ssh_host = <icehouse_ip>
+ssh_user = <dst_ssh_user>
+ssh_sudo_password = <dst_ssh_sudo_password>
 ext_cidr = <dst_ext_cidr> 
 user = <dst_user>
 password = <dst_password> 
 tenant = <dst_tenant>
-temp = <dst_temp> 
 
 [dst_mysql]
 user = <dst_mysql_user> 
 password = <dst_mysql_password> 
 host = <icehouse_ip>
+port = 3306
 connection = mysql+mysqlconnector
 
 [dst_compute]
@@ -114,15 +128,22 @@ backend = iscsi
 convert_diff_file = qcow2
 convert_ephemeral_disk = qcow2
 host_eph_drv = <icehouse_ip>
+connection = mysql+mysqlconnector
+host = <icehouse_ip>
+port = 3306
+database_name = nova
+user = <dst_mysql_user>
+password = <dst_mysql_password>
 
 [dst_rabbit]
 password = <dst_rabbit_password>
-hosts = <icehouse_ip>
+hosts = <icehouse_ip>:5672
 
 [dst_storage]
 service = cinder
 backend = ceph
 host = <icehouse_ip>
+port = 3306
 protocol_transfer = <dst_storage_protocol_transfer>
 connection = mysql+mysqlconnector
 user = <dst_mysql_user>
@@ -136,6 +157,7 @@ backend = swift
 user = <dst_mysql_user>
 password = <dst_mysql_password>
 host = <icehouse_ip>
+port = 3306
 connection = mysql+mysqlconnector
 database_name = glance
 
@@ -145,6 +167,11 @@ service = keystone
 [dst_network]
 service=auto
 interfaces_for_instance = <dst_network_interfaces_for_instance>
+user = <dst_mysql_user>
+password = <dst_mysql_password>
+host = <icehouse_ip>
+connection = mysql+mysqlconnector
+database_name = neutron
 
 [import_rules]
 key = {name:dest-key-1}
@@ -157,7 +184,7 @@ snapshot_path = <snapshot_snapshot_path>
 
 [initial_check]
 claimed_bandwidth = 100
-factor = 0.5
+factor = 0.1
 test_file_size = 10
 
 [condense]
@@ -166,5 +193,5 @@ group_file=
 node_file=
 
 [database]
-host=
-port=
+host = localhost
+port = 6379

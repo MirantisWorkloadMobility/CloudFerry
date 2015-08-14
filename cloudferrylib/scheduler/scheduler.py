@@ -14,11 +14,11 @@
 
 
 import multiprocessing
-import traceback
 
 from cloudferrylib.scheduler.namespace import Namespace, CHILDREN
 from cloudferrylib.utils import utils
 from cursor import Cursor
+import signal_handler
 from task import BaseTask
 from thread_tasks import WrapThreadTask
 
@@ -83,10 +83,12 @@ class BaseScheduler(object):
         self.process_chain(self.preparation, "PREPARATION")
         # if we didn't get error during preparation task - process migration
         if self.status_error != ERROR:
-            self.process_chain(self.migration, "MIGRATION")
-            # if we had an error during process migration - rollback
-            if self.status_error == ERROR:
-                self.process_chain(self.rollback, "ROLLBACK")
+            with signal_handler.IgnoreInterruptHandler():
+                with signal_handler.InterruptHandler():
+                    self.process_chain(self.migration, "MIGRATION")
+                # if we had an error during process migration - rollback
+                if self.status_error == ERROR:
+                    self.process_chain(self.rollback, "ROLLBACK")
 
     def task_run(self, task):
         task(namespace=self.namespace)

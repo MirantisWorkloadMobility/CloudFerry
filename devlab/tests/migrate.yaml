@@ -3,35 +3,39 @@ namespace:
       instances: {}
 
 preparation:
+  - pre_migration_test:
+      - act_get_filter: True
+      - act_check_filter: True
+      - src_test:
+          - check_src_ssh_access: True
+          - act_check_bandwidth_src: True
+          - check_src_sql: True
+          - check_src_rabbit: True
+          - act_check_image_api_src: True
+          - act_check_compute_api_src: True
+          - act_check_storage_api_src: True
+          - act_get_info_objects_src: False
+      - dst_test:
+          - check_dst_ssh_access: True
+          - act_check_bandwidth_dst: True
+          - check_dst_sql: True
+          - check_dst_rabbit: True
+          - act_check_image_api_dst: True
+          - act_check_compute_api_dst: True
+          - act_check_storage_api_dst: True
+          - act_get_info_objects_dst: False
   - create_snapshot: True
   - create_vm_snapshot_src: True
   - create_vm_snapshot_dst: True
+  - create_image_snapshot_dst: True
 
 rollback:
   - restore_from_vm_snapshot_dst: True
   - restore_from_vm_snapshot_src: True
+  - image_rollback_dst: True
   - restore_from_snapshot: True
 
 process:
-  - pre_migration_test:
-      - src_test:
-          - act_get_info_images_src: True
-          - act_get_info_inst_src: True
-          - act_get_info_volumes_src: True
-          - act_get_info_objects_src: False
-          - act_check_bandwidth_src: True
-          - check_src_ssh_access: True
-          - check_src_sql: True
-          - check_src_rabbit: True
-      - dst_test:
-          - act_get_info_images_dst: True
-          - act_get_info_inst_dst: True
-          - act_get_info_volumes_dst: True
-          - act_get_info_objects_dst: False
-          - act_check_bandwidth_dst: True
-          - check_dst_ssh_access: True
-          - check_dst_sql: True
-          - check_dst_rabbit: True
   - task_resources_transporting:
       - act_identity_trans: True
       - task_images_trans:
@@ -43,7 +47,6 @@ process:
       - write_volumes_db_data: True
       - transport_key_pairs: True
   - transport_instances_and_dependency_resources:
-      - act_get_filter: True
       - act_get_info_inst: True
       - init_iteration_instance:
           - init_iteration_instance_copy_var: True
@@ -79,11 +82,11 @@ process:
               - add_key_pairs_to_instances: True
               - act_is_not_copy_diff_file: ['act_transport_ephemeral']
               - act_trans_diff_file: False
-              - act_trans_diff_file_chunks : True
+              - copy_vm_data: True
               - act_transport_ephemeral: True
           - act_attaching: True
           - act_dissociate_floatingip: True
-          - act_start_vms: True
+          - act_start_vms_if_needed: True
       - save_result_migrate_instances: True
       - is_instances: ['get_next_instance']
       - rename_info_iter: True

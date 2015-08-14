@@ -12,38 +12,56 @@ File.foreach(config_file) { |line|
   end
 }
 
+
+# If you want to deploy your vm's in isolated particular network, you should specify environment variable:
+# export VIRTUALBOX_NETWORK_NAME=test_net1
+# vagrant up grizzly juno cloudferry
+
+options['virtualbox_network_name'] = ENV['VIRTUALBOX_NETWORK_NAME'] unless ENV['VIRTUALBOX_NETWORK_NAME'].nil?
+
+
 user = %x(id -un).strip()
 uid = %x(id -u #{user}).strip()
 
 nodes = {
-  "grizzly" => {
+  "grizzly#{ENV["BUILD_NAME"]}" => {
     "box" => "openstack-user/precise-grizzly",
     "ip" => "#{options['grizzly_ip']}",
-    "memory" => 4096,
+    "memory" => 2560,
     "role" => "openstack"
   },
-  "icehouse" => {
+  "icehouse#{ENV["BUILD_NAME"]}" => {
     "box" => "openstack-user/precise-icehouse",
     "ip" => "#{options['icehouse_ip']}",
-    "memory" => 4096,
+    "memory" => 3072,
     "role" => "openstack"
   },
-  "cloudferry" => {
+  "juno#{ENV["BUILD_NAME"]}" => {
+    "box" => "openstack-user/juno",
+    "ip" => "#{options['juno_ip']}",
+    "memory" => 3072,
+    "role" => "openstack",
+    "devstack" => {
+      "branch" => 'stable/juno' 
+        }
+  },
+  "cloudferry#{ENV["BUILD_NAME"]}" => {
     "box" => "hashicorp/precise64",
     "ip" => "#{options['cloudferry_ip']}",
-    "memory" => 2048,
-    "role" => "dev"
+    "memory" => 1536,
+    "cpus" => 1,
+    "role" => "lab"
   },
   "grizzlycompute" => {
     "box" => "openstack-user/precise-grizzlycompute",
     "ip" => "#{options['grizzly_compute_ip']}",
-    "memory" => 4096,
+    "memory" => 2560,
     "role" => "openstack"
   },
   "icehousecompute" => {
     "box" => "openstack-user/precise-icehousecompute",
     "ip" => "#{options['icehouse_compute_ip']}",
-    "memory" => 4096,
+    "memory" => 2560,
     "role" => "openstack"
   }
 }
@@ -53,6 +71,8 @@ Vagrant.require_version '>= 1.6.0'
 Vagrant.configure(2) do |config|
   config.vm.provision "shell", path: "./provision/prerequisites.sh"
   etc_hosts = nodes.map { |name, data| [data["ip"], name].join(' ') }.join("\n")
+  cloudferry_repo = File.expand_path(File.join(File.dirname(__FILE__), ".."))
+  ubuntu_cf_repo = cloudferry_repo.sub(ENV["HOME"], "/home/#{user}")
 
   nodes.each do |nodename, nodedata|
     config.vm.define nodename do |thisnode|
@@ -66,6 +86,18 @@ Vagrant.configure(2) do |config|
           thisnode.vm.provision "shell",
             path: "./provision/keys.sh",
             args: [ "--public-key", File.read("#{ENV["HOME"]}/#{options['public_key_path']}").strip() ]
+          thisnode.vm.provision "shell",
+            path: "./provision/keys.sh",
+            args: [ "--public-key", File.read("provision/cf_keys/id_rsa.pub").strip() ] unless not File.exist?("provision/cf_keys/id_rsa.pub")
+          if nodedata.has_key?('devstack')
+            thisnode.vm.provision "file",
+              source: "./provision/devstack/local_#{nodename}.conf", 
+              destination: "/tmp/local.conf"
+            thisnode.vm.provision "shell",
+              privileged: false,
+              path: "./provision/devstack/devstack.sh",
+              args: [ "--branch", "#{nodedata['devstack']['branch']}" ]
+          end
         when "dev"
           thisnode.vm.provision "shell",
             path: "./provision/user.sh",
@@ -73,17 +105,39 @@ Vagrant.configure(2) do |config|
           thisnode.vm.synced_folder ENV["HOME"], "/home/#{user}", type: "nfs"
           thisnode.vm.provision "shell",
             path: "./provision/cloudferry.sh",
-            args: [ "--cloudferry-path", "#{options['cloudferry_path']}",
+            args: [ "--cloudferry-path", ubuntu_cf_repo,
                     "--user", user ]
+          thisnode.vm.provision "shell",
+            path: "./provision/generate_config.sh",
+            args: [ "--cloudferry-path", ubuntu_cf_repo ]
+        when "lab"
+          thisnode.vm.provision "shell",
+            path: "./provision/keys.sh",
+            args: [ "--public-key", File.read("#{ENV["HOME"]}/#{options['public_key_path']}").strip() ]
+          thisnode.vm.provision "shell",
+            path: "./provision/pythoncrypto.sh"
+          thisnode.vm.provision "file",
+            source: "./provision/cf_keys/id_rsa", 
+            destination: "/home/vagrant/.ssh/id_rsa" unless not File.exist?("provision/cf_keys/id_rsa")
+          thisnode.vm.provision "file",
+            source: "./provision/cf_keys/id_rsa.pub", 
+            destination: "/home/vagrant/.ssh/id_rsa.pub" unless not File.exist?("provision/cf_keys/id_rsa.pub")
       end
 
       if nodedata.has_key?("ip") then
-        thisnode.vm.network "private_network", ip: nodedata['ip']
+        thisnode.vm.network "private_network", ip: nodedata['ip'],
+          virtualbox__intnet: options['virtualbox_network_name']
+      end
+      if nodename.start_with?("icehouse-cf-") then
+        thisnode.vm.provision "shell",
+          path: "./provision/restart_nova_neutron.sh"
       end
 
       thisnode.vm.provider "virtualbox" do |v|
         v.memory = nodedata.fetch("memory", 1024)
         v.cpus = nodedata.fetch("cpus", 2)
+        v.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
+        v.customize ["modifyvm", :id, "--cpuexecutioncap", "80"]
       end
     end
   end

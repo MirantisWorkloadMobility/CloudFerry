@@ -14,12 +14,24 @@
 
 
 import copy
+from neutronclient.common import exceptions as neutronclient_exceptions
 
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
 
+LOG = utl.get_log(__name__)
+
 
 class PrepareNetworks(action.Action):
+    """Creates ports on destination with IPs and MACs preserved
+
+    Process:
+     - For each port on source create port with the same IP and MAC on
+       destination
+
+    Requirements:
+     - Networks and subnets must be deployed on destination
+    """
 
     def run(self, info=None, **kwargs):
 
@@ -61,20 +73,38 @@ class PrepareNetworks(action.Action):
                     if sg['tenant_id'] == tenant_id:
                         if sg['name'] in security_groups:
                             sg_ids.append(sg['id'])
-                port = network_resource.create_port(dst_net['id'],
-                                                    src_net['mac'],
-                                                    src_net['ip'],
-                                                    tenant_id,
-                                                    keep_ip,
-                                                    sg_ids)
-                if self.cfg.migrate.keep_floatingip:
-                    if src_net['floatingip']:
-                        dst_flotingips = network_resource.get_floatingips()
-                        dst_flotingips_map = \
-                            {fl_ip['floating_ip_address']: fl_ip['id'] for fl_ip in dst_flotingips}
-                        dst_floatingip_id = dst_flotingips_map[src_net['floatingip']]
-                        floating_ip = network_resource.update_floatingip(dst_floatingip_id, port['id'])
-                params.append({'net-id': dst_net['id'], 'port-id': port['id']})
+                try:
+                    port = network_resource.create_port(dst_net['id'],
+                                                        src_net['mac'],
+                                                        src_net['ip'],
+                                                        tenant_id,
+                                                        keep_ip,
+                                                        sg_ids)
+                except neutronclient_exceptions.IpAddressInUseClient:
+                    LOG.warning("IP address '%s' on destination net '%s (%s)' "
+                                "already exists!",
+                                src_net['ip'], dst_net['name'], dst_net['id'])
+                    continue
+                fip = None
+                src_fip = src_net['floatingip']
+                if src_fip:
+                    dst_flotingips = network_resource.get_floatingips()
+                    dst_flotingips_map = {
+                        fl_ip['floating_ip_address']: fl_ip['id']
+                        for fl_ip in dst_flotingips
+                    }
+                    # floating IP may be filtered and not exist on dest
+                    dst_floatingip_id = dst_flotingips_map.get(src_fip)
+                    if dst_floatingip_id is None:
+                        LOG.warning("Floating IP '%s' is not available on "
+                                    "destination, make sure floating IPs "
+                                    "migrated correctly", src_fip)
+                    else:
+                        fip = {'dst_floatingip_id': dst_floatingip_id,
+                               'dst_port_id': port['id']}
+                params.append({'net-id': dst_net['id'],
+                               'port-id': port['id'],
+                               'floatingip': fip})
             instances[id_inst][utl.INSTANCE_BODY]['nics'] = params
         info_compute[utl.INSTANCES_TYPE] = instances
 

@@ -2,6 +2,8 @@ import argparse
 import itertools
 import os
 import time
+import json
+import yaml
 
 from glanceclient import Client as glance
 from novaclient import client as nova
@@ -10,6 +12,7 @@ from keystoneclient.v2_0 import client as keystone
 from cinderclient import client as cinder
 
 import config
+from filtering_utils import FilteringUtils
 
 NOVA_CLIENT_VERSION = config.NOVA_CLIENT_VERSION
 GLANCE_CLIENT_VERSION = config.GLANCE_CLIENT_VERSION
@@ -17,8 +20,9 @@ NEUTRON_CLIENT_VERSION = config.NEUTRON_CLIENT_VERSION
 CINDER_CLIENT_VERSION = config.CINDER_CLIENT_VERSION
 
 
-class Prerequisites():
+class Prerequisites(object):
     def __init__(self, cloud_prefix='SRC'):
+        self.filtering_utils = FilteringUtils()
         self.username = os.environ['%s_OS_USERNAME' % cloud_prefix]
         self.password = os.environ['%s_OS_PASSWORD' % cloud_prefix]
         self.tenant = os.environ['%s_OS_TENANT_NAME' % cloud_prefix]
@@ -82,6 +86,10 @@ class Prerequisites():
     def get_net_id(self, net):
         return self.neutronclient.list_networks(
             name=net, all_tenants=True)['networks'][0]['id']
+
+    def get_sg_id(self, sg):
+        return self.neutronclient.list_security_groups(
+            name=sg, all_tenants=True)['security_groups'][0]['id']
 
     def get_volume_id(self, volume_name):
         volumes = self.cinderclient.volumes.list(
@@ -173,6 +181,67 @@ class Prerequisites():
             while img.status != 'active':
                 time.sleep(2)
                 img = self.glanceclient.images.get(img.id)
+        src_cloud = Prerequisites(cloud_prefix='SRC')
+        src_img = [x.__dict__ for x in
+                   src_cloud.glanceclient.images.list()]
+        for image in src_img:
+            if image['name'] in config.img_to_add_members:
+                image_id = image['id']
+                tenant_list = self.keystoneclient.tenants.list()
+                for tenant in tenant_list:
+                    tenant = tenant.__dict__
+                    if tenant['name'] in config.members:
+                        member_id = tenant['id']
+                        self.glanceclient.image_members.create(image_id,
+                                                               member_id)
+
+    def update_filtering_file(self):
+        src_cloud = Prerequisites(cloud_prefix='SRC')
+        src_img = [x.__dict__ for x in
+                   src_cloud.glanceclient.images.list()]
+        src_vms = [x.__dict__ for x in
+                   src_cloud.novaclient.servers.list(
+                       search_opts={'all_tenants': 1})]
+        image_dict = {}
+        for image in src_img:
+            img_members = self.glanceclient.image_members.list(image['id'])
+            if len(img_members) > 1:
+                img_mem_list = []
+                for img_member in img_members:
+                    img_member = img_member.__dict__
+                    img_mem_list.append(img_member['member_id'])
+                image_dict[image['id']] = img_mem_list
+        vm_id_list = []
+        for vm in src_vms:
+            vm_id = vm['id']
+            vm_id_list.append(vm_id)
+        loaded_data = self.filtering_utils.load_file('configs/filter.yaml')
+        filter_dict = loaded_data[0]
+        if filter_dict is None:
+            filter_dict = {'images': {'images_list': {}},
+                           'instances': {'id': {}}}
+        all_img_ids = []
+        img_list = []
+        not_incl_img = []
+        vm_list = []
+        for image in src_img:
+            all_img_ids.append(image['id'])
+        for img in config.images_not_included_in_filter:
+            not_incl_img.append(self.get_image_id(img))
+        for key in filter_dict.keys():
+            if key == 'images':
+                for img_id in all_img_ids:
+                    if img_id not in not_incl_img:
+                        img_list.append(img_id)
+                filter_dict[key]['images_list'] = img_list
+            elif key == 'instances':
+                for vm in vm_id_list:
+                    if vm != self.get_vm_id('not_in_filter'):
+                        vm_list.append(vm)
+                filter_dict[key]['id'] = vm_list
+        file_path = loaded_data[1]
+        with open(file_path, "w") as f:
+            yaml.dump(filter_dict, f, default_flow_style=False)
 
     def create_flavors(self):
         for flavor in config.flavors:
@@ -186,6 +255,8 @@ class Prerequisites():
         for tenant in config.tenants:
             if 'vms' in tenant:
                 for user in config.users:
+                    if 'deleted' in user and user['deleted']:
+                        continue
                     if user['tenant'] == tenant['name'] and user['enabled']:
                         self.switch_user(user=user['name'],
                                          password=user['password'],
@@ -193,6 +264,9 @@ class Prerequisites():
                 for vm in tenant['vms']:
                     vm['image'] = self.get_image_id(vm['image'])
                     vm['flavor'] = self.get_flavor_id(vm['flavor'])
+                    if 'nics' in vm:
+                        for nic in vm['nics']:
+                            nic['net-id'] = self.get_net_id(nic['net-id'])
                     self.check_vm_state(self.novaclient.servers.create(**vm))
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
@@ -256,8 +330,29 @@ class Prerequisites():
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
+    def get_sec_group_id_by_tenant_id(self, tenant_id):
+        sec_group_list = self.neutronclient.list_security_groups()
+        return [i['id'] for i in sec_group_list['security_groups']
+                if i['tenant_id'] == tenant_id]
+
+    def create_security_group_rule(self, group_id, tenant_id, protocol='tcp',
+                                   port_range_min=22, port_range_max=22,
+                                   direction='ingress'):
+        sec_rule = {'security_group_rule': {"security_group_id": group_id,
+                                            "protocol": protocol,
+                                            "direction": direction,
+                                            'tenant_id': tenant_id,
+                                            "port_range_min": port_range_min,
+                                            "port_range_max": port_range_max}}
+        self.neutronclient.create_security_group_rule(sec_rule)
+
     def create_cinder_volumes(self, volumes_list):
         for volume in volumes_list:
+            if 'user' in volume:
+                user = [u for u in config.users
+                        if u['name'] == volume['user']][0]
+                self.switch_user(user=user['name'], password=user['password'],
+                                 tenant=user['tenant'])
             vlm = self.cinderclient.volumes.create(display_name=volume['name'],
                                                    size=volume['size'])
             self.wait_for_volume(volume['name'])
@@ -287,24 +382,100 @@ class Prerequisites():
 
     def emulate_vm_states(self):
         for vm_state in config.vm_states:
-            self.novaclient.servers.reset_state(
-                server=self.get_vm_id(vm_state['name']),
-                state=vm_state['state'])
+            # emulate error state:
+            if vm_state['state'] == u'error':
+                self.novaclient.servers.reset_state(
+                    server=self.get_vm_id(vm_state['name']),
+                    state=vm_state['state'])
+            # emulate suspend state:
+            elif vm_state['state'] == u'suspend':
+                self.novaclient.servers.suspend(self.get_vm_id(
+                    vm_state['name']))
+            # emulate resize state:
+            elif vm_state['state'] == u'pause':
+                self.novaclient.servers.pause(self.get_vm_id(vm_state['name']))
+            # emulate stop/shutoff state:
+            elif vm_state['state'] == u'stop':
+                self.novaclient.servers.stop(self.get_vm_id(vm_state['name']))
+            # emulate resize state:
+            elif vm_state['state'] == u'resize':
+                self.novaclient.servers.resize(self.get_vm_id(vm_state['name']),
+                                               '1')
+
+    def generate_vm_state_list(self):
+        data = {}
+        for vm in self.novaclient.servers.list():
+            vm_name = vm.name
+            index = self.novaclient.servers.list().index(vm)
+            while self.novaclient.servers.list()[index].status == u'RESIZE':
+                time.sleep(2)
+            vm_state = self.novaclient.servers.list()[index].status
+            data[vm_name] = vm_state
+        file_name = 'pre_migration_vm_states.json'
+        with open(file_name, 'w') as outfile:
+            json.dump(data, outfile, sort_keys=True, indent=4,
+                      ensure_ascii=False)
+
+    def delete_flavor(self, flavor='del_flvr'):
+        """
+        Method for flavor deletion.
+        """
+        try:
+            self.novaclient.flavors.delete(
+                self.get_flavor_id(flavor))
+        except Exception as e:
+            print "Flavor %s failed to delete: %s" % (flavor, repr(e))
+
+    def modify_admin_tenant_quotas(self):
+        for tenant in config.tenants:
+            if 'quota' in tenant:
+                self.novaclient.quotas.update(tenant_id=self.get_tenant_id(
+                    'admin'), **tenant['quota'])
+                break
+
+    def delete_users(self):
+        for user in config.users:
+            if user.get('deleted'):
+                self.keystoneclient.users.delete(
+                    self.get_user_id(user['name']))
 
     def run_preparation_scenario(self):
+        print('>>> Creating tenants:')
         self.create_tenants()
+        print('>>> Creating users:')
         self.create_users()
+        print('>>> Creating roles:')
         self.create_roles()
+        print('>>> Creating keypairs:')
         self.create_keypairs()
+        print('>>> Modifying quotas:')
         self.modify_quotas()
+        print('>>> Creating flavors:')
         self.create_flavors()
+        print('>>> Uploading images:')
         self.upload_image()
+        print('>>> Creating networking:')
         self.create_all_networking()
+        print('>>> Creating vms:')
         self.create_vms()
+        print('>>> Updating filtering:')
+        self.update_filtering_file()
+        print('>>> Creating vm snapshots:')
         self.create_vm_snapshots()
+        print('>>> Creating security groups:')
         self.create_security_groups()
+        print('>>> Creating cinder objects:')
         self.create_cinder_objects()
+        print('>>> Emulating vm states:')
         self.emulate_vm_states()
+        print('>>> Generating vm states list:')
+        self.generate_vm_state_list()
+        print('>>> Deleting flavor:')
+        self.delete_flavor()
+        print('>>> Modifying admin tenant quotas:')
+        self.modify_admin_tenant_quotas()
+        print('>>> Delete users which should be deleted:')
+        self.delete_users()
 
     def clean_objects(self):
         for flavor in config.flavors:
@@ -366,6 +537,15 @@ class Prerequisites():
             except Exception as e:
                 print "Tenant %s failed to delete: %s" % (tenant['name'],
                                                           repr(e))
+        sgs = self.neutronclient.list_security_groups()['security_groups']
+        for sg in sgs:
+            try:
+                print "delete sg {}".format(sg['name'])
+                self.neutronclient.delete_security_group(self.get_sg_id(
+                                                         sg['name']))
+            except Exception as e:
+                print "Security group %s failed to delete: %s" % (sg['name'],
+                                                                  repr(e))
         for user in config.users:
             try:
                 self.keystoneclient.users.delete(
@@ -403,13 +583,14 @@ class Prerequisites():
 
 
 if __name__ == '__main__':
-    preqs = Prerequisites()
     parser = argparse.ArgumentParser(
         description='Script to generate load for Openstack and delete '
                     'generated objects')
     parser.add_argument('--clean', help='clean objects described in '
                                         'config.ini', action='store_true')
+    parser.add_argument('--env', default='SRC', help='choose cloud: SRC or DST')
     args = parser.parse_args()
+    preqs = Prerequisites(cloud_prefix=args.env)
     if args.clean:
         preqs.clean_objects()
     else:

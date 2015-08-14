@@ -1,6 +1,12 @@
+#tenants:
+#    tenant_id:
+#        - <tenant_id1>
+#        - <tenant_id2>
 #instances:
 #    id:
 #        - <server_id1>
 #        - <server_id2>
 #images:
-#    date: 2015-03-25
+#    images_list:
+#        - <image_id1>
+#        - <image_id2>

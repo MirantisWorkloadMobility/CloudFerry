@@ -29,16 +29,70 @@ from cloudferrylib.utils import utils as utl
 LOG = utl.get_log(__name__)
 
 
+class AddAdminUserToNonAdminTenant(object):
+    """Temporarily adds admin user to non-admin tenant when necessary.
+
+    Use when any openstack object must be created in specific tenant. If
+    admin user is already added to the tenant as tenant's member - nothing
+    happens. Otherwise admin user is added to a tenant on block entrance, and
+    removed on exit.
+
+    When this class is in use, make sure *all* your openstack clients generate
+    new auth token on *each* openstack API call, because when user gets added
+    to a tenant as a member, all it's tokens get revoked.
+
+    Usage:
+     with AddAdminUserToNonAdminTenant():
+        your_operation_from_admin_user()
+    """
+
+    def __init__(self, keystone, admin_user, tenant, member_role='admin'):
+        """
+        :tenant: can be either tenant name or tenant ID
+        """
+
+        self.keystone = keystone
+        try:
+            self.tenant = self.keystone.tenants.find(name=tenant)
+        except keystoneclient.exceptions.NotFound:
+            self.tenant = self.keystone.tenants.find(id=tenant)
+        self.user = self.keystone.users.find(name=admin_user)
+        self.role = self.keystone.roles.find(name=member_role)
+        self.already_member = False
+
+    def __enter__(self):
+        roles = self.keystone.roles.roles_for_user(user=self.user,
+                                                   tenant=self.tenant)
+
+        for role in roles:
+            if role.name == self.role.name:
+                # do nothing if user is already member of a tenant
+                self.already_member = True
+                return
+        LOG.debug("Adding %s user to tenant %s as %s",
+                  self.user.name, self.tenant.name, self.role.name)
+        self.keystone.roles.add_user_role(user=self.user,
+                                          role=self.role,
+                                          tenant=self.tenant)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self.already_member:
+            LOG.debug("Removing %s user from tenant %s",
+                      self.user.name, self.tenant.name)
+            self.keystone.roles.remove_user_role(user=self.user,
+                                                 role=self.role,
+                                                 tenant=self.tenant)
+
+
 class KeystoneIdentity(identity.Identity):
     """The main class for working with OpenStack Keystone Identity Service."""
 
     def __init__(self, config, cloud):
         super(KeystoneIdentity, self).__init__()
         self.config = config
-        self._ks_client_creds = self.proxy(self._get_client_by_creds(), config)
-        self.keystone_client = self.proxy(self.get_client(), config)
         self.mysql_connector = cloud.mysql_connector
         self.cloud = cloud
+        self.filter_tenant_id = None
         self.postman = None
         if self.config.mail.server != "-":
             self.postman = Postman(self.config['mail']['username'],
@@ -47,6 +101,10 @@ class KeystoneIdentity(identity.Identity):
                                    self.config['mail']['server'])
         self.templater = Templater()
         self.generator = GeneratorPassword()
+
+    @property
+    def keystone_client(self):
+        return self.proxy(self._get_client_by_creds(), self.config)
 
     @staticmethod
     def convert(identity_obj, cfg):
@@ -86,30 +144,31 @@ class KeystoneIdentity(identity.Identity):
                 'users': [],
                 'roles': []}
 
-        service_tenant_id = \
-            self.get_tenant_id_by_name(self.config.cloud.service_tenant)
+        if kwargs.get('tenant_id'):
+            self.filter_tenant_id = kwargs['tenant_id'][0]
 
-        for tenant in self.get_tenants_list():
-            if tenant.id != service_tenant_id:
-                tnt = self.convert(tenant, self.config)
-                info['tenants'].append(tnt)
+        tenant_list = self.get_tenants_list()
+        for tenant in tenant_list:
+            tnt = self.convert(tenant, self.config)
+            info['tenants'].append(tnt)
 
-        for user in self.get_users_list():
-            if user.tenantId != service_tenant_id:
-                usr = self.convert(user, self.config)
-                info['users'].append(usr)
+        user_list = self.get_users_list()
+        for user in user_list:
+            usr = self.convert(user, self.config)
+            info['users'].append(usr)
 
         for role in self.get_roles_list():
             rl = self.convert(role, self.config)
             info['roles'].append(rl)
 
-        info['user_tenants_roles'] = self._get_user_tenants_roles()
+        info['user_tenants_roles'] = \
+             self._get_user_tenants_roles(tenant_list, user_list)
         if self.config['migrate']['keep_user_passwords']:
             info['user_passwords'] = self._get_user_passwords()
         return info
 
     def deploy(self, info):
-        print 'Deploy started'
+        LOG.info("Identity objects deployment started")
         tenants = info['tenants']
         users = info['users']
         roles = info['user_tenants_roles']
@@ -123,7 +182,7 @@ class KeystoneIdentity(identity.Identity):
             passwords = info['user_passwords']
             self._upload_user_passwords(users, passwords)
         self._upload_user_tenant_roles(roles, users, tenants)
-        print 'Finished'
+        LOG.info("Done")
 
     def get_client(self):
         """ Getting keystone client using authentication with admin auth token.
@@ -131,9 +190,7 @@ class KeystoneIdentity(identity.Identity):
         :return: OpenStack Keystone Client instance
         """
 
-        return keystone_client.Client(
-            token=self._ks_client_creds.auth_ref['token']['id'],
-            endpoint=self.config.cloud.auth_url)
+        return self.keystone_client
 
     def _get_client_by_creds(self):
         """Authenticating with a user name and password.
@@ -155,7 +212,7 @@ class KeystoneIdentity(identity.Identity):
         :return: String endpoint of specified OpenStack service
         """
 
-        return self._ks_client_creds.service_catalog.url_for(
+        return self.keystone_client.service_catalog.url_for(
             service_type=service_type,
             endpoint_type=endpoint_type)
 
@@ -169,10 +226,9 @@ class KeystoneIdentity(identity.Identity):
         return func
 
     def get_tenant_id_by_name(self, name):
-        for tenant in self.get_tenants_list():
-            if tenant.name == name:
-                return tenant.id
-        return None
+        """ Getting tenant ID by name from keystone. """
+
+        return self.keystone_client.tenants.find(name=name).id
 
     def get_tenant_by_name(self, tenant_name):
         """ Getting tenant by name from keystone. """
@@ -204,12 +260,22 @@ class KeystoneIdentity(identity.Identity):
     def get_tenants_list(self):
         """ Getting list of tenants from keystone. """
 
-        return self.keystone_client.tenants.list()
+        result = []
+        ks_tenants = self.keystone_client.tenants
+        if self.filter_tenant_id:
+            result.append(ks_tenants.find(id=self.filter_tenant_id))
+        else:
+            result = ks_tenants.list()
+        return result
 
     def get_users_list(self):
         """ Getting list of users from keystone. """
 
-        return self.keystone_client.users.list()
+        if self.filter_tenant_id:
+            tenant_id = self.filter_tenant_id
+        else:
+            tenant_id = None
+        return self.keystone_client.users.list(tenant_id=tenant_id)
 
     def get_roles_list(self):
         """ Getting list of available roles from keystone. """
@@ -221,6 +287,26 @@ class KeystoneIdentity(identity.Identity):
             return self.keystone_client.users.get(user_id).name
         except keystoneclient.exceptions.NotFound:
             return default
+
+    def try_get_user_by_id(self, user_id, default=None):
+        if default is None:
+            admin_usr = \
+                self.try_get_user_by_name(username=self.config.cloud.user)
+            default = admin_usr.id
+        try:
+            return self.keystone_client.users.find(id=user_id)
+        except keystoneclient.exceptions.NotFound:
+            LOG.warning("User '%s' has not been found, returning default "
+                        "value = '%s'", user_id, default)
+            return self.keystone_client.users.find(id=default)
+
+    def try_get_user_by_name(self, username, default=None):
+        try:
+            return self.keystone_client.users.find(name=username)
+        except keystoneclient.exceptions.NotFound:
+            LOG.warning("User '%s' has not been found, returning default "
+                        "value = '%s'", username, default)
+            return self.keystone_client.users.find(name=default)
 
     def roles_for_user(self, user_id, tenant_id):
         """ Getting list of user roles for tenant """
@@ -267,7 +353,8 @@ class KeystoneIdentity(identity.Identity):
         return self.keystone_client.users.update(user, **kwargs)
 
     def get_auth_token_from_user(self):
-        return self.keystone_client.auth_token_from_user
+        self.keystone_client.authenticate()
+        return self.keystone_client.auth_token
 
     def _deploy_tenants(self, tenants):
         dst_tenants = {tenant.name: tenant.id for tenant in
@@ -367,12 +454,15 @@ class KeystoneIdentity(identity.Identity):
 
         return info
 
-    def _get_user_tenants_roles(self):
+    def _get_user_tenants_roles(self, tenant_list=None, user_list=None):
+        if tenant_list is None:
+            tenant_list = []
+        if user_list is None:
+            user_list = []
         user_tenants_roles = {}
-        tenants = self.get_tenants_list()
-        for user in self.get_users_list():
+        for user in user_list:
             user_tenants_roles[user.name] = {}
-            for tenant in tenants:
+            for tenant in tenant_list:
                 roles = []
                 for role in self.roles_for_user(user.id, tenant.id):
                     roles.append({'role': {'name': role.name, 'id': role.id}})
@@ -395,10 +485,6 @@ class KeystoneIdentity(identity.Identity):
 
         for _user in users:
             user = _user['user']
-            # FIXME should be deleted after determining how
-            # to change self role without logout
-            if user['name'] == self.keystone_client.username:
-                continue
             if user['name'] not in dst_users:
                 continue
             for _tenant in tenants:
@@ -431,9 +517,13 @@ class KeystoneIdentity(identity.Identity):
     def check_rabbitmq(self):
         credentials = pika.PlainCredentials(self.config.rabbit.user,
                                             self.config.rabbit.password)
-        for host in self.config.rabbit.hosts.split(","):
-            pika.BlockingConnection(pika.ConnectionParameters(
-                host=host.strip(), credentials=credentials))
+
+        for host_with_port in self.config.rabbit.hosts.split(","):
+            host, port = host_with_port.split(':')
+            pika.BlockingConnection(
+                pika.ConnectionParameters(host=host.strip(),
+                                          port=int(port),
+                                          credentials=credentials))
 
 
 def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
@@ -444,9 +534,9 @@ def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
         src_user = src_keystone.keystone_client.users.find(id=src_user_id)
         src_user_name = src_user.name
     except keystoneclient.exceptions.NotFound:
-        LOG.warning("User '%s' not found on source!", src_user_id)
+        LOG.warning("User '%s' not found on SRC!", src_user_id)
         if fallback_to_admin:
-            LOG.warning("Replacing user '%s' with admin", src_user_id)
+            LOG.warning("Replacing user '%s' with SRC admin", src_user_id)
             src_user_name = cfglib.CONF.src.user
         else:
             return
@@ -456,4 +546,8 @@ def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
         return dst_user
     except keystoneclient.exceptions.NotFound:
         LOG.warning("User '%s' not found on DST!", src_user_name)
-        return
+        if fallback_to_admin:
+            LOG.warning("Replacing user '%s' with DST admin", src_user_name)
+            dst_user = dst_keystone.keystone_client.users.find(
+                name=cfglib.CONF.dst.user)
+            return dst_user
