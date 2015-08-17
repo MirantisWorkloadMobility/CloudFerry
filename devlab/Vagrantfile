@@ -33,13 +33,13 @@ nodes = {
   "icehouse#{ENV["BUILD_NAME"]}" => {
     "box" => "openstack-user/precise-icehouse",
     "ip" => "#{options['icehouse_ip']}",
-    "memory" => 3072,
+    "memory" => 4096,
     "role" => "openstack"
   },
   "juno#{ENV["BUILD_NAME"]}" => {
     "box" => "openstack-user/juno",
     "ip" => "#{options['juno_ip']}",
-    "memory" => 3072,
+    "memory" => 4096,
     "role" => "openstack",
     "devstack" => {
       "branch" => 'stable/juno' 

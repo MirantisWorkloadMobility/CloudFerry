@@ -14,7 +14,10 @@ clean_exit()
 {
     pushd ${CF_DIR}/devlab
     vboxmanage list vms
+    vagrant status
     vagrant destroy --force
+    vboxmanage list vms
+    vagrant status
     popd
 }
 
