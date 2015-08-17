@@ -15,16 +15,10 @@ mkdir ${CF_DIR}/devlab/provision/cf_keys
 cd ${CF_DIR}/devlab/provision/cf_keys
 ssh-keygen -f id_rsa -t rsa -N ''
 
-
-echo "Preparing lab"
 cd  ${CF_DIR}/devlab
-echo 'Removing old VMs if exist...'
-vagrant destroy --force
-
 echo 'Booting new VMs...'
 #vagrant box update
 vagrant up grizzly${BUILD_NAME} icehouse${BUILD_NAME} cloudferry${BUILD_NAME}
-
 
 echo 'Running test load cleaning...'
 pushd $CF_DIR
