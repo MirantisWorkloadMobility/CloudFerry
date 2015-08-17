@@ -115,8 +115,10 @@ networks = [
 
 # Subnets to create/delete
 subnets = [
+
     {'cidr': '10.4.2.0/24', 'ip_version': 4, 'name':'subnet_1'},
-    {'cidr': '172.18.10.0/24', 'ip_version': 4, 'name':'subnet_2'}
+    {'cidr': '192.168.1.0/24', 'ip_version': 4, 'name': 'external_subnet',
+     'allocation_pools': [{'start': '192.168.1.100', 'end': '192.168.1.254'}]}
 ]
 
 # VM's to create/delete
