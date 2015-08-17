@@ -29,7 +29,7 @@ from filtering_utils import FilteringUtils
 class RollbackScenarioGeneration(object):
     def __init__(self):
         self.migration_utils = FilteringUtils()
-        self.file_path = 'devlab/tests/migrate.yaml'
+        self.file_path = 'devlab/tests/scenarios/cold_migrate.yaml'
         self.main_folder = self.migration_utils.main_folder
         self.full_path = os.path.join(self.main_folder, self.file_path)
         self.exception_task = {'fail_migration': True}
