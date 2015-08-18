@@ -3,6 +3,7 @@
 export WORKSPACE="${WORKSPACE:-$( cd $( dirname "$0" ) && cd ../../../ && pwd)}"
 export CF_DIR=$WORKSPACE/CloudFerry
 export JOB_NAME="${JOB_NAME:-cloudferry-functional-tests}"
+export JOB_REGEX="cloudferry-functional-tests*"
 export BUILD_NUMBER="${BUILD_NUMBER:-$[ 1 + $[ RANDOM % 1000 ]]}"
 export BUILD_NAME="-$(echo $JOB_NAME | sed s/cloudferry/cf/)-${BUILD_NUMBER}"
 export VIRTUALBOX_NETWORK_NAME="vn-${JOB_NAME}-${BUILD_NUMBER}"
@@ -22,7 +23,7 @@ clean_exit()
 echo "Preparing environment"
 pushd $CF_DIR
 
-if [ "$JOB_NAME" = "cloudferry-functional-tests" ]; then
+if [[ $JOB_NAME =~ $JOB_REGEX ]]; then
     git remote update
     # cloudferry source dir is not deleted after job finish, so if
     # pull request cannot be automatically rebased, we must abort it explicitly and

@@ -13,8 +13,8 @@ cf_port=`vagrant ssh-config ${cf_hostname} | grep Port | awk '{print $2}'`
 cf_id=`vagrant ssh-config ${cf_hostname} | grep IdentityFile | awk '{print $2}'`
 
 cf_ssh_cmd="ssh -q -oConnectTimeout=5 -oConnectionAttempts=3 -oStrictHostKeyChecking=no -oCheckHostIP=no -i ${cf_id} ${cf_user}@${cf_ip} -p ${cf_port}"
-gen_load="cloudferry/devlab/jenkins/cf/generate_load.sh"
-run_migration="cloudferry/devlab/jenkins/cf/run_migration.sh"
+gen_load="CloudFerry/devlab/jenkins/cf/generate_load.sh"
+run_migration="CloudFerry/devlab/jenkins/cf/run_migration.sh"
 
 ${cf_ssh_cmd} ${gen_load}
 ${cf_ssh_cmd} ${run_migration}

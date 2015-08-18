@@ -26,7 +26,7 @@ usage() {
 src=`grep grizzly_ip $cfg | awk '{print $3}'`
 dst=`grep icehouse_ip $cfg | awk '{print $3}'`
 
-pushd $WORKSPACE/cloudferry/devlab
+pushd $WORKSPACE/CloudFerry/devlab
 
 src_hostname=`vagrant status | grep running | grep grizzly | awk '{print $1}'`
 dst_hostname=`vagrant status | grep running | grep icehouse | awk '{print $1}'`
