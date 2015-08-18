@@ -91,7 +91,7 @@ Vagrant.configure(2) do |config|
             args: [ "--public-key", File.read("provision/cf_keys/id_rsa.pub").strip() ] unless not File.exist?("provision/cf_keys/id_rsa.pub")
           if nodedata.has_key?('devstack')
             thisnode.vm.provision "file",
-              source: "./provision/devstack/local_#{nodename}.conf",
+              source: "./provision/devstack/local_juno.conf",
               destination: "/tmp/local.conf"
             thisnode.vm.provision "shell",
               privileged: false,
