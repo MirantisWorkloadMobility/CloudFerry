@@ -332,7 +332,7 @@ class Prerequisites(object):
         self.create_router(config.routers)
         self.create_networks(config.networks, config.subnets)
         for tenant in config.tenants:
-            if tenant['networks']:
+            if tenant.get('networks'):
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
                 self.create_networks(tenant['networks'], tenant['subnets'])
@@ -472,6 +472,12 @@ class Prerequisites(object):
                 self.keystoneclient.users.delete(
                     self.get_user_id(user['name']))
 
+    def delete_tenants(self):
+        for tenant in config.tenants:
+            if tenant.get('deleted'):
+                self.keystoneclient.tenants.delete(
+                    self.get_tenant_id(tenant['name']))
+
     def run_preparation_scenario(self):
         print('>>> Creating tenants:')
         self.create_tenants()
@@ -509,6 +515,8 @@ class Prerequisites(object):
         self.modify_admin_tenant_quotas()
         print('>>> Delete users which should be deleted:')
         self.delete_users()
+        print('>>> Delete tenants which should be deleted:')
+        self.delete_tenants()
 
     def clean_objects(self):
         def clean_router_ports(router_id):
@@ -555,7 +563,7 @@ class Prerequisites(object):
                                                           repr(e))
         vms = config.vms
         vms += itertools.chain(*[tenant['vms'] for tenant
-                                 in config.tenants if tenant['vms']])
+                                 in config.tenants if tenant.get('vms')])
         for vm in vms:
             try:
                 self.novaclient.servers.delete(self.get_vm_id(vm['name']))
@@ -571,7 +579,7 @@ class Prerequisites(object):
                                                          repr(e))
         nets = config.networks
         nets += itertools.chain(*[tenant['networks'] for tenant
-                                  in config.tenants if tenant['networks']])
+                                  in config.tenants if tenant.get('networks')])
         floatingips = self.neutronclient.list_floatingips()['floatingips']
         for ip in floatingips:
             try:
