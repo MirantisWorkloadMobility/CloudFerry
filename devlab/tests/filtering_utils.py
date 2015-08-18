@@ -14,7 +14,6 @@
 
 import os
 import yaml
-import config
 
 
 class FilteringUtils(object):
@@ -70,22 +69,3 @@ class FilteringUtils(object):
                index = src_data_list.index(tenant)
                src_data_list.pop(index)
         return [src_data_list, popped_tenant_list]
-
-    def get_resource_names(self, obj, cfg):
-        if obj == 'routers':
-            return [i['router']['name'] for i in cfg]
-        else:
-            return [i['name'] for i in cfg]
-
-    def get_resources_from_config(self, res):
-        if res == 'security_groups':
-            return [sg for i in config.tenants if 'security_groups' in i
-                    for sg in i['security_groups']]
-        elif res == 'servers':
-            cfg = getattr(config, 'vms')
-            [cfg.extend(i['vms']) for i in config.tenants if 'vms' in i]
-            return cfg
-        elif res == 'volumes':
-            res = 'cinder_volumes'
-
-        return getattr(config, res)

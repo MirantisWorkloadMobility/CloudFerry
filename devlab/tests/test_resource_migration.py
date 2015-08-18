@@ -8,51 +8,9 @@ import functional_test
 from keystoneclient.exceptions import NotFound
 
 from time import sleep
-from generate_load import Prerequisites
-from filtering_utils import FilteringUtils
-
-NEUTRON_RESOURCES = ['networks', 'routers', 'subnets']
-KEYSTONE_RESOURCES = ['tenants', 'users', 'roles']
-NOVA_RESOURCES = ['servers', 'flavors', 'keypairs', 'security_groups']
-GLANCE_RESOURCES = ['images']
-CINDER_RESOURCES = ['volumes']
 
 
 class ResourceMigrationTests(functional_test.FunctionalTest):
-
-    def setUp(self):
-        self.src_cloud = Prerequisites(cloud_prefix='SRC')
-        self.dst_cloud = Prerequisites(cloud_prefix='DST')
-        self.filtering_utils = FilteringUtils()
-
-    def filter_resources(self, obj):
-        def find_client(obj):
-            if obj in KEYSTONE_RESOURCES:
-                return self.src_cloud.keystoneclient
-            elif obj in NOVA_RESOURCES:
-                return self.src_cloud.novaclient
-            elif obj in GLANCE_RESOURCES:
-                return self.src_cloud.glanceclient
-            elif obj in NEUTRON_RESOURCES:
-                return self.src_cloud.neutronclient
-            elif obj in CINDER_RESOURCES:
-                return self.src_cloud.cinderclient
-
-        cfg = self.filtering_utils.get_resources_from_config(obj)
-        names = self.filtering_utils.get_resource_names(obj, cfg)
-        if obj in NEUTRON_RESOURCES:
-            net_list = getattr(find_client(obj), 'list_' + obj)()
-            return {obj: [i for i in net_list[obj] if i['name'] in names]}
-        opts = {}
-        name_attr = 'name'
-        if obj in CINDER_RESOURCES or obj in ['servers']:
-            opts = {'search_opts': {'all_tenants': 1}}
-            if obj in CINDER_RESOURCES:
-                name_attr = 'display_name'
-
-        client = getattr(find_client(obj), obj)
-        return [i for i in client.list(**opts)
-                if getattr(i, name_attr) in names]
 
     def validator(self, source_resources, dest_resources, resource_name):
         if not source_resources <= dest_resources:
@@ -86,13 +44,13 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     def test_migrate_keystone_users(self):
         src_users = []
-        for u in self.filter_resources('users'):
+        for u in self.filter_users():
             try:
                 self.src_cloud.keystoneclient.tenants.find(id=u.tenantId)
                 src_users.append(u)
             except NotFound:
                 pass
-
+        src_users = self.filter_users()
         dst_users = self.dst_cloud.keystoneclient.users.list()
 
         self.validate_resource_parameter_in_dst(src_users, dst_users,
@@ -103,7 +61,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 parameter='email')
 
     def test_migrate_keystone_roles(self):
-        src_roles = self.filter_resources('roles')
+        src_roles = self.filter_roles()
         dst_roles = self.dst_cloud.keystoneclient.roles.list()
 
         self.validate_resource_parameter_in_dst(src_roles, dst_roles,
@@ -111,13 +69,12 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 parameter='name')
 
     def test_migrate_keystone_tenants(self):
-        src_tenants = self.filter_resources('tenants')
+        src_tenants = self.filter_tenants()
         dst_tenants_gen = self.dst_cloud.keystoneclient.tenants.list()
         dst_tenants = [x.__dict__ for x in dst_tenants_gen]
 
         filtering_data = self.filtering_utils.filter_tenants(src_tenants)
         src_tenants = filtering_data[0]
-
         self.validate_resource_parameter_in_dst_dict(src_tenants, dst_tenants,
                                                 resource_name='tenant',
                                                 parameter='name')
@@ -126,7 +83,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 parameter='description')
 
     def test_migrate_nova_keypairs(self):
-        src_keypairs = self.filter_resources('keypairs')
+        src_keypairs = self.filter_keypairs()
         dst_keypairs = self.dst_cloud.novaclient.keypairs.list()
 
         self.validate_resource_parameter_in_dst(src_keypairs, dst_keypairs,
@@ -137,7 +94,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 parameter='fingerprint')
 
     def test_migrate_nova_flavors(self):
-        src_flavors = self.filter_resources('flavors')
+        src_flavors = self.filter_flavors()
         dst_flavors = self.dst_cloud.novaclient.flavors.list()
 
         self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
@@ -159,7 +116,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 parameter='id')
 
     def test_migrate_nova_security_groups(self):
-        src_sec_gr = self.filter_resources('security_groups')
+        src_sec_gr = self.filter_security_groups()
         dst_sec_gr = self.dst_cloud.novaclient.security_groups.list()
 
         self.validate_resource_parameter_in_dst(src_sec_gr, dst_sec_gr,
@@ -170,7 +127,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 parameter='description')
 
     def test_migrate_glance_images(self):
-        src_images = self.filter_resources('images')
+        src_images = self.filter_images()
         dst_images_gen = self.dst_cloud.glanceclient.images.list()
         dst_images = [x.__dict__ for x in dst_images_gen]
 
@@ -194,7 +151,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                      parameter='checksum')
 
     def test_glance_images_not_in_filter_did_not_migrate(self):
-        src_images = self.filter_resources('images')
+        src_images = self.filter_images()
         filtering_data = self.filtering_utils.filter_images(src_images)
         dst_images_gen = self.dst_cloud.glanceclient.images.list()
         dst_images = [x.__dict__['name'] for x in dst_images_gen]
@@ -206,7 +163,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                              'Image info: \n{}'.format(image))
 
     def test_migrate_neutron_networks(self):
-        src_nets = self.filter_resources('networks')
+        src_nets = self.filter_networks()
         dst_nets = self.dst_cloud.neutronclient.list_networks()
 
         self.validate_neutron_resource_parameter_in_dst(src_nets, dst_nets)
@@ -216,7 +173,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             src_nets, dst_nets, parameter='provider:segmentation_id')
 
     def test_migrate_neutron_subnets(self):
-        src_subnets = self.filter_resources('subnets')
+        src_subnets = self.filter_subnets()
         dst_subnets = self.dst_cloud.neutronclient.list_subnets()
 
         self.validate_neutron_resource_parameter_in_dst(
@@ -229,14 +186,13 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             parameter='cidr')
 
     def test_migrate_neutron_routers(self):
-        src_routers = self.filter_resources('routers')
+        src_routers = self.filter_routers()
         dst_routers = self.dst_cloud.neutronclient.list_routers()
-
         self.validate_neutron_resource_parameter_in_dst(
             src_routers, dst_routers, resource_name='routers')
 
     def test_migrate_vms_parameters(self):
-        src_vms_names = self.filter_resources('servers')
+        src_vms_names = self.filter_vms()
         dst_vms_names = self.dst_cloud.novaclient.servers.list(
             search_opts={'all_tenants': 1})
         src_vms = [x.__dict__ for x in src_vms_names]
@@ -256,7 +212,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     def test_migrate_cinder_volumes(self):
 
-        src_volume_list = self.filter_resources('volumes')
+        src_volume_list = self.filter_volumes()
         dst_volume_list = self.dst_cloud.cinderclient.volumes.list(
             search_opts={'all_tenants': 1})
 
@@ -270,7 +226,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
     @unittest.skip("Temporarily disabled: snapshots doesn't implemented in "
                    "cinder's nfs driver")
     def test_migrate_cinder_snapshots(self):
-        src_volume_list = self.filter_resources('volumes')
+        src_volume_list = self.filter_volumes()
         dst_volume_list = self.dst_cloud.cinderclient.volume_snapshots.list(
             search_opts={'all_tenants': 1})
 
@@ -294,7 +250,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                     if key in src_quotas[tenant]}
 
         src_quotas = {i.name: self.src_cloud.novaclient.quotas.get(i.id)._info
-                      for i in self.filter_resources('tenants')}
+                      for i in self.filter_tenants()}
         dst_quotas = {i.name: self.dst_cloud.novaclient.quotas.get(i.id)._info
                       for i in self.dst_cloud.keystoneclient.tenants.list()}
 
@@ -378,9 +334,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
     def test_floating_ips_migrated(self):
         def get_fips(client):
             return set([fip['floating_ip_address']
-                for fip in client.list_floatingips()['floatingips']])
+                        for fip in client.list_floatingips()['floatingips']])
 
-        src_fips = get_fips(self.src_cloud.neutronclient)
+        src_fips = self.filter_floatingips()
         dst_fips = get_fips(self.dst_cloud.neutronclient)
 
         missing_fips = src_fips - dst_fips
@@ -388,5 +344,4 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         if missing_fips:
             self.fail("{num} floating IPs did not migrate to destination: "
                       "{fips}".format(num=len(missing_fips),
-                      fips=pprint.pformat(missing_fips)))
-
+                                      fips=pprint.pformat(missing_fips)))
