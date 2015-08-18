@@ -1,9 +1,7 @@
-#!/bin/bash
-set -e
-set -x
+#!/bin/bash -ex
 
 export WORKSPACE="${WORKSPACE:-$( cd $( dirname "$0" ) && cd ../../../ && pwd)}"
-export CF_DIR="${WORKSPACE}/cloudferry"
+export CF_DIR="${WORKSPACE}/CloudFerry"
 
 cd ${CF_DIR}/devlab/
 cf_hostname=`vagrant status | grep running | grep cloudferry | awk '{print $1}'`

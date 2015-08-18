@@ -1,12 +1,8 @@
-#!/bin/bash
+#!/bin/bash -ex
 
-set -e
-set -x
-
-export CF_DIR=${HOME}/cloudferry
+export CF_DIR=${HOME}/CloudFerry
 
 cd ${CF_DIR}
-
 echo "Activate python venv..."
 source .venv/bin/activate
 

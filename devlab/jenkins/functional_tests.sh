@@ -1,9 +1,7 @@
-#!/bin/bash
-set -e
-set -x
+#!/bin/bash -ex
 
 export WORKSPACE="${WORKSPACE:-$( cd $( dirname "$0" ) && cd ../../../ && pwd)}"
-export CF_DIR=$WORKSPACE/cloudferry
+export CF_DIR=$WORKSPACE/CloudFerry
 export JOB_NAME="${JOB_NAME:-cloudferry-functional-tests}"
 export BUILD_NUMBER="${BUILD_NUMBER:-$[ 1 + $[ RANDOM % 1000 ]]}"
 export BUILD_NAME="-$(echo $JOB_NAME | sed s/cloudferry/cf/)-${BUILD_NUMBER}"
@@ -22,7 +20,6 @@ clean_exit()
 }
 
 echo "Preparing environment"
-
 pushd $CF_DIR
 
 if [ "$JOB_NAME" = "cloudferry-functional-tests" ]; then
@@ -40,8 +37,8 @@ fi
 
 echo "Create code archive"
 cd ${WORKSPACE}/
-rm -f cloudferry.tar.gz
-tar cvfz cloudferry.tar.gz cloudferry/
+rm -f CloudFerry.tar.gz
+tar cvfz CloudFerry.tar.gz CloudFerry/
 
 echo "Put all steps below"
 ${CF_DIR}/devlab/jenkins/setup_lab.sh
