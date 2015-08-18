@@ -42,8 +42,8 @@ nodes = {
     "memory" => 4096,
     "role" => "openstack",
     "devstack" => {
-      "branch" => 'stable/juno' 
-        }
+      "branch" => 'stable/juno'
+    }
   },
   "cloudferry#{ENV["BUILD_NAME"]}" => {
     "box" => "hashicorp/precise64",
@@ -91,12 +91,18 @@ Vagrant.configure(2) do |config|
             args: [ "--public-key", File.read("provision/cf_keys/id_rsa.pub").strip() ] unless not File.exist?("provision/cf_keys/id_rsa.pub")
           if nodedata.has_key?('devstack')
             thisnode.vm.provision "file",
-              source: "./provision/devstack/local_#{nodename}.conf", 
+              source: "./provision/devstack/local_#{nodename}.conf",
               destination: "/tmp/local.conf"
             thisnode.vm.provision "shell",
               privileged: false,
               path: "./provision/devstack/devstack.sh",
               args: [ "--branch", "#{nodedata['devstack']['branch']}" ]
+          end
+          thisnode.vm.provision "shell", path: "./provision/libvirt.sh"
+          if nodename == "grizzly" then
+            thisnode.vm.provision "shell", path: "./provision/qemu.sh"
+          elsif nodename == "icehouse" then
+            thisnode.vm.provision "shell", path: "./provision/cleanup_nova_instances.sh"
           end
         when "dev"
           thisnode.vm.provision "shell",

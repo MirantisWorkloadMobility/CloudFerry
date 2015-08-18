@@ -35,6 +35,17 @@ class RemoteSymlinkTestCase(test.TestCase):
         runner.run.assert_called_once_with(create_symlink)
         runner.run_ignoring_errors.assert_called_once_with(rm_symlink)
 
+    def test_symlink_does_nothing_if_target_file_is_none(self):
+        runner = mock.Mock()
+        target = None
+        symlink = "_symlink"
+
+        with files.RemoteSymlink(runner, target, symlink):
+            pass
+
+        assert not runner.run.called
+        assert not runner.run_ignoring_errors.called
+
 
 class RemoteTempFileTestCase(test.TestCase):
     def test_temp_file_is_deleted_on_scope_exit(self):
