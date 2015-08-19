@@ -112,12 +112,16 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     def test_migrate_keystone_tenants(self):
         src_tenants = self.filter_resources('tenants')
-        dst_tenants = self.dst_cloud.keystoneclient.tenants.list()
+        dst_tenants_gen = self.dst_cloud.keystoneclient.tenants.list()
+        dst_tenants = [x.__dict__ for x in dst_tenants_gen]
 
-        self.validate_resource_parameter_in_dst(src_tenants, dst_tenants,
+        filtering_data = self.filtering_utils.filter_tenants(src_tenants)
+        src_tenants = filtering_data[0]
+
+        self.validate_resource_parameter_in_dst_dict(src_tenants, dst_tenants,
                                                 resource_name='tenant',
                                                 parameter='name')
-        self.validate_resource_parameter_in_dst(src_tenants, dst_tenants,
+        self.validate_resource_parameter_in_dst_dict(src_tenants, dst_tenants,
                                                 resource_name='tenant',
                                                 parameter='description')
 

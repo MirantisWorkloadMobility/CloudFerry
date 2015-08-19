@@ -57,6 +57,20 @@ class FilteringUtils(object):
                     src_data_list.pop(index)
         return [src_data_list, popped_img_list]
 
+    def filter_tenants(self, src_data_list):
+        loaded_data = self.load_file('configs/filter.yaml')
+        filter_dict = loaded_data[0]
+        popped_tenant_list = []
+        src_data_list = [x.__dict__ for x in src_data_list]
+        if 'tenants' not in filter_dict:
+            return [src_data_list, []]
+        for tenant in src_data_list:
+            if tenant['id'] not in filter_dict['tenants']['tenant_id']:
+               popped_tenant_list.append(tenant)
+               index = src_data_list.index(tenant)
+               src_data_list.pop(index)
+        return [src_data_list, popped_tenant_list]
+
     def get_resource_names(self, obj, cfg):
         if obj == 'routers':
             return [i['router']['name'] for i in cfg]

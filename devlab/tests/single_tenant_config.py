@@ -83,15 +83,14 @@ flavors = [
 # Networks to create/delete
 # Connected to tenants
 networks = [
-    {'name': 'mynetwork1', 'admin_state_up': True},
-    {'name': 'shared_net', 'admin_state_up': True, 'shared': True,
-     'router:external': True}
+    {'name': 'tenantnet1', 'admin_state_up': True, 'shared': False, 'router:external': False},
+    {'name': 'shared_net', 'admin_state_up': True, 'shared': True, 'router:external': True}
 
 ]
 
 # Subnets to create/delete
 subnets = [
-    {'cidr': '10.4.2.0/24', 'ip_version': 4, 'name':'subnet_1'},
+    {'cidr': '10.5.2.0/24', 'ip_version': 4},
     {'cidr': '172.18.10.0/24', 'ip_version': 4, 'name':'subnet_2'}
 ]
 
@@ -111,9 +110,9 @@ snapshots = [
 
 # Cinder images to create/delete
 cinder_volumes = [
-    {'name': 'cinder_volume1', 'size': 1},
-    {'name': 'cinder_volume2', 'size': 1,
-     'server_to_attach': 'server2', 'device': '/dev/vdb'}
+    {'name': 'cinder_volume3', 'size': 1, 'user': 'test_volume_migration'},
+    {'name': 'tn1_volume1', 'size': 1},
+    {'name': 'tn1_volume2', 'size': 1},
 ]
 
 # Cinder snapshots to create/delete
