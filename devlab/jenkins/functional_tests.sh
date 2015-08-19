@@ -14,7 +14,7 @@ clean_exit()
     pushd ${CF_DIR}/devlab
     vboxmanage list vms
     vagrant status
-    vagrant destroy --force
+    vboxmanage list vms | grep "${BUILD_NAME:1:${#BUILD_NAME}}" | awk -F'_' '{print $2}' | xargs -I {} vagrant destroy {} --force
     vboxmanage list vms
     vagrant status
     popd
