@@ -19,6 +19,9 @@ from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
 
 
+LOG = utl.get_log(__name__)
+
+
 def get_boot_volume(instance):
     return instance[utl.INSTANCE_BODY]['boot_volume']
 
@@ -42,6 +45,7 @@ class ConvertComputeToImage(action.Action):
         image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
         storage_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
         compute_ignored_images = {}
+        missing_images = {}
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             _instance = instance[utl.INSTANCE_BODY]
             if _instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
@@ -66,9 +70,13 @@ class ConvertComputeToImage(action.Action):
                         images_body.update(img)
                         images_body[image_id][utl.META_INFO][
                             utl.INSTANCE_BODY] = [instance]
+                    else:
+                        LOG.warning("No boot image for instance, need to re-create it")
+                        missing_images[instance_id] = image_id
             else:
                 compute_ignored_images[instance_id] = instance
         return {
             self.target_output: image_info,
-            'compute_ignored_images': compute_ignored_images
+            'compute_ignored_images': compute_ignored_images,
+            'missing_images': missing_images
         }

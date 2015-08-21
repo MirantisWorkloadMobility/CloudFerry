@@ -322,7 +322,7 @@ class GlanceImage(image.Image):
         obsolete_images_ids_list = []
 
         for image_id_src, gl_image in info['images'].iteritems():
-            if gl_image['image']:
+            if gl_image['image'] and gl_image['image']['resource']:
                 dst_img_checksums = {x.checksum: x for x in
                                      self.get_image_list()}
                 dst_img_names = [x.name for x in self.get_image_list()]
@@ -398,7 +398,10 @@ class GlanceImage(image.Image):
                     delete_container_format.append(migrate_image.id)
                 if not gl_image["image"]["disk_format"]:
                     delete_disk_format.append(migrate_image.id)
-            else:
+            elif gl_image['image']['resource'] is None:
+                recreated_image = utl.ext_dict(name=gl_image["image"]["name"])
+                migrate_images_list.append((recreated_image, gl_image['meta']))
+            elif not gl_image['image']:
                 empty_image_list[image_id_src] = gl_image
 
         # Remove obsolete/broken images from info
@@ -454,3 +457,18 @@ class GlanceImage(image.Image):
                 out = json.loads(
                     run("rbd -p images info %s --format json" % image_id))
                 image_from_glance.update(size=out["size"])
+
+    def glance_img_create(self, runner, image_name, image_format, file_path):
+        cfg = self.cloud.cloud_config.cloud
+        out = runner.run(("glance --os-username=%s --os-password=%s --os-tenant-name=%s --os-auth-url=%s " +
+                          "image-create --name %s --disk-format=%s --container-format=bare --file %s " +
+                          "| grep id") %
+                         (cfg.user,
+                          cfg.password,
+                          cfg.tenant,
+                          cfg.auth_url,
+                          image_name,
+                          image_format,
+                          file_path))
+        image_id = out.split("|")[2].replace(' ', '')
+        return image_id

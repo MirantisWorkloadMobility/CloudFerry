@@ -61,6 +61,8 @@ process:
           - transport_resource_inst:
               - transport_images:
                   - act_conv_comp_img: True
+                  - act_is_boot_image_deleted: ['act_copy_inst_images']
+                  - act_recreate_boot_image: True
                   - act_copy_inst_images: True
                   - act_conv_image_comp: True
               - set_volume_id_for_attaching: True
