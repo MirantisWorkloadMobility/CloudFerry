@@ -1,4 +1,7 @@
-#!/bin/bash -ex
+#!/bin/bash
+
+set -e
+set -x 
 
 export WORKSPACE="${WORKSPACE:-$( cd $( dirname "$0" ) && cd ../../../ && pwd)}"
 export CF_DIR=$WORKSPACE/CloudFerry
@@ -36,13 +39,14 @@ else
     exit 1
 fi
 
+echo "Put all steps below"
+${CF_DIR}/devlab/jenkins/setup_lab.sh
+
 echo "Create code archive"
 cd ${WORKSPACE}/
 rm -f CloudFerry.tar.gz
 tar cvfz CloudFerry.tar.gz CloudFerry/
 
-echo "Put all steps below"
-${CF_DIR}/devlab/jenkins/setup_lab.sh
 ${CF_DIR}/devlab/jenkins/copy_code_to_cf.sh
 ${CF_DIR}/devlab/jenkins/gen_load_and_migration.sh
 ${CF_DIR}/devlab/jenkins/nosetests.sh

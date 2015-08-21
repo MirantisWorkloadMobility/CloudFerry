@@ -52,6 +52,13 @@ nodes = {
     "cpus" => 1,
     "role" => "lab"
   },
+  "nfs#{ENV["BUILD_NAME"]}" => {
+    "box" => "http://172.18.124.79:8000/nfs.box",
+    "ip" => "#{options['nfs_ip']}",
+    "memory" => 256,
+    "cpus" => 1,
+    "role" => "lab"
+  },
   "grizzlycompute" => {
     "box" => "openstack-user/precise-grizzlycompute",
     "ip" => "#{options['grizzly_compute_ip']}",

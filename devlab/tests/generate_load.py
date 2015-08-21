@@ -290,6 +290,12 @@ class Prerequisites(object):
             self.novaclient.servers.create_image(
                 server=self.get_vm_id(snapshot['server']),
                 image_name=snapshot['image_name'])
+            snp = self.glanceclient.images.get(self.get_image_id(snapshot['image_name']))
+            while snp.status != 'active':
+                time.sleep(2)
+                snp = self.glanceclient.images.get(self.get_image_id(snapshot['image_name']))
+                if snp.status == 'error':
+                    return None
 
     def create_networks(self, network_list, subnet_list):
         ext_router_id = self.get_router_id('ext_router')
@@ -433,7 +439,7 @@ class Prerequisites(object):
             # emulate resize state:
             elif vm_state['state'] == u'resize':
                 self.novaclient.servers.resize(self.get_vm_id(vm_state['name']),
-                                               '1')
+                                               '2')
 
     def generate_vm_state_list(self):
         data = {}
