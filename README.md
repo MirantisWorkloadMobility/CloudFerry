@@ -119,41 +119,6 @@ Run migration as usual:
 fab migrate:<configuration file>
 ```
 
+## Playground
 
-# Versions
-
-## 1.0 - Full devlab environment migration
-
-See `devlab/tests/generate_load.py` for the load migrated.
-
-See `devlab/README.md` for test environment description.
-
- - Successful tenants migration
- - Successful users migration
- - Successful roles migration
- - Successful keypairs migration
-     * User's
-     * Admin's
- - Successful quotas migration
-     * Quotas for all tenants
-     * Tenant's quotas
- - Successful flavors migration
- - Successful images migration
- - Successful volumes migration
-     * User's
-     * Admin's
- - Successful security groups migration
-     * User's
-     * Admin's
- - Successful networks migration
-     * Tenant's
-     * External
- - Successful subnets migration
- - Successful routers migration
- - Successful floating-ips migration
-     * Associated with VM's
-     * Allocated in tenants
- - Successful VMs migration
-     * Admin's
-     * User's
-
+See QUICKSTART.md for the quickest way of running your first successful migration.
