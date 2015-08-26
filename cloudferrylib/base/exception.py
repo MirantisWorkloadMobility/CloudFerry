@@ -19,3 +19,9 @@ class OutOfResources(Exception):
 
 class ImageDownloadError(Exception):
     pass
+
+
+class AbortMigrationError(RuntimeError):
+    """Non-recoverable exception which must be used in cases where migration
+    process MUST be aborted"""
+    pass

@@ -11,27 +11,52 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
-
+from operator import itemgetter
 
 from fabric.api import settings
 
 from cloudferrylib.base.action import action
+from cloudferrylib.base import exception
 from cloudferrylib.utils import remote_runner
-from cloudferrylib.utils import utils as utl
+from cloudferrylib.utils import utils
+
+
+LOG = utils.get_log(__name__)
 
 
 class CheckSSH(action.Action):
     def run(self, info=None, **kwargs):
+        check_results = []
+        check_failed = False
+
         for node in self.get_compute_nodes():
-            self.check_access(node)
+            node_ssh_failed = self.check_access(node)
+            check_failed = check_failed or node_ssh_failed
+            check_results.append((node, node_ssh_failed))
+
+        if check_failed:
+            message = "SSH check failed for following nodes: '{nodes}'".format(
+                nodes=map(itemgetter(0),
+                          filter(lambda (n, status): status, check_results)))
+            LOG.error(message)
+            raise exception.AbortMigrationError(message)
 
     def get_compute_nodes(self):
-        return self.cloud.resources[utl.COMPUTE_RESOURCE].get_compute_hosts()
+        return self.cloud.resources[utils.COMPUTE_RESOURCE].get_compute_hosts()
 
     def check_access(self, node):
+        ssh_access_failed = False
+
         cfg = self.cloud.cloud_config.cloud
         runner = remote_runner.RemoteRunner(node, cfg.ssh_user,
                                             password=cfg.ssh_sudo_password)
-        with settings(abort_on_prompts=True,
-                      gateway=self.cloud.getIpSsh()):
-            runner.run('echo')
+        gateway = self.cloud.getIpSsh()
+        try:
+            with settings(gateway=gateway):
+                runner.run('echo')
+        except Exception as error:
+            LOG.error("SSH connection from '%s' to '%s' failed with error: "
+                      "'%s'", gateway, node, error.message)
+            ssh_access_failed = True
+
+        return ssh_access_failed
