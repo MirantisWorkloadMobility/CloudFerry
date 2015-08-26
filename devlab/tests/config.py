@@ -32,8 +32,10 @@ tenants = [
           'key_name': 'key1'},
          {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1'},
          {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr'}],
-     'networks': [{'name': 'tenantnet1', 'admin_state_up': True}],
-     'subnets': [{'cidr': '10.5.2.0/24', 'ip_version': 4}],
+     'networks': [{'name': 'tenantnet1', 'admin_state_up': True},
+                  {'name': 'tenant1_net2', 'admin_state_up': True}],
+     'subnets': [{'cidr': '10.5.2.0/24', 'ip_version': 4},
+                 {'cidr': '10.6.2.0/24', 'ip_version': 4}],
      'security_groups': [
          {'name': 'sg11', 'description': 'Blah blah group', 'rules': [
              {'ip_protocol': 'icmp',
