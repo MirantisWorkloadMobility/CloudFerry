@@ -17,19 +17,19 @@ usage() {
     echo "Script to operate in OpenStack"
     echo "Current usage of this script is to clean lab"
     echo "(remove all VMs, flavors, images, networks, volumes)"
-    echo "  bash $0 clean {dst|src}"
+    echo "  bash $0 clean {dst|src} {grizzly|icehouse} {icehouse|juno}"
     echo "The script uses $cfg for getting access to environment"
     echo "Make sure you have update it properly for all IPs"
     echo
 }
 
-src=`grep grizzly_ip $cfg | awk '{print $3}'`
-dst=`grep icehouse_ip $cfg | awk '{print $3}'`
+src=`grep ${3}_ip $cfg | awk '{print $3}'`
+dst=`grep ${4}_ip $cfg | awk '{print $3}'`
 
-pushd $WORKSPACE/cloudferry/devlab
+pushd $WORKSPACE/CloudFerry/devlab
 
-src_hostname=`vagrant status | grep running | grep grizzly | awk '{print $1}'`
-dst_hostname=`vagrant status | grep running | grep icehouse | awk '{print $1}'`
+src_hostname=`vagrant status | grep running | grep ${3} | awk '{print $1}'`
+dst_hostname=`vagrant status | grep running | grep ${4} | awk '{print $1}'`
 
 src_ip=`vagrant ssh-config $src_hostname | grep HostName | awk '{print $2}'`
 dst_ip=`vagrant ssh-config $dst_hostname | grep HostName | awk '{print $2}'`
@@ -46,6 +46,26 @@ dst_id=`vagrant ssh-config $dst_hostname | grep IdentityFile | awk '{print $2}'`
 ssh_options="-oConnectTimeout=5 -oStrictHostKeyChecking=no -oCheckHostIP=no"
 src_ssh_cmd="ssh -q ${ssh_options} -i ${src_id} ${src_user}@${src_ip} -p ${src_port}"
 dst_ssh_cmd="ssh -q ${ssh_options} -i ${dst_id} ${dst_user}@${dst_ip} -p ${dst_port}"
+
+cat << EOF > tests/openrc
+# Source cloud
+export SRC_OS_TENANT_NAME=admin
+export SRC_OS_USERNAME=admin
+export SRC_OS_PASSWORD=admin
+export SRC_OS_AUTH_URL="http://${src}:5000/v2.0/"
+export SRC_OS_IMAGE_ENDPOINT="http://${src}:9292"
+export SRC_OS_NEUTRON_ENDPOINT="http://${src}:9696/"
+# Destination cloud parameters
+export DST_OS_TENANT_NAME=admin
+export DST_OS_USERNAME=admin
+export DST_OS_PASSWORD=admin
+export DST_OS_AUTH_URL="http://${dst}:5000/v2.0/"
+export DST_OS_IMAGE_ENDPOINT="http://${dst}:9292"
+export DST_OS_NEUTRON_ENDPOINT="http://${dst}:9696/"
+EOF
+
+echo "src_ip = ${src}" >> config.ini
+echo "dst_ip = ${dst}" >> config.ini
 
 dst_env=`cat << EOF
 declare -x OS_AUTH="http://${dst}:35357/v2.0";

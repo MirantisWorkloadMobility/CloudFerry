@@ -26,12 +26,18 @@ class RemoteSymlink(object):
         self.symlink = symlink_name
 
     def __enter__(self):
+        if self.target is None:
+            return
+
         cmd = "ln --symbolic {file} {symlink_name}".format(
             file=self.target, symlink_name=self.symlink)
         self.runner.run(cmd)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.target is None:
+            return
+
         self.runner.run_ignoring_errors(_unlink(self.symlink))
         return self
 
@@ -56,10 +62,7 @@ class RemoteTempFile(object):
 class RemoteDir(object):
     def __init__(self, runner, dirname):
         self.runner = runner
-        if dirname == '/':
-            raise ValueError("The directory / is not allowed")
-        else:
-            self.dirname = dirname
+        self.dirname = dirname
 
     def __enter__(self):
         cmd = "mkdir -p {dir}".format(dir=self.dirname)
@@ -68,7 +71,6 @@ class RemoteDir(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.runner.run_ignoring_errors(_unlink_dir(self.dirname))
-        return self
 
 
 class GetTempDir(object):

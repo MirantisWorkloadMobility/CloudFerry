@@ -19,12 +19,8 @@ import config
 
 class FilteringUtils(object):
     def __init__(self):
-        # TODO:
-        #  Using relative paths is a bad practice, unfortunately this is the
-        #  only way at this moment.
-        #  Should be fixed by implementing proper package module for
-        #  Cloud Ferry.
-        self.main_folder = os.path.dirname(os.path.dirname(os.getcwd()))
+        self.main_folder = os.path.dirname(os.path.dirname(
+            os.path.split(__file__)[0]))
 
     def load_file(self, file_name):
         file_path = os.path.join(self.main_folder, file_name.lstrip('/'))
@@ -60,6 +56,20 @@ class FilteringUtils(object):
                     index = src_data_list.index(img)
                     src_data_list.pop(index)
         return [src_data_list, popped_img_list]
+
+    def filter_tenants(self, src_data_list):
+        loaded_data = self.load_file('configs/filter.yaml')
+        filter_dict = loaded_data[0]
+        popped_tenant_list = []
+        src_data_list = [x.__dict__ for x in src_data_list]
+        if 'tenants' not in filter_dict:
+            return [src_data_list, []]
+        for tenant in src_data_list:
+            if tenant['id'] not in filter_dict['tenants']['tenant_id']:
+               popped_tenant_list.append(tenant)
+               index = src_data_list.index(tenant)
+               src_data_list.pop(index)
+        return [src_data_list, popped_tenant_list]
 
     def get_resource_names(self, obj, cfg):
         if obj == 'routers':

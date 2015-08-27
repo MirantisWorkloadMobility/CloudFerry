@@ -14,6 +14,7 @@
 
 
 import copy
+import random
 from operator import attrgetter
 import pprint
 import time
@@ -40,6 +41,7 @@ INTERFACES = "interfaces"
 DEFAULT_QUOTA_VALUE = -1
 
 INSTANCE_HOST_ATTRIBUTE = 'OS-EXT-SRV-ATTR:host'
+INSTANCE_LIBVIRT_NAME_ATTRIBUTE = 'OS-EXT-SRV-ATTR:instance_name'
 
 ACTIVE = 'ACTIVE'
 STOPPED = 'STOPPED'
@@ -65,6 +67,37 @@ STATUSES_AFTER_MIGRATION = {ACTIVE: ACTIVE,
                             SHELVED: SHUTOFF,
                             SHELVED_OFFLOADED: SHUTOFF,
                             VERIFY_RESIZE: ACTIVE}
+
+
+class DestinationCloudNotOperational(RuntimeError):
+    pass
+
+
+class RandomSchedulerVmDeployer(object):
+    """Creates VM on destination. Tries to create VM on random compute host if
+    failed with the one picked by nova scheduler"""
+
+    def __init__(self, nova_compute_obj):
+        self.nc = nova_compute_obj
+
+    def deploy(self, instance, create_params, client_conf):
+        hosts = self.nc.get_compute_hosts()
+        random.seed()
+        random.shuffle(hosts)
+        while hosts:
+            try:
+                return self.nc.deploy_instance(create_params, client_conf)
+            except timeout_exception.TimeoutException:
+                az = instance['availability_zone']
+                node = hosts.pop()
+                create_params['availability_zone'] = ':'.join([az, node])
+                LOG.debug("Failed to boot VM '%s', rescheduling on node '%s'",
+                          instance['name'], node)
+
+        message = ("Unable to schedule VM '{vm}' on any of available compute "
+                   "nodes.").format(vm=instance['name'])
+        LOG.error(message)
+        raise DestinationCloudNotOperational(message)
 
 
 class NovaCompute(compute.Compute):
@@ -516,10 +549,20 @@ class NovaCompute(compute.Compute):
             self.update_quota(tenant_id=tenant_id, user_id=user_id,
                               **quota_info)
 
+    def deploy_instance(self, create_params, conf):
+        with keystone.AddAdminUserToNonAdminTenant(
+                self.identity.keystone_client,
+                conf.cloud.user,
+                conf.cloud.tenant):
+            nclient = self.get_client(conf)
+            new_id = self.create_instance(nclient, **create_params)
+            self.wait_for_status(new_id, 'active')
+        return new_id
+
     def _deploy_instances(self, info_compute):
         new_ids = {}
 
-        params = copy.deepcopy(self.config)
+        client_conf = copy.deepcopy(self.config)
 
         for _instance in info_compute['instances'].itervalues():
             instance = _instance['instance']
@@ -541,15 +584,13 @@ class NovaCompute(compute.Compute):
                     "boot_index": 0
                 }]
                 create_params['image'] = None
-            params.cloud.tenant = _instance['instance']['tenant_name']
 
-            with keystone.AddAdminUserToNonAdminTenant(
-                    self.identity.keystone_client,
-                    params.cloud.user,
-                    params.cloud.tenant):
-                nclient = self.get_client(params)
-                new_id = self.create_instance(nclient, **create_params)
-                self.wait_for_status(new_id, 'active')
+            client_conf.cloud.tenant = instance['tenant_name']
+
+            new_id = RandomSchedulerVmDeployer(self).deploy(instance,
+                                                            create_params,
+                                                            client_conf)
+
             new_ids[new_id] = instance['id']
         return new_ids
 
@@ -706,10 +747,10 @@ class NovaCompute(compute.Compute):
             try:
                 reduce(lambda res, f: f(instance), map_status[curr][will],
                        None)
-            except timeout_exception.TimeoutException as e:
-                return e
-        else:
-            return True
+            except timeout_exception.TimeoutException:
+                LOG.warning("Failed to change state from '%s' to '%s' for VM "
+                            "'%s'", curr, will, instance.name)
+                pass
 
     def wait_for_status(self, id_obj, status, limit_retry=90):
         count = 0
@@ -807,6 +848,9 @@ class NovaCompute(compute.Compute):
     def detach_volume(self, instance_id, volume_id):
         self.nova_client.volumes.delete_server_volume(instance_id, volume_id)
 
+    def associate_floatingip(self, instance_id, floatingip):
+        self.nova_client.servers.add_floating_ip(instance_id, floatingip)
+
     def dissociate_floatingip(self, instance_id, floatingip):
         self.nova_client.servers.remove_floating_ip(instance_id, floatingip)
 
@@ -844,6 +888,26 @@ class NovaCompute(compute.Compute):
         instances.incloud_live_migrate(self.nova_client, self.config, vm_id,
                                        destination_host)
 
+    def get_instance_sql_id_by_uuid(self, uuid):
+        sql = "select id from instances where uuid='%s'" % uuid
+        libvirt_instance_id = self.mysql_connector.execute(sql).fetchone()[0]
+
+        LOG.debug("Libvirt instance ID of VM '%s' is '%s'", uuid,
+                  libvirt_instance_id)
+
+        return libvirt_instance_id
+
+    def update_instance_auto_increment(self, mysql_id):
+        LOG.debug("Updating nova.instances auto_increment value to %s",
+                  mysql_id)
+        sql = ("alter table instances change id id INT (11) not null default "
+               "{libvirt_id}").format(libvirt_id=mysql_id)
+
+        self.mysql_connector.execute(sql)
+
+    def reset_state(self, vm_id):
+        self.get_instance(vm_id).reset_state()
+
 
 def down_hosts(novaclient):
     services = novaclient.services.list()
@@ -859,3 +923,14 @@ def filter_down_hosts(hosts_down, elements, hostname_attribute=''):
             lambda e: getattr(e, hostname_attribute, e) not in hosts_down,
             elements)
     return elements
+
+
+# TODO: move these to a Instance class, which would represent internal instance
+# data in cloudferry regardless of the backend used (openstack, vmware,
+# cloudstack, etc)
+def instance_libvirt_name(instance):
+    return getattr(instance, INSTANCE_LIBVIRT_NAME_ATTRIBUTE)
+
+
+def instance_host(instance):
+    return getattr(instance, INSTANCE_HOST_ATTRIBUTE)

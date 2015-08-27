@@ -9,7 +9,9 @@ users = [
     {'name': 'user4', 'password': 'asaasdf', 'email': 'asdasd@example.com',
      'tenant': 'tenant2', 'enabled': False},
     {'name': 'test_volume_migration', 'password': 'passwd', 'enabled': True,
-     'email': 'volume_test@example.com', 'tenant': 'tenant1', 'deleted': True}
+     'email': 'volume_test@example.com', 'tenant': 'tenant1', 'deleted': True},
+    {'name': 'user5', 'password': 'passwd', 'email': 'asdasd@example.com',
+     'tenant': 'tenant3', 'enabled': True}
 ]
 
 # Roles to create/delete
@@ -30,8 +32,10 @@ tenants = [
           'key_name': 'key1'},
          {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1'},
          {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr'}],
-     'networks': [{'name': 'tenantnet1', 'admin_state_up': True}],
-     'subnets': [{'cidr': '10.5.2.0/24', 'ip_version': 4}],
+     'networks': [{'name': 'tenantnet1', 'admin_state_up': True},
+                  {'name': 'tenant1_net2', 'admin_state_up': True}],
+     'subnets': [{'cidr': '10.5.2.0/24', 'ip_version': 4},
+                 {'cidr': '10.6.2.0/24', 'ip_version': 4}],
      'security_groups': [
          {'name': 'sg11', 'description': 'Blah blah group', 'rules': [
              {'ip_protocol': 'icmp',
@@ -67,7 +71,9 @@ tenants = [
          {'name': 'tn_volume1', 'size': 1, 'server_to_attach': 'tn2server1',
           'device': '/dev/vdb'}
      ]
-     }
+     },
+    {'name': 'tenant3', 'description': 'This tenant will be deleted',
+     'enabled': True, 'deleted': True}
 ]
 
 # Images to create/delete
@@ -115,8 +121,10 @@ networks = [
 
 # Subnets to create/delete
 subnets = [
+
     {'cidr': '10.4.2.0/24', 'ip_version': 4, 'name':'subnet_1'},
-    {'cidr': '172.18.10.0/24', 'ip_version': 4, 'name':'subnet_2'}
+    {'cidr': '192.168.1.0/24', 'ip_version': 4, 'name': 'external_subnet',
+     'allocation_pools': [{'start': '192.168.1.100', 'end': '192.168.1.254'}]}
 ]
 
 # VM's to create/delete

@@ -31,9 +31,9 @@ incloud_live_migration = nova
 
 [src]
 type = os
-auth_url = http://<grizzly_ip>:35357/v2.0
-host = <grizzly_ip>
-ssh_host = <grizzly_ip>
+auth_url = http://<src_ip>:35357/v2.0
+host = <src_ip>
+ssh_host = <src_ip>
 ssh_user = <src_ssh_user>
 ssh_sudo_password = <src_ssh_sudo_password>
 ext_cidr = <src_ext_cidr>
@@ -44,22 +44,22 @@ tenant = <src_tenant>
 [src_mysql]
 user = <src_mysql_user>
 password = <src_mysql_password>
-host = <grizzly_ip>
+host = <src_ip>
 port = 3306
 connection = mysql+mysqlconnector
 
 [src_rabbit]
 password = <src_rabbit_password>
-hosts = <grizzly_ip>:5672
+hosts = <src_ip>:5672
 
 [src_compute]
 service = nova
 backend = iscsi
 convert_diff_file = qcow2
 convert_ephemeral_disk = qcow2
-host_eph_drv = <grizzly_ip>
+host_eph_drv = <src_ip>
 connection = mysql+mysqlconnector
-host = <grizzly_ip>
+host = <src_ip>
 port = 3306
 database_name = nova
 user = <src_mysql_user>
@@ -68,7 +68,7 @@ password = <src_mysql_password>
 [src_storage]
 service = cinder
 backend = ceph
-host = <grizzly_ip>
+host = <src_ip>
 port = 3306
 connection = mysql+mysqlconnector
 user = <src_mysql_user>
@@ -83,7 +83,7 @@ backend = swift
 disk_format = qcow2
 user = <src_mysql_user>
 password = <src_mysql_password>
-host = <grizzly_ip>
+host = <src_ip>
 port = 3306
 connection = mysql+mysqlconnector
 database_name = glance
@@ -96,7 +96,7 @@ service = auto
 interfaces_for_instance = <src_network_interfaces_for_instance>
 user = <src_mysql_user>
 password = <src_mysql_password>
-host = <grizzly_ip>
+host = <src_ip>
 connection = mysql+mysqlconnector
 database_name = quantum
 
@@ -105,9 +105,9 @@ service =
 
 [dst]
 type = os
-auth_url = http://<icehouse_ip>:35357/v2.0
-host = <icehouse_ip>
-ssh_host = <icehouse_ip>
+auth_url = http://<dst_ip>:35357/v2.0
+host = <dst_ip>
+ssh_host = <dst_ip>
 ssh_user = <dst_ssh_user>
 ssh_sudo_password = <dst_ssh_sudo_password>
 ext_cidr = <dst_ext_cidr> 
@@ -118,7 +118,7 @@ tenant = <dst_tenant>
 [dst_mysql]
 user = <dst_mysql_user> 
 password = <dst_mysql_password> 
-host = <icehouse_ip>
+host = <dst_ip>
 port = 3306
 connection = mysql+mysqlconnector
 
@@ -127,9 +127,9 @@ service = nova
 backend = iscsi
 convert_diff_file = qcow2
 convert_ephemeral_disk = qcow2
-host_eph_drv = <icehouse_ip>
+host_eph_drv = <dst_ip>
 connection = mysql+mysqlconnector
-host = <icehouse_ip>
+host = <dst_ip>
 port = 3306
 database_name = nova
 user = <dst_mysql_user>
@@ -137,12 +137,12 @@ password = <dst_mysql_password>
 
 [dst_rabbit]
 password = <dst_rabbit_password>
-hosts = <icehouse_ip>:5672
+hosts = <dst_ip>:5672
 
 [dst_storage]
 service = cinder
 backend = ceph
-host = <icehouse_ip>
+host = <dst_ip>
 port = 3306
 protocol_transfer = <dst_storage_protocol_transfer>
 connection = mysql+mysqlconnector
@@ -156,7 +156,7 @@ convert_to_raw = False
 backend = swift
 user = <dst_mysql_user>
 password = <dst_mysql_password>
-host = <icehouse_ip>
+host = <dst_ip>
 port = 3306
 connection = mysql+mysqlconnector
 database_name = glance
@@ -169,7 +169,7 @@ service=auto
 interfaces_for_instance = <dst_network_interfaces_for_instance>
 user = <dst_mysql_user>
 password = <dst_mysql_password>
-host = <icehouse_ip>
+host = <dst_ip>
 connection = mysql+mysqlconnector
 database_name = neutron
 

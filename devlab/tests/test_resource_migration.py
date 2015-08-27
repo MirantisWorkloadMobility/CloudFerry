@@ -5,6 +5,8 @@ import unittest
 import subprocess
 import functional_test
 
+from keystoneclient.exceptions import NotFound
+
 from time import sleep
 from generate_load import Prerequisites
 from filtering_utils import FilteringUtils
@@ -83,7 +85,14 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.validator(source_resources, dest_resources, resource_name)
 
     def test_migrate_keystone_users(self):
-        src_users = self.filter_resources('users')
+        src_users = []
+        for u in self.filter_resources('users'):
+            try:
+                self.src_cloud.keystoneclient.tenants.find(id=u.tenantId)
+                src_users.append(u)
+            except NotFound:
+                pass
+
         dst_users = self.dst_cloud.keystoneclient.users.list()
 
         self.validate_resource_parameter_in_dst(src_users, dst_users,
@@ -103,12 +112,16 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     def test_migrate_keystone_tenants(self):
         src_tenants = self.filter_resources('tenants')
-        dst_tenants = self.dst_cloud.keystoneclient.tenants.list()
+        dst_tenants_gen = self.dst_cloud.keystoneclient.tenants.list()
+        dst_tenants = [x.__dict__ for x in dst_tenants_gen]
 
-        self.validate_resource_parameter_in_dst(src_tenants, dst_tenants,
+        filtering_data = self.filtering_utils.filter_tenants(src_tenants)
+        src_tenants = filtering_data[0]
+
+        self.validate_resource_parameter_in_dst_dict(src_tenants, dst_tenants,
                                                 resource_name='tenant',
                                                 parameter='name')
-        self.validate_resource_parameter_in_dst(src_tenants, dst_tenants,
+        self.validate_resource_parameter_in_dst_dict(src_tenants, dst_tenants,
                                                 resource_name='tenant',
                                                 parameter='description')
 

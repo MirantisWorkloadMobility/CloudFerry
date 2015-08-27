@@ -12,11 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import mock
-
 from cloudferrylib.utils import files
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils.drivers import ssh_chunks
-
 from tests import test
 
 
@@ -34,6 +32,17 @@ class RemoteSymlinkTestCase(test.TestCase):
 
         runner.run.assert_called_once_with(create_symlink)
         runner.run_ignoring_errors.assert_called_once_with(rm_symlink)
+
+    def test_symlink_does_nothing_if_target_file_is_none(self):
+        runner = mock.Mock()
+        target = None
+        symlink = "_symlink"
+
+        with files.RemoteSymlink(runner, target, symlink):
+            pass
+
+        assert not runner.run.called
+        assert not runner.run_ignoring_errors.called
 
 
 class RemoteTempFileTestCase(test.TestCase):
@@ -137,3 +146,13 @@ class VerifiedFileCopyTestCase(test.TestCase):
                                           num_retries)
         except ssh_chunks.FileCopyFailure:
             assert scp.call_count == num_retries + 1
+    def test_temp_dir_exception_inside_with(self):
+        runner = mock.Mock()
+        dirname = 'dir'
+
+        try:
+            with files.RemoteDir(runner, dirname):
+                raise Exception
+        except Exception:
+            res = True
+        self.assertTrue(res)
