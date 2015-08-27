@@ -4,26 +4,26 @@ import os
 import time
 import json
 import yaml
+import config as conf
 
+from neutronclient.common.exceptions import NeutronClientException
+from keystoneclient.exceptions import Unauthorized
+from novaclient.exceptions import NotFound
 from glanceclient import Client as glance
 from novaclient import client as nova
 from neutronclient.neutron import client as neutron
 from keystoneclient.v2_0 import client as keystone
 from cinderclient import client as cinder
-
-import config
 from filtering_utils import FilteringUtils
 
-NOVA_CLIENT_VERSION = config.NOVA_CLIENT_VERSION
-GLANCE_CLIENT_VERSION = config.GLANCE_CLIENT_VERSION
-NEUTRON_CLIENT_VERSION = config.NEUTRON_CLIENT_VERSION
-CINDER_CLIENT_VERSION = config.CINDER_CLIENT_VERSION
+
 TIMEOUT = 600
 
 
 class Prerequisites(object):
-    def __init__(self, cloud_prefix='SRC'):
-        self.filtering_utils = FilteringUtils()
+    def __init__(self, config, cloud_prefix='SRC'):
+        self.filtering_utils = FilteringUtils(config)
+        self.config = config
         self.username = os.environ['%s_OS_USERNAME' % cloud_prefix]
         self.password = os.environ['%s_OS_PASSWORD' % cloud_prefix]
         self.tenant = os.environ['%s_OS_TENANT_NAME' % cloud_prefix]
@@ -39,23 +39,23 @@ class Prerequisites(object):
         self.keystoneclient.authenticate()
         self.token = self.keystoneclient.auth_token
 
-        self.novaclient = nova.Client(NOVA_CLIENT_VERSION,
+        self.novaclient = nova.Client(self.config.NOVA_CLIENT_VERSION,
                                       username=self.username,
                                       api_key=self.password,
                                       project_id=self.tenant,
                                       auth_url=self.auth_url)
 
-        self.glanceclient = glance(GLANCE_CLIENT_VERSION,
+        self.glanceclient = glance(self.config.GLANCE_CLIENT_VERSION,
                                    endpoint=self.image_endpoint,
                                    token=self.token)
 
-        self.neutronclient = neutron.Client(NEUTRON_CLIENT_VERSION,
+        self.neutronclient = neutron.Client(self.config.NEUTRON_CLIENT_VERSION,
                                             endpoint_url=self.neutron_endpoint,
                                             token=self.token)
 
-        self.cinderclient = cinder.Client(CINDER_CLIENT_VERSION, self.username,
-                                          self.password, self.tenant,
-                                          self.auth_url)
+        self.cinderclient = cinder.Client(self.config.CINDER_CLIENT_VERSION,
+                                          self.username, self.password,
+                                          self.tenant, self.auth_url)
         # will be filled during create all networking step
         self.ext_net_id = None
 
@@ -128,21 +128,23 @@ class Prerequisites(object):
                                               tenant_name=tenant)
         self.keystoneclient.authenticate()
         self.token = self.keystoneclient.auth_token
-        self.novaclient = nova.Client(NOVA_CLIENT_VERSION, username=user,
+        self.novaclient = nova.Client(self.config.NOVA_CLIENT_VERSION,
+                                      username=user,
                                       api_key=password, project_id=tenant,
                                       auth_url=self.auth_url)
-        self.glanceclient = glance(GLANCE_CLIENT_VERSION,
+        self.glanceclient = glance(self.config.GLANCE_CLIENT_VERSION,
                                    endpoint=self.image_endpoint,
                                    token=self.token)
         self.neutronclient = neutron.Client(
-            NEUTRON_CLIENT_VERSION,
+            self.config.NEUTRON_CLIENT_VERSION,
             endpoint_url=self.neutron_endpoint,
             token=self.token)
-        self.cinderclient = cinder.Client(CINDER_CLIENT_VERSION, user,
-                                          password, tenant, self.auth_url)
+        self.cinderclient = cinder.Client(self.config.CINDER_CLIENT_VERSION,
+                                          user, password, tenant,
+                                          self.auth_url)
 
     def create_users(self):
-        for user in config.users:
+        for user in self.config.users:
             self.keystoneclient.users.create(name=user['name'],
                                              password=user['password'],
                                              email=user['email'],
@@ -159,11 +161,11 @@ class Prerequisites(object):
                              tenant=self.tenant)
 
     def create_roles(self):
-        for role in config.roles:
+        for role in self.config.roles:
             self.keystoneclient.roles.create(name=role['name'])
 
     def create_tenants(self):
-        for tenant in config.tenants:
+        for tenant in self.config.tenants:
             self.keystoneclient.tenants.create(tenant_name=tenant['name'],
                                                description=tenant[
                                                    'description'],
@@ -174,7 +176,7 @@ class Prerequisites(object):
                 self.get_tenant_id(tenant['name']))
 
     def create_keypairs(self):
-        for user, keypair in zip(config.users, config.keypairs):
+        for user, keypair in zip(self.config.users, self.config.keypairs):
             self.switch_user(user=user['name'], password=user['password'],
                              tenant=user['tenant'])
             self.novaclient.keypairs.create(**keypair)
@@ -182,33 +184,33 @@ class Prerequisites(object):
                          tenant=self.tenant)
 
     def modify_quotas(self):
-        for tenant in config.tenants:
+        for tenant in self.config.tenants:
             if 'quota' in tenant:
                 self.novaclient.quotas.update(tenant_id=self.get_tenant_id(
                     tenant['name']), **tenant['quota'])
 
     def upload_image(self):
-        for image in config.images:
+        for image in self.config.images:
             img = self.glanceclient.images.create(**image)
             while img.status != 'active':
                 time.sleep(2)
                 img = self.glanceclient.images.get(img.id)
-        src_cloud = Prerequisites(cloud_prefix='SRC')
+        src_cloud = Prerequisites(cloud_prefix='SRC', config=self.config)
         src_img = [x.__dict__ for x in
                    src_cloud.glanceclient.images.list()]
         for image in src_img:
-            if image['name'] in config.img_to_add_members:
+            if image['name'] in self.config.img_to_add_members:
                 image_id = image['id']
                 tenant_list = self.keystoneclient.tenants.list()
                 for tenant in tenant_list:
                     tenant = tenant.__dict__
-                    if tenant['name'] in config.members:
+                    if tenant['name'] in self.config.members:
                         member_id = tenant['id']
                         self.glanceclient.image_members.create(image_id,
                                                                member_id)
 
     def update_filtering_file(self):
-        src_cloud = Prerequisites(cloud_prefix='SRC')
+        src_cloud = Prerequisites(cloud_prefix='SRC', config=self.config)
         src_img = [x.__dict__ for x in
                    src_cloud.glanceclient.images.list()]
         src_vms = [x.__dict__ for x in
@@ -238,7 +240,7 @@ class Prerequisites(object):
         vm_list = []
         for image in src_img:
             all_img_ids.append(image['id'])
-        for img in config.images_not_included_in_filter:
+        for img in self.config.images_not_included_in_filter:
             not_incl_img.append(self.get_image_id(img))
         for key in filter_dict.keys():
             if key == 'images':
@@ -256,7 +258,7 @@ class Prerequisites(object):
             yaml.dump(filter_dict, f, default_flow_style=False)
 
     def create_flavors(self):
-        for flavor in config.flavors:
+        for flavor in self.config.flavors:
             self.novaclient.flavors.create(**flavor)
 
     def create_vms(self):
@@ -288,8 +290,8 @@ class Prerequisites(object):
                     {"floatingip": {"floating_network_id": self.ext_net_id}})
                 _vm.add_floating_ip(fip['floatingip']['floating_ip_address'])
 
-        create_vms(config.vms)
-        for tenant in config.tenants:
+        create_vms(self.config.vms)
+        for tenant in self.config.tenants:
             if not tenant.get('vms'):
                 continue
             self.switch_user(user=self.username, password=self.password,
@@ -299,7 +301,7 @@ class Prerequisites(object):
                          tenant=self.tenant)
 
     def create_vm_snapshots(self):
-        for snapshot in config.snapshots:
+        for snapshot in self.config.snapshots:
             self.novaclient.servers.create_image(
                 server=self.get_vm_id(snapshot['server']),
                 image_name=snapshot['image_name'])
@@ -329,13 +331,13 @@ class Prerequisites(object):
             self.neutronclient.create_router(router)
 
     def create_external_network(self):
-        for network in config.networks:
+        for network in self.config.networks:
             if network.get('router:external'):
                 net = self.neutronclient.create_network({'network': network})
                 break
         else:
             raise RuntimeError('Please specify external network in config.py')
-        for subnet in config.subnets:
+        for subnet in self.config.subnets:
             if subnet.get('name') == 'external_subnet':
                 subnet['network_id'] = net['network']['id']
                 self.neutronclient.create_subnet({'subnet': subnet})
@@ -348,9 +350,9 @@ class Prerequisites(object):
 
     def create_all_networking(self):
         self.ext_net_id = self.create_external_network()
-        self.create_router(config.routers)
-        self.create_networks(config.networks, config.subnets)
-        for tenant in config.tenants:
+        self.create_router(self.config.routers)
+        self.create_networks(self.config.networks, self.config.subnets)
+        for tenant in self.config.tenants:
             if tenant.get('networks'):
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
@@ -377,7 +379,7 @@ class Prerequisites(object):
                         cidr=rule['cidr'])
 
     def create_security_groups(self):
-        for tenant in config.tenants:
+        for tenant in self.config.tenants:
             if 'security_groups' in tenant:
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
@@ -404,7 +406,7 @@ class Prerequisites(object):
     def create_cinder_volumes(self, volumes_list):
         for volume in volumes_list:
             if 'user' in volume:
-                user = [u for u in config.users
+                user = [u for u in self.config.users
                         if u['name'] == volume['user']][0]
                 self.switch_user(user=user['name'], password=user['password'],
                                  tenant=user['tenant'])
@@ -423,9 +425,9 @@ class Prerequisites(object):
             self.cinderclient.volume_snapshots.create(**snapshot)
 
     def create_cinder_objects(self):
-        self.create_cinder_volumes(config.cinder_volumes)
-        self.create_cinder_snapshots(config.cinder_snapshots)
-        for tenant in config.tenants:
+        self.create_cinder_volumes(self.config.cinder_volumes)
+        self.create_cinder_snapshots(self.config.cinder_snapshots)
+        for tenant in self.config.tenants:
             if 'cinder_volumes' in tenant:
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
@@ -436,7 +438,7 @@ class Prerequisites(object):
                          tenant=self.tenant)
 
     def emulate_vm_states(self):
-        for vm_state in config.vm_states:
+        for vm_state in self.config.vm_states:
             # emulate error state:
             if vm_state['state'] == u'error':
                 self.novaclient.servers.reset_state(
@@ -484,20 +486,20 @@ class Prerequisites(object):
             print "Flavor %s failed to delete: %s" % (flavor, repr(e))
 
     def modify_admin_tenant_quotas(self):
-        for tenant in config.tenants:
+        for tenant in self.config.tenants:
             if 'quota' in tenant:
                 self.novaclient.quotas.update(tenant_id=self.get_tenant_id(
                     'admin'), **tenant['quota'])
                 break
 
     def delete_users(self):
-        for user in config.users:
+        for user in self.config.users:
             if user.get('deleted'):
                 self.keystoneclient.users.delete(
                     self.get_user_id(user['name']))
 
     def delete_tenants(self):
-        for tenant in config.tenants:
+        for tenant in self.config.tenants:
             if tenant.get('deleted'):
                 self.keystoneclient.tenants.delete(
                     self.get_tenant_id(tenant['name']))
@@ -508,8 +510,8 @@ class Prerequisites(object):
         security group, even default, while on src this tenant has security
         group.
         """
-        dst_cloud = Prerequisites(cloud_prefix='DST')
-        for t in config.tenants:
+        dst_cloud = Prerequisites(cloud_prefix='DST', config=self.config)
+        for t in self.config.tenants:
             if 'deleted' in t and not t['deleted'] and t['enabled']:
                 dst_cloud.keystoneclient.tenants.create(
                     tenant_name=t['name'], description=t['description'],
@@ -564,14 +566,18 @@ class Prerequisites(object):
                 try:
                     self.neutronclient.remove_interface_router(
                         router_id, {'subnet_id': subnet['id']})
-                except Exception:
+                except NeutronClientException:
                     pass
 
         def delete_user_keypairs(_user):
             if not _user.get('enabled'):
                 return
-            self.switch_user(user=_user['name'], password=_user['password'],
-                             tenant=_user['tenant'])
+            try:
+                self.switch_user(user=_user['name'],
+                                 password=_user['password'],
+                                 tenant=_user['tenant'])
+            except Unauthorized:
+                return
 
             keypairs = [k.id for k in self.novaclient.keypairs.list()]
             if keypairs:
@@ -585,40 +591,44 @@ class Prerequisites(object):
                 servers = self.novaclient.servers.list(
                     search_opts={'all_tenants': 1})
                 for server in servers:
-                    if server.status == 'DELETED':
+                    if server.status != 'DELETED':
+                        time.sleep(1)
+                    try:
                         self.novaclient.servers.delete(server.id)
-                    time.sleep(1)
+                    except NotFound:
+                        pass
                 else:
                     break
             else:
                 raise RuntimeError('Next vms were not deleted')
 
-        for flavor in config.flavors:
+        for flavor in self.config.flavors:
             try:
                 self.novaclient.flavors.delete(
                     self.get_flavor_id(flavor['name']))
             except Exception as e:
                 print "Flavor %s failed to delete: %s" % (flavor['name'],
                                                           repr(e))
-        vms = config.vms
+        vms = self.config.vms
         vms += itertools.chain(*[tenant['vms'] for tenant
-                                 in config.tenants if tenant.get('vms')])
+                                 in self.config.tenants if tenant.get('vms')])
         for vm in vms:
             try:
                 self.novaclient.servers.delete(self.get_vm_id(vm['name']))
             except Exception as e:
                 print "VM %s failed to delete: %s" % (vm['name'], repr(e))
         wait_until_vms_all_deleted()
-        for image in config.images:
+        for image in self.config.images:
             try:
                 self.glanceclient.images.delete(
                     self.get_image_id(image['name']))
             except Exception as e:
                 print "Image %s failed to delete: %s" % (image['name'],
                                                          repr(e))
-        nets = config.networks
+        nets = self.config.networks
         nets += itertools.chain(*[tenant['networks'] for tenant
-                                  in config.tenants if tenant.get('networks')])
+                                  in self.config.tenants
+                                  if tenant.get('networks')])
         floatingips = self.neutronclient.list_floatingips()['floatingips']
         for ip in floatingips:
             try:
@@ -627,7 +637,7 @@ class Prerequisites(object):
                 print "Ip %s failed to delete: %s" % (
                     ip['floating_ip_address'], repr(e))
 
-        for router in config.routers:
+        for router in self.config.routers:
             try:
                 clean_router_ports(self.get_router_id(
                     router['router']['name']))
@@ -649,29 +659,39 @@ class Prerequisites(object):
             except Exception as e:
                 print "Network %s failed to delete: %s" % (network['name'],
                                                            repr(e))
-        for snapshot in config.snapshots:
+        for snapshot in self.config.snapshots:
             try:
                 self.glanceclient.images.delete(
                     self.get_image_id(snapshot['image_name']))
             except Exception as e:
                 print "Image %s failed to delete: %s" % (
                     snapshot['image_name'], repr(e))
-        for user in config.users:
+
+        sgs = self.neutronclient.list_security_groups()['security_groups']
+        for sg in sgs:
             try:
-                delete_user_keypairs(user)
+                print "delete sg {}".format(sg['name'])
+                self.neutronclient.delete_security_group(self.get_sg_id(
+                                                         sg['name']))
+            except NeutronClientException as e:
+                print "Security group %s failed to delete: %s" % (sg['name'],
+                                                                  repr(e))
+        for user in self.config.users:
+            delete_user_keypairs(user)
+            try:
                 self.keystoneclient.users.delete(
                     self.get_user_id(user['name']))
             except Exception as e:
                 print "User %s failed to delete: %s" % (user['name'], repr(e))
-        for role in config.roles:
+        for role in self.config.roles:
             try:
                 self.keystoneclient.roles.delete(self.get_role_id(
                     role['name']))
             except Exception as e:
                 print "Role %s failed to delete: %s" % (role['name'], repr(e))
-        snapshots = config.cinder_snapshots
+        snapshots = self.config.cinder_snapshots
         snapshots += itertools.chain(*[tenant['cinder_snapshots'] for tenant
-                                       in config.tenants if 'cinder_snapshots'
+                                       in self.config.tenants if 'cinder_snapshots'
                                        in tenant])
         for snapshot in snapshots:
             try:
@@ -681,7 +701,7 @@ class Prerequisites(object):
                 print "Snapshot %s failed to delete: %s" % (
                     snapshot['display_name'], repr(e))
 
-        for tenant in config.tenants:
+        for tenant in self.config.tenants:
             try:
                 self.keystoneclient.tenants.delete(
                     self.get_tenant_id(tenant['name']))
@@ -696,9 +716,9 @@ class Prerequisites(object):
                 print "Security group %s failed to delete: %s" % (sg['name'],
                                                                   repr(e))
 
-        volumes = config.cinder_volumes
+        volumes = self.config.cinder_volumes
         volumes += itertools.chain(*[tenant['cinder_volumes'] for tenant
-                                     in config.tenants if 'cinder_volumes'
+                                     in self.config.tenants if 'cinder_volumes'
                                      in tenant])
         for volume in volumes:
             try:
@@ -714,10 +734,10 @@ if __name__ == '__main__':
         description='Script to generate load for Openstack and delete '
                     'generated objects')
     parser.add_argument('--clean', help='clean objects described in '
-                                        'config.ini', action='store_true')
+                                        'self.config.ini', action='store_true')
     parser.add_argument('--env', default='SRC', help='choose cloud: SRC or DST')
     args = parser.parse_args()
-    preqs = Prerequisites(cloud_prefix=args.env)
+    preqs = Prerequisites(config=conf, cloud_prefix=args.env)
     if args.clean:
         preqs.clean_objects()
     else:

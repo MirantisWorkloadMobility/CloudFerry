@@ -15,11 +15,10 @@
 import os
 import yaml
 import unittest
+import functional_test
 
-from generate_load import Prerequisites
 
-
-class GroupProcedureVerification(unittest.TestCase):
+class GroupProcedureVerification(functional_test.FunctionalTest):
     """
     Testing class for grouping verification.
     """
@@ -27,7 +26,6 @@ class GroupProcedureVerification(unittest.TestCase):
         """
         SetUp method.
         """
-        self.src_cloud = Prerequisites(cloud_prefix='SRC')
         self.main_folder = os.path.dirname(os.path.dirname(os.getcwd()))
         # TODO:
         #  Using relative paths is a bad practice, unfortunately this is the

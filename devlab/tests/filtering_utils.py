@@ -17,9 +17,11 @@ import yaml
 
 
 class FilteringUtils(object):
-    def __init__(self):
+
+    def __init__(self, config):
         self.main_folder = os.path.dirname(os.path.dirname(
             os.path.split(__file__)[0]))
+        self.config = config
 
     def load_file(self, file_name):
         file_path = os.path.join(self.main_folder, file_name.lstrip('/'))
