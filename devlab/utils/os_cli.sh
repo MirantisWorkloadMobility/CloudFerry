@@ -26,7 +26,12 @@ usage() {
 src=`grep ${3}_ip $cfg | awk '{print $3}'`
 dst=`grep ${4}_ip $cfg | awk '{print $3}'`
 
-pushd $WORKSPACE/CloudFerry/devlab
+export WORKSPACE="${WORKSPACE:-$( cd $( dirname "$0" ) && cd ../../../ && pwd)}"
+if [[ -n "$WORKSPACE" ]]; then
+    pushd $WORKSPACE/CloudFerry/devlab
+else
+    pushd devlab
+fi
 
 src_hostname=`vagrant status | grep running | grep ${3} | awk '{print $1}'`
 dst_hostname=`vagrant status | grep running | grep ${4} | awk '{print $1}'`
@@ -166,7 +171,7 @@ function delete_volume {
 }
 
 function get_volume_list {
-  ${ssh} nova volume-list --all-tenants | grep none | cut -d ' ' -f 2
+  ${ssh} cinder list --all-tenants | sed -nr 's/^\| (\w{8}-\w{4}-\w{4}-\w{4}-\w{12}).*/\1/p'
 }
 
 #arg1 - name
@@ -284,12 +289,12 @@ function delete_router {
 }
 
 function get_router_list {
-  ${ssh} ${net_service} router-list -F ID | grep -v + | grep -v ID | cut -d '|' -f 2 | sed 's/^[ \t]*//'
+  ${ssh} ${net_service} router-list -F id | grep -v + | grep -v id | cut -d '|' -f 2 | sed 's/^[ \t]*//'
 }
 
 #arg1 - router name
 function get_router_ifaces_list {
-  ${ssh} ${net_service} router-show -F ID | grep -v + | grep -v ID | cut -d '|' -f 2 | sed 's/^[ \t]*//'
+  ${ssh} ${net_service} router-show -F  | grep -v + | grep -v id | cut -d '|' -f 2 | sed 's/^[ \t]*//'
 }
 
 #arg1 - port id
@@ -309,7 +314,7 @@ function delete_port {
 }
 
 function get_port_list {
-  ${ssh} ${net_service} port-list -F ID | grep -v + | grep -v ID | cut -d '|' -f 2 | sed 's/^[ \t]*//'
+  ${ssh} ${net_service} port-list -F id | grep -v + | grep -v id | cut -d '|' -f 2 | sed 's/^[ \t]*//'
 }
 
 #arg1 - subnet name
@@ -327,7 +332,7 @@ function float_ip_create {
 }
 
 function get_float_list {
-  ${ssh} ${net_service} floatingip-list | grep -v + | grep -v ID | cut -d '|' -f 2 | sed 's/^[ \t]*//'
+  ${ssh} ${net_service} floatingip-list | grep -v + | grep -v id | cut -d '|' -f 2 | sed 's/^[ \t]*//'
 }
 
 #arg1 - float ip id
