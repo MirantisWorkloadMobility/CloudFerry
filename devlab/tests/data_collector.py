@@ -101,8 +101,11 @@ class DataCollector(object):
                 servers_list = self.cloud_info.novaclient.servers.list(
                     search_opts={'all_tenants': 1})
                 for server in servers_list:
-                    vm = server.__dict__
-                    vm_list.append(vm['_info'])
+                    vm = server.__dict__['_info']
+                    for data in vm.keys():
+                        if data == u'updated':
+                            del vm[data]
+                    vm_list.append(vm)
                 collected_items[arg] = vm_list
             elif arg == 'security_groups':
                 self.unified_method(destination, collected_items, arg,
