@@ -1,4 +1,7 @@
-#!/bin/bash -ex
+#!/bin/bash
+
+set -e
+set -x
 
 export CF_DIR=${HOME}/CloudFerry
 
@@ -11,7 +14,7 @@ pip install --allow-all-external -r requirements.txt -r test-requirements.txt
 
 cd ${CF_DIR}/devlab/tests
 echo "Clean load..."
-source openrc.example
+source openrc
 python generate_load.py --clean --env DST
 python generate_load.py --clean --env DST
 python generate_load.py --clean --env SRC

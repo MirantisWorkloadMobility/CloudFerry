@@ -1,4 +1,7 @@
-#!/bin/bash -ex
+#!/bin/bash
+
+set -e
+set -x
 
 export WORKSPACE="${WORKSPACE:-$( cd $( dirname "$0" ) && cd ../../../ && pwd)}"
 export CF_DIR="${WORKSPACE}/CloudFerry"

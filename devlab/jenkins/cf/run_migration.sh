@@ -1,4 +1,7 @@
-#!/bin/bash -ex
+#!/bin/bash
+
+set -e
+set -x
 
 export CF_DIR=${HOME}/CloudFerry
 
@@ -6,7 +9,7 @@ cd ${CF_DIR}
 echo "Activate python venv..."
 source .venv/bin/activate
 
-source ${CF_DIR}/devlab/tests/openrc.example
+source ${CF_DIR}/devlab/tests/openrc
 echo "Preparing configuration for CloudFerry"
 cd ${CF_DIR}
 devlab/provision/generate_config.sh --cloudferry-path "$CF_DIR"
