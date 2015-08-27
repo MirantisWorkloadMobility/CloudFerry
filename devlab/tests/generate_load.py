@@ -147,6 +147,14 @@ class Prerequisites(object):
                                              enabled=user['enabled'],
                                              tenant_id=self.get_tenant_id(
                                                  user['tenant']))
+            # Next action for default sec group creation
+            if not user['enabled']:
+                continue
+            self.switch_user(user=user['name'], password=user['password'],
+                             tenant=user['tenant'])
+            self.novaclient.security_groups.list()
+            self.switch_user(user=self.username, password=self.password,
+                             tenant=self.tenant)
 
     def create_roles(self):
         for role in config.roles:
@@ -484,6 +492,19 @@ class Prerequisites(object):
                 self.keystoneclient.tenants.delete(
                     self.get_tenant_id(tenant['name']))
 
+    def create_tenant_wo_sec_group_on_dst(self):
+        """
+        Method for check fixed issue, when on dst tenant does not have
+        security group, even default, while on src this tenant has security
+        group.
+        """
+        dst_cloud = Prerequisites(cloud_prefix='DST')
+        for t in config.tenants:
+            if 'deleted' in t and not t['deleted'] and t['enabled']:
+                dst_cloud.keystoneclient.tenants.create(
+                    tenant_name=t['name'], description=t['description'],
+                    enabled=t['enabled'])
+
     def run_preparation_scenario(self):
         print('>>> Creating tenants:')
         self.create_tenants()
@@ -523,6 +544,8 @@ class Prerequisites(object):
         self.delete_users()
         print('>>> Delete tenants which should be deleted:')
         self.delete_tenants()
+        print('>>> Create tenant on dst, without security group')
+        self.create_tenant_wo_sec_group_on_dst()
 
     def clean_objects(self):
         def clean_router_ports(router_id):
