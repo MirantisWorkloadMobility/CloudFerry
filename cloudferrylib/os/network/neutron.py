@@ -1104,7 +1104,7 @@ class NeutronNetwork(network.Network):
             else:
                 existing_router = self.get_res_by_hash(existing_routers,
                                                        router['res_hash'])
-                if not set(router['ips']).intersection(existing_router['ips']):
+                if existing_router['ips'] and not set(router['ips']).intersection(existing_router['ips']):
                     LOG.debug("Creating router %s", pprint.pformat(r_info))
                     new_router = \
                         self.neutron_client.create_router(r_info)['router']
