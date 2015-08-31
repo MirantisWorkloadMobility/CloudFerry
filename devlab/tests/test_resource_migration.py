@@ -212,6 +212,8 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.validate_neutron_resource_parameter_in_dst(src_nets, dst_nets)
         self.validate_neutron_resource_parameter_in_dst(
             src_nets, dst_nets, parameter='provider:network_type')
+        self.validate_neutron_resource_parameter_in_dst(
+            src_nets, dst_nets, parameter='provider:segmentation_id')
 
     def test_migrate_neutron_subnets(self):
         src_subnets = self.filter_resources('subnets')
