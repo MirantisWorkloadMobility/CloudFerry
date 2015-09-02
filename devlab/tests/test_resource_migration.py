@@ -79,10 +79,20 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
     def validate_neutron_resource_parameter_in_dst(self, src_list, dst_list,
                                                    resource_name='networks',
                                                    parameter='name'):
-        # Validating only uniq parameter's value
-        source_resources = set([x[parameter] for x in src_list[resource_name]])
-        dest_resources = set([x[parameter] for x in dst_list[resource_name]])
-        self.validator(source_resources, dest_resources, resource_name)
+        for i in src_list[resource_name]:
+            for j in dst_list[resource_name]:
+                if i['name'] != j['name']:
+                    continue
+                if i[parameter] != j[parameter]:
+                    msg = 'Parameter {param} for resource {res} with name ' \
+                          '{name} are different src: {r1}, dst: {r2}'
+                    self.fail(msg.format(
+                        param=parameter, res=resource_name, name=i['name'],
+                        r1=i[parameter], r2=j[parameter]))
+                break
+            else:
+                msg = 'Resource {res} with name {r_name} was not found on dst'
+                self.fail(msg.format(res=resource_name, r_name=i['name']))
 
     def test_migrate_keystone_users(self):
         src_users = []
