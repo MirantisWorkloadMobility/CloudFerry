@@ -28,6 +28,7 @@ preparation:
           - check_dst_sql: True
           - check_dst_rabbit: True
           - act_get_info_objects_dst: False
+      - check_networks: True
   - create_snapshot: True
   - create_vm_snapshot_src: True
   - create_vm_snapshot_dst: True

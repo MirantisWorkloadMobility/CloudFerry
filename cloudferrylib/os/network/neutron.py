@@ -284,7 +284,8 @@ class NeutronNetwork(network.Network):
                                                  'allocation_pools',
                                                  'gateway_ip',
                                                  'cidr',
-                                                 'tenant_name')
+                                                 'tenant_name',
+                                                 'network_name')
 
         result['res_hash'] = res_hash
 
