@@ -17,7 +17,6 @@ import copy
 import datetime
 import json
 import re
-import time
 
 from fabric.api import run
 from fabric.api import settings
@@ -446,9 +445,8 @@ class GlanceImage(image.Image):
                            [" '{0}' ".format(i) for i in list_of_ids])))
         self.mysql_connector.execute(command)
 
-    def wait_for_status(self, id_res, status):
-        while self.glance_client.images.get(id_res).status != status:
-            time.sleep(1)
+    def get_status(self, res_id):
+        return self.glance_client.images.get(res_id).status
 
     def patch_image(self, backend_storage, image_id):
         if backend_storage == 'ceph':
