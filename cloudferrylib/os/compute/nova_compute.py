@@ -135,7 +135,7 @@ class NovaCompute(compute.Compute):
             my_settings = getattr(self.cloud.config,
                                   self.cloud.position + '_compute')
             return mysql_connector.MysqlConnector(my_settings,
-                                                  my_settings.database_name)
+                                                  my_settings.db_name)
 
     def _read_info_quotas(self):
         admin_tenant_id = self.identity.get_tenant_id_by_name(

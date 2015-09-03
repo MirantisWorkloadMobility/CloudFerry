@@ -32,15 +32,15 @@ class MysqlDump(action.Action):
                    "--password={password} "
                    "--opt "
                    "--all-databases > {path}").format(
-            user=self.cloud.cloud_config.mysql.user,
-            password=self.cloud.cloud_config.mysql.password,
+            user=self.cloud.cloud_config.mysql.db_user,
+            password=self.cloud.cloud_config.mysql.db_password,
             path=self.cloud.cloud_config.snapshot.snapshot_path)
         LOG.info("dumping database with command '%s'", command)
         self.cloud.ssh_util.execute(command)
         # copy dump file to host with cloudferry (for now just in case)
         # in future we will store snapshot for every step of migration
         context = {
-            'host_src': self.cloud.cloud_config.mysql.host,
+            'host_src': self.cloud.cloud_config.mysql.db_host,
             'path_src': self.cloud.cloud_config.snapshot.snapshot_path,
             'user_src': self.cloud.cloud_config.cloud.ssh_user,
             'key': self.cloud.config.migrate.key_filename,
@@ -61,8 +61,8 @@ class MysqlRestore(action.Action):
                    "--user={user} "
                    "--password={password} "
                    "< {path}").format(
-            user=self.cloud.cloud_config.mysql.user,
-            password=self.cloud.cloud_config.mysql.password,
+            user=self.cloud.cloud_config.mysql.db_user,
+            password=self.cloud.cloud_config.mysql.db_password,
             path=self.cloud.cloud_config.snapshot.snapshot_path)
         LOG.info("restoring database with command '%s'", command)
         self.cloud.ssh_util.execute(command)
