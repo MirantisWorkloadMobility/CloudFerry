@@ -1,0 +1,54 @@
+# Resource migration only: identity, images, volumes, networks, keypairs, flavors.
+# Use path to this file in the configuration.ini in block [migrate].
+
+namespace:
+  info_result:
+      instances: {}
+
+preparation:
+  - pre_migration_test:
+      - act_get_filter: True
+      - act_check_filter: True
+      - src_test:
+          - act_check_image_api_src: True
+          - act_check_compute_api_src: True
+          - act_check_storage_api_src: True
+          - act_check_neutron_api_src: True
+          - check_src_ssh_access: True
+          - act_check_bandwidth_src: True
+          - check_src_sql: True
+          - check_src_rabbit: True
+          - act_get_info_objects_src: False
+      - dst_test:
+          - act_check_image_api_dst: True
+          - act_check_compute_api_dst: True
+          - act_check_storage_api_dst: True
+          - act_check_neutron_api_dst: True
+          - check_dst_ssh_access: True
+          - act_check_bandwidth_dst: True
+          - check_dst_sql: True
+          - check_dst_rabbit: True
+          - act_get_info_objects_dst: False
+  - create_snapshot: True
+  - create_vm_snapshot_src: True
+  - create_vm_snapshot_dst: True
+  - create_image_snapshot_dst: True
+
+rollback:
+  - restore_from_vm_snapshot_dst: True
+  - restore_from_vm_snapshot_src: True
+  - image_rollback_dst: True
+  - restore_from_snapshot: True
+
+
+process:
+  - task_resources_transporting:
+      - act_identity_trans: True
+      - task_images_trans:
+          - act_get_info_images: True
+          - act_deploy_images: True
+      - act_comp_res_trans: True
+      - act_network_trans: True
+      - get_volumes_db_data: True
+      - write_volumes_db_data: True
+      - transport_key_pairs: True
