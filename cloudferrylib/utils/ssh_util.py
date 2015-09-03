@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-
-from fabric.api import run
-from fabric.api import settings
+from cloudferrylib.utils import remote_runner
 
 import cmd_cfg
 from utils import forward_agent
@@ -26,15 +24,18 @@ class SshUtil(object):
         self.host = host if host else cloud.host
         self.config_migrate = config_migrate
 
-    def execute(self, cmd, internal_host=None, host_exec=None):
+    def execute(self, cmd, internal_host=None, host_exec=None, ignore_errors=False):
         host = host_exec if host_exec else self.host
-        with settings(host_string=host,
-                      user=self.cloud.ssh_user):
-            if internal_host:
-                return self.execute_on_inthost(str(cmd), internal_host)
-            else:
-                return run(str(cmd))
+        runner = remote_runner.RemoteRunner(host,
+                                            self.cloud.ssh_user,
+                                            password=self.cloud.ssh_sudo_password,
+                                            sudo=False,
+                                            ignore_errors=ignore_errors)
+        if internal_host:
+            return self.execute_on_inthost(runner, str(cmd), internal_host)
+        else:
+            return runner.run(str(cmd))
 
-    def execute_on_inthost(self, cmd, host):
+    def execute_on_inthost(self, runner, cmd, host):
         with forward_agent(self.config_migrate.key_filename):
-            return run(str(cmd_cfg.ssh_cmd(host, str(cmd))))
+            return runner.run(str(cmd_cfg.ssh_cmd(host, str(cmd))))

@@ -17,6 +17,10 @@ __author__ = 'mirrorcoder'
 import cmd_cfg
 import ssh_util
 
+from cloudferrylib.utils import utils
+
+LOG = utils.get_log(__name__)
+
 
 class QemuImg(ssh_util.SshUtil):
     commit_cmd = cmd_cfg.qemu_img_cmd("commit %s")
@@ -28,7 +32,7 @@ class QemuImg(ssh_util.SshUtil):
     convert_cmd = convert_cmd("-O %s %s %s")
 
     def diff_commit(self, dest_path, filename="disk", host_compute=None):
-        cmd = self.commit_cmd(dest_path, filename)
+        cmd = self.commit_cd_cmd(dest_path, filename)
         return self.execute(cmd, host_compute)
 
     def convert_image(self,
@@ -51,12 +55,12 @@ class QemuImg(ssh_util.SshUtil):
 
     def detect_backing_file(self, dest_disk_ephemeral, host_instance):
         cmd = self.backing_file_cmd(dest_disk_ephemeral)
-        return self.parsing_output_backing(self.execute(cmd, host_instance))
+        return self.parsing_output_backing(self.execute(cmd=cmd, host_exec=host_instance, ignore_errors=True))
 
     @staticmethod
     def parsing_output_backing(output):
         out = output.split('\n')
-        backing_file = ""
+        backing_file = None
         for i in out:
             line_out = i.split(":")
             if line_out[0] == "backing file":
