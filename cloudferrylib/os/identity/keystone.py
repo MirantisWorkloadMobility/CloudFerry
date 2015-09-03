@@ -14,6 +14,7 @@
 
 
 import pika
+import ast
 
 import keystoneclient
 from keystoneclient.v2_0 import client as keystone_client
@@ -24,7 +25,6 @@ from cloudferrylib.utils import GeneratorPassword
 from cloudferrylib.utils import Postman
 from cloudferrylib.utils import Templater
 from cloudferrylib.utils import utils as utl
-
 
 LOG = utl.get_log(__name__)
 
@@ -491,7 +491,6 @@ class KeystoneIdentity(identity.Identity):
                     "SELECT password FROM user WHERE id = :user_id",
                     user_id=user.id):
                 info[user.name] = password[0]
-
         return info
 
     def _get_user_tenants_roles(self, tenant_list=None, user_list=None):
@@ -499,7 +498,36 @@ class KeystoneIdentity(identity.Identity):
             tenant_list = []
         if user_list is None:
             user_list = []
-        user_tenants_roles = {}
+        if not self.config.identity.optimize_user_role_fetch:
+            user_tenants_roles = self._get_user_tenants_roles_by_api(tenant_list,
+                                                                      user_list)
+        else:
+            user_tenants_roles = self._get_user_tenants_roles_by_db(tenant_list,
+                                                                     user_list)
+        return user_tenants_roles
+
+    def _get_user_tenants_roles_by_db(self, tenant_list, user_list):
+        user_tenants_roles = {u.name: {t.name: [] for t in tenant_list}
+                              for u in user_list}
+        tenant_ids = {tenant.id: tenant.name for tenant in tenant_list}
+        user_ids = {user.id: user.name for user in user_list}
+        roles = {r.id: r for r in self.get_roles_list()}
+        import pdb; pdb.set_trace()
+        res = self.mysql_connector.execute(
+            "SELECT * FROM user_project_metadata")
+        for row in res:
+            user_id = row[0]
+            tenant_id = row[1]
+            roles_ids = ast.literal_eval(row[2])['roles']
+            user_tenants_roles[user_ids[user_id]][tenant_ids[tenant_id]] = [{'role':
+                                                                                 {'name': roles[r].name,
+                                                                                  'id': roles[r].id}}
+                                                                            for r in roles_ids]
+        return user_tenants_roles
+
+    def _get_user_tenants_roles_by_api(self, tenant_list, user_list):
+        user_tenants_roles = {u.name: {t.name: [] for t in tenant_list}
+                               for u in user_list}
         for user in user_list:
             user_tenants_roles[user.name] = {}
             for tenant in tenant_list:
