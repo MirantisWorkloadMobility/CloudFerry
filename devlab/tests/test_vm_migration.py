@@ -1,21 +1,13 @@
 import unittest
 import json
 import functional_test
-
-from generate_load import Prerequisites
-from filtering_utils import FilteringUtils
 import config
 
 
 class VmMigration(functional_test.FunctionalTest):
 
     def setUp(self):
-        self.migration_utils = FilteringUtils()
-        self.src_cloud = Prerequisites(cloud_prefix='SRC')
-        self.dst_cloud = Prerequisites(cloud_prefix='DST')
-        src_vms = [x.__dict__ for x in
-                   self.src_cloud.novaclient.servers.list(
-                       search_opts={'all_tenants': 1})]
+        src_vms = [x.__dict__ for x in self.filter_vms()]
         self.dst_vms = [x.__dict__ for x in
                         self.dst_cloud.novaclient.servers.list(
                             search_opts={'all_tenants': 1})]
@@ -27,7 +19,7 @@ class VmMigration(functional_test.FunctionalTest):
                     vm['name']))
         with open('pre_migration_vm_states.json') as data_file:
             self.before_migr_states = json.load(data_file)
-        self.filter_vms = self.migration_utils.filter_vms(src_vms)
+        self.filter_vms = self.filtering_utils.filter_vms(src_vms)
 
     def test_vms_not_in_filter_stay_active_on_src(self):
         filter_results = self.filter_vms
