@@ -108,7 +108,7 @@ class NovaCompute(compute.Compute):
         self.cloud = cloud
         self.filter_tenant_id = None
         self.identity = cloud.resources['identity']
-        self.mysql_connector = self.get_db_connection()
+        self.mysql_connector = cloud.mysql_connector('nova')
 
     @property
     def nova_client(self):

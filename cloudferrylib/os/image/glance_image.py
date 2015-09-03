@@ -50,27 +50,12 @@ class GlanceImage(image.Image):
         self.filter_tenant_id = None
         self.filter_image = []
         # get mysql settings
-        self.mysql_connector = self.get_db_connection()
+        self.mysql_connector = cloud.mysql_connector('glance')
         super(GlanceImage, self).__init__(config)
 
     @property
     def glance_client(self):
         return self.proxy(self.get_client(), self.config)
-
-    def get_db_connection(self):
-        if not hasattr(
-                self.cloud.config,
-                self.cloud.position + '_image'):
-            LOG.debug('running on default mysql settings')
-            return mysql_connector.MysqlConnector(
-                self.config.mysql, 'glance')
-        else:
-            LOG.debug('running on custom mysql settings')
-            my_settings = getattr(
-                self.cloud.config,
-                self.cloud.position + '_image')
-            return mysql_connector.MysqlConnector(
-                my_settings, my_settings.database_name)
 
     def get_client(self):
         """ Getting glance client """

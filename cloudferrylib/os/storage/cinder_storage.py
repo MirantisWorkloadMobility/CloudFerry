@@ -38,7 +38,7 @@ class CinderStorage(storage.Storage):
             if config.mysql.host else self.host
         self.cloud = cloud
         self.identity_client = cloud.resources[utl.IDENTITY_RESOURCE]
-        self.mysql_connector = self.get_db_connection()
+        self.mysql_connector = cloud.mysql_connector('cinder')
         super(CinderStorage, self).__init__(config)
 
     @property
@@ -56,17 +56,6 @@ class CinderStorage(storage.Storage):
             params.cloud.password,
             params.cloud.tenant,
             params.cloud.auth_url)
-
-    def get_db_connection(self):
-        if not hasattr(self.cloud.config, self.cloud.position + '_storage'):
-            LOG.debug('Running on default storage settings')
-            return mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
-        else:
-            LOG.debug('Running on custom storage settings')
-            my_settings = getattr(self.cloud.config,
-                                  self.cloud.position + '_storage')
-            return mysql_connector.MysqlConnector(my_settings,
-                                                  my_settings.database_name)
 
     def read_info(self, **kwargs):
         info = {utl.VOLUMES_TYPE: {}}
