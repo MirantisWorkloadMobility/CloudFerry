@@ -17,6 +17,8 @@ tasks:
    act_net_prep: ['PrepareNetworks', 'dst_cloud']
    act_deploy_instances: ['TransportInstance']
    act_conv_comp_img: ['ConvertComputeToImage', 'src_cloud']
+   act_recreate_boot_image: ['ReCreateBootImage', 'src_cloud']
+   act_is_boot_image_deleted: ['IsBootImageDeleted']
    act_conv_image_comp: ['ConvertImageToCompute']
    act_copy_inst_images: ['CopyFromGlanceToGlance']
    act_identity_trans: ['IdentityTransporter']

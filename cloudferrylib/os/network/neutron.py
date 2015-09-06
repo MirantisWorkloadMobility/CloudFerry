@@ -232,7 +232,6 @@ class NeutronNetwork(network.Network):
         for subnet in net['subnets']:
             name = net_res.neutron_client.show_subnet(subnet)['subnet']['name']
             subnet_names.append(name)
-
         result = {
             'name': net['name'],
             'id': net['id'],
@@ -954,7 +953,8 @@ class NeutronNetwork(network.Network):
                     continue
             # create network on destination cloud
             if net['res_hash'] not in existing_nets_hashlist:
-                if net.get("provider:physical_network"):
+                phys_net = net.get("provider:physical_network")
+                if phys_net or (net['provider:network_type'] in ['gre', 'vxlan']):
                     # update info with additional arguments
                     # we need to check if we have parameter
                     # "provider:physical_network"
@@ -964,8 +964,10 @@ class NeutronNetwork(network.Network):
                     # handled automatically (this automatic handling goes
                     # after creation of networks with provider:physical_network
                     # attribute to avoid seg_id overlap)
-                    for atr in ["provider:physical_network",
-                                "provider:network_type"]:
+                    list_update_atr = ["provider:network_type"]
+                    if phys_net:
+                        list_update_atr.append(phys_net)
+                    for atr in list_update_atr:
                         network_info['network'].update({atr: net.get(atr)})
 
                     # check if we have seg_ids of that type
@@ -982,7 +984,7 @@ class NeutronNetwork(network.Network):
                         if net["provider:segmentation_id"]:
                             network_info['network'][
                                 'provider:segmentation_id'] = net[
-                                    'provider:segmentation_id']
+                                'provider:segmentation_id']
                         else:
                             networks_without_seg_ids.update({
                                 net.get("id"): network_info
@@ -1104,7 +1106,7 @@ class NeutronNetwork(network.Network):
             else:
                 existing_router = self.get_res_by_hash(existing_routers,
                                                        router['res_hash'])
-                if not set(router['ips']).intersection(existing_router['ips']):
+                if existing_router['ips'] and not set(router['ips']).intersection(existing_router['ips']):
                     LOG.debug("Creating router %s", pprint.pformat(r_info))
                     new_router = \
                         self.neutron_client.create_router(r_info)['router']

@@ -18,6 +18,7 @@ NOVA_CLIENT_VERSION = config.NOVA_CLIENT_VERSION
 GLANCE_CLIENT_VERSION = config.GLANCE_CLIENT_VERSION
 NEUTRON_CLIENT_VERSION = config.NEUTRON_CLIENT_VERSION
 CINDER_CLIENT_VERSION = config.CINDER_CLIENT_VERSION
+TIMEOUT = 600
 
 
 class Prerequisites(object):
@@ -451,13 +452,15 @@ class Prerequisites(object):
 
     def generate_vm_state_list(self):
         data = {}
-        for vm in self.novaclient.servers.list():
-            vm_name = vm.name
-            index = self.novaclient.servers.list().index(vm)
-            while self.novaclient.servers.list()[index].status == u'RESIZE':
-                time.sleep(2)
-            vm_state = self.novaclient.servers.list()[index].status
-            data[vm_name] = vm_state
+        for vm in self.novaclient.servers.list(search_opts={'all_tenants': 1}):
+            for i in range(TIMEOUT):
+                _vm = self.novaclient.servers.get(vm.id)
+                if _vm.status != u'RESIZE':
+                    break
+                time.sleep(1)
+            vm_state = self.novaclient.servers.get(vm.id).status
+            data[vm.name] = vm_state
+
         file_name = 'pre_migration_vm_states.json'
         with open(file_name, 'w') as outfile:
             json.dump(data, outfile, sort_keys=True, indent=4,

@@ -171,7 +171,11 @@ vm_states = [
     {'name': 'server2', 'state': 'stop'},
     {'name': 'server3', 'state': 'suspend'},
     {'name': 'server4', 'state': 'pause'},
-    {'name': 'server5', 'state': 'resize'}
+    {'name': 'server5', 'state': 'resize'},
+    {'name': 'server6', 'state': 'active'},
+    {'name': 'tn1server1', 'state': 'active'},
+    {'name': 'tn1server2', 'state': 'active'},
+    {'name': 'tn2server1', 'state': 'active'},
 ]
 
 # Client's versions

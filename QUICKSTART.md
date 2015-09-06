@@ -23,7 +23,7 @@
 4. Setup development environment
     ```
     cd CloudFerry/devlab
-    vagrant up grizzly icehouse
+    vagrant up grizzly icehouse nfs
     ```
 
 5. Setup virtual environment for cloudferry
