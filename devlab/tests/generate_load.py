@@ -106,10 +106,11 @@ class Prerequisites(object):
 
     def check_vm_state(self, srv):
         while srv.status != 'ACTIVE':
-                time.sleep(2)
-                srv = self.novaclient.servers.get(srv.id)
-                if srv.status == 'ERROR':
-                    return None
+            time.sleep(2)
+            srv = self.novaclient.servers.get(srv.id)
+            if srv.status == 'ERROR':
+                return None
+        return srv
 
     def wait_for_volume(self, volume_name):
         vlm = self.cinderclient.volumes.get(self.get_volume_id(volume_name))
@@ -270,27 +271,30 @@ class Prerequisites(object):
                     if not net['router:external'] and net['tenant_id'] == _t]
             return nics
 
-        for vm in config.vms:
-            vm['image'] = self.get_image_id(vm['image'])
-            vm['flavor'] = self.get_flavor_id(vm['flavor'])
-            vm['nics'] = get_vm_nics(vm)
-            self.check_vm_state(self.novaclient.servers.create(**vm))
+        def get_parameters_for_vm_creating(_vm):
+            return {'image': self.get_image_id(_vm['image']),
+                    'flavor': self.get_flavor_id(_vm['flavor']),
+                    'nics': get_vm_nics(_vm),
+                    'name': _vm['name']
+                    }
+
+        def create_vms(vm_list):
+            for vm in vm_list:
+                _vm = self.check_vm_state(self.novaclient.servers.create(
+                    **get_parameters_for_vm_creating(vm)))
+                if not vm.get('fip'):
+                    continue
+                fip = self.neutronclient.create_floatingip(
+                    {"floatingip": {"floating_network_id": self.ext_net_id}})
+                _vm.add_floating_ip(fip['floatingip']['floating_ip_address'])
+
+        create_vms(config.vms)
         for tenant in config.tenants:
-            if 'vms' in tenant:
-                for user in config.users:
-                    if user.get('deleted'):
-                        continue
-                    if user['tenant'] == tenant['name'] and user['enabled']:
-                        self.switch_user(user=user['name'],
-                                         password=user['password'],
-                                         tenant=user['tenant'])
-                for vm in tenant['vms']:
-                    vm['image'] = self.get_image_id(vm['image'])
-                    vm['flavor'] = self.get_flavor_id(vm['flavor'])
-                    vm['nics'] = get_vm_nics(vm)
-                    self.check_vm_state(self.novaclient.servers.create(**vm))
-                self.switch_user(user=self.username, password=self.password,
-                                 tenant=tenant['name'])
+            if not tenant.get('vms'):
+                continue
+            self.switch_user(user=self.username, password=self.password,
+                             tenant=tenant['name'])
+            create_vms(tenant['vms'])
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
@@ -351,8 +355,11 @@ class Prerequisites(object):
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
                 self.create_networks(tenant['networks'], tenant['subnets'])
-                self.neutronclient.create_floatingip(
-                     {"floatingip": {"floating_network_id": self.ext_net_id}})
+            if tenant.get('unassociated_fip'):
+                for i in range(tenant['unassociated_fip']):
+                    self.neutronclient.create_floatingip(
+                        {"floatingip": {"floating_network_id": self.ext_net_id}
+                         })
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
