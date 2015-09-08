@@ -9,14 +9,15 @@ pika==0.9.14
 pycrypto
 python-cinderclient==1.0.9
 python-glanceclient==0.12.0
-python-keystoneclient==0.9.0
+python-keystoneclient==1.6.0
 python-neutronclient==2.3.4
-python-novaclient==2.16.0
+python-novaclient==2.20.0
 python-swiftclient==2.3.1
 pyyaml
 redis
 requests==2.2.1
 sqlalchemy
 oslo.config==1.15.0
+oslo.utils==1.9.0
 # see https://github.com/paramiko/paramiko/issues/570 and https://github.com/paramiko/paramiko/pull/571
 -e git://github.com/mirrorcoder/paramiko.git#egg=paramiko
