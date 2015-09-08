@@ -447,8 +447,6 @@ dst_network_opts = [
     cfg.StrOpt('service', default='auto',
                help='name service for network, '
                     'auto - detect available service'),
-    cfg.ListOpt('interfaces_for_instance', default='net04',
-                help='list interfaces for connection to instance'),
     cfg.StrOpt('host', default='localhost',
                help='Neutron DB node host'),
     cfg.IntOpt('port', default='3306',

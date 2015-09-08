@@ -93,7 +93,6 @@ service = keystone
 
 [src_network]
 service = auto
-interfaces_for_instance = <src_network_interfaces_for_instance>
 user = <src_mysql_user>
 password = <src_mysql_password>
 host = <src_ip>
@@ -166,7 +165,6 @@ service = keystone
 
 [dst_network]
 service=auto
-interfaces_for_instance = <dst_network_interfaces_for_instance>
 user = <dst_mysql_user>
 password = <dst_mysql_password>
 host = <dst_ip>
