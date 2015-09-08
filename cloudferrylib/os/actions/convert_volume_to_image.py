@@ -47,13 +47,13 @@ class ConvertVolumeToImage(converter.Converter):
             vol = volume['volume']
             LOG.debug(
                 "| | uploading volume %s [%s] to image service bootable=%s" % (
-                vol['display_name'], vol['id'],
-                vol['bootable'] if hasattr(vol, 'bootable') else False))
+                    vol['display_name'], vol['id'],
+                    vol['bootable'] if hasattr(vol, 'bootable') else False))
             resp, image_id = resource_storage.upload_volume_to_image(
                 vol['id'], force=True, image_name=vol['id'],
                 container_format=self.container_format,
                 disk_format=self.disk_format)
-            resource_image.wait_for_status(image_id, ACTIVE)
+            resource_image.wait_for_status(image_id, resource_image.get_status, ACTIVE)
             resource_image.patch_image(resource_image.get_backend(), image_id)
             image_vol = resource_image.read_info(image_id=image_id)
             img_new = {

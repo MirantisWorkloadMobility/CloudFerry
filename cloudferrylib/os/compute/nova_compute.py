@@ -17,7 +17,6 @@ import copy
 import random
 from operator import attrgetter
 import pprint
-import time
 
 from novaclient.v1_1 import client as nova_client
 from novaclient import exceptions as nova_exc
@@ -556,7 +555,7 @@ class NovaCompute(compute.Compute):
                 conf.cloud.tenant):
             nclient = self.get_client(conf)
             new_id = self.create_instance(nclient, **create_params)
-            self.wait_for_status(new_id, 'active')
+            self.wait_for_status(new_id, self.get_status, 'active')
         return new_id
 
     def _deploy_instances(self, info_compute):
@@ -675,7 +674,7 @@ class NovaCompute(compute.Compute):
     def change_status(self, status, instance=None, instance_id=None):
         if instance_id:
             instance = self.nova_client.servers.get(instance_id)
-        curr = self.get_status(self.nova_client.servers, instance.id).lower()
+        curr = self.get_status(instance.id).lower()
         will = status.lower()
         func_restore = {
             'start': lambda instance: instance.start(),
@@ -687,7 +686,9 @@ class NovaCompute(compute.Compute):
             'confirm_resize': lambda instance: instance.confirm_resize(),
             'status': lambda status: lambda instance: self.wait_for_status(
                 instance_id,
-                status)
+                self.get_status,
+                status,
+                )
         }
         map_status = {
             'paused': {
@@ -752,16 +753,6 @@ class NovaCompute(compute.Compute):
                             "'%s'", curr, will, instance.name)
                 pass
 
-    def wait_for_status(self, id_obj, status, limit_retry=90):
-        count = 0
-        getter = self.nova_client.servers
-        while getter.get(id_obj).status.lower() != status.lower():
-            time.sleep(2)
-            count += 1
-            if count > limit_retry:
-                raise timeout_exception.TimeoutException(
-                    getter.get(id_obj).status.lower(), status, "Timeout exp")
-
     def get_flavor_from_id(self, flavor_id, include_deleted=False):
         if include_deleted:
             return self.nova_client.flavors.get(flavor_id)
@@ -812,8 +803,8 @@ class NovaCompute(compute.Compute):
         return self.nova_client.servers.interface_attach(server_id, port_id,
                                                          net_id, fixed_ip)
 
-    def get_status(self, getter, res_id):
-        return getter.get(res_id).status
+    def get_status(self, res_id):
+        return self.nova_client.servers.get(res_id).status
 
     def get_networks(self, instance):
         networks = []

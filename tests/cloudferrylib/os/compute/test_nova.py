@@ -108,62 +108,62 @@ class NovaComputeTestCase(test.TestCase):
         self.assertEqual(fake_instances_list, instances_list)
 
     def test_get_status(self):
-        self.fake_getter.get('fake_id').status = 'start'
+        self.mock_client().servers.get('fake_id').status = 'start'
 
-        status = self.nova_client.get_status(self.fake_getter, 'fake_id')
+        status = self.nova_client.get_status('fake_id')
 
         self.assertEqual('start', status)
 
-    @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
+    @mock.patch('cloudferrylib.base.resource.time.sleep')
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
     def test_change_status_active(self, mock_get, mock_sleep):
         mock_get.return_value = 'shutoff'
         self.nova_client.change_status('active', instance=self.fake_instance_0)
         self.fake_instance_0.start.assert_called_once_with()
-        mock_sleep.assert_called_with(2)
+        mock_sleep.assert_called_with(32)
 
-    @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
+    @mock.patch('cloudferrylib.base.resource.time.sleep')
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
     def test_change_status_shutoff(self, mock_get, mock_sleep):
         mock_get.return_value = 'active'
         self.nova_client.change_status('shutoff',
                                        instance=self.fake_instance_0)
         self.fake_instance_0.stop.assert_called_once_with()
-        mock_sleep.assert_called_with(2)
+        mock_sleep.assert_called_with(32)
 
-    @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
+    @mock.patch('cloudferrylib.base.resource.time.sleep')
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
     def test_change_status_resume(self, mock_get, mock_sleep):
         mock_get.return_value = 'suspended'
         self.nova_client.change_status('active', instance=self.fake_instance_0)
         self.fake_instance_0.resume.assert_called_once_with()
-        mock_sleep.assert_called_with(2)
+        mock_sleep.assert_called_with(32)
 
-    @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
+    @mock.patch('cloudferrylib.base.resource.time.sleep')
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
     def test_change_status_paused(self, mock_get, mock_sleep):
         mock_get.return_value = 'active'
         self.nova_client.change_status('paused', instance=self.fake_instance_0)
         self.fake_instance_0.pause.assert_called_once_with()
-        mock_sleep.assert_called_with(2)
+        mock_sleep.assert_called_with(32)
 
-    @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
+    @mock.patch('cloudferrylib.base.resource.time.sleep')
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
     def test_change_status_unpaused(self, mock_get, mock_sleep):
         mock_get.return_value = 'paused'
         self.nova_client.change_status('active',
                                        instance=self.fake_instance_0)
         self.fake_instance_0.unpause.assert_called_once_with()
-        mock_sleep.assert_called_with(2)
+        mock_sleep.assert_called_with(32)
 
-    @mock.patch('cloudferrylib.os.compute.nova_compute.time.sleep')
+    @mock.patch('cloudferrylib.base.resource.time.sleep')
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
     def test_change_status_suspend(self, mock_get, mock_sleep):
         mock_get.return_value = 'active'
         self.nova_client.change_status('suspended',
                                        instance=self.fake_instance_0)
         self.fake_instance_0.suspend.assert_called_once_with()
-        mock_sleep.assert_called_with(2)
+        mock_sleep.assert_called_with(32)
 
     def test_change_status_same(self):
         self.mock_client().servers.get('fake_instance_id').status = 'stop'

@@ -12,7 +12,12 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import time
 from cloudferrylib.utils import proxy_client
+from cloudferrylib.utils import timeout_exception
+from cloudferrylib.utils import utils
+
+LOG = utils.get_log(__name__)
 
 
 class Resource(object):
@@ -36,8 +41,23 @@ class Resource(object):
     def restore(self):
         pass
 
-    def wait_for_status(self, id_obj, status, limit_retry=60):
-        pass
+    def wait_for_status(self, res_id, get_status, wait_status, timeout=60):
+        delay = 1
+        while delay < timeout:
+            if get_status(res_id).lower() == wait_status.lower():
+                break
+            time.sleep(delay)
+            delay *= 2
+        else:
+            raise timeout_exception.TimeoutException(get_status(res_id).lower(),
+                                                     wait_status, "Timeout exp")
+
+    def try_wait_for_status(self, res_id, get_status, wait_status, timeout=60):
+        try:
+            self.wait_for_status(res_id, get_status, wait_status, timeout)
+        except timeout_exception.TimeoutException as e:
+            LOG.warning("Resource '%s' has not changed status to '%s'(%s)",
+                        res_id, wait_status, e)
 
     def get_status(self, resource_id):
         pass

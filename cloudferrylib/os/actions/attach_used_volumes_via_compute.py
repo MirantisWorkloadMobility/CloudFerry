@@ -22,7 +22,6 @@ class AttachVolumesCompute(action.Action):
 
     def run(self, info, **kwargs):
         info = copy.deepcopy(info)
-        # import pdb; pdb.set_trace()
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
         storage_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
         for instance in info[utl.INSTANCES_TYPE].itervalues():
@@ -33,5 +32,6 @@ class AttachVolumesCompute(action.Action):
                         vol['volume']['id']) != 'in-use':
                     compute_resource.attach_volume_to_instance(instance, vol)
                     storage_resource.wait_for_status(vol['volume']['id'],
+                                                     storage_resource.get_status,
                                                      'in-use')
         return {}
