@@ -70,6 +70,7 @@ process:
               - set_volume_id_for_attaching: True
           - transport_inst:
               - act_net_prep: True
+              - associate_floatingip_on_dest: True
               - act_map_com_info: True
               - act_is_not_trans_image: ['act_is_not_merge_diff']
               - process_transport_image:
