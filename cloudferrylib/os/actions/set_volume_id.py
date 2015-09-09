@@ -31,5 +31,5 @@ class SetVolumeId(action.Action):
             meta_volume_array = []
             for volume in instance['instance']['volumes']:
                 meta_volume_array.append({'volume': volume})
-            instance['meta'] = {'volume': meta_volume_array}
+            instance['meta'].update({'volume': meta_volume_array})
         return {'info': info}

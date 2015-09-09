@@ -105,3 +105,4 @@ tasks:
    sleep_30: ['Sleep30']
    check_networks: ['CheckNetworks']
    check_src_instance_networks: ['CheckInstanceNetworks', 'src_cloud']
+   verify_vms: ['VerifyVms', src_cloud]
