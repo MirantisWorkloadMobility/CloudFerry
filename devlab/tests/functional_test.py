@@ -34,9 +34,9 @@ class FunctionalTest(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(FunctionalTest, self).__init__(*args, **kwargs)
         suppress_dependency_logging()
-        self.src_cloud = Prerequisites(cloud_prefix='SRC')
-        self.dst_cloud = Prerequisites(cloud_prefix='DST')
-        self.filtering_utils = FilteringUtils()
+        self.src_cloud = Prerequisites(cloud_prefix='SRC', config=config)
+        self.dst_cloud = Prerequisites(cloud_prefix='DST', config=config)
+        self.filtering_utils = FilteringUtils(config=config)
 
     def filter_networks(self):
         cfg = [i['name'] for i in config.networks]
