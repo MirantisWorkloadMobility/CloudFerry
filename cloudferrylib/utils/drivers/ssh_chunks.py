@@ -29,21 +29,6 @@ class FileCopyFailure(RuntimeError):
     pass
 
 
-def splitter(total_size, block_size):
-    """Splits :total_size into :block_size smaller chunks
-
-    :returns generator with (start, end) tuple"""
-
-    start = 0
-    end = start
-    while start <= total_size:
-        end += block_size
-        if end > total_size:
-            end = total_size
-        yield start, end
-        start = end + 1
-
-
 def remote_file_size(runner, path):
     return int(runner.run('stat --printf="%s" {path}'.format(path=path)))
 
@@ -106,12 +91,12 @@ def verified_file_copy(src_runner, dst_runner, dst_user, src_path, dst_path,
                               src_path, dst_host)
 
 
-def remote_split_file(runner, input, output, start, end):
-    split_file = ('dd if={input} of={output} skip={start} bs={block_size} '
-                  'count={blocks_to_copy}').format(input=input, output=output,
-                                                   block_size='1M',
-                                                   start=start,
-                                                   blocks_to_copy=end-start)
+def remote_split_file(runner, input, output, start, block_size):
+    split_file = ('dd if={input} of={output} skip={start} bs={block_size}M '
+                  'count=1').format(input=input,
+                                    output=output,
+                                    block_size=block_size,
+                                    start=start)
     runner.run(split_file)
 
 
@@ -120,12 +105,12 @@ def remote_unzip(runner, path):
     runner.run(unzip)
 
 
-def remote_join_file(runner, dest_file, part, start, end):
-    join = ("dd if={part} of={dest} seek={start} bs={block_size} "
-            "count={blocks_to_copy}").format(part=part, dest=dest_file,
-                                             start=start,
-                                             block_size='1M',
-                                             blocks_to_copy=end-start)
+def remote_join_file(runner, dest_file, part, start, block_size):
+    join = ("dd if={part} of={dest} seek={start} bs={block_size}M "
+            "count=1").format(part=part,
+                              dest=dest_file,
+                              start=start,
+                              block_size=block_size)
     runner.run(join)
 
 
@@ -170,31 +155,33 @@ class CopyFilesBetweenComputeHosts(driver_transporter.DriverTransporter):
 
             src_md5 = remote_md5_sum(src_runner, src_path)
 
-            for i, (start, end) in enumerate(splitter(file_size, block_size)):
+            num_blocks = int(math.ceil(float(file_size)/block_size))
+
+            for i in xrange(num_blocks):
                 part = os.path.basename(src_path) + '.part{i}'.format(i=i)
                 part_path = os.path.join(src_temp_dir, part)
-                remote_split_file(src_runner, src_path, part_path,
-                                  start, end)
+                remote_split_file(src_runner, src_path, part_path, i,
+                                  block_size)
                 gzipped_path = remote_gzip(src_runner, part_path)
                 gzipped_filename = os.path.basename(gzipped_path)
-                dst_path = os.path.join(dst_temp_dir, gzipped_filename)
+                dst_gzipped_path = os.path.join(dst_temp_dir, gzipped_filename)
 
                 verified_file_copy(src_runner, dst_runner, dst_user,
-                                   gzipped_path, dst_path, dst_host,
+                                   gzipped_path, dst_gzipped_path, dst_host,
                                    num_retries)
 
-                remote_unzip(dst_runner, dst_path)
+                remote_unzip(dst_runner, dst_gzipped_path)
                 partial_files.append(os.path.join(dst_temp_dir, part))
 
-            for i, (start, end) in enumerate(splitter(file_size, block_size)):
-                remote_join_file(dst_runner, dst_path, partial_files[i],
-                                 start, end)
+            for i in xrange(num_blocks):
+                remote_join_file(dst_runner, dst_path, partial_files[i], i,
+                                 block_size)
 
             dst_md5 = remote_md5_sum(dst_runner, dst_path)
 
             if src_md5 != dst_md5:
-                message = ("Error copying file from '{src_file}@{src_host}' "
-                           "to '{dst_file}@{dst_host}'").format(
+                message = ("Error copying file from '{src_host}:{src_file}' "
+                           "to '{dst_host}:{dst_file}'").format(
                     src_file=src_path, src_host=src_host, dst_file=dst_path,
                     dst_host=dst_host)
                 LOG.error(message)
