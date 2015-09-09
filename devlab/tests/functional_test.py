@@ -73,8 +73,13 @@ class FunctionalTest(unittest.TestCase):
             return set(fips)
 
     def filter_users(self):
-        users = [i['name'] for i in config.users
-                 if not i.get('deleted') and self._tenant_exists(i['tenant'])]
+        users = []
+        for user in config.users:
+            if user.get('deleted'):
+                continue
+            if self._tenant_exists(user['tenant']) or\
+                    self._user_has_not_primary_tenants(user['name']):
+                users.append(user['name'])
         return self._get_keystone_resources('users', users)
 
     def filter_tenants(self):
@@ -136,6 +141,14 @@ class FunctionalTest(unittest.TestCase):
             return True
         except IndexError:
             return False
+
+    def _user_has_not_primary_tenants(self, user_name):
+        user_id = self.src_cloud.get_user_id(user_name)
+        for tenant in self.src_cloud.keystoneclient.tenants.list():
+            if self.src_cloud.keystoneclient.roles.roles_for_user(
+                    user=user_id, tenant=tenant.id):
+                return True
+        return False
 
     def get_vms_with_fip_associated(self):
         vms = config.vms
