@@ -64,6 +64,7 @@ port = 3306
 database_name = nova
 user = <src_mysql_user>
 password = <src_mysql_password>
+service_tenant = service
 
 [src_storage]
 service = cinder
@@ -113,6 +114,7 @@ ext_cidr = <dst_ext_cidr>
 user = <dst_user>
 password = <dst_password> 
 tenant = <dst_tenant>
+service_tenant = service
 
 [dst_mysql]
 user = <dst_mysql_user> 
