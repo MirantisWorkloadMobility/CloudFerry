@@ -100,3 +100,4 @@ tasks:
    reset_instances_id_column_rollback: ['RestoreOriginalInstancesTableSchema']
    check_qemu_version: ['CheckQemuVersion']
    sleep_30: ['Sleep30']
+   check_networks: ['CheckNetworks']
