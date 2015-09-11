@@ -18,6 +18,24 @@ from filtering_utils import FilteringUtils
 
 
 TIMEOUT = 600
+VM_SPAWNING_LIMIT = 5
+
+
+def retry_until_resources_created(resource_name):
+    def actual_decorator(func):
+        def wrapper(_list):
+            for i in range(TIMEOUT):
+                _list = func(_list)
+                if _list:
+                    time.sleep(1)
+                    continue
+                else:
+                    break
+            else:
+                msg = '{0}s with ids {1} have not become in active state'
+                raise RuntimeError(msg.format(resource_name, _list))
+        return wrapper
+    return actual_decorator
 
 
 class Prerequisites(object):
@@ -113,21 +131,8 @@ class Prerequisites(object):
         return user_tenant_roles
 
     def check_vm_state(self, srv):
-        while srv.status != 'ACTIVE':
-            time.sleep(2)
-            srv = self.novaclient.servers.get(srv.id)
-            if srv.status == 'ERROR':
-                return None
-        return srv
-
-    def wait_for_volume(self, volume_name):
-        vlm = self.cinderclient.volumes.get(self.get_volume_id(volume_name))
-        while vlm.status != 'available' and vlm.status != 'in-use':
-            time.sleep(2)
-            vlm = self.cinderclient.volumes.get(
-                self.get_volume_id(volume_name))
-            if vlm.status == 'error':
-                    return None
+        srv = self.novaclient.servers.get(srv)
+        return srv.status == 'ACTIVE'
 
     def switch_user(self, user, password, tenant):
         self.keystoneclient = keystone.Client(auth_url=self.auth_url,
@@ -205,10 +210,15 @@ class Prerequisites(object):
                     tenant['name']), **tenant['quota'])
 
     def upload_image(self):
+        @retry_until_resources_created('image')
+        def wait_until_images_created(image_ids):
+            for img_id in image_ids[:]:
+                img = self.glanceclient.images.get(img_id)
+                if img.status == 'active':
+                    image_ids.remove(img_id)
+            return image_ids
+
         img_ids = []
-        for image in self.config.images:
-            img = self.glanceclient.images.create(**image)
-            img_ids.append(img.id)
         for tenant in self.config.tenants:
             if not tenant.get('images'):
                 continue
@@ -219,21 +229,10 @@ class Prerequisites(object):
                 img_ids.append(img.id)
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
-
-        for i in range(TIMEOUT):
-            if img_ids:
-                for img_id in img_ids[:]:
-                    img = self.glanceclient.images.get(img_id)
-                    if img.status == 'active':
-                        img_ids.remove(img_id)
-            else:
-                break
-            time.sleep(1)
-        else:
-            raise RuntimeError(
-                'Images with ids {0} have not become to active state'.format(
-                    img_ids))
-
+        for image in self.config.images:
+            img = self.glanceclient.images.create(**image)
+            img_ids.append(img.id)
+        wait_until_images_created(img_ids)
         src_cloud = Prerequisites(cloud_prefix='SRC', config=self.config)
         src_img = [x.__dict__ for x in
                    src_cloud.glanceclient.images.list()]
@@ -319,39 +318,90 @@ class Prerequisites(object):
                     'name': _vm['name']
                     }
 
+        def wait_vm_nic_created(vm_id):
+            for i in range(TIMEOUT):
+                srv = self.novaclient.servers.get(vm_id)
+                if srv.networks:
+                    break
+            else:
+                raise RuntimeError(
+                    'NIC for vm with id {0} was not created'.format(vm_id))
+
+        def wait_for_vm_creating():
+            """ When limit for creating vms in nova is reached, we receive
+                exception from nova: 'novaclient.exceptions.OverLimit:
+                This request was rate-limited. (HTTP 413)'. To handle this we
+                set limit for vm spawning.
+            """
+            for i in range(TIMEOUT):
+                all_vms = self.novaclient.servers.list(
+                    search_opts={'all_tenants': 1})
+                spawning_vms = [vm.id for vm in all_vms
+                                if vm.status == 'BUILD']
+                if len(spawning_vms) >= VM_SPAWNING_LIMIT:
+                    time.sleep(1)
+                else:
+                    break
+            else:
+                raise RuntimeError(
+                    'VMs with ids {0} were in "BUILD" state more than {1} '
+                    'seconds'.format(spawning_vms, TIMEOUT))
+
         def create_vms(vm_list):
+            vm_ids = []
             for vm in vm_list:
-                _vm = self.check_vm_state(self.novaclient.servers.create(
-                    **get_parameters_for_vm_creating(vm)))
+                wait_for_vm_creating()
+                _vm = self.novaclient.servers.create(
+                    **get_parameters_for_vm_creating(vm))
+                vm_ids.append(_vm.id)
                 if not vm.get('fip'):
                     continue
+                wait_vm_nic_created(_vm.id)
                 fip = self.neutronclient.create_floatingip(
                     {"floatingip": {"floating_network_id": self.ext_net_id}})
                 _vm.add_floating_ip(fip['floatingip']['floating_ip_address'])
+            return vm_ids
 
-        create_vms(self.config.vms)
+        @retry_until_resources_created('vm')
+        def wait_until_vms_created(vm_list):
+            for vm in vm_list[:]:
+                if self.check_vm_state(vm):
+                    vms.remove(vm)
+            return vms
+
+        vms = create_vms(self.config.vms)
         for tenant in self.config.tenants:
             if not tenant.get('vms'):
                 continue
             self.switch_user(user=self.username, password=self.password,
                              tenant=tenant['name'])
-            create_vms(tenant['vms'])
+            vms.extend(create_vms(tenant['vms']))
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
+        wait_until_vms_created(vms)
+
     def create_vm_snapshots(self):
+        @retry_until_resources_created('vm_snapshot')
+        def wait_until_vm_snapshots_created(snapshot_ids):
+            for snp_id in snapshot_ids[:]:
+                snp = self.glanceclient.images.get(snp_id)
+                if snp.status == 'active':
+                    snp_ids.remove(snp_id)
+                elif snp.status == 'error':
+                    msg = 'Snapshot with id {0} has become in error state'
+                    raise RuntimeError(msg.format(snp_id))
+            return snapshot_ids
+
+        snp_ids = []
         for snapshot in self.config.snapshots:
             self.novaclient.servers.create_image(
                 server=self.get_vm_id(snapshot['server']),
                 image_name=snapshot['image_name'])
-            snp = self.glanceclient.images.get(
-                self.get_image_id(snapshot['image_name']))
-            while snp.status != 'active':
-                time.sleep(2)
-                snp = self.glanceclient.images.get(
-                    self.get_image_id(snapshot['image_name']))
-                if snp.status == 'error':
-                    return None
+            snp = self.glanceclient.images.get(self.get_image_id(
+                snapshot['image_name']))
+            snp_ids.append(snp.id)
+        wait_until_vm_snapshots_created(snp_ids)
 
     def create_networks(self, network_list, subnet_list):
         ext_router_id = self.get_router_id('ext_router')
@@ -445,6 +495,19 @@ class Prerequisites(object):
         self.neutronclient.create_security_group_rule(sec_rule)
 
     def create_cinder_volumes(self, volumes_list):
+
+        @retry_until_resources_created('volume')
+        def wait_for_volumes(volume_ids):
+            for volume_id in volume_ids[:]:
+                _vlm = self.cinderclient.volumes.get(volume_id)
+                if _vlm.status == 'available' or _vlm.status == 'in-use':
+                    volume_ids.remove(volume_id)
+                elif _vlm.status == 'error':
+                    msg = 'Volume with id {0} was created with error'
+                    raise RuntimeError(msg.format(volume_id))
+            return volume_ids
+
+        vlm_ids = []
         for volume in volumes_list:
             if 'user' in volume:
                 user = [u for u in self.config.users
@@ -453,13 +516,21 @@ class Prerequisites(object):
                                  tenant=user['tenant'])
             vlm = self.cinderclient.volumes.create(display_name=volume['name'],
                                                    size=volume['size'])
-            self.wait_for_volume(volume['name'])
-            if 'server_to_attach' in volume:
-                self.novaclient.volumes.create_server_volume(
-                    server_id=self.get_vm_id(volume['server_to_attach']),
-                    volume_id=vlm.id,
-                    device=volume['device'])
-            self.wait_for_volume(volume['name'])
+            vlm_ids.append(vlm.id)
+        self.switch_user(user=self.username, password=self.password,
+                         tenant=self.tenant)
+        wait_for_volumes(vlm_ids)
+        vlm_ids = []
+        for volume in volumes_list:
+            if 'server_to_attach' not in volume:
+                continue
+            vlm_id = self.get_volume_id(volume['name'])
+            self.novaclient.volumes.create_server_volume(
+                server_id=self.get_vm_id(volume['server_to_attach']),
+                volume_id=vlm_id,
+                device=volume['device'])
+            vlm_ids.append(vlm_id)
+        wait_for_volumes(vlm_ids)
 
     def create_cinder_snapshots(self, snapshot_list):
         for snapshot in snapshot_list:
