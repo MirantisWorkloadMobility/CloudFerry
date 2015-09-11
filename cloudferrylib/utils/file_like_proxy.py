@@ -13,6 +13,7 @@
 # limitations under the License.
 
 
+import progressbar
 import re
 import time
 
@@ -75,10 +76,23 @@ class FileLikeProxy:
 
     def __trigger_callback(self, len_data):
         self.delta += len_data
+        if self.delta == len_data:
+            msg = 'Download file {}({}): '.format(self.name, self.id)
+            self.bar = progressbar.ProgressBar(
+                widgets=[
+                    msg,
+                    progressbar.Bar(left='[',
+                                    marker='=',
+                                    right=']'),
+                    progressbar.Percentage()
+                ]
+            ).start()
         self.res += len_data
-        if self.delta > self.percent:
-            self.__callback(self.res, self.length, self.id, self.name)
+        if (self.delta > self.percent) or (len_data == 0):
+            self.bar.update(self.res * 100 / self.length)
             self.delta = 0
+        if len_data == 0:
+            self.bar.finish()
 
     def close(self):
         self.resp.close()

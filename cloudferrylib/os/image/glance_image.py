@@ -299,6 +299,8 @@ class GlanceImage(image.Image):
                 info['images'][glance_image.id] = {'image': gl_image,
                                                    'meta': {},
                                                    }
+                LOG.debug("find image with ID {}({})".format(glance_image.id,
+                                                             glance_image.name))
             else:
                 LOG.warning("image {img} was not migrated according to "
                             "status = {status}, (expected status "
@@ -310,7 +312,7 @@ class GlanceImage(image.Image):
 
         return info
 
-    def deploy(self, info, callback=None):
+    def deploy(self, info):
         info = copy.deepcopy(info)
         new_info = {'images': {}}
         migrate_images_list = []
@@ -334,8 +336,9 @@ class GlanceImage(image.Image):
                         (dst_img_checksums[checksum_current], meta))
                     continue
 
-                LOG.debug("updating owner of image {image}".format(
-                    image=gl_image["image"]["owner"]))
+                LOG.debug("updating owner {owner} of image {image}".format(
+                    owner=gl_image["image"]["owner"],
+                    image=gl_image["image"]["id"]))
                 gl_image["image"]["owner"] = \
                     self.identity_client.get_tenant_id_by_name(
                     gl_image["image"]["owner_name"])
@@ -383,8 +386,8 @@ class GlanceImage(image.Image):
                         properties=gl_image['image']['properties'],
                         data=file_like_proxy.FileLikeProxy(
                             gl_image['image'],
-                            callback,
                             self.config['migrate']['speed_limit']))
+                    LOG.debug("new image ID {}".format(migrate_image.id))
                 except exception.ImageDownloadError:
                     LOG.warning("Unable to reach image's data due to "
                                 "Glance HTTPInternalServerError. Skipping "
@@ -409,6 +412,8 @@ class GlanceImage(image.Image):
         if migrate_images_list:
             im_name_list = [(im.name, tmp_meta) for (im, tmp_meta) in
                             migrate_images_list]
+            LOG.debug("images on destination: {}".format(
+                [im for (im, tmp_meta) in im_name_list]))
             new_info = self.read_info(images_list_meta=im_name_list)
         new_info['images'].update(empty_image_list)
         # on this step we need to create map between source ids and dst ones
