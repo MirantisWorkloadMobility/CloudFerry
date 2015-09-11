@@ -28,6 +28,7 @@ class NovaNetwork(network.Network):
     def __init__(self, config, cloud):
         super(NovaNetwork, self).__init__(config)
         self.cloud = cloud
+        self.mysql_connector = cloud.mysql_connector('nova')
 
     @property
     def nova_client(self):
