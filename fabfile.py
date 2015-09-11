@@ -91,9 +91,15 @@ def evacuate(name_config=None, debug=False, iteration=False):
     LOG.info("running evacuation")
     evacuation_chain.process_chain(cloud, iteration)
 
+    freed_nodes = get_freed_nodes(iteration)
+
+    if not freed_nodes:
+        LOG.warning("Evacuation cannot be completed, because there are no "
+                    "available compute nodes, that should be freed")
+        return
+
     LOG.info("Following nodes will be freed once in-cloud migration finishes, "
-             "and can be moved from source to destination: %s",
-             get_freed_nodes(iteration))
+             "and can be moved from source to destination: %s", freed_nodes)
 
 
 @task
