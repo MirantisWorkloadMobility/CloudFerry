@@ -39,7 +39,8 @@ FAKE_CONFIG = utils.ext_dict(
                             'keep_user_passwords': False,
                             'overwrite_user_passwords': False,
                             'migrate_users': True}),
-    mail=utils.ext_dict({'server': '-'}))
+    mail=utils.ext_dict({'server': '-'}),
+    identity=utils.ext_dict({'optimize_user_role_fetch': False}))
 
 
 @mock.patch("cloudferrylib.base.clients", mock.MagicMock())
@@ -216,6 +217,8 @@ class KeystoneIdentityTestCase(test.TestCase):
         self.mock_client().tenants.list.return_value = fake_tenants_list
         self.mock_client().users.list.return_value = fake_users_list
         self.mock_client().roles.list.return_value = fake_roles_list
+        self.keystone_client._get_user_roles_cached = mock.MagicMock()
+        self.keystone_client._get_user_roles_cached.return_value = mock.MagicMock().return_value = [self.fake_role_0]
         self.mock_client().roles.roles_for_user.return_value = [
             self.fake_role_0]
 

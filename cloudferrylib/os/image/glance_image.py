@@ -58,7 +58,6 @@ class GlanceImage(image.Image):
 
     def get_client(self):
         """ Getting glance client """
-
         endpoint_glance = self.identity_client.get_endpoint_by_service_type(
             service_type='image',
             endpoint_type='publicURL')
