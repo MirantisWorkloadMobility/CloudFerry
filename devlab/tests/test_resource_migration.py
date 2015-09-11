@@ -161,6 +161,22 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                      resource_name='image',
                                                      parameter='checksum')
 
+    def test_migrate_glance_belongs_to_deleted_tenant(self):
+        src_images = self.filter_images()
+        src_tnt_ids = [i.id for i in self.filter_tenants()]
+        src_tnt_ids.append(self.src_cloud.get_tenant_id(self.src_cloud.tenant))
+        src_images = [i.name for i in src_images if i.owner not in src_tnt_ids]
+
+        dst_images = self.dst_cloud.glanceclient.images.list()
+        dst_tenant_id = self.dst_cloud.get_tenant_id(self.dst_cloud.tenant)
+
+        for image in dst_images:
+            if image.name not in src_images:
+                continue
+            self.assertEqual(image.owner, dst_tenant_id,
+                             'Image owner on dst is {0} instead of {1}'.format(
+                                 image.owner, dst_tenant_id))
+
     def test_glance_images_not_in_filter_did_not_migrate(self):
         src_images = self.filter_images()
         filtering_data = self.filtering_utils.filter_images(src_images)
