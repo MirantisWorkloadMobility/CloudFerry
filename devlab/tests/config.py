@@ -30,7 +30,8 @@ tenants = [
      'vms': [
          {'name': 'tn1server1', 'image': 'image1', 'flavor': 'flavorname2',
           'key_name': 'key1'},
-         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1'},
+         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1',
+          'fip': True},
          {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr'}],
      'networks': [{'name': 'tenantnet1', 'admin_state_up': True},
                   {'name': 'tenant1_net2', 'admin_state_up': True}],
@@ -70,7 +71,8 @@ tenants = [
      'cinder_volumes': [
          {'name': 'tn_volume1', 'size': 1, 'server_to_attach': 'tn2server1',
           'device': '/dev/vdb'}
-     ]
+     ],
+     'unassociated_fip': 1
      },
     {'name': 'tenant3', 'description': 'This tenant will be deleted',
      'enabled': True, 'deleted': True}
@@ -131,7 +133,8 @@ subnets = [
 vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'server2', 'image': 'image2', 'flavor': 'flavorname1'},
-    {'name': 'server3', 'image': 'image1', 'flavor': 'flavorname2'},
+    {'name': 'server3', 'image': 'image1', 'flavor': 'flavorname2',
+     'fip': True},
     {'name': 'server4', 'image': 'image2', 'flavor': 'flavorname2'},
     {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'}

@@ -34,9 +34,9 @@ class FunctionalTest(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(FunctionalTest, self).__init__(*args, **kwargs)
         suppress_dependency_logging()
-        self.src_cloud = Prerequisites(cloud_prefix='SRC')
-        self.dst_cloud = Prerequisites(cloud_prefix='DST')
-        self.filtering_utils = FilteringUtils()
+        self.src_cloud = Prerequisites(cloud_prefix='SRC', config=config)
+        self.dst_cloud = Prerequisites(cloud_prefix='DST', config=config)
+        self.filtering_utils = FilteringUtils(config=config)
 
     def filter_networks(self):
         cfg = [i['name'] for i in config.networks]
@@ -86,8 +86,8 @@ class FunctionalTest(unittest.TestCase):
         return self._get_keystone_resources('roles', roles)
 
     def filter_vms(self):
-        cfg = config.vms
-        vms = [cfg.extend(i['vms']) for i in config.tenants if 'vms' in i]
+        vms = config.vms
+        [vms.extend(i['vms']) for i in config.tenants if 'vms' in i]
         opts = {'search_opts': {'all_tenants': 1}}
         return [i for i in self.src_cloud.novaclient.servers.list(**opts)
                 if i.name in vms]
@@ -136,3 +136,8 @@ class FunctionalTest(unittest.TestCase):
             return True
         except IndexError:
             return False
+
+    def get_vms_with_fip_associated(self):
+        vms = config.vms
+        [vms.extend(i['vms']) for i in config.tenants if 'vms' in i]
+        return [vm['name'] for vm in vms if vm.get('fip')]

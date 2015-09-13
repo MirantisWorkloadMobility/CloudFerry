@@ -17,7 +17,6 @@ import copy
 import datetime
 import json
 import re
-import time
 
 from fabric.api import run
 from fabric.api import settings
@@ -51,27 +50,12 @@ class GlanceImage(image.Image):
         self.filter_tenant_id = None
         self.filter_image = []
         # get mysql settings
-        self.mysql_connector = self.get_db_connection()
+        self.mysql_connector = cloud.mysql_connector('glance')
         super(GlanceImage, self).__init__(config)
 
     @property
     def glance_client(self):
         return self.proxy(self.get_client(), self.config)
-
-    def get_db_connection(self):
-        if not hasattr(
-                self.cloud.config,
-                self.cloud.position + '_image'):
-            LOG.debug('running on default mysql settings')
-            return mysql_connector.MysqlConnector(
-                self.config.mysql, 'glance')
-        else:
-            LOG.debug('running on custom mysql settings')
-            my_settings = getattr(
-                self.cloud.config,
-                self.cloud.position + '_image')
-            return mysql_connector.MysqlConnector(
-                my_settings, my_settings.database_name)
 
     def get_client(self):
         """ Getting glance client """
@@ -300,6 +284,8 @@ class GlanceImage(image.Image):
                 info['images'][glance_image.id] = {'image': gl_image,
                                                    'meta': {},
                                                    }
+                LOG.debug("find image with ID {}({})".format(glance_image.id,
+                                                             glance_image.name))
             else:
                 LOG.warning("image {img} was not migrated according to "
                             "status = {status}, (expected status "
@@ -311,7 +297,7 @@ class GlanceImage(image.Image):
 
         return info
 
-    def deploy(self, info, callback=None):
+    def deploy(self, info):
         info = copy.deepcopy(info)
         new_info = {'images': {}}
         migrate_images_list = []
@@ -335,8 +321,9 @@ class GlanceImage(image.Image):
                         (dst_img_checksums[checksum_current], meta))
                     continue
 
-                LOG.debug("updating owner of image {image}".format(
-                    image=gl_image["image"]["owner"]))
+                LOG.debug("updating owner {owner} of image {image}".format(
+                    owner=gl_image["image"]["owner"],
+                    image=gl_image["image"]["id"]))
                 gl_image["image"]["owner"] = \
                     self.identity_client.get_tenant_id_by_name(
                     gl_image["image"]["owner_name"])
@@ -384,8 +371,8 @@ class GlanceImage(image.Image):
                         properties=gl_image['image']['properties'],
                         data=file_like_proxy.FileLikeProxy(
                             gl_image['image'],
-                            callback,
                             self.config['migrate']['speed_limit']))
+                    LOG.debug("new image ID {}".format(migrate_image.id))
                 except exception.ImageDownloadError:
                     LOG.warning("Unable to reach image's data due to "
                                 "Glance HTTPInternalServerError. Skipping "
@@ -410,6 +397,8 @@ class GlanceImage(image.Image):
         if migrate_images_list:
             im_name_list = [(im.name, tmp_meta) for (im, tmp_meta) in
                             migrate_images_list]
+            LOG.debug("images on destination: {}".format(
+                [im for (im, tmp_meta) in im_name_list]))
             new_info = self.read_info(images_list_meta=im_name_list)
         new_info['images'].update(empty_image_list)
         # on this step we need to create map between source ids and dst ones
@@ -446,9 +435,8 @@ class GlanceImage(image.Image):
                            [" '{0}' ".format(i) for i in list_of_ids])))
         self.mysql_connector.execute(command)
 
-    def wait_for_status(self, id_res, status):
-        while self.glance_client.images.get(id_res).status != status:
-            time.sleep(1)
+    def get_status(self, res_id):
+        return self.glance_client.images.get(res_id).status
 
     def patch_image(self, backend_storage, image_id):
         if backend_storage == 'ceph':

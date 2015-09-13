@@ -25,6 +25,7 @@ class SwiftStorage(objstorage.ObjStorage):
         self.config = config
         self.cloud = cloud
         self.storage_url, self.token = self.get_swift_conn()
+        self.mysql_connector = cloud.mysql_connector('nova')
 
     def get_swift_conn(self, params=None):
         """Getting nova client. """

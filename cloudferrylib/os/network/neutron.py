@@ -41,6 +41,7 @@ class NeutronNetwork(network.Network):
         self.filter_tenant_id = None
         self.ext_net_map = \
             utl.read_yaml_file(self.config.migrate.ext_net_map) or {}
+        self.mysql_connector = cloud.mysql_connector('neutron')
 
     @property
     def neutron_client(self):
@@ -52,17 +53,6 @@ class NeutronNetwork(network.Network):
             password=self.config.cloud.password,
             tenant_name=self.config.cloud.tenant,
             auth_url=self.config.cloud.auth_url)
-
-    def get_db_connection(self):
-        if not hasattr(self.cloud.config, self.cloud.position + '_network'):
-            LOG.debug('Running on default mysql settings')
-            return mysql_connector.MysqlConnector(self.config.mysql, 'neutron')
-        else:
-            my_settings = getattr(self.cloud.config,
-                                  self.cloud.position + '_network')
-            LOG.debug('Running on custom mysql settings')
-            return mysql_connector.MysqlConnector(my_settings,
-                                                  my_settings.database_name)
 
     def read_info(self, **kwargs):
 
@@ -284,7 +274,8 @@ class NeutronNetwork(network.Network):
                                                  'allocation_pools',
                                                  'gateway_ip',
                                                  'cidr',
-                                                 'tenant_name')
+                                                 'tenant_name',
+                                                 'network_name')
 
         result['res_hash'] = res_hash
 
@@ -1186,7 +1177,7 @@ class NeutronNetwork(network.Network):
                 LOG.debug("Creating FIP on net '%s'", ext_net_id)
                 created_fip = self.neutron_client.create_floatingip(new_fip)
 
-            dst_mysql = self.get_db_connection()
+            dst_mysql = self.mysql_connector
             sql = ('UPDATE floatingips '
                    'SET floating_ip_address="{ip}" '
                    'WHERE id="{fip_id}"').format(

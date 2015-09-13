@@ -117,7 +117,7 @@ class LiveMigration(action.Action):
         src_backing_file = src_libvirt.get_backing_file(old_id)
         migration_backing_file = os.path.join(
             libvirt.nova_instances_path, '_base', 'migration_disk_{}'.format(old_id))
-        dst_compute.wait_for_status(new_id, 'active')
+        dst_compute.wait_for_status(new_id, dst_compute.get_status, 'active')
 
         with files.RemoteTempFile(src_runner, "migrate-{}".format(old_id), src_vm_xml.dump()) as migration_file,\
                 files.RemoteSymlink(src_runner, src_backing_file, migration_backing_file),\

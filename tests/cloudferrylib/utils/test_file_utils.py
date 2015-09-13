@@ -70,38 +70,6 @@ class RemoteDirTestCase(test.TestCase):
         runner.run_ignoring_errors.assert_called_once_with(rm_dir)
 
 
-class SplitterTestCase(test.TestCase):
-    def test_makes_one_iteration_if_total_is_zero(self):
-        total = 0
-        block = 10
-
-        for start, end in ssh_chunks.splitter(total, block):
-            self.assertEqual(start, 0)
-            self.assertEqual(end, 0)
-
-    def test_one_chunk_for_one_mb_total(self):
-        total = 1
-        block = 10
-
-        for start, end in ssh_chunks.splitter(total, block):
-            self.assertEqual(start, 0)
-            self.assertEqual(end, total)
-
-    def test_keeps_correct_number_of_iterations_for_uneven_totals(self):
-        total = 101
-        block = 10
-
-        expected_iterations = total / block
-        if total % block != 0:
-            expected_iterations += 1
-
-        actual_iterations = 0
-        for _, _ in ssh_chunks.splitter(total, block):
-            actual_iterations += 1
-
-        self.assertEqual(actual_iterations, expected_iterations)
-
-
 class VerifiedFileCopyTestCase(test.TestCase):
     @mock.patch("tests.cloudferrylib.utils.test_file_utils.ssh_chunks."
                 "remote_scp")
@@ -146,10 +114,12 @@ class VerifiedFileCopyTestCase(test.TestCase):
                                           num_retries)
         except ssh_chunks.FileCopyFailure:
             assert scp.call_count == num_retries + 1
+
     def test_temp_dir_exception_inside_with(self):
         runner = mock.Mock()
         dirname = 'dir'
 
+        res = False
         try:
             with files.RemoteDir(runner, dirname):
                 raise Exception

@@ -90,7 +90,6 @@ class KeystoneIdentity(identity.Identity):
     def __init__(self, config, cloud):
         super(KeystoneIdentity, self).__init__()
         self.config = config
-        self.mysql_connector = cloud.mysql_connector
         self.cloud = cloud
         self.filter_tenant_id = None
         self.postman = None
@@ -99,6 +98,7 @@ class KeystoneIdentity(identity.Identity):
                                    self.config['mail']['password'],
                                    self.config['mail']['from_addr'],
                                    self.config['mail']['server'])
+        self.mysql_connector = cloud.mysql_connector('keystone')
         self.templater = Templater()
         self.generator = GeneratorPassword()
 

@@ -13,8 +13,6 @@
 # limitations under the License.
 
 
-import time
-
 from cinderclient.v1 import client as cinder_client
 
 from cloudferrylib.base import storage
@@ -40,7 +38,7 @@ class CinderStorage(storage.Storage):
             if config.mysql.host else self.host
         self.cloud = cloud
         self.identity_client = cloud.resources[utl.IDENTITY_RESOURCE]
-        self.mysql_connector = self.get_db_connection()
+        self.mysql_connector = cloud.mysql_connector('cinder')
         super(CinderStorage, self).__init__(config)
 
     @property
@@ -58,17 +56,6 @@ class CinderStorage(storage.Storage):
             params.cloud.password,
             params.cloud.tenant,
             params.cloud.auth_url)
-
-    def get_db_connection(self):
-        if not hasattr(self.cloud.config, self.cloud.position + '_storage'):
-            LOG.debug('Running on default storage settings')
-            return mysql_connector.MysqlConnector(self.config.mysql, 'cinder')
-        else:
-            LOG.debug('Running on custom storage settings')
-            my_settings = getattr(self.cloud.config,
-                                  self.cloud.position + '_storage')
-            return mysql_connector.MysqlConnector(my_settings,
-                                                  my_settings.database_name)
 
     def read_info(self, **kwargs):
         info = {utl.VOLUMES_TYPE: {}}
@@ -168,25 +155,13 @@ class CinderStorage(storage.Storage):
     def get_status(self, resource_id):
         return self.cinder_client.volumes.get(resource_id).status
 
-    def wait_for_status(self, resource_id, status, limit_retry=60):
-        counter = 0
-        while self.get_status(resource_id) != status and counter < limit_retry:
-            time.sleep(1)
-            counter += 1
-
-        if counter == limit_retry:
-            LOG.warning("Volume '%s' has not changed status to '%s'",
-                        resource_id, status)
-
     def deploy_volumes(self, info):
         new_ids = {}
-        # if info.get('volumes_db'):
-        #     return self.deploy_volumes_db(info)
         for vol_id, vol in info[utl.VOLUMES_TYPE].iteritems():
             vol_for_deploy = self.convert_to_params(vol)
             volume = self.create_volume(**vol_for_deploy)
             vol[utl.VOLUME_BODY]['id'] = volume.id
-            self.wait_for_status(volume.id, AVAILABLE)
+            self.try_wait_for_status(volume.id, self.get_status, AVAILABLE)
             self.finish(vol)
             new_ids[volume.id] = vol_id
         return new_ids

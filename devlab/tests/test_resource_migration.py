@@ -12,27 +12,27 @@ from time import sleep
 
 class ResourceMigrationTests(functional_test.FunctionalTest):
 
-    def validator(self, source_resources, dest_resources, resource_name):
-        if not source_resources <= dest_resources:
-            missing = source_resources - dest_resources
-            self.fail("Not all {resources} migrated. Missing resources on dest: {missing}".format(
-                resources=resource_name, missing=missing))
-
-    def validate_resource_parameter_in_dst_dict(self, src_list, dst_list,
-                                                resource_name='resource',
-                                                parameter='name'):
-        # Validating only uniq parameter's value
-        source_resources = set([x[parameter] for x in src_list])
-        dest_resources = set([x[parameter] for x in dst_list])
-        self.validator(source_resources, dest_resources, resource_name)
-
     def validate_resource_parameter_in_dst(self, src_list, dst_list,
-                                           resource_name='resource',
-                                           parameter='name'):
-        # Validating only uniq parameter's value
-        source_resources = set([x.__dict__[parameter] for x in src_list])
-        dest_resources = set([x.__dict__[parameter] for x in dst_list])
-        self.validator(source_resources, dest_resources, resource_name)
+                                           resource_name, parameter):
+        name_attr = 'name'
+        if resource_name == 'volume':
+            name_attr = 'display_name'
+        for i in src_list:
+            for j in dst_list:
+                if getattr(i, name_attr) != getattr(j, name_attr):
+                    continue
+                if getattr(i, parameter) != getattr(j, parameter):
+                    msg = 'Parameter {param} for resource {res} with name ' \
+                          '{name} are different src: {r1}, dst: {r2}'
+                    self.fail(msg.format(
+                        param=parameter, res=resource_name,
+                        name=getattr(i, name_attr), r1=getattr(i, parameter),
+                        r2=getattr(j, parameter)))
+                break
+            else:
+                msg = 'Resource {res} with name {r_name} was not found on dst'
+                self.fail(msg.format(res=resource_name,
+                                     r_name=getattr(i, name_attr)))
 
     def validate_neutron_resource_parameter_in_dst(self, src_list, dst_list,
                                                    resource_name='networks',
@@ -81,14 +81,15 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
     def test_migrate_keystone_tenants(self):
         src_tenants = self.filter_tenants()
         dst_tenants_gen = self.dst_cloud.keystoneclient.tenants.list()
-        dst_tenants = [x.__dict__ for x in dst_tenants_gen]
+        dst_tenants = [x for x in dst_tenants_gen]
 
         filtering_data = self.filtering_utils.filter_tenants(src_tenants)
         src_tenants = filtering_data[0]
-        self.validate_resource_parameter_in_dst_dict(src_tenants, dst_tenants,
+
+        self.validate_resource_parameter_in_dst(src_tenants, dst_tenants,
                                                 resource_name='tenant',
                                                 parameter='name')
-        self.validate_resource_parameter_in_dst_dict(src_tenants, dst_tenants,
+        self.validate_resource_parameter_in_dst(src_tenants, dst_tenants,
                                                 resource_name='tenant',
                                                 parameter='description')
 
@@ -139,24 +140,24 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
     def test_migrate_glance_images(self):
         src_images = self.filter_images()
         dst_images_gen = self.dst_cloud.glanceclient.images.list()
-        dst_images = [x.__dict__ for x in dst_images_gen]
+        dst_images = [x for x in dst_images_gen]
 
         filtering_data = self.filtering_utils.filter_images(src_images)
         src_images = filtering_data[0]
 
-        self.validate_resource_parameter_in_dst_dict(src_images, dst_images,
+        self.validate_resource_parameter_in_dst(src_images, dst_images,
                                                      resource_name='image',
                                                      parameter='name')
-        self.validate_resource_parameter_in_dst_dict(src_images, dst_images,
+        self.validate_resource_parameter_in_dst(src_images, dst_images,
                                                      resource_name='image',
                                                      parameter='disk_format')
-        self.validate_resource_parameter_in_dst_dict(src_images, dst_images,
+        self.validate_resource_parameter_in_dst(src_images, dst_images,
                                                      resource_name='image',
                                                      parameter='container_format')
-        self.validate_resource_parameter_in_dst_dict(src_images, dst_images,
+        self.validate_resource_parameter_in_dst(src_images, dst_images,
                                                      resource_name='image',
                                                      parameter='size')
-        self.validate_resource_parameter_in_dst_dict(src_images, dst_images,
+        self.validate_resource_parameter_in_dst(src_images, dst_images,
                                                      resource_name='image',
                                                      parameter='checksum')
 
@@ -164,10 +165,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         src_images = self.filter_images()
         filtering_data = self.filtering_utils.filter_images(src_images)
         dst_images_gen = self.dst_cloud.glanceclient.images.list()
-        dst_images = [x.__dict__['name'] for x in dst_images_gen]
+        dst_images = [x.name for x in dst_images_gen]
         images_filtered_out = filtering_data[1]
         for image in images_filtered_out:
-            self.assertTrue(image['name'] not in dst_images, 'Image migrated despite '
+            self.assertTrue(image.name not in dst_images, 'Image migrated despite '
                                                              'that it was not '
                                                              'included in filter, '
                                                              'Image info: \n{}'.format(image))
@@ -202,23 +203,35 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             src_routers, dst_routers, resource_name='routers')
 
     def test_migrate_vms_parameters(self):
-        src_vms_names = self.filter_vms()
-        dst_vms_names = self.dst_cloud.novaclient.servers.list(
+        src_vms = self.filter_vms()
+        dst_vms = self.dst_cloud.novaclient.servers.list(
             search_opts={'all_tenants': 1})
-        src_vms = [x.__dict__ for x in src_vms_names]
-        dst_vms = [x.__dict__ for x in dst_vms_names]
 
         filtering_data = self.filtering_utils.filter_vms(src_vms)
         src_vms = filtering_data[0]
 
-        src_vms = [vm for vm in src_vms if vm['status'] != 'ERROR']
+        src_vms = [vm for vm in src_vms if vm.status != 'ERROR']
 
-        self.validate_resource_parameter_in_dst_dict(
+        self.validate_resource_parameter_in_dst(
             src_vms, dst_vms, resource_name='VM', parameter='name')
-        self.validate_resource_parameter_in_dst_dict(
+        self.validate_resource_parameter_in_dst(
             src_vms, dst_vms, resource_name='VM', parameter='config_drive')
-        self.validate_resource_parameter_in_dst_dict(
+        self.validate_resource_parameter_in_dst(
             src_vms, dst_vms, resource_name='VM', parameter='key_name')
+
+    def test_migrate_vms_with_floating(self):
+        vm_names_with_fip = self.get_vms_with_fip_associated()
+        dst_vms = self.dst_cloud.novaclient.servers.list(
+            search_opts={'all_tenants': 1})
+        for vm in dst_vms:
+            if vm.name not in vm_names_with_fip:
+                continue
+            for net in vm.addresses.values():
+                if [True for addr in net if 'floating' in addr.values()]:
+                    break
+            else:
+                raise RuntimeError('Vm {0} does not have floating ip'.format(
+                    vm.name))
 
     def test_migrate_cinder_volumes(self):
 
