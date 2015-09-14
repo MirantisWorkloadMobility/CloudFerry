@@ -113,8 +113,10 @@ Vagrant.configure(2) do |config|
           end
           thisnode.vm.provision "shell", path: "./provision/libvirt.sh"
           if nodename == "grizzly" then
+            thisnode.vm.provision "shell", path: "./provision/fix_interfaces.sh"
             thisnode.vm.provision "shell", path: "./provision/qemu.sh"
           elsif nodename == "icehouse" then
+            thisnode.vm.provision "shell", path: "./provision/fix_interfaces.sh"
             thisnode.vm.provision "shell", path: "./provision/cleanup_nova_instances.sh"
           end
         when "dev"
