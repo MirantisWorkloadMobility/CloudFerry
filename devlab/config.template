@@ -11,7 +11,6 @@ keep_ip = yes
 keep_floatingip = yes
 keep_volume_storage = False
 speed_limit = 100MB
-instances = key_name-qwerty
 file_compression = gzip
 level_compression = 9
 overwrite_user_passwords = False
@@ -55,8 +54,6 @@ hosts = <src_ip>:5672
 [src_compute]
 service = nova
 backend = iscsi
-convert_diff_file = qcow2
-convert_ephemeral_disk = qcow2
 host_eph_drv = <src_ip>
 db_connection = mysql+mysqlconnector
 db_host = <src_ip>
@@ -125,8 +122,6 @@ db_connection = mysql+mysqlconnector
 [dst_compute]
 service = nova
 backend = iscsi
-convert_diff_file = qcow2
-convert_ephemeral_disk = qcow2
 host_eph_drv = <dst_ip>
 db_connection = mysql+mysqlconnector
 db_host = <dst_ip>
@@ -187,9 +182,7 @@ factor = 0.1
 test_file_size = 10
 
 [condense]
-nova_file=
 group_file=
-node_file=
 
 [database]
 host = localhost
