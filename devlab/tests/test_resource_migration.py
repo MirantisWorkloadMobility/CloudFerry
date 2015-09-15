@@ -5,8 +5,6 @@ import unittest
 import subprocess
 import functional_test
 
-from keystoneclient.exceptions import NotFound
-
 from time import sleep
 
 
@@ -53,13 +51,6 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 self.fail(msg.format(res=resource_name, r_name=i['name']))
 
     def test_migrate_keystone_users(self):
-        src_users = []
-        for u in self.filter_users():
-            try:
-                self.src_cloud.keystoneclient.tenants.find(id=u.tenantId)
-                src_users.append(u)
-            except NotFound:
-                pass
         src_users = self.filter_users()
         dst_users = self.dst_cloud.keystoneclient.users.list()
 
@@ -69,6 +60,19 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.validate_resource_parameter_in_dst(src_users, dst_users,
                                                 resource_name='user',
                                                 parameter='email')
+
+    def test_migrate_keystone_user_tenant_roles(self):
+        src_users = self.filter_users()
+        src_user_names = [user.name for user in src_users]
+        dst_users = self.dst_cloud.keystoneclient.users.list()
+        for dst_user in dst_users:
+            if dst_user.name not in src_user_names:
+                continue
+            src_user_tnt_roles = self.src_cloud.get_user_tenant_roles(dst_user)
+            dst_user_tnt_roles = self.dst_cloud.get_user_tenant_roles(dst_user)
+            self.validate_resource_parameter_in_dst(
+                src_user_tnt_roles, dst_user_tnt_roles,
+                resource_name='user_tenant_role', parameter='name')
 
     def test_migrate_keystone_roles(self):
         src_roles = self.filter_roles()

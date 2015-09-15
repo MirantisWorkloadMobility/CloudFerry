@@ -104,6 +104,14 @@ class Prerequisites(object):
             search_opts={'all_tenants': 1})
         return [x for x in snapshots if x.display_name == snapshot_name][0].id
 
+    def get_user_tenant_roles(self, user):
+        user_tenant_roles = []
+        for tenant in self.keystoneclient.tenants.list():
+            user_tenant_roles.extend(self.keystoneclient.roles.roles_for_user(
+                user=self.get_user_id(user.name),
+                tenant=self.get_tenant_id(tenant.name)))
+        return user_tenant_roles
+
     def check_vm_state(self, srv):
         while srv.status != 'ACTIVE':
             time.sleep(2)
@@ -151,6 +159,13 @@ class Prerequisites(object):
                                              enabled=user['enabled'],
                                              tenant_id=self.get_tenant_id(
                                                  user['tenant']))
+            if not user.get('additional_tenants'):
+                continue
+            for tenant in user['additional_tenants']:
+                self.keystoneclient.roles.add_user_role(
+                    tenant=self.get_tenant_id(tenant['name']),
+                    role=self.get_role_id(tenant['role']),
+                    user=self.get_user_id(user['name']))
             # Next action for default sec group creation
             if not user['enabled']:
                 continue

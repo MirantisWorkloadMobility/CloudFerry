@@ -11,7 +11,10 @@ users = [
     {'name': 'test_volume_migration', 'password': 'passwd', 'enabled': True,
      'email': 'volume_test@example.com', 'tenant': 'tenant1', 'deleted': True},
     {'name': 'user5', 'password': 'passwd', 'email': 'asdasd@example.com',
-     'tenant': 'tenant3', 'enabled': True}
+     'tenant': 'tenant3', 'enabled': True},
+    {'name': 'user6', 'password': 'passwd', 'email': 'testd@example.com',
+     'tenant': 'tenant3', 'enabled': True, 'additional_tenants':
+        [{'name': 'tenant1', 'role': '_member_'}]}
 ]
 
 # Roles to create/delete
