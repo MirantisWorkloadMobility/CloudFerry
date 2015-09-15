@@ -25,6 +25,7 @@ from cloudferrylib.utils import GeneratorPassword
 from cloudferrylib.utils import Postman
 from cloudferrylib.utils import Templater
 from cloudferrylib.utils import utils as utl
+from sqlalchemy.exc import ProgrammingError
 
 LOG = utl.get_log(__name__)
 
@@ -192,7 +193,6 @@ class KeystoneIdentity(identity.Identity):
         tenants = info['tenants']
         users = info['users']
         roles = info['user_tenants_roles']
-
         self._deploy_tenants(tenants)
         self._deploy_roles(info['roles'])
         self._deploy_users(users, tenants)
@@ -510,25 +510,48 @@ class KeystoneIdentity(identity.Identity):
                                                                     user_list)
         return user_tenants_roles
 
+    def _get_roles_sql_request(self):
+        res = []
+        try:
+            is_project_metadata = self.mysql_connector.execute(
+                "SHOW TABLES LIKE 'user_project_metadata'").rowcount
+            if is_project_metadata: #for grizzly case
+                return self.mysql_connector.execute(
+                    "SELECT * FROM user_project_metadata")
+            is_assignment = self.mysql_connector.execute(
+                "SHOW TABLES LIKE 'assignment'").rowcount
+            if is_assignment: #for icehouse case
+                res_raw = self.mysql_connector.execute(
+                    "SELECT * FROM assignment")
+                res_tmp = {}
+                for type_record, actor_id, project_id, role_id, inher_tmp in res_raw:
+                    if (actor_id, project_id) not in res_tmp:
+                        res_tmp[(actor_id, project_id)] = {'roles': []}
+                    res_tmp[(actor_id, project_id)]['roles'].append(role_id)
+                for k, v in res_tmp.iteritems():
+                    res.append((k[0], k[1], str(v)))
+        except ProgrammingError as e:
+            LOG.warn(e.message)
+        return res
+
     def _get_user_roles_cached(self):
         all_roles = {}
         if self.config.identity.optimize_user_role_fetch:
-            res = self.mysql_connector.execute(
-                "SELECT * FROM user_project_metadata")
-            for row in res:
-                user_id = row[0]
-                tenant_id = row[1]
-                roles_ids = ast.literal_eval(row[2])['roles']
-                all_roles[user_id] = {} if not user_id in all_roles else all_roles[user_id]
+            res = self._get_roles_sql_request()
+            for user_id, tenant_id, roles_field in res:
+                roles_ids = ast.literal_eval(roles_field)['roles']
+                all_roles[user_id] = {} \
+                    if not user_id in all_roles else all_roles[user_id]
                 all_roles[user_id][tenant_id] = [] \
-                    if not tenant_id in all_roles[user_id] else all_roles[user_id][tenant_id]
-                all_roles[user_id][tenant_id].append(roles_ids)
+                    if not tenant_id in all_roles[user_id] \
+                    else all_roles[user_id][tenant_id]
+                all_roles[user_id][tenant_id].extend(roles_ids)
 
         def _get_user_roles(user_id, tenant_id):
             if not self.config.identity.optimize_user_role_fetch:
                 roles = self.roles_for_user(user_id, tenant_id)
             else:
-                roles = getattr(getattr(all_roles, user_id, {}), tenant_id, {})
+                roles = all_roles.get(user_id, {}).get(tenant_id, [])
             return roles
         return _get_user_roles
 
@@ -538,16 +561,14 @@ class KeystoneIdentity(identity.Identity):
         tenant_ids = {tenant.id: tenant.name for tenant in tenant_list}
         user_ids = {user.id: user.name for user in user_list}
         roles = {r.id: r for r in self.get_roles_list()}
-        res = self.mysql_connector.execute(
-            "SELECT * FROM user_project_metadata")
-        for row in res:
-            user_id = row[0]
-            tenant_id = row[1]
-            roles_ids = ast.literal_eval(row[2])['roles']
-            user_tenants_roles[user_ids[user_id]][tenant_ids[tenant_id]] = [{'role':
-                                                                                 {'name': roles[r].name,
-                                                                                  'id': r}}
-                                                                            for r in roles_ids]
+        res = self._get_roles_sql_request()
+        for user_id, tenant_id, roles_field in res:
+            roles_ids = ast.literal_eval(roles_field)['roles']
+            user_tenants_roles[user_ids[user_id]][tenant_ids[tenant_id]] = \
+                [{'role':
+                      {'name': roles[r].name,
+                       'id': r}}
+                 for r in roles_ids]
         return user_tenants_roles
 
     def _get_user_tenants_roles_by_api(self, tenant_list, user_list):
@@ -574,17 +595,20 @@ class KeystoneIdentity(identity.Identity):
 
     def _upload_user_tenant_roles(self, user_tenants_roles, users, tenants):
         roles_id = {role.name: role.id for role in self.get_roles_list()}
-        dst_users = {user.name: user.id for user in self.get_users_list()}
-
+        dst_users_obj = self.get_users_list()
+        dst_users = {user.name: user.id for user in dst_users_obj}
+        dst_roles = {role.id: role.name for role in self.get_roles_list()}
+        _get_user_roles_cached = self._get_user_roles_cached()
         for _user in users:
             user = _user['user']
             if user['name'] not in dst_users:
                 continue
             for _tenant in tenants:
                 tenant = _tenant['tenant']
-                exists_roles = [role.name for role in
-                                self.roles_for_user(_user['meta']['new_id'],
-                                                    _tenant['meta']['new_id'])]
+                user_roles_objs = _get_user_roles_cached(_user['meta']['new_id'],
+                                                         _tenant['meta']['new_id'])
+                exists_roles = [dst_roles[role] if not hasattr(role, 'name') else role.name
+                                for role in user_roles_objs]
                 for _role in user_tenants_roles[user['name']][tenant['name']]:
                     role = _role['role']
                     if role['name'] in exists_roles:

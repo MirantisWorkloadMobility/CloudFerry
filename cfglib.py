@@ -464,7 +464,7 @@ dst_identity_opts = [
                help='driver for connection'),
     cfg.StrOpt('service', default='keystone',
                help='name service for keystone'),
-    cfg.BoolOpt('optimize_user_role_fetch', default=False,
+    cfg.BoolOpt('optimize_user_role_fetch', default=True,
                 help=("Uses low-level DB requests if set to True, "
                       "may be incompatible with more recent versions of Keystone. "
                       "Tested on grizzly, icehouse and juno.")),
