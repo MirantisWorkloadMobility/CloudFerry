@@ -37,3 +37,9 @@ class MysqlConnector():
         with sqlalchemy.create_engine(
                 self.connection_url).begin() as connection:
             return connection.execute(sqlalchemy.text(command), **kwargs)
+
+    def batch_execute(self, commands, **kwargs):
+        with sqlalchemy.create_engine(
+                self.connection_url).begin() as connection:
+            for command in commands:
+                connection.execute(sqlalchemy.text(command), **kwargs)
