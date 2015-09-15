@@ -34,8 +34,8 @@ class CinderStorage(storage.Storage):
     def __init__(self, config, cloud):
         self.config = config
         self.host = config.cloud.host
-        self.mysql_host = config.mysql.host \
-            if config.mysql.host else self.host
+        self.mysql_host = config.mysql.db_host \
+            if config.mysql.db_host else self.host
         self.cloud = cloud
         self.identity_client = cloud.resources[utl.IDENTITY_RESOURCE]
         self.mysql_connector = cloud.mysql_connector('cinder')

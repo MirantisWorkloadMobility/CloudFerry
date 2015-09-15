@@ -23,11 +23,11 @@ class MysqlConnector():
         self.connection_url = self.compose_connection_url()
 
     def compose_connection_url(self):
-        return '{}://{}:{}@{}:{}/{}'.format(self.config['connection'],
-                                            self.config['user'],
-                                            self.config['password'],
-                                            self.config['host'],
-                                            self.config['port'],
+        return '{}://{}:{}@{}:{}/{}'.format(self.config['db_connection'],
+                                            self.config['db_user'],
+                                            self.config['db_password'],
+                                            self.config['db_host'],
+                                            self.config['db_port'],
                                             self.db)
 
     def get_engine(self):
