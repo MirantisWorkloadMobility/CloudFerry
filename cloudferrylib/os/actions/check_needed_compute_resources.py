@@ -61,21 +61,26 @@ class CheckNeededComputeResources(action.Action):
         # is in this flavor, it will keep the old flavor id, can not be matched
         # to existing flavors
         src_compute = self.src_cloud.resources[utl.COMPUTE_RESOURCE]
-        src_flavors = [flavor.id for flavor in src_compute.get_flavor_list()]
+        src_flavor_ids = [flavor.id for flavor in src_compute.get_flavor_list()]
         dst_compute = self.dst_cloud.resources[utl.COMPUTE_RESOURCE]
-        dst_flavors = [flavor.id for flavor in dst_compute.get_flavor_list()]
+        dst_flavors = dst_compute.get_flavor_list()
+        dst_flavor_ids = [flavor.id for flavor in dst_flavors]
+        flavor_ids = src_flavor_ids + dst_flavor_ids
 
         for instance in objs.values():
-            if instance['instance']['flavor_id'] not in src_flavors \
-                    and instance['instance']['flavor_id'] not in dst_flavors:
+            inst_flavor_id = instance['instance']['flavor_id']
+            if inst_flavor_id not in flavor_ids:
                 _instance = instance['instance']
                 instance_id = _instance['id']
                 flav_details = \
                     info['instances'][instance_id]['instance']['flav_details']
+                for flavor in dst_flavors:
+                    if flavor.name == flav_details['name']:
+                        dst_compute.delete_flavor(flavor.id)
                 dst_compute.create_flavor(name=flav_details['name'],
                                           flavorid=_instance['flavor_id'],
                                           ram=flav_details['memory_mb'],
                                           vcpus=flav_details['vcpus'],
                                           disk=flav_details['root_gb'],
                                           ephemeral=flav_details['ephemeral_gb'])
-                src_flavors.append(_instance['flavor_id'])
+                src_flavor_ids.append(_instance['flavor_id'])
