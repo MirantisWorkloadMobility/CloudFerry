@@ -1,3 +1,5 @@
+img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
+
 # Users to create/delete
 users = [
     {'name': 'user1', 'password': 'passwd1', 'email': 'mail@example.com',
@@ -78,21 +80,23 @@ tenants = [
      'unassociated_fip': 1
      },
     {'name': 'tenant3', 'description': 'This tenant will be deleted',
-     'enabled': True, 'deleted': True}
+     'enabled': True, 'deleted': True,
+     'images':
+         [{'name': 'image6', 'copy_from': img_url, 'is_public': True}]}
 ]
+
 
 # Images to create/delete
 images = [
-    {'name': 'image1', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'is_public': True},
-    {'name': 'image2', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False},
-    {'name': 'image3', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False},
-    {'name': 'image4', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False},
-    {'name': 'image5', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False}
+    {'name': 'image1', 'copy_from': img_url, 'is_public': True},
+    {'name': 'image2', 'copy_from': img_url, 'container_format': 'bare',
+     'disk_format': 'qcow2', 'is_public': False},
+    {'name': 'image3', 'copy_from': img_url, 'container_format': 'bare',
+     'disk_format': 'qcow2', 'is_public': False},
+    {'name': 'image4', 'copy_from': img_url, 'container_format': 'bare',
+     'disk_format': 'qcow2', 'is_public': False},
+    {'name': 'image5', 'copy_from': img_url, 'container_format': 'bare',
+     'disk_format': 'qcow2', 'is_public': False}
 ]
 
 # Images not to be migrated:

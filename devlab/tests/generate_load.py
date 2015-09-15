@@ -22,7 +22,7 @@ TIMEOUT = 600
 
 class Prerequisites(object):
     def __init__(self, config, cloud_prefix='SRC'):
-        self.filtering_utils = FilteringUtils(config)
+        self.filtering_utils = FilteringUtils()
         self.config = config
         self.username = os.environ['%s_OS_USERNAME' % cloud_prefix]
         self.password = os.environ['%s_OS_PASSWORD' % cloud_prefix]
@@ -205,11 +205,35 @@ class Prerequisites(object):
                     tenant['name']), **tenant['quota'])
 
     def upload_image(self):
+        img_ids = []
         for image in self.config.images:
             img = self.glanceclient.images.create(**image)
-            while img.status != 'active':
-                time.sleep(2)
-                img = self.glanceclient.images.get(img.id)
+            img_ids.append(img.id)
+        for tenant in self.config.tenants:
+            if not tenant.get('images'):
+                continue
+            for image in tenant['images']:
+                self.switch_user(user=self.username, password=self.password,
+                                 tenant=tenant['name'])
+                img = self.glanceclient.images.create(**image)
+                img_ids.append(img.id)
+        self.switch_user(user=self.username, password=self.password,
+                         tenant=self.tenant)
+
+        for i in range(TIMEOUT):
+            if img_ids:
+                for img_id in img_ids[:]:
+                    img = self.glanceclient.images.get(img_id)
+                    if img.status == 'active':
+                        img_ids.remove(img_id)
+            else:
+                break
+            time.sleep(1)
+        else:
+            raise RuntimeError(
+                'Images with ids {0} have not become to active state'.format(
+                    img_ids))
+
         src_cloud = Prerequisites(cloud_prefix='SRC', config=self.config)
         src_img = [x.__dict__ for x in
                    src_cloud.glanceclient.images.list()]
@@ -633,7 +657,11 @@ class Prerequisites(object):
             except Exception as e:
                 print "VM %s failed to delete: %s" % (vm['name'], repr(e))
         wait_until_vms_all_deleted()
-        for image in self.config.images:
+        images = self.config.images
+        images += itertools.chain(*[tenant['images'] for tenant
+                                  in self.config.tenants
+                                  if tenant.get('images')])
+        for image in images:
             try:
                 self.glanceclient.images.delete(
                     self.get_image_id(image['name']))

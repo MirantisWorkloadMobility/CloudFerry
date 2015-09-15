@@ -36,7 +36,7 @@ class FunctionalTest(unittest.TestCase):
         suppress_dependency_logging()
         self.src_cloud = Prerequisites(cloud_prefix='SRC', config=config)
         self.dst_cloud = Prerequisites(cloud_prefix='DST', config=config)
-        self.filtering_utils = FilteringUtils(config=config)
+        self.filtering_utils = FilteringUtils()
 
     def filter_networks(self):
         cfg = [i['name'] for i in config.networks]
@@ -112,6 +112,10 @@ class FunctionalTest(unittest.TestCase):
 
     def filter_images(self):
         images = [i['name'] for i in config.images]
+        for tenant in config.tenants:
+            if not tenant.get('images'):
+                continue
+            [images.append(i['name']) for i in tenant['images']]
         return [i for i in self.src_cloud.glanceclient.images.list()
                 if i.name in images]
 
