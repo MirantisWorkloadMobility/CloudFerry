@@ -16,6 +16,7 @@ preparation:
           - check_src_sql: True
           - check_src_rabbit: True
           - act_get_info_objects_src: False
+          - check_src_instance_networks: True
       - dst_test:
           - act_check_image_api_dst: True
           - act_check_compute_api_dst: True
