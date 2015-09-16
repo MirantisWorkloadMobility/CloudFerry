@@ -150,20 +150,20 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         src_images = filtering_data[0]
 
         self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                     resource_name='image',
-                                                     parameter='name')
+                                                resource_name='image',
+                                                parameter='name')
         self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                     resource_name='image',
-                                                     parameter='disk_format')
+                                                resource_name='image',
+                                                parameter='disk_format')
         self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                     resource_name='image',
-                                                     parameter='container_format')
+                                                resource_name='image',
+                                                parameter='container_format')
         self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                     resource_name='image',
-                                                     parameter='size')
+                                                resource_name='image',
+                                                parameter='size')
         self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                     resource_name='image',
-                                                     parameter='checksum')
+                                                resource_name='image',
+                                                parameter='checksum')
 
     def test_migrate_glance_belongs_to_deleted_tenant(self):
         src_images = self.filter_images()
@@ -188,10 +188,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         dst_images = [x.name for x in dst_images_gen]
         images_filtered_out = filtering_data[1]
         for image in images_filtered_out:
-            self.assertTrue(image.name not in dst_images, 'Image migrated despite '
-                                                             'that it was not '
-                                                             'included in filter, '
-                                                             'Image info: \n{}'.format(image))
+            self.assertTrue(image.name not in dst_images,
+                            'Image migrated despite that it was not included '
+                            'in filter, Image info: \n{}'.format(image))
 
     def test_migrate_neutron_networks(self):
         src_nets = self.filter_networks()

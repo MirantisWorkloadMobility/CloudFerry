@@ -15,8 +15,8 @@ class VmMigration(functional_test.FunctionalTest):
         self.dst_vm_indexes = []
         for vm in src_vms:
             if vm['name'] not in config.vms_not_in_filter:
-                self.dst_vm_indexes.append([x['name'] for x in self.dst_vms].index(
-                    vm['name']))
+                self.dst_vm_indexes.append(
+                    [x['name'] for x in self.dst_vms].index(vm['name']))
         with open('pre_migration_vm_states.json') as data_file:
             self.before_migr_states = json.load(data_file)
         self.filter_vms = self.filtering_utils.filter_vms(src_vms)
@@ -35,10 +35,9 @@ class VmMigration(functional_test.FunctionalTest):
                    self.dst_cloud.novaclient.servers.list(
                        search_opts={'all_tenants': 1})]
         for vm in vms_filtered_out:
-            self.assertTrue(vm['name'] not in dst_vms, 'VM migrated despite '
-                                                       'that it was not '
-                                                       'included in filter, '
-                                                       'VM info: \n{}'.format(vm))
+            self.assertTrue(vm['name'] not in dst_vms,
+                            'VM migrated despite that it was not included in '
+                            'filter, VM info: \n{}'.format(vm))
 
     def test_cold_migrate_vm_state(self):
         original_states = self.before_migr_states
@@ -50,11 +49,13 @@ class VmMigration(functional_test.FunctionalTest):
             if src_vm['name'] in original_states.keys():
                 if original_states[src_vm['name']] == 'ACTIVE' or \
                         original_states[src_vm['name']] == 'VERIFY_RESIZE':
-                    self.assertTrue(src_vm['status'] == 'SHUTOFF' and
-                                    self.dst_vms[vm_index]['status'] == 'ACTIVE')
+                    self.assertTrue(
+                        src_vm['status'] == 'SHUTOFF' and
+                        self.dst_vms[vm_index]['status'] == 'ACTIVE')
                 else:
-                    self.assertTrue(src_vm['status'] == 'SHUTOFF' and
-                                    self.dst_vms[vm_index]['status'] == 'SHUTOFF')
+                    self.assertTrue(
+                        src_vm['status'] == 'SHUTOFF' and
+                        self.dst_vms[vm_index]['status'] == 'SHUTOFF')
             else:
                 self.assertTrue(src_vm['status'] == 'SHUTOFF' and
                                 self.dst_vms[vm_index]['status'] == 'ACTIVE')

@@ -26,10 +26,10 @@ class DataCollector(object):
     returns __dict__ with info for both SRC and DST clusters.
     Methods description:
         - unified_method: method to get resources for each tenant separately in
-                          case the resource is specific for each tenant, example
-                          key-pairs, security-groups, etc.
-        - nova_collector: method to get nova resources, list of resources can be
-                          obtained in config.py:
+                          case the resource is specific for each tenant,
+                          example key-pairs, security-groups, etc.
+        - nova_collector: method to get nova resources, list of resources can
+                          be obtained in config.py:
                             config.rollback_params['param_dict']['Nova']
         - cinder_collector: method to get cinder resources, list of resources
                             can be obtained in config.py:
@@ -42,7 +42,7 @@ class DataCollector(object):
                                config.rollback_params['param_dict']['Neutron']
         - keystone_collector: method to get keystone resources, list of
                               resources can be obtained in config.py:
-                                config.rollback_params['param_dict']['Keystone']
+                              config.rollback_params['param_dict']['Keystone']
     """
     def __init__(self):
         self.cloud_info = None
