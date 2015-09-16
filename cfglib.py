@@ -267,9 +267,19 @@ src_identity = cfg.OptGroup(name='src_identity',
                             title='Config service for identity')
 
 src_identity_opts = [
+    cfg.StrOpt('db_user', default=None,
+               help='user for mysql'),
+    cfg.StrOpt('db_password', default=None,
+               help='password for mysql'),
+    cfg.StrOpt('db_host', default=None,
+               help='host of mysql'),
+    cfg.IntOpt('db_port', default=None,
+               help='port for mysql connection'),
+    cfg.StrOpt('db_connection', default=None,
+               help='driver for connection'),
     cfg.StrOpt('service', default='keystone',
                help='name service for keystone'),
-    cfg.StrOpt('database_name', default='',
+    cfg.StrOpt('db_name', default='',
                help='database name')
 ]
 
@@ -301,7 +311,7 @@ src_objstorage = cfg.OptGroup(name='src_objstorage',
 src_objstorage_opts = [
     cfg.StrOpt('service', default='swift',
                help='service name for object storage'),
-    cfg.StrOpt('database_name', default='',
+    cfg.StrOpt('db_name', default='',
                help='database name'),
 ]
 
@@ -331,7 +341,7 @@ dst_rabbit_opts = [
                help='password for RabbitMQ'),
     cfg.StrOpt('hosts', default='-',
                help='comma separated RabbitMQ hosts'),
-    cfg.StrOpt('database_name', default=None,
+    cfg.StrOpt('db_name', default=None,
                help='database name'),
 ]
 
@@ -431,9 +441,19 @@ dst_identity = cfg.OptGroup(name='dst_identity',
                             title='Config service for identity')
 
 dst_identity_opts = [
+    cfg.StrOpt('db_user', default=None,
+               help='user for mysql'),
+    cfg.StrOpt('db_password', default=None,
+               help='password for mysql'),
+    cfg.StrOpt('db_host', default=None,
+               help='host of mysql'),
+    cfg.IntOpt('db_port', default=None,
+               help='port for mysql connection'),
+    cfg.StrOpt('db_connection', default=None,
+               help='driver for connection'),
     cfg.StrOpt('service', default='keystone',
                help='name service for keystone'),
-    cfg.StrOpt('database_name', default=None,
+    cfg.StrOpt('db_name', default=None,
                help='database name')
 ]
 
@@ -465,7 +485,7 @@ dst_objstorage = cfg.OptGroup(name='dst_objstorage',
 dst_objstorage_opts = [
     cfg.StrOpt('service', default='swift',
                help='service name for object storage'),
-    cfg.StrOpt('database_name', default=None,
+    cfg.StrOpt('db_name', default=None,
                help='database name')
 ]
 
