@@ -130,6 +130,12 @@ class Prerequisites(object):
                 tenant=self.get_tenant_id(tenant.name)))
         return user_tenant_roles
 
+    def get_ext_routers(self):
+        routers = self.neutronclient.list_routers()['routers']
+        ext_routers = [router for router in routers
+                       if router['external_gateway_info']]
+        return ext_routers
+
     def check_vm_state(self, srv):
         srv = self.novaclient.servers.get(srv)
         return srv.status == 'ACTIVE'
@@ -824,14 +830,6 @@ class Prerequisites(object):
             except Exception as e:
                 print "Tenant %s failed to delete: %s" % (tenant['name'],
                                                           repr(e))
-        sgs = self.neutronclient.list_security_groups()['security_groups']
-        for sg in sgs:
-            try:
-                self.neutronclient.delete_security_group(sg['id'])
-            except Exception as e:
-                print "Security group %s failed to delete: %s" % (sg['name'],
-                                                                  repr(e))
-
         volumes = self.config.cinder_volumes
         volumes += itertools.chain(*[tenant['cinder_volumes'] for tenant
                                      in self.config.tenants if 'cinder_volumes'

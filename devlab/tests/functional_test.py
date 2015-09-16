@@ -14,9 +14,19 @@
 
 import config
 import logging
+import sys
+import os
 import unittest
 from generate_load import Prerequisites
 from filtering_utils import FilteringUtils
+
+
+def get_cf_root_folder():
+    return os.path.dirname(os.path.dirname(os.path.split(__file__)[0]))
+
+sys.path.append(get_cf_root_folder())
+import cfglib
+cfglib.init_config(os.path.join(get_cf_root_folder(), config.cloud_ferry_conf))
 
 
 def suppress_dependency_logging():
