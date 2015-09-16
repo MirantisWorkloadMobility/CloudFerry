@@ -52,14 +52,24 @@ class GroupingTestCase(test.TestCase):
         self.identity.get_tenants_list.return_value = [self.fake_tenant1,
                                                        self.fake_tenant2]
 
-        self.fake_network_1 = {'name': 'net1'}
-        self.fake_network_2 = {'name': 'net3'}
+        self.fake_network_1 = {'name': 'net1',
+                               'id': 'net1_id',
+                               'shared': False}
+        self.fake_network_2 = {'name': 'net3',
+                               'id': 'net3_id',
+                               'shared': False}
 
-        network_ip_to_network = {'1.1.1.1': {'id': 'net1_id'},
-                                 '1.1.1.2': {'id': 'net1_id'},
-                                 '1.1.3.1': {'id': 'net3_id'}}
-        self.network.get_network = lambda ip, tenant_id, keep: \
-            network_ip_to_network[ip['ip']]
+        self.fake_subnet1 = {'network_id': 'net1_id',
+                             'tenant_id': 't1',
+                             'cidr': '1.1.1.0/24'}
+        self.fake_subnet2 = {'network_id': 'net3_id',
+                             'tenant_id': 't2',
+                             'cidr': '1.1.3.0/24'}
+
+        self.network.get_subnets_list.return_value = [self.fake_subnet1,
+                                                      self.fake_subnet2]
+        self.network.get_networks_list.return_value = [self.fake_network_1,
+                                                       self.fake_network_2]
 
         self.fake_instance1 = mock.Mock()
         self.fake_instance1.id = 's1'

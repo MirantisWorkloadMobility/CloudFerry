@@ -167,7 +167,7 @@ class NeutronNetwork(network.Network):
     def get_network(self, network_info, tenant_id, keep_ip=False):
         if keep_ip:
             instance_addr = ipaddr.IPAddress(network_info['ip'])
-            for snet in self.neutron_client.list_subnets()['subnets']:
+            for snet in self.get_subnets_list():
                 network = self.get_network({"id": snet['network_id']}, None)
                 if snet['tenant_id'] == tenant_id or network['shared']:
                     if ipaddr.IPNetwork(snet['cidr']).Contains(instance_addr):
@@ -562,10 +562,12 @@ class NeutronNetwork(network.Network):
         return self.neutron_client.list_networks(
             tenant_id=tenant_id)['networks']
 
+    def get_subnets_list(self, tenant_id=''):
+        return self.neutron_client.list_subnets(tenant_id=tenant_id)['subnets']
+
     def get_subnets(self, tenant_id=''):
         LOG.info("Get subnets...")
-        subnets = self.neutron_client.list_subnets(
-            tenant_id=tenant_id)['subnets']
+        subnets = self.get_subnets_list(tenant_id)
         subnets_info = []
 
         for snet in subnets:
@@ -1257,3 +1259,41 @@ class NeutronNetwork(network.Network):
             net_hash = self.get_res_hash_by_id(src_nets, src_net_id)
             dst_net_id = self.get_res_by_hash(dst_nets, net_hash)['id']
         return dst_net_id
+
+
+def get_network_from_list_by_id(network_id, networks_list):
+    """Get Neutron network by id from provided networks list.
+
+    :param network_id: Neutron network ID
+    :param networks_list: List of Neutron networks, where target network should
+                          be searched
+    """
+
+    for net in networks_list:
+        if net['id'] == network_id:
+            return net
+
+    LOG.warning("Cannot obtain network with id='%s' from provided networks "
+                "list", network_id)
+
+
+def get_network_from_list(ip, tenant_id, networks_list, subnets_list):
+        """Get Neutron network by parameters from provided list.
+
+        :param ip: IP address of VM from this network
+        :param tenant_id: Tenant Id of VM in this network
+        :param networks_list: List of Neutron networks, where target network
+                              should be searched
+        :param subnets_list: List of Neutron subnets, where target network
+                             should be searched
+        """
+
+        instance_ip = ipaddr.IPAddress(ip)
+
+        for subnet in subnets_list:
+            network_id = subnet['network_id']
+            net = get_network_from_list_by_id(network_id, networks_list)
+            if subnet['tenant_id'] == tenant_id or net['shared']:
+                if ipaddr.IPNetwork(subnet['cidr']).Contains(instance_ip):
+                    return get_network_from_list_by_id(network_id,
+                                                       networks_list)
