@@ -32,7 +32,7 @@ from data_collector import DataCollector
 class RollbackVerification(functional_test.FunctionalTest):
 
     def setUp(self):
-        data_collector = DataCollector()
+        data_collector = DataCollector(config=config)
 
         self.data_after = data_collector.data_collector()
 

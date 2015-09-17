@@ -14,8 +14,8 @@
 
 import os
 import yaml
+import config as cfg
 
-import config
 from generate_load import Prerequisites
 from filtering_utils import FilteringUtils
 
@@ -44,13 +44,15 @@ class DataCollector(object):
                               resources can be obtained in config.py:
                               config.rollback_params['param_dict']['Keystone']
     """
-    def __init__(self):
+    def __init__(self, config):
         self.cloud_info = None
         self.migration_utils = FilteringUtils()
         self.main_folder = self.migration_utils.main_folder
+        self.config = config
 
     def chose_destination_cloud(self, destination):
-        self.cloud_info = Prerequisites(cloud_prefix=destination)
+        self.cloud_info = Prerequisites(cloud_prefix=destination,
+                                        config=self.config)
 
     def return_to_admin_privileges(self):
         self.cloud_info.switch_user(user=self.cloud_info.username,
@@ -66,7 +68,7 @@ class DataCollector(object):
     def unified_method(self, destination, collected_items, _res, *args):
         main_dict = {}
         if destination == 'SRC':
-            for user, key_pair in zip(config.users, config.keypairs):
+            for user, key_pair in zip(self.config.users, self.config.keypairs):
                 self.cloud_info.switch_user(user=user['name'],
                                             password=user['password'],
                                             tenant=user['tenant'])
@@ -241,7 +243,7 @@ class DataCollector(object):
 
     def data_collector(self):
         all_data = {'SRC': {}, 'DST': {}}
-        param_dict = config.rollback_params['param_dict']
+        param_dict = self.config.rollback_params['param_dict']
         for key in all_data.keys():
             for service in param_dict.keys():
                 if service == 'Nova':
@@ -266,8 +268,9 @@ class DataCollector(object):
                     all_data[key][service] = glance_data_list
         return all_data
 
-    def dump_data(self,
-                  file_name=config.rollback_params['data_file_names']['PRE']):
+    def dump_data(self, file_name=None):
+        if not file_name:
+            file_name = self.config.rollback_params['data_file_names']['PRE']
         path = 'devlab/tests'
         pre_file_path = os.path.join(self.main_folder, path, file_name)
         data = self.data_collector()
@@ -275,5 +278,5 @@ class DataCollector(object):
             yaml.dump(data, f, default_flow_style=False)
 
 if __name__ == '__main__':
-    rollback = DataCollector()
+    rollback = DataCollector(cfg)
     rollback.dump_data()
