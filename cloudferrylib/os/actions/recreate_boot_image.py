@@ -104,7 +104,7 @@ class ReCreateBootImage(action.Action):
                 verified_file_copy(self.src_runner, self.dst_runner, self.dst_user,
                                    diff_file, dst_base_file, self.dst_host, 1)
             image_resource = self.dst_cloud.resources[utils.IMAGE_RESOURCE]
-            id = image_resource.glance_img_create(self.dst_runner, img_id, 'qcow2',
+            id = image_resource.glance_img_create(img_id, 'qcow2',
                                                   dst_base_file)
             checksum = remote_md5_sum(self.dst_runner, dst_base_file)
             return {'id': id, 'checksum': checksum}

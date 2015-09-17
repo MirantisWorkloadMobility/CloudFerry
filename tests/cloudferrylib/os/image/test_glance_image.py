@@ -28,6 +28,7 @@ FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
                                                    'tenant': 'fake_tenant',
                                                    'region': None,
                                                    'host': '1.1.1.1',
+                                                   'ssh_user': 'fake_user'
                                                    }),
                              migrate=utils.ext_dict({'speed_limit': '10MB',
                                                      'retry': '7',
@@ -69,6 +70,8 @@ class GlanceImageTestCase(test.TestCase):
 
         self.fake_cloud.resources = dict(identity=self.identity_mock,
                                          image=self.image_mock)
+        self.fake_cloud.mysql_connector = mock.MagicMock()
+
         self.glance_image = GlanceImage(FAKE_CONFIG, self.fake_cloud)
 
         self.fake_image_1 = mock.Mock()
@@ -108,8 +111,10 @@ class GlanceImageTestCase(test.TestCase):
                                               'protected': False,
                                               'size': 1024,
                                               'resource': self.image_mock,
-                                              'properties': {'user_name': 'fake_user_name'}},
-                                    'meta': {}}},
+                                              'properties': {
+                                                  'user_name': 'fake_user_name'
+                                              }},
+                                    'meta': {'img_loc': None}}},
             'tags': {},
             'members': {}
         }
@@ -133,7 +138,8 @@ class GlanceImageTestCase(test.TestCase):
         self.glance_mock_client().images.list.return_value = fake_images
 
         images_list = self.glance_image.get_image_list()
-        self.glance_mock_client().images.list.assert_called_once_with(filters={'is_public': None})
+        self.glance_mock_client().images.list.assert_called_once_with(
+            filters={'is_public': None})
         self.assertEquals(fake_images, images_list)
 
     def test_create_image(self):
