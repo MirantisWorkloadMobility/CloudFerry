@@ -176,8 +176,7 @@ class GlanceImage(image.Image):
             # to map it later to new user id
             user_id = gl_image["properties"].get("user_id")
             usr = keystone.try_get_user_by_id(user_id=user_id)
-            if usr:
-                gl_image["properties"]["user_name"] = usr.name
+            gl_image["properties"]["user_name"] = usr.name
         return gl_image
 
     def is_snapshot(self, img):
@@ -298,6 +297,7 @@ class GlanceImage(image.Image):
         return info
 
     def deploy(self, info):
+        LOG.info("Glance images deployment started...")
         info = copy.deepcopy(info)
         new_info = {'images': {}}
         migrate_images_list = []
@@ -321,9 +321,9 @@ class GlanceImage(image.Image):
                         (dst_img_checksums[checksum_current], meta))
                     continue
 
-                LOG.debug("updating owner {owner} of image {image}".format(
-                    owner=gl_image["image"]["owner"],
-                    image=gl_image["image"]["id"]))
+                LOG.debug("Updating owner '{owner}' of image '{image}'".format(
+                    owner=gl_image["image"]["owner_name"],
+                    image=gl_image["image"]["name"]))
                 gl_image["image"]["owner"] = \
                     self.identity_client.get_tenant_id_by_name(
                     gl_image["image"]["owner_name"])
@@ -348,8 +348,9 @@ class GlanceImage(image.Image):
                                 username=metadata["user_name"]).id
                         del metadata["user_name"]
 
-                LOG.debug("migrating image {image}".format(
-                    image=gl_image["image"]["id"]))
+                LOG.debug("Creating image '{image}' ({image_id})".format(
+                    image=gl_image["image"]["name"],
+                    image_id=gl_image['image']['id']))
                 # we can face situation when image has no
                 # disk_format and container_format properties
                 # this situation appears, when image was created
@@ -422,6 +423,7 @@ class GlanceImage(image.Image):
                     can_share)
         self.delete_fields('disk_format', delete_disk_format)
         self.delete_fields('container_format', delete_container_format)
+        LOG.info("Glance images deployment finished.")
         return new_info
 
     def delete_fields(self, field, list_of_ids):

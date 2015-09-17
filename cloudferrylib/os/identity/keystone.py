@@ -274,7 +274,6 @@ class KeystoneIdentity(identity.Identity):
 
     def get_tenants_list(self):
         """ Getting list of tenants from keystone. """
-
         result = []
         ks_tenants = self.keystone_client.tenants
         if self.filter_tenant_id:
@@ -372,16 +371,22 @@ class KeystoneIdentity(identity.Identity):
         return self.keystone_client.auth_token
 
     def _deploy_tenants(self, tenants):
+        LOG.info('Deploying tenants...')
         dst_tenants = {tenant.name: tenant.id for tenant in
                        self.get_tenants_list()}
         for _tenant in tenants:
             tenant = _tenant['tenant']
             if tenant['name'] not in dst_tenants:
+                LOG.debug("Creating tenant '%s'", tenant['name'])
                 _tenant['meta']['new_id'] = self.create_tenant(
                     tenant['name'],
                     tenant['description']).id
             else:
+                LOG.debug("Tenant '%s' is already present on destination, "
+                          "skipping", tenant['name'])
                 _tenant['meta']['new_id'] = dst_tenants[tenant['name']]
+
+        LOG.info("Tenant deployment done.")
 
     def _deploy_users(self, users, tenants):
         dst_users = {user.name: user.id for user in self.get_users_list()}
@@ -451,13 +456,20 @@ class KeystoneIdentity(identity.Identity):
                                               'password': password}))
 
     def _deploy_roles(self, roles):
+        LOG.info("Role deployment started...")
+
         dst_roles = {role.name: role.id for role in self.get_roles_list()}
         for _role in roles:
             role = _role['role']
             if role['name'] not in dst_roles:
+                LOG.debug("Creating role '%s'", role['name'])
                 _role['meta']['new_id'] = self.create_role(role['name']).id
             else:
+                LOG.debug("Role '%s' is already present on destination, "
+                          "skipping", role['name'])
                 _role['meta']['new_id'] = dst_roles[role['name']]
+
+        LOG.info("Role deployment done.")
 
     def _get_user_passwords(self):
         info = {}
