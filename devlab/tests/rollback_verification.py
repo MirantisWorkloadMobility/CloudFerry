@@ -13,8 +13,8 @@
 # limitations under the License.
 
 """
-This is module to verify if rollback procedure was executed correctly. Basically
-two dictionaries are being compared:
+This is module to verify if rollback procedure was executed correctly.
+Basically two dictionaries are being compared:
     - pre_data: data collected from SRC and DST clusters, is being stored in
                 file with name which is described in config file.
     - data_after: data collected from SRC and DST clusters using data_collector

@@ -344,10 +344,12 @@ class Prerequisites(object):
             self.novaclient.servers.create_image(
                 server=self.get_vm_id(snapshot['server']),
                 image_name=snapshot['image_name'])
-            snp = self.glanceclient.images.get(self.get_image_id(snapshot['image_name']))
+            snp = self.glanceclient.images.get(
+                self.get_image_id(snapshot['image_name']))
             while snp.status != 'active':
                 time.sleep(2)
-                snp = self.glanceclient.images.get(self.get_image_id(snapshot['image_name']))
+                snp = self.glanceclient.images.get(
+                    self.get_image_id(snapshot['image_name']))
                 if snp.status == 'error':
                     return None
 
@@ -495,8 +497,8 @@ class Prerequisites(object):
                 self.novaclient.servers.stop(self.get_vm_id(vm_state['name']))
             # emulate resize state:
             elif vm_state['state'] == u'resize':
-                self.novaclient.servers.resize(self.get_vm_id(vm_state['name']),
-                                               '2')
+                self.novaclient.servers.resize(
+                    self.get_vm_id(vm_state['name']), '2')
 
     def generate_vm_state_list(self):
         data = {}
@@ -733,9 +735,9 @@ class Prerequisites(object):
             except Exception as e:
                 print "Role %s failed to delete: %s" % (role['name'], repr(e))
         snapshots = self.config.cinder_snapshots
-        snapshots += itertools.chain(*[tenant['cinder_snapshots'] for tenant
-                                       in self.config.tenants if 'cinder_snapshots'
-                                       in tenant])
+        snapshots += itertools.chain(
+            *[tenant['cinder_snapshots'] for tenant in self.config.tenants
+              if 'cinder_snapshots' in tenant])
         for snapshot in snapshots:
             try:
                 self.cinderclient.volume_snapshots.delete(
@@ -778,7 +780,8 @@ if __name__ == '__main__':
                     'generated objects')
     parser.add_argument('--clean', help='clean objects described in '
                                         'self.config.ini', action='store_true')
-    parser.add_argument('--env', default='SRC', help='choose cloud: SRC or DST')
+    parser.add_argument('--env', default='SRC',
+                        help='choose cloud: SRC or DST')
     args = parser.parse_args()
     preqs = Prerequisites(config=conf, cloud_prefix=args.env)
     if args.clean:
