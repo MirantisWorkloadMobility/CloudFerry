@@ -80,6 +80,36 @@ class CheckCloud(action.Action):
             properties={'user_name': 'test_user_name'},
             data='test'
         )
+
+        # Creating private network
+        private_network_info = {
+            'network': {
+                'tenant_id': tenant_id,
+                'admin_state_up': False,
+                'shared': False,
+                'name': 'private_test_net',
+                'router:external': False
+            }
+        }
+        private_network_id = net_resource.neutron_client.create_network(
+            private_network_info)['network']['id']
+
+        # Creating subnet for private network
+        subnet_info = {
+            'subnet':
+            {
+                'name': 'test_subnet',
+                'network_id': private_network_id,
+                'cidr': '192.168.1.0/24',
+                'ip_version': 4,
+                'tenant_id': tenant_id,
+            }
+        }
+
+        subnet = net_resource.neutron_client.create_subnet(subnet_info)
+
+        nics = [{'net-id': private_network_id}]
+
         info = {
             'instances': {
                 'a0a0a0a': {
@@ -89,7 +119,7 @@ class CheckCloud(action.Action):
                         'image_id': migrate_image.id,
                         'flavor_id': flavor_id,
                         'key_name': '1',
-                        'nics': None,
+                        'nics': nics,
                         'user_id': '1',
                         'boot_mode': utl.BOOT_FROM_IMAGE,
                         'availability_zone': 'nova',
@@ -134,3 +164,6 @@ class CheckCloud(action.Action):
         image_res.glance_client.images.delete(migrate_image.id)
         compute_resource.nova_client.flavors.delete(flavor_id)
         ident_resource.keystone_client.tenants.delete(tenant_id)
+
+        # delete private network and subnet
+        net_resource.neutron_client.delete_network(private_network_id)
