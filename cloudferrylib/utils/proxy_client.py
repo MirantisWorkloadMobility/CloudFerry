@@ -80,6 +80,8 @@ class Proxy:
 
     def __getattr__(self, name):
         attr = getattr(self.client, name)
-        if inspect.ismethod(attr) or (type(attr) is method_wrapper) or is_wrapping(attr):
+        if inspect.ismethod(attr) or \
+                (type(attr) is method_wrapper) or \
+                is_wrapping(attr):
             return Proxy(attr, self.retry, self.wait_time)
         return attr

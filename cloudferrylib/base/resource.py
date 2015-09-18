@@ -49,8 +49,9 @@ class Resource(object):
             time.sleep(delay)
             delay *= 2
         else:
-            raise timeout_exception.TimeoutException(get_status(res_id).lower(),
-                                                     wait_status, "Timeout exp")
+            raise timeout_exception.TimeoutException(
+                get_status(res_id).lower(),
+                wait_status, "Timeout exp")
 
     def try_wait_for_status(self, res_id, get_status, wait_status, timeout=60):
         try:

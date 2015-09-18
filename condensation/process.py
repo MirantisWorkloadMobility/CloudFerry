@@ -35,6 +35,7 @@ def process(nodes, flavors, vms, groups):
 
 if __name__ == "__main__":
     process(nodes=condense_utils.read_file(cfglib.CONF.condense.nodes_file),
-            flavors=condense_utils.read_file(cfglib.CONF.condense.flavors_file),
+            flavors=condense_utils.read_file(
+                cfglib.CONF.condense.flavors_file),
             vms=condense_utils.read_file(cfglib.CONF.condense.vms_file),
             groups=condense_utils.read_file(cfglib.CONF.condense.groups_file))

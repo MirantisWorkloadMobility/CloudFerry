@@ -40,15 +40,20 @@ class SwiftStorage(objstorage.ObjStorage):
         return conn.get_auth()
 
     def read_info(self, **kwargs):
-        info = {utl.OBJSTORAGE_RESOURCE:
-                    {utl.CONTAINERS: {}}}
+        info = {
+            utl.OBJSTORAGE_RESOURCE: {
+                utl.CONTAINERS: {}
+            }
+        }
         account_info = self.get_account_info()
         info[utl.OBJSTORAGE_RESOURCE][utl.CONTAINERS] = account_info[1]
         for container_info in info[utl.OBJSTORAGE_RESOURCE][utl.CONTAINERS]:
-            container_info['objects'] = self.get_container(container_info['name'])[1]
+            container_info['objects'] = \
+                self.get_container(container_info['name'])[1]
             for object_info in container_info['objects']:
-                resp, object_info['data'] = self.get_object(container_info['name'],
-                                                            object_info['name'])
+                resp, object_info['data'] = \
+                    self.get_object(container_info['name'],
+                                    object_info['name'])
         return info
 
     def deploy(self, info, **kwargs):
@@ -65,30 +70,35 @@ class SwiftStorage(objstorage.ObjStorage):
         return swift_client.get_account(self.storage_url, self.token)
 
     def get_container(self, container, *args):
-        return swift_client.get_container(self.storage_url, self.token, container, *args)
+        return swift_client.get_container(self.storage_url,
+                                          self.token,
+                                          container, *args)
 
     def get_object(self, container, obj_name, *args):
-        return swift_client.get_object(self.storage_url, self.token, container, obj_name, *args)
+        return swift_client.get_object(self.storage_url,
+                                       self.token,
+                                       container,
+                                       obj_name, *args)
 
-    def put_object(self, container, obj_name, content=None, content_type=None, *args):
-        return swift_client.put_object(self.storage_url, self.token, container, obj_name, content, content_type, *args)
+    def put_object(self,
+                   container,
+                   obj_name,
+                   content=None,
+                   content_type=None,
+                   *args):
+        return swift_client.put_object(self.storage_url,
+                                       self.token,
+                                       container,
+                                       obj_name,
+                                       content,
+                                       content_type,
+                                       *args)
 
     def put_container(self, container, *args):
-        return swift_client.put_container(self.storage_url, self.token, container, *args)
+        return swift_client.put_container(self.storage_url,
+                                          self.token,
+                                          container, *args)
 
     def delete_container(self, container, *args):
-        return swift_client.delete_container(self.storage_url, self.token, container)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        return swift_client.delete_container(self.storage_url,
+                                             self.token, container)

@@ -21,6 +21,7 @@ LOG = utils.get_log(__name__)
 
 NAMESPACE = 'IMAGE_SNAPSHOT'
 
+
 class ImageSnapshotBasic(action.Action):
 
     """Base class that contains common to image_snapshot methods"""

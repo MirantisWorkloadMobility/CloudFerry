@@ -33,4 +33,3 @@ class CopyVar(action.Action):
         return {
             self.info_name: new_obj
         }
-

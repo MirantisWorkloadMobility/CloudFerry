@@ -475,7 +475,8 @@ class KeystoneIdentity(identity.Identity):
 
     def _deploy_roles(self, roles):
         LOG.info("Role deployment started...")
-        dst_roles = {role.name.lower(): role.id for role in self.get_roles_list()}
+        dst_roles = {
+            role.name.lower(): role.id for role in self.get_roles_list()}
         for _role in roles:
             role = _role['role']
             if role['name'].lower() not in dst_roles:
@@ -503,11 +504,13 @@ class KeystoneIdentity(identity.Identity):
         if user_list is None:
             user_list = []
         if not self.config.migrate.optimize_user_role_fetch:
-            user_tenants_roles = self._get_user_tenants_roles_by_api(tenant_list,
-                                                                     user_list)
+            user_tenants_roles = \
+                self._get_user_tenants_roles_by_api(tenant_list,
+                                                    user_list)
         else:
-            user_tenants_roles = self._get_user_tenants_roles_by_db(tenant_list,
-                                                                    user_list)
+            user_tenants_roles = \
+                self._get_user_tenants_roles_by_db(tenant_list,
+                                                   user_list)
         return user_tenants_roles
 
     def _get_roles_sql_request(self):
@@ -515,16 +518,17 @@ class KeystoneIdentity(identity.Identity):
         try:
             is_project_metadata = self.mysql_connector.execute(
                 "SHOW TABLES LIKE 'user_project_metadata'").rowcount
-            if is_project_metadata: #for grizzly case
+            if is_project_metadata:  # for grizzly case
                 return self.mysql_connector.execute(
                     "SELECT * FROM user_project_metadata")
             is_assignment = self.mysql_connector.execute(
                 "SHOW TABLES LIKE 'assignment'").rowcount
-            if is_assignment: #for icehouse case
+            if is_assignment:  # for icehouse case
                 res_raw = self.mysql_connector.execute(
                     "SELECT * FROM assignment")
                 res_tmp = {}
-                for type_record, actor_id, project_id, role_id, inher_tmp in res_raw:
+                for (type_record, actor_id, project_id,
+                     role_id, inher_tmp) in res_raw:
                     if (actor_id, project_id) not in res_tmp:
                         res_tmp[(actor_id, project_id)] = {'roles': []}
                     res_tmp[(actor_id, project_id)]['roles'].append(role_id)
@@ -609,9 +613,12 @@ class KeystoneIdentity(identity.Identity):
                 continue
             for _tenant in tenants:
                 tenant = _tenant['tenant']
-                user_roles_objs = _get_user_roles_cached(_user['meta']['new_id'],
-                                                         _tenant['meta']['new_id'])
-                exists_roles = [dst_roles[role] if not hasattr(role, 'name') else role.name
+                user_roles_objs = _get_user_roles_cached(
+                    _user['meta']['new_id'],
+                    _tenant['meta']['new_id'])
+                exists_roles = [dst_roles[role] if not hasattr(role,
+                                                               'name')
+                                else role.name
                                 for role in user_roles_objs]
                 for _role in user_tenants_roles[user['name']][tenant['name']]:
                     role = _role['role']

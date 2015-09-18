@@ -24,8 +24,8 @@ LOG = utl.get_log(__name__)
 
 class CheckFilter(action.Action):
     def run(self, **kwargs):
-        """Check filter file and make sure all entries are present in source cloud.
-
+        """Check filter file and make sure all entries are present in source
+        cloud.
         """
         search_opts = kwargs.get('search_opts', {})
         search_opts_img = kwargs.get('search_opts_img', {})
@@ -38,10 +38,13 @@ class CheckFilter(action.Action):
                 try:
                     img = image_resource.glance_client.images.get(img_id)
                     if img:
-                        LOG.debug('Filter config check: Image ID {} is OK'.format(img_id))
+                        LOG.debug('Filter config check: Image ID {} is OK'
+                                  .format(img_id))
                 except glance_exc.HTTPNotFound as e:
-                    LOG.error('Filter config check: Image ID {} is not present in source cloud, '
-                              'please update your filter config. Aborting.'.format(img_id))
+                    LOG.error('Filter config check: Image ID {} '
+                              'is not present in source cloud, '
+                              'please update your filter config. Aborting.'
+                              .format(img_id))
                     raise e
         ident_resource = self.cloud.resources[utl.IDENTITY_RESOURCE]
         if search_opts_tenant and search_opts_tenant.get('tenant_id'):
@@ -49,12 +52,16 @@ class CheckFilter(action.Action):
             for tenant_id in tenants:
                 LOG.debug('Filtered tenant id: {}'.format(tenant_id))
                 try:
-                    tenant = ident_resource.keystone_client.tenants.find(id=tenant_id)
+                    tenant = ident_resource.keystone_client.tenants.find(
+                        id=tenant_id)
                     if tenant:
-                        LOG.debug('Filter config check: Tenant ID {} is OK'.format(tenant_id))
+                        LOG.debug('Filter config check: Tenant ID {} is OK'
+                                  .format(tenant_id))
                 except keystone_exc.NotFound as e:
-                    LOG.error('Filter config check: Tenant ID {} is not present in source cloud, '
-                              'please update your filter config. Aborting.'.format(tenant_id))
+                    LOG.error('Filter config check: Tenant ID {} '
+                              'is not present in source cloud, '
+                              'please update your filter config. Aborting.'
+                              .format(tenant_id))
                     raise e
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
         if search_opts and search_opts.get('id'):
@@ -62,10 +69,14 @@ class CheckFilter(action.Action):
             for instance_id in instances:
                 LOG.debug('Filtered instance id: {}'.format(instance_id))
                 try:
-                    instance = compute_resource.nova_client.servers.get(instance_id)
+                    instance = \
+                        compute_resource.nova_client.servers.get(instance_id)
                     if instance:
-                        LOG.debug('Filter config check: Instance ID {} is OK'.format(instance_id))
+                        LOG.debug('Filter config check: Instance ID {} is OK'
+                                  .format(instance_id))
                 except nova_exc.NotFound as e:
-                    LOG.error('Filter config check: Instance ID {} is not present in source cloud, '
-                              'please update your filter config. Aborting.'.format(instance_id))
+                    LOG.error('Filter config check: Instance ID {} '
+                              'is not present in source cloud, '
+                              'please update your filter config. Aborting.'
+                              .format(instance_id))
                     raise e

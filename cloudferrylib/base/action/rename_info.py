@@ -14,7 +14,6 @@
 
 
 from cloudferrylib.base.action import action
-import copy
 
 
 class RenameInfo(action.Action):
@@ -29,4 +28,3 @@ class RenameInfo(action.Action):
             self.original_info_name: None,
             self.info_name: kwargs[self.original_info_name]
         }
-

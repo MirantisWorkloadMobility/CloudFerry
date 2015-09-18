@@ -20,9 +20,10 @@ CHILDREN = '__children__'
 class Namespace:
 
     def __init__(self, vars={}):
-        if not CHILDREN in vars:
+        if CHILDREN not in vars:
             vars[CHILDREN] = dict()
         self.vars = vars
 
     def fork(self, is_deep_copy=False):
-        return Namespace(copy.copy(self.vars)) if not is_deep_copy else Namespace(copy.deepcopy(self.vars))
+        return Namespace(copy.copy(self.vars)) if not is_deep_copy \
+            else Namespace(copy.deepcopy(self.vars))

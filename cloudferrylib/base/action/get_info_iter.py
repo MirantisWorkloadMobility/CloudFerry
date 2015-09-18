@@ -15,12 +15,12 @@
 
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
-import copy
 
 
 class GetInfoIter(action.Action):
 
-    def __init__(self, init, iter_info_name='info_iter', info_name='info', resource_name=utl.INSTANCES_TYPE):
+    def __init__(self, init, iter_info_name='info_iter', info_name='info',
+                 resource_name=utl.INSTANCES_TYPE):
         self.iter_info_name = iter_info_name
         self.info_name = info_name
         self.resource_name = resource_name
@@ -39,7 +39,3 @@ class GetInfoIter(action.Action):
             self.iter_info_name: info,
             self.info_name: new_info
         }
-
-
-
-

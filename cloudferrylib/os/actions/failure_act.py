@@ -22,6 +22,7 @@ LOG = utils.get_log(__name__)
 class DivisionByZero(action.Action):
 
     def run(self, *args, **kwargs):
-        LOG.debug("Dividing by zero (special case to fail migration execution)")
+        LOG.debug("Dividing by zero "
+                  "(special case to fail migration execution)")
         a = 1 / 0
         return a

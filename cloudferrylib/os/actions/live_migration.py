@@ -96,8 +96,10 @@ class LiveMigration(action.Action):
         src_host = instance_host(src_instance)
         dst_host = instance_host(dst_instance)
 
-        src_runner = remote_runner.RemoteRunner(src_host, cfglib.CONF.src.ssh_user)
-        dst_runner = remote_runner.RemoteRunner(dst_host, cfglib.CONF.dst.ssh_user)
+        src_runner = remote_runner.RemoteRunner(src_host,
+                                                cfglib.CONF.src.ssh_user)
+        dst_runner = remote_runner.RemoteRunner(dst_host,
+                                                cfglib.CONF.dst.ssh_user)
 
         src_libvirt = libvirt.Libvirt(src_runner)
         dst_libvirt = libvirt.Libvirt(dst_runner)
@@ -116,14 +118,24 @@ class LiveMigration(action.Action):
         dst_backing_file = dst_libvirt.get_backing_file(new_id)
         src_backing_file = src_libvirt.get_backing_file(old_id)
         migration_backing_file = os.path.join(
-            libvirt.nova_instances_path, '_base', 'migration_disk_{}'.format(old_id))
+            libvirt.nova_instances_path,
+            '_base',
+            'migration_disk_{}'.format(old_id))
         dst_compute.wait_for_status(new_id, dst_compute.get_status, 'active')
 
-        with files.RemoteTempFile(src_runner, "migrate-{}".format(old_id), src_vm_xml.dump()) as migration_file,\
-                files.RemoteSymlink(src_runner, src_backing_file, migration_backing_file),\
-                files.RemoteSymlink(dst_runner, dst_backing_file, migration_backing_file),\
+        with files.RemoteTempFile(src_runner,
+                                  "migrate-{}".format(old_id),
+                                  src_vm_xml.dump()) as migration_file,\
+                files.RemoteSymlink(src_runner,
+                                    src_backing_file,
+                                    migration_backing_file),\
+                files.RemoteSymlink(dst_runner,
+                                    dst_backing_file,
+                                    migration_backing_file),\
                 ubuntu.StopNovaCompute(dst_runner),\
-                libvirt.QemuBackingFileMover(src_libvirt.runner, migration_backing_file, old_id):
+                libvirt.QemuBackingFileMover(src_libvirt.runner,
+                                             migration_backing_file,
+                                             old_id):
 
             destroyer = libvirt.DestNovaInstanceDestroyer(dst_libvirt,
                                                           dst_compute,
@@ -131,7 +143,9 @@ class LiveMigration(action.Action):
                                                           dst_instance.id)
             try:
                 destroyer.do()
-                src_libvirt.live_migrate(src_virsh_name, dst_host, migration_file.filename)
+                src_libvirt.live_migrate(src_virsh_name,
+                                         dst_host,
+                                         migration_file.filename)
             except remote_runner.RemoteExecutionError:
                 destroyer.undo()
             finally:

@@ -49,7 +49,8 @@ class PrepareVolumesDataMap(action.Action):
                 utl.HOST_DST: dst_host,
                 utl.PATH_DST: dst_path
             })
-            volumes_data_map[dst_id][utl.META_INFO].update(src_volumes[src_id][utl.META_INFO])
+            volumes_data_map[dst_id][utl.META_INFO].\
+                update(src_volumes[src_id][utl.META_INFO])
         volumes = {
             utl.VOLUMES_TYPE: volumes_data_map
         }

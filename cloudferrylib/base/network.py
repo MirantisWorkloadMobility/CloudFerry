@@ -38,4 +38,3 @@ class Network(resource.Resource):
 
     def get_security_groups(self):
         raise NotImplemented("it's base class")
-

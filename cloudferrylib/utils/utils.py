@@ -96,6 +96,9 @@ FILTER_PATH = 'configs/filter.yaml'
 
 up_ssh_tunnel = None
 
+SSH_CMD = \
+    "ssh -oStrictHostKeyChecking=no -L %s:%s:22 -R %s:localhost:%s %s -Nf"
+
 
 class ext_dict(dict):
     def __getattr__(self, name):
@@ -105,8 +108,8 @@ class ext_dict(dict):
 
 
 def get_snapshots_list_repository(path=PATH_TO_SNAPSHOTS):
-    path_source = path+'/source'
-    path_dest = path+'/dest'
+    path_source = path + '/source'
+    path_dest = path + '/dest'
     s = os.listdir(path_source)
     s.sort()
     source = [{'path': '%s/%s' % (path_source, f),
@@ -137,19 +140,22 @@ def convert_to_dict(obj, ident=0, limit_ident=6):
     ident += 1
     if type(obj) in primitive:
         return obj
-    if isinstance(obj, inspect.types.InstanceType) or (type(obj) not in (list, tuple, dict)):
+    if isinstance(obj, inspect.types.InstanceType) or \
+            (type(obj) not in (list, tuple, dict)):
         if ident <= limit_ident:
             try:
                 obj = obj.convert_to_dict()
-            except AttributeError as e:
+            except AttributeError:
                 try:
                     t = obj.__dict__
                     t['_type_class'] = str(obj.__class__)
                     obj = t
-                except AttributeError as e:
-                    return str(obj.__class__ if hasattr(obj, '__class__') else type(obj))
+                except AttributeError:
+                    return str(obj.__class__ if hasattr(obj, '__class__')
+                               else type(obj))
         else:
-            return str(obj.__class__ if hasattr(obj, '__class__') else type(obj))
+            return str(obj.__class__ if hasattr(obj, '__class__')
+                       else type(obj))
     if type(obj) is dict:
         res = {}
         for item in obj:
@@ -238,12 +244,15 @@ with open(LOGGING_CONFIG, 'r') as logging_config:
     config.dictConfig(yaml.load(logging_config))
     LOGGER = logging.getLogger("CF")
 
+
 def configure_logging(level):
     # redefine default logging level
     LOGGER.setLevel(level)
 
+
 def get_log(name):
     return LOGGER
+
 
 class StackCallFunctions(object):
     def __init__(self):
@@ -288,7 +297,8 @@ def log_step(log):
         @wraps(func)
         def inner(*args, **kwargs):
             stack_call_functions.append(func.__name__, args, kwargs)
-            log.info("%s> Step %s" % ("- - "*stack_call_functions.depth(), func.__name__))
+            log.info("%s> Step %s" % ("- - " * stack_call_functions.depth(),
+                                      func.__name__))
             res = func(*args, **kwargs)
             stack_call_functions.pop(res)
             return res
@@ -298,7 +308,8 @@ def log_step(log):
 
 class forward_agent(object):
     """
-        Forwarding ssh-key for access on to source and destination clouds via ssh
+        Forwarding ssh-key for access on to source and
+        destination clouds via ssh
     """
 
     def __init__(self, key_file):
@@ -340,7 +351,8 @@ class forward_agent(object):
 class wrapper_singletone_ssh_tunnel:
 
     def __init__(self, interval_ssh="9000-9999", locker=Lock()):
-        self.interval_ssh = [int(interval_ssh.split('-')[0]), int(interval_ssh.split('-')[1])]
+        self.interval_ssh = [int(interval_ssh.split('-')[0]),
+                             int(interval_ssh.split('-')[1])]
         self.busy_port = []
         self.locker = locker
 
@@ -360,40 +372,48 @@ class wrapper_singletone_ssh_tunnel:
             if port in self.busy_port:
                 self.busy_port.remove(port)
 
-    def __call__(self, address_dest_compute, address_dest_controller, host, **kwargs):
-        return up_ssh_tunnel_class(address_dest_compute,
-                                   address_dest_controller,
-                                   host,
-                                   self.get_free_port,
-                                   self.free_port)
+    def __call__(self, address_dest_compute, address_dest_controller, host,
+                 **kwargs):
+        return UpSshTunnelClass(address_dest_compute,
+                                address_dest_controller,
+                                host,
+                                self.get_free_port,
+                                self.free_port)
 
 
-class up_ssh_tunnel_class:
+class UpSshTunnelClass:
 
     """
         Up ssh tunnel on dest controller node for transferring data
     """
 
-    def __init__(self, address_dest_compute, address_dest_controller, host, callback_get, callback_free):
+    def __init__(self, address_dest_compute, address_dest_controller, host,
+                 callback_get, callback_free):
         self.address_dest_compute = address_dest_compute
         self.address_dest_controller = address_dest_controller
         self.get_free_port = callback_get
         self.remove_port = callback_free
         self.host = host
-        self.cmd = "ssh -oStrictHostKeyChecking=no -L %s:%s:22 -R %s:localhost:%s %s -Nf"
+        self.cmd = SSH_CMD
 
     def __enter__(self):
         self.port = self.get_free_port()
         with settings(host_string=self.host,
                       connection_attempts=env.connection_attempts):
-            run(self.cmd % (self.port, self.address_dest_compute, self.port, self.port,
+            run(self.cmd % (self.port,
+                            self.address_dest_compute,
+                            self.port,
+                            self.port,
                             self.address_dest_controller) + " && sleep 2")
         return self.port
 
     def __exit__(self, type, value, traceback):
         with settings(host_string=self.host,
                       connection_attempts=env.connection_attempts):
-            run(("pkill -f '"+self.cmd+"'") % (self.port, self.address_dest_compute, self.port, self.port,
+            run(("pkill -f '"+self.cmd+"'") % (self.port,
+                                               self.address_dest_compute,
+                                               self.port,
+                                               self.port,
                                                self.address_dest_controller))
         time.sleep(2)
         self.remove_port(self.port)
@@ -405,17 +425,19 @@ class ChecksumImageInvalid(Exception):
         self.checksum_dest = checksum_dest
 
     def __str__(self):
-        return repr("Checksum of image source = %s Checksum of image dest = %s" %
+        return repr("Checksum of image source = %s" +
+                    "Checksum of image dest = %s" %
                     (self.checksum_source, self.checksum_dest))
 
 
-def render_info(info_values, template_path="templates", template_file="info.html"):
+def render_info(info_values, template_path="templates",
+                template_file="info.html"):
     info_env = Environment(loader=FileSystemLoader(template_path))
     template = info_env.get_template(template_file)
     return template.render(info_values)
 
 
-def write_info(rendered_info, info_file = "source_info.html"):
+def write_info(rendered_info, info_file="source_info.html"):
     with open(info_file, "wb") as ifile:
         ifile.write(rendered_info)
 
@@ -439,7 +461,8 @@ def find_element_by_in(list_values, word):
 
 
 def init_singletones(cfg):
-    globals()['up_ssh_tunnel'] = wrapper_singletone_ssh_tunnel(cfg.migrate.ssh_transfer_port)
+    globals()['up_ssh_tunnel'] = wrapper_singletone_ssh_tunnel(
+        cfg.migrate.ssh_transfer_port)
 
 
 def get_disk_path(instance, blk_list, is_ceph_ephemeral=False, disk=DISK):
@@ -470,7 +493,7 @@ def get_ips(init_host, compute_host, ssh_user):
         list_ips = []
         for info in out.split():
             try:
-                ip = ipaddr.IPAddress(info)
+                ipaddr.IPAddress(info)
             except ValueError:
                 continue
             list_ips.append(info)

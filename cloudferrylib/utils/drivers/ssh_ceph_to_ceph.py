@@ -16,8 +16,6 @@
 from fabric.api import env
 from fabric.api import settings
 
-from cloudferrylib.os.actions import utils as action_utils
-
 from cloudferrylib.utils import cmd_cfg
 from cloudferrylib.utils import driver_transporter
 from cloudferrylib.utils import rbd_util
@@ -42,16 +40,19 @@ class SSHCephToCeph(driver_transporter.DriverTransporter):
             ssh_rbd_import_diff = ssh_cmd(host_dst, rbd_import_diff)
 
             if snapshot:
-                process_params = [snapshot['name'], data['path_src'], '-', '-', data['path_dst']]
+                process_params = [snapshot['name'], data['path_src'], '-', '-',
+                                  data['path_dst']]
                 if snapshot_type == 1:
                     rbd_export_diff = rbd_util.RbdUtil.rbd_export_diff_snap_cmd
                 elif snapshot_type == 2:
-                    rbd_export_diff = rbd_util.RbdUtil.rbd_export_diff_from_snap_cmd
+                    rbd_export_diff = \
+                        rbd_util.RbdUtil.rbd_export_diff_from_snap_cmd
                     process_params.insert(0, snapshot['prev_snapname'])
                 elif snapshot_type == 3:
                     rbd_export_diff = rbd_util.RbdUtil.rbd_export_diff_from_cmd
                 else:
-                    raise ValueError("Unsupported snapshot type %s", snapshot_type)
+                    raise ValueError("Unsupported snapshot type %s",
+                                     snapshot_type)
             else:
                 rbd_export_diff = rbd_util.RbdUtil.rbd_export_diff_cmd
                 process_params = [data['path_src'], '-', '-', data['path_dst']]

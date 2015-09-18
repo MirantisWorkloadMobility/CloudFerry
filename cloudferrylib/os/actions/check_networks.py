@@ -82,8 +82,8 @@ class Network(object):
             if overlapping_subnet:
                 message = ("Subnet %s in network %s on src overlap "
                            "subnet %s in network %s on dst" % (
-                                overlapping_subnet, self.id,
-                                subnet['id'], network.id))
+                               overlapping_subnet, self.id,
+                               subnet['id'], network.id))
                 LOG.error(message)
                 raise exceptions.EnvironmentError(message)
 

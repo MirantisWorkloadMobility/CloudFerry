@@ -16,7 +16,6 @@
 from cinderclient.v1 import client as cinder_client
 
 from cloudferrylib.base import storage
-from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import utils as utl
 
 LOG = utl.get_log(__name__)

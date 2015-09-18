@@ -17,14 +17,18 @@ from cloudferrylib.base import exception
 from cloudferrylib.utils import utils as utl
 from neutronclient.common import exceptions as neutron_exc
 from glanceclient import exc as glance_exc
-from keystoneclient.openstack.common.apiclient import exceptions as keystone_exc
+from keystoneclient.openstack.common.apiclient import exceptions as ks_exc
 from cinderclient import exceptions as cinder_exc
 from novaclient import exceptions as nova_exc
 
 LOG = utl.get_log(__name__)
 
 
-def check(os_api_call, os_api_type, position, *os_api_call_args, **os_api_call_kwargs):
+def check(os_api_call,
+          os_api_type,
+          position,
+          *os_api_call_args,
+          **os_api_call_kwargs):
     try:
         LOG.info("Checking %s APIs availability on %s.",
                  os_api_type, position.upper())
@@ -32,7 +36,7 @@ def check(os_api_call, os_api_type, position, *os_api_call_args, **os_api_call_k
     except (neutron_exc.NeutronException,
             glance_exc.BaseException,
             glance_exc.ClientException,
-            keystone_exc.ClientException,
+            ks_exc.ClientException,
             cinder_exc.ClientException,
             nova_exc.ClientException) as e:
         message = ('{os_api_type} APIs on {position} check failed with: '
@@ -76,13 +80,15 @@ class CheckStorageBackend(action.Action):
         storage_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
         check(storage_resource.cinder_client.volumes.list, 'Cinder volumes',
               self.cloud.position)
-        check(storage_resource.cinder_client.volume_snapshots.list, 'Cinder snapshots',
+        check(storage_resource.cinder_client.volume_snapshots.list,
+              'Cinder snapshots',
               self.cloud.position)
 
 
 class CheckNetworkingAPIs(action.Action):
     def run(self, **kwargs):
-        """Check networking backend by getting network/subnets/routers lists."""
+        """Check networking backend
+         by getting network/subnets/routers lists."""
         neutron = self.cloud.resources[utl.NETWORK_RESOURCE]
         check(neutron.neutron_client.list_networks, 'Neutron networks',
               self.cloud.position)

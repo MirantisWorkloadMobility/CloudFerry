@@ -22,8 +22,6 @@ from fabric.api import settings
 from cloudferrylib.base.action import action
 from cloudferrylib.os.actions import convert_file_to_image
 from cloudferrylib.os.actions import convert_image_to_file
-from cloudferrylib.os.actions import convert_volume_to_image
-from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.os.actions import task_transfer
 from cloudferrylib.utils import utils as utl, forward_agent
 
@@ -66,7 +64,7 @@ class PreTransportInstance(action.Action):
 
     def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)
-        #Init before run
+        # Init before run
         src_compute = self.src_cloud.resources[utl.COMPUTE_RESOURCE]
         dst_compute = self.src_cloud.resources[utl.COMPUTE_RESOURCE]
         backend_ephem_drv_src = src_compute.config.compute.backend
@@ -76,7 +74,7 @@ class PreTransportInstance(action.Action):
             }
         }
 
-        #Get next one instance
+        # Get next one instance
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             instance_boot = instance[utl.INSTANCE_BODY]['boot_mode']
             one_instance = {
@@ -84,12 +82,16 @@ class PreTransportInstance(action.Action):
                     instance_id: instance
                 }
             }
-            #Pre processing deploy
-            if (instance_boot == utl.BOOT_FROM_IMAGE) and (backend_ephem_drv_src == CEPH):
+            # Pre processing deploy
+            if ((instance_boot == utl.BOOT_FROM_IMAGE) and
+                    (backend_ephem_drv_src == CEPH)):
                 self.transport_image(self.dst_cloud, one_instance, instance_id)
-            if (instance_boot == utl.BOOT_FROM_IMAGE) and (backend_ephem_drv_src == ISCSI) \
-                and (backend_ephem_drv_dst == CEPH):
-                self.transport_diff_and_merge(self.dst_cloud, one_instance, instance_id)
+            if ((instance_boot == utl.BOOT_FROM_IMAGE) and
+                    (backend_ephem_drv_src == ISCSI) and
+                    (backend_ephem_drv_dst == CEPH)):
+                self.transport_diff_and_merge(self.dst_cloud,
+                                              one_instance,
+                                              instance_id)
             new_info[utl.INSTANCES_TYPE].update(
                 one_instance[utl.INSTANCES_TYPE])
 
@@ -97,15 +99,21 @@ class PreTransportInstance(action.Action):
             'info': new_info
         }
 
-    def convert_file_to_image(self, dst_cloud, base_file, disk_format, instance_id):
-        converter = convert_file_to_image.ConvertFileToImage(self.init, cloud=dst_cloud)
+    def convert_file_to_image(self,
+                              dst_cloud,
+                              base_file,
+                              disk_format,
+                              instance_id):
+        converter = convert_file_to_image.ConvertFileToImage(self.init,
+                                                             cloud=dst_cloud)
         dst_image_id = converter.run(file_path=base_file,
                                      image_format=disk_format,
                                      image_name="%s-image" % instance_id)
         return dst_image_id
 
     def convert_image_to_file(self, cloud, image_id, filename):
-        convertor = convert_image_to_file.ConvertImageToFile(self.init, cloud=cloud)
+        convertor = convert_image_to_file.ConvertImageToFile(self.init,
+                                                             cloud=cloud)
         convertor.run(image_id=image_id,
                       base_filename=filename)
 
@@ -115,7 +123,8 @@ class PreTransportInstance(action.Action):
         self.commit_diff_file(host, diff_file)
 
     def transport_image(self, dst_cloud, info, instance_id):
-        path_dst = "%s/%s" % (dst_cloud.cloud_config.cloud.temp, "temp%s_base" % instance_id)
+        path_dst = "%s/%s" % (dst_cloud.cloud_config.cloud.temp,
+                              "temp%s_base" % instance_id)
         info[INSTANCES][instance_id][DIFF][PATH_DST] = path_dst
         info[INSTANCES][instance_id][DIFF][HOST_DST] = dst_cloud.getIpSsh()
 
@@ -126,8 +135,8 @@ class PreTransportInstance(action.Action):
             resource_root_name=utl.DIFF_BODY)
         transporter.run(info=info)
 
-        converter = convert_file_to_image.ConvertFileToImage(self.init, 'dst_cloud')
-
+        converter = convert_file_to_image.ConvertFileToImage(self.init,
+                                                             'dst_cloud')
 
         dst_image_id = converter.run(file_path=path_dst,
                                      image_format='raw',
@@ -135,7 +144,8 @@ class PreTransportInstance(action.Action):
         info[INSTANCES][instance_id][INSTANCE_BODY]['image_id'] = dst_image_id
 
     def transport_diff_and_merge(self, dst_cloud, info, instance_id):
-        convertor = convert_image_to_file.ConvertImageToFile(self.init, cloud='dst_cloud')
+        convertor = convert_image_to_file.ConvertImageToFile(self.init,
+                                                             cloud='dst_cloud')
         transporter = task_transfer.TaskTransfer(
             self.init,
             TRANSPORTER_MAP[ISCSI][ISCSI],
@@ -143,8 +153,10 @@ class PreTransportInstance(action.Action):
             resource_root_name=utl.DIFF_BODY)
         image_id = info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id']
 
-        base_file = "%s/%s" % (dst_cloud.cloud_config.cloud.temp, "temp%s_base" % instance_id)
-        diff_file = "%s/%s" % (dst_cloud.cloud_config.cloud.temp, "temp%s" % instance_id)
+        base_file = "%s/%s" % (dst_cloud.cloud_config.cloud.temp,
+                               "temp%s_base" % instance_id)
+        diff_file = "%s/%s" % (dst_cloud.cloud_config.cloud.temp,
+                               "temp%s" % instance_id)
 
         info[INSTANCES][instance_id][DIFF][PATH_DST] = diff_file
         info[INSTANCES][instance_id][DIFF][HOST_DST] = dst_cloud.getIpSsh()
@@ -162,9 +174,12 @@ class PreTransportInstance(action.Action):
         disk_format = image[utl.IMAGE_BODY]['disk_format']
         if image_res.config.image.convert_to_raw:
             if disk_format.lower() != utl.RAW:
-                self.convert_file_to_raw(dst_cloud.cloud_config.cloud.host, disk_format, base_file)
+                self.convert_file_to_raw(dst_cloud.cloud_config.cloud.host,
+                                         disk_format,
+                                         base_file)
                 disk_format = utl.RAW
-        converter = convert_file_to_image.ConvertFileToImage(self.init, cloud='dst_cloud')
+        converter = convert_file_to_image.ConvertFileToImage(self.init,
+                                                             cloud='dst_cloud')
         dst_image_id = converter.run(file_path=base_file,
                                      image_format=disk_format,
                                      image_name="%s-image" % instance_id)
@@ -190,4 +205,4 @@ class PreTransportInstance(action.Action):
     def commit_diff_file(host, diff_file):
         with settings(host_string=host,
                       connection_attempts=env.connection_attempts):
-            run("qemu-img commit %s" % diff_file)        
+            run("qemu-img commit %s" % diff_file)
