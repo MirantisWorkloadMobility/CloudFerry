@@ -14,7 +14,7 @@
 from fabric.api import run
 from fabric.api import settings
 
-
+from cloudferrylib.base import clients
 from cloudferrylib.utils import utils
 
 
@@ -71,20 +71,9 @@ def cobalt_live_migrate_vm(config, vm_id, dest_host):
 
     with settings(warn_only=True, host_string=host_string,
                   key_filename=config.migrate.key_filename):
-        migrate_cmd = ("nova "
-                       "--os-tenant-name={tenant} "
-                       "--os-username={username} "
-                       "--os-password={password} "
-                       "--os-auth-url={auth_url} "
-                       "cobalt-migrate {vm_id} "
-                       "--dest {dest_host}").format(
-            tenant=config.cloud.tenant,
-            username=config.cloud.user,
-            password=config.cloud.password,
-            auth_url=config.cloud.auth_url,
-            vm_id=vm_id,
-            dest_host=dest_host
-        )
+        migrate_cmd = clients.os_cli_cmd(config.cloud, "nova",
+                                         "cobalt-migrate", vm_id,
+                                         "--dest", dest_host)
 
         LOG.debug(migrate_cmd)
 

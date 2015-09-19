@@ -31,6 +31,7 @@ FAKE_CONFIG = utils.ext_dict(
                           'password': 'fake_password',
                           'tenant': 'fake_tenant',
                           'auth_url': 'http://1.1.1.1:35357/v2.0/',
+                          'region': None,
                           'service_tenant': 'service'}),
     migrate=utils.ext_dict({'speed_limit': '10MB',
                             'retry': '7',
@@ -41,6 +42,7 @@ FAKE_CONFIG = utils.ext_dict(
     mail=utils.ext_dict({'server': '-'}))
 
 
+@mock.patch("cloudferrylib.base.clients", mock.MagicMock())
 class KeystoneIdentityTestCase(test.TestCase):
     def setUp(self):
         super(KeystoneIdentityTestCase, self).setUp()
@@ -419,6 +421,61 @@ class KeystoneIdentityTestCase(test.TestCase):
                                                       'fake_same_id',
                                                       fallback_to_admin=True)
         self.assertEquals(self.fake_same_user, user)
+
+
+@mock.patch("cloudferrylib.os.identity.keystone.keystone_client.Client")
+class KeystoneClientTestCase(test.TestCase):
+    def test_adds_region_if_set_in_config(self, ks_client):
+        cloud = mock.MagicMock()
+        config = mock.MagicMock()
+
+        tenant = 'tenant'
+        region = 'region'
+        user = 'user'
+        auth_url = 'auth_url'
+        password = 'password'
+
+        config.cloud.user = user
+        config.cloud.tenant = tenant
+        config.cloud.region = region
+        config.cloud.auth_url = auth_url
+        config.cloud.password = password
+
+        ks = keystone.KeystoneIdentity(config, cloud)
+        ks.get_client()
+
+        ks_client.assert_called_with(
+            region_name=region,
+            tenant_name=tenant,
+            password=password,
+            auth_url=auth_url,
+            username=user
+        )
+
+    def test_does_not_add_region_if_not_set_in_config(self, ks_client):
+        cloud = mock.MagicMock()
+        config = mock.MagicMock()
+
+        tenant = 'tenant'
+        user = 'user'
+        auth_url = 'auth_url'
+        password = 'password'
+
+        config.cloud.region = None
+        config.cloud.user = user
+        config.cloud.tenant = tenant
+        config.cloud.auth_url = auth_url
+        config.cloud.password = password
+
+        ks = keystone.KeystoneIdentity(config, cloud)
+        ks.get_client()
+
+        ks_client.assert_called_with(
+            tenant_name=tenant,
+            password=password,
+            auth_url=auth_url,
+            username=user
+        )
 
 
 class AddAdminToNonAdminTenantTestCase(test.TestCase):

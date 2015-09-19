@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+from cloudferrylib.base import clients
 from cloudferrylib.base import resource
 
 
@@ -23,3 +24,35 @@ class Image(resource.Resource):
 
     def get_backend(self):
         return self.config.image.backend
+
+
+def glance_image_download_cmd(config, image_id, destination_file):
+    """Generates glance command which stores `image_id` in `destination_file`
+
+    :returns: Openstack CLI command
+    """
+    image_download_cmd = clients.os_cli_cmd(
+        config, 'glance', 'image-download', image_id)
+
+    return "{img_download_cmd} > {file}".format(
+        img_download_cmd=image_download_cmd,
+        file=destination_file)
+
+
+def glance_image_create_cmd(config, image_name, disk_format, filename,
+                            container_format="bare"):
+    """Generates glance command which creates image based on arguments
+    provided. Command output is filtered for 'id'
+
+    :returns: Openstack CLI command"""
+    args = ("--name {image_name} "
+            "--disk-format={disk_format} "
+            "--container-format={container_format} "
+            "--file {file}").format(
+        image_name=image_name,
+        disk_format=disk_format,
+        container_format=container_format,
+        file=filename
+    )
+    return "{image_create} | grep '\<id\>'".format(
+        image_create=clients.os_cli_cmd(config, 'image-create', *args))

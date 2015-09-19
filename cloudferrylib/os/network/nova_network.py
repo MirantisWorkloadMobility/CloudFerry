@@ -35,11 +35,19 @@ class NovaNetwork(network.Network):
         return self.proxy(self.get_client(), self.config)
 
     def get_client(self):
-        return nova_client.Client(
+        args = [
             self.config.cloud.user,
             self.config.cloud.password,
             self.config.cloud.tenant,
-            self.config.cloud.auth_url)
+            self.config.cloud.auth_url
+        ]
+
+        kwargs = {}
+
+        if self.config.cloud.region:
+            kwargs["region_name"] = self.config.cloud.region
+
+        return nova_client.Client(*args, **kwargs)
 
     def read_info(self, opts=None):
         opts = {} if not opts else opts

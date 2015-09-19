@@ -1,4 +1,6 @@
+# FIXME code below is not tested functionally. Should be considered dead
 
+from cloudferrylib.base import image
 from cloudferrylib.base.action import action
 from fabric.api import run, settings
 from cloudferrylib.utils import utils as utl
@@ -32,8 +34,9 @@ class UploadFileToImage(action.Action):
         img_res = self.cloud.resources[utl.IMAGE_RESOURCE]
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             # init
-            image_id = info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id']
-            base_file = "%s/%s" % (self.cloud.cloud_config.cloud.temp, "temp%s_base" % instance_id)
+            inst_body = info[INSTANCES][instance_id][utl.INSTANCE_BODY]
+            image_id = inst_body['image_id']
+            base_file = "/tmp/%s" % ("temp%s_base" % instance_id)
             image_name = "%s-image" % instance_id
             images = img_res.read_info(image_id=image_id)[utl.IMAGES_TYPE]
             image_format = images[image_id][utl.IMAGE_BODY]['disk_format']
@@ -41,17 +44,9 @@ class UploadFileToImage(action.Action):
                 image_format = utl.RAW
             # action
             with settings(host_string=cfg.host):
-                out = run(("glance --os-username=%s --os-password=%s --os-tenant-name=%s " +
-                           "--os-auth-url=%s " +
-                           "image-create --name %s --disk-format=%s --container-format=bare --file %s| " +
-                           "grep id") %
-                          (cfg.user,
-                           cfg.password,
-                           cfg.tenant,
-                           cfg.auth_url,
-                           image_name,
-                           image_format,
-                           base_file))
+                cmd = image.glance_image_create_cmd(cfg, image_name,
+                                                    image_format, base_file)
+                out = run(cmd)
             image_id = out.split("|")[2].replace(' ', '')
             info[INSTANCES][instance_id][INSTANCE_BODY]['image_id'] = image_id
         return {

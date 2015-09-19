@@ -31,6 +31,7 @@ FAKE_CONFIG = utils.ext_dict(
     cloud=utils.ext_dict({'user': 'fake_user',
                           'password': 'fake_password',
                           'tenant': 'fake_tenant',
+                          'region': None,
                           'auth_url': 'http://1.1.1.1:35357/v2.0/'}),
     mysql=utils.ext_dict({'host': '1.1.1.1'}),
     migrate=utils.ext_dict({'migrate_quotas': True,
@@ -439,3 +440,48 @@ class FlavorDeploymentTestCase(test.TestCase):
         nc._deploy_flavors(flavors, tenant_map)
 
         assert nc._add_flavor_access_for_tenants.called
+
+
+@mock.patch("cloudferrylib.os.compute.nova_compute.nova_client.Client")
+class NovaClientTestCase(test.TestCase):
+    def test_adds_region_if_set_in_config(self, n_client):
+        cloud = mock.MagicMock()
+        config = mock.MagicMock()
+
+        tenant = 'tenant'
+        region = 'region'
+        user = 'user'
+        auth_url = 'auth_url'
+        password = 'password'
+
+        config.cloud.user = user
+        config.cloud.tenant = tenant
+        config.cloud.region = region
+        config.cloud.auth_url = auth_url
+        config.cloud.password = password
+
+        n = nova_compute.NovaCompute(config, cloud)
+        n.get_client()
+
+        n_client.assert_called_with(user, password, tenant, auth_url,
+                                    region_name=region)
+
+    def test_does_not_add_region_if_not_set_in_config(self, n_client):
+        cloud = mock.MagicMock()
+        config = mock.MagicMock()
+
+        tenant = 'tenant'
+        user = 'user'
+        auth_url = 'auth_url'
+        password = 'password'
+
+        config.cloud.region = None
+        config.cloud.user = user
+        config.cloud.tenant = tenant
+        config.cloud.auth_url = auth_url
+        config.cloud.password = password
+
+        n = nova_compute.NovaCompute(config, cloud)
+        n.get_client()
+
+        n_client.assert_called_with(user, password, tenant, auth_url)

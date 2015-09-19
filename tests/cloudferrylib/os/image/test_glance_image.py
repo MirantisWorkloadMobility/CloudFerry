@@ -26,6 +26,7 @@ from tests import test
 FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
                                                    'password': 'fake_password',
                                                    'tenant': 'fake_tenant',
+                                                   'region': None,
                                                    'host': '1.1.1.1',
                                                    }),
                              migrate=utils.ext_dict({'speed_limit': '10MB',
@@ -33,9 +34,10 @@ FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
                                                      'time_wait': 5}))
 
 
-class FakeUser():
+class FakeUser(object):
     def __init__(self):
         self.name = 'fake_user_name'
+
 
 class GlanceImageTestCase(test.TestCase):
 
@@ -67,9 +69,7 @@ class GlanceImageTestCase(test.TestCase):
 
         self.fake_cloud.resources = dict(identity=self.identity_mock,
                                          image=self.image_mock)
-        with mock.patch(
-                'cloudferrylib.os.image.glance_image.mysql_connector'):
-            self.glance_image = GlanceImage(FAKE_CONFIG, self.fake_cloud)
+        self.glance_image = GlanceImage(FAKE_CONFIG, self.fake_cloud)
 
         self.fake_image_1 = mock.Mock()
 

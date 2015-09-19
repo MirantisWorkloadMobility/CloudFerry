@@ -27,7 +27,6 @@ from glanceclient.v1.images import CREATE_PARAMS
 
 from cloudferrylib.base import exception
 from cloudferrylib.base import image
-from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import file_like_proxy
 from cloudferrylib.utils import utils as utl
 
@@ -450,15 +449,8 @@ class GlanceImage(image.Image):
 
     def glance_img_create(self, runner, image_name, image_format, file_path):
         cfg = self.cloud.cloud_config.cloud
-        out = runner.run(("glance --os-username=%s --os-password=%s --os-tenant-name=%s --os-auth-url=%s " +
-                          "image-create --name %s --disk-format=%s --container-format=bare --file %s " +
-                          "| grep id") %
-                         (cfg.user,
-                          cfg.password,
-                          cfg.tenant,
-                          cfg.auth_url,
-                          image_name,
-                          image_format,
-                          file_path))
+        cmd = image.glance_image_create_cmd(cfg, image_name, image_format,
+                                            file_path)
+        out = runner.run(cmd)
         image_id = out.split("|")[2].replace(' ', '')
         return image_id
