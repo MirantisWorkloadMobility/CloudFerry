@@ -16,6 +16,26 @@
 import sqlalchemy
 
 
+def get_db_host(cloud_config):
+    """Returns DB host based on configuration.
+
+    Useful when MySQL is deployed on multiple nodes, when multiple MySQL nodes
+    are hidden behind a VIP. In this scenario providing VIP in
+    `config.dst_mysql.db_host` will break mysqldump which requires to be run
+    locally on particular DB host.
+
+    :returns: `config.migrate.mysqldump_host` if not `None`, or
+    `config.dst_mysql.db_host` otherwise
+    """
+
+    db_host = cloud_config.mysql.db_host
+
+    if cloud_config.migrate.mysqldump_host:
+        db_host = cloud_config.migrate.mysqldump_host
+
+    return db_host
+
+
 class MysqlConnector():
     def __init__(self, config, db):
         self.config = config
