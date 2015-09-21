@@ -57,6 +57,7 @@ vagrant box update
 vagrant up grizzly icehouse
 sleep 10
 
+if [[ "$SRC" != "192.168.1.2" ]];then
 ssh root@$SRC "for f in \`grep -l -r \"192.168.1.2\" /etc/\`; do sed -i 's/192.168.1.2/$SRC/g' \$f; done"
 ssh root@$SRC "mysqldump -u $src_mysql_user -p$src_mysql_password keystone > db.sql"
 ssh root@$SRC "sed -i 's/192.168.1.2/$SRC/g' db.sql"
@@ -67,6 +68,7 @@ ssh root@$DST "mysqldump -u $dst_mysql_user -p$dst_mysql_password keystone > db.
 ssh root@$DST "sed -i 's/192.168.1.3/$DST/g' db.sql"
 ssh root@$DST "mysql -u $dst_mysql_user -p$dst_mysql_password keystone < ./db.sql"
 vagrant reload grizzly icehouse
+fi
 
 echo "Generate load on SRC"
 cd tests
