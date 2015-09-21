@@ -138,7 +138,10 @@ migrate_opts = [
                      'OpenStack does not support user quotas (e.g. Grizzly)'),
     cfg.StrOpt('incloud_live_migration', default='nova',
                help='Live migration type used for in-cloud live migration. '
-                    'Possible values: "nova", "cobalt".')
+                    'Possible values: "nova", "cobalt".'),
+    cfg.StrOpt('mysqldump_host',
+               help='IP or hostname used for creating MySQL dump for rollback.'
+                    'If not set uses `[dst] db_host` config option.')
 ]
 
 mail = cfg.OptGroup(name='mail',
