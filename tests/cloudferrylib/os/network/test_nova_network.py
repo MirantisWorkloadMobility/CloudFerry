@@ -27,6 +27,7 @@ FAKE_CONFIG = utils.ext_dict(
     cloud=utils.ext_dict({'user': 'fake_user',
                           'password': 'fake_password',
                           'tenant': 'fake_tenant',
+                          'region': None,
                           'auth_url': 'http://1.1.1.1:35357/v2.0/'}),
     migrate=utils.ext_dict({'speed_limit': '10MB',
                             'retry': '7',

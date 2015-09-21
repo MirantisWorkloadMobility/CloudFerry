@@ -43,8 +43,9 @@ class LiveMigrationTestCase(test.TestCase):
         except Exception as e:
             self.fail("Migration should not fail for nova: %s" % e)
 
-    @mock.patch('cloudferrylib.os.compute.instances.run')
-    def test_runs_migration_for_cobalt(self, _):
+    @mock.patch('cloudferrylib.os.compute.instances.run', mock.MagicMock())
+    @mock.patch('cloudferrylib.os.compute.instances.clients', mock.MagicMock())
+    def test_runs_migration_for_cobalt(self):
         nova_client = mock.Mock()
         config = mock.Mock()
 

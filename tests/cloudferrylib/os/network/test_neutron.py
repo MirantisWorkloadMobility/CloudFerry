@@ -30,6 +30,7 @@ FAKE_CONFIG = utils.ext_dict(
                           'password': 'fake_password',
                           'tenant': 'fake_tenant',
                           'auth_url': 'http://1.1.1.1:35357/v2.0/',
+                          'region': None,
                           'service_tenant': 'services'}),
     migrate=utils.ext_dict({'ext_net_map': 'fake_ext_net_map.yaml',
                             'speed_limit': '10MB',
@@ -606,3 +607,60 @@ class NeutronTestCase(test.TestCase):
         net1_hash = neutron.NeutronNetwork.get_resource_hash(net1, 'cidr')
         net2_hash = neutron.NeutronNetwork.get_resource_hash(net2, 'cidr')
         self.assertEqual(net1_hash, net2_hash)
+
+
+@mock.patch("cloudferrylib.os.network.neutron.neutron_client.Client")
+@mock.patch("cloudferrylib.os.network.neutron.utl.read_yaml_file",
+            mock.MagicMock())
+class NeutronClientTestCase(test.TestCase):
+    def test_adds_region_if_set_in_config(self, n_client):
+        cloud = mock.MagicMock()
+        config = mock.MagicMock()
+
+        tenant = 'tenant'
+        region = 'region'
+        user = 'user'
+        auth_url = 'auth_url'
+        password = 'password'
+
+        config.cloud.user = user
+        config.cloud.tenant = tenant
+        config.cloud.region = region
+        config.cloud.auth_url = auth_url
+        config.cloud.password = password
+
+        n = neutron.NeutronNetwork(config, cloud)
+        n.get_client()
+
+        n_client.assert_called_with(
+            region_name=region,
+            tenant_name=tenant,
+            password=password,
+            auth_url=auth_url,
+            username=user
+        )
+
+    def test_does_not_add_region_if_not_set_in_config(self, n_client):
+        cloud = mock.MagicMock()
+        config = mock.MagicMock()
+
+        tenant = 'tenant'
+        user = 'user'
+        auth_url = 'auth_url'
+        password = 'password'
+
+        config.cloud.region = None
+        config.cloud.user = user
+        config.cloud.tenant = tenant
+        config.cloud.auth_url = auth_url
+        config.cloud.password = password
+
+        n = neutron.NeutronNetwork(config, cloud)
+        n.get_client()
+
+        n_client.assert_called_with(
+            tenant_name=tenant,
+            password=password,
+            auth_url=auth_url,
+            username=user
+        )

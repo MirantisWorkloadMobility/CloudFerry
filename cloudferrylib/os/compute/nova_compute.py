@@ -119,8 +119,14 @@ class NovaCompute(compute.Compute):
 
         params = self.config if not params else params
 
-        client = nova_client.Client(params.cloud.user, params.cloud.password,
-                                    params.cloud.tenant, params.cloud.auth_url)
+        client_args = [params.cloud.user, params.cloud.password,
+                       params.cloud.tenant, params.cloud.auth_url]
+
+        client_kwargs = {}
+        if params.cloud.region:
+            client_kwargs["region_name"] = params.cloud.region
+
+        client = nova_client.Client(*client_args, **client_kwargs)
         LOG.debug("Authenticating as '%s' in tenant '%s'",
                   params.cloud.user, params.cloud.tenant)
         client.authenticate()

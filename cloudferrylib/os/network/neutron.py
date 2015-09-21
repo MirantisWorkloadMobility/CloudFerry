@@ -20,7 +20,6 @@ from neutronclient.v2_0 import client as neutron_client
 
 from cloudferrylib.base import network
 from cloudferrylib.os.identity import keystone as ksresource
-from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import utils as utl
 
 
@@ -48,11 +47,17 @@ class NeutronNetwork(network.Network):
         return self.proxy(self.get_client(), self.config)
 
     def get_client(self):
-        return neutron_client.Client(
-            username=self.config.cloud.user,
-            password=self.config.cloud.password,
-            tenant_name=self.config.cloud.tenant,
-            auth_url=self.config.cloud.auth_url)
+        kwargs = {
+            "username": self.config.cloud.user,
+            "password": self.config.cloud.password,
+            "tenant_name": self.config.cloud.tenant,
+            "auth_url": self.config.cloud.auth_url
+        }
+
+        if self.config.cloud.region:
+            kwargs["region_name"] = self.config.cloud.region
+
+        return neutron_client.Client(**kwargs)
 
     def read_info(self, **kwargs):
 
