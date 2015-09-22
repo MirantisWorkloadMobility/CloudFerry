@@ -608,6 +608,30 @@ class NeutronTestCase(test.TestCase):
         net2_hash = neutron.NeutronNetwork.get_resource_hash(net2, 'cidr')
         self.assertEqual(net1_hash, net2_hash)
 
+    def test_get_network_from_list_by_id(self):
+        networks_list = [self.net_1_info, self.net_2_info]
+
+        network = neutron.get_network_from_list_by_id('fake_network_id_2',
+                                                      networks_list)
+        self.assertEqual(self.net_2_info, network)
+
+    def test_get_network_from_list(self):
+        subnet1 = copy.deepcopy(self.subnet_1_info)
+        subnet2 = copy.deepcopy(self.subnet_2_info)
+        subnet1['tenant_id'] = 'fake_tenant_id_1'
+        subnet2['tenant_id'] = 'fake_tenant_id_2'
+        subnet2['cidr'] = '192.168.1.0/24'
+
+        subnets_list = [subnet1, subnet2]
+        networks_list = [self.net_1_info, self.net_2_info]
+
+        network = neutron.get_network_from_list(ip='192.168.1.13',
+                                                tenant_id='fake_tenant_id_2',
+                                                networks_list=networks_list,
+                                                subnets_list=subnets_list)
+
+        self.assertEqual(self.net_2_info, network)
+
 
 @mock.patch("cloudferrylib.os.network.neutron.neutron_client.Client")
 @mock.patch("cloudferrylib.os.network.neutron.utl.read_yaml_file",
