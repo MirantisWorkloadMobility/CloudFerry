@@ -92,8 +92,10 @@ class NovaNetwork(network.Network):
     def get_mac_addresses(self, instance):
         compute_node = getattr(instance, nova_compute.INSTANCE_HOST_ATTRIBUTE)
         libvirt_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
+        ssh_attempts = self.config.migrate.ssh_connection_attempts
 
-        with settings(host_string=self.config['host']):
+        with settings(host_string=self.config['host'],
+                      connection_attempts=ssh_attempts):
             with forward_agent(env.key_filename):
                 cmd = "virsh dumpxml %s | grep 'mac address' | " \
                       "cut -d\\' -f2" % libvirt_name

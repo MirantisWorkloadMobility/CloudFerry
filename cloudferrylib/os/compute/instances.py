@@ -69,8 +69,10 @@ def cobalt_live_migrate_vm(config, vm_id, dest_host):
     host_string = "{user}@{host}".format(
         user=config.cloud.ssh_user, host=config.cloud.ssh_host)
 
-    with settings(warn_only=True, host_string=host_string,
-                  key_filename=config.migrate.key_filename):
+    with settings(warn_only=True,
+                  host_string=host_string,
+                  key_filename=config.migrate.key_filename,
+                  connection_attempts=config.migrate.ssh_connection_attempts):
         migrate_cmd = clients.os_cli_cmd(config.cloud, "nova",
                                          "cobalt-migrate", vm_id,
                                          "--dest", dest_host)

@@ -69,14 +69,16 @@ class SSHFileToFile(driver_transporter.DriverTransporter):
                 self.src_cloud.ssh_util.execute(process)
 
     def transfer_direct(self, data):
+        ssh_attempts = self.cfg.migrate.ssh_connection_attempts
         LOG.debug("| | copy file")
         if self.cfg.src.ssh_user != 'root' or self.cfg.dst.ssh_user != 'root':
             LOG.critical("This operation needs 'sudo' access rights, that is "
                          "currently not implemented in this driver. Please use"
                          " 'CopyFilesBetweenComputeHosts' driver from "
                          "cloudferrylib/utils/drivers/.")
-        with settings(host_string=data['host_src']), utils.forward_agent(
-                self.cfg.migrate.key_filename):
+        with (settings(host_string=data['host_src'],
+                       connection_attempts=ssh_attempts),
+              utils.forward_agent(self.cfg.migrate.key_filename)):
             if self.cfg.migrate.file_compression == "dd":
                 dd_dst = cmd_cfg.dd_cmd_of
                 ssh_cmd_dst = cmd_cfg.ssh_cmd

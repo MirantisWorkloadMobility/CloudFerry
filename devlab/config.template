@@ -29,6 +29,7 @@ cinder_migration_strategy = cloudferrylib.os.storage.cinder_database.CinderStora
 skip_down_hosts = True
 migrate_user_quotas = False
 incloud_live_migration = nova
+ssh_connection_attempts = 3
 
 [src]
 type = os

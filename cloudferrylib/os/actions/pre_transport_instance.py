@@ -170,18 +170,24 @@ class PreTransportInstance(action.Action):
                                      image_name="%s-image" % instance_id)
         info[INSTANCES][instance_id][INSTANCE_BODY]['image_id'] = dst_image_id
 
-    def convert_file_to_raw(self, host, disk_format, filepath):
-        with settings(host_string=host):
+    @staticmethod
+    def convert_file_to_raw(host, disk_format, filepath):
+        with settings(host_string=host,
+                      connection_attempts=env.connection_attempts):
             with forward_agent(env.key_filename):
                 run("qemu-img convert -f %s -O raw %s %s.tmp" %
                     (disk_format, filepath, filepath))
                 run("mv -f %s.tmp %s" % (filepath, filepath))
 
-    def rebase_diff_file(self, host, base_file, diff_file):
+    @staticmethod
+    def rebase_diff_file(host, base_file, diff_file):
         cmd = "qemu-img rebase -u -b %s %s" % (base_file, diff_file)
-        with settings(host_string=host):
+        with settings(host_string=host,
+                      connection_attempts=env.connection_attempts):
             run(cmd)
 
-    def commit_diff_file(self, host, diff_file):
-        with settings(host_string=host):
+    @staticmethod
+    def commit_diff_file(host, diff_file):
+        with settings(host_string=host,
+                      connection_attempts=env.connection_attempts):
             run("qemu-img commit %s" % diff_file)        

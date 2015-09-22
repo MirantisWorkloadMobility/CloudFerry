@@ -439,9 +439,12 @@ class GlanceImage(image.Image):
         return self.glance_client.images.get(res_id).status
 
     def patch_image(self, backend_storage, image_id):
+        ssh_attempts = self.cloud.cloud_config.migrate.ssh_connection_attempts
+
         if backend_storage == 'ceph':
             image_from_glance = self.get_image_by_id(image_id)
-            with settings(host_string=self.cloud.getIpSsh()):
+            with settings(host_string=self.cloud.getIpSsh(),
+                          connection_attempts=ssh_attempts):
                 out = json.loads(
                     run("rbd -p images info %s --format json" % image_id))
                 image_from_glance.update(size=out["size"])

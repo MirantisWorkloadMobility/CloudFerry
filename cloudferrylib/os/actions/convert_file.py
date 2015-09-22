@@ -24,7 +24,8 @@ class ConvertFile(action.Action):
 
     @staticmethod
     def convert_file_to_raw(host, disk_format, filepath):
-        with settings(host_string=host):
+        with settings(host_string=host,
+                      connection_attempts=env.connection_attempts):
             with forward_agent(env.key_filename):
                 run("qemu-img convert -f %s -O raw %s %s.tmp" %
                     (disk_format, filepath, filepath))

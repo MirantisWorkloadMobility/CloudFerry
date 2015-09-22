@@ -85,9 +85,11 @@ class TransportEphemeral(action.Action):
             'info': new_info
         }
 
-    def delete_remote_file_on_compute(self, path_file, host_cloud,
+    @staticmethod
+    def delete_remote_file_on_compute(path_file, host_cloud,
                                       host_instance):
-        with settings(host_string=host_cloud):
+        with settings(host_string=host_cloud,
+                      connection_attempts=env.connection_attempts):
             with forward_agent(env.key_filename):
                 run("ssh -oStrictHostKeyChecking=no %s  'rm -rf %s'" %
                     (host_instance, path_file))
