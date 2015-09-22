@@ -20,6 +20,8 @@ src_opts = [
                help='password for access to API'),
     cfg.StrOpt('tenant', default='-',
                help='tenant for access to API'),
+    cfg.StrOpt('region', default=None,
+               help='Openstack region name'),
     cfg.StrOpt('service_tenant', default='service',
                help='Tenant name for services'),
     cfg.StrOpt('ssh_user', default='root',
@@ -49,6 +51,8 @@ dst_opts = [
                help='password for access to API'),
     cfg.StrOpt('tenant', default='-',
                help='tenant for access to API'),
+    cfg.StrOpt('region', default=None,
+               help='Openstack region name'),
     cfg.StrOpt('service_tenant', default='service',
                help='Tenant name for services'),
     cfg.StrOpt('ssh_user', default='root',
@@ -86,8 +90,6 @@ migrate_opts = [
                help='True - keep volume_storage, False - not keep volume_storage'),
     cfg.StrOpt('speed_limit', default='10MB',
                help='speed limit for glance to glance'),
-    cfg.StrOpt('instances', default='key_name-qwerty',
-               help='filter instance by parameters'),
     cfg.StrOpt('file_compression', default='dd',
                help='gzip - use GZIP when file transferring via ssh, '
                     ' - no compression, directly via dd'),
@@ -136,7 +138,10 @@ migrate_opts = [
                      'OpenStack does not support user quotas (e.g. Grizzly)'),
     cfg.StrOpt('incloud_live_migration', default='nova',
                help='Live migration type used for in-cloud live migration. '
-                    'Possible values: "nova", "cobalt".')
+                    'Possible values: "nova", "cobalt".'),
+    cfg.StrOpt('mysqldump_host',
+               help='IP or hostname used for creating MySQL dump for rollback.'
+                    'If not set uses `[dst] db_host` config option.')
 ]
 
 mail = cfg.OptGroup(name='mail',
@@ -157,15 +162,15 @@ src_mysql = cfg.OptGroup(name='src_mysql',
                          title='Config mysql for source cloud')
 
 src_mysql_opts = [
-    cfg.StrOpt('user', default='-',
+    cfg.StrOpt('db_user', default='-',
                help='user for mysql'),
-    cfg.StrOpt('password', default='-',
+    cfg.StrOpt('db_password', default='-',
                help='password for mysql'),
-    cfg.StrOpt('host', default='-',
+    cfg.StrOpt('db_host', default='-',
                help='host of mysql'),
-    cfg.IntOpt('port', default='3306',
+    cfg.IntOpt('db_port', default='3306',
                help='port for mysql connection'),
-    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default='mysql+mysqlconnector',
                help='driver for connection'),
 ]
 
@@ -190,27 +195,23 @@ src_compute_opts = [
                help='name service for compute'),
     cfg.StrOpt('backend', default='ceph',
                help='backend for ephemeral drives'),
-    cfg.StrOpt('convert_diff_file', default='qcow2',
-               help='convert diff file to'),
-    cfg.StrOpt('convert_ephemeral_disk', default='qcow2',
-               help='convert ephemeral disk to'),
     cfg.BoolOpt('disk_overcommit', default=False,
                 help='live-migration allow disk overcommit'),
     cfg.BoolOpt('block_migration', default=False,
                 help='live-migration without shared_storage'),
     cfg.StrOpt('host_eph_drv', default='-',
                help='host ephemeral drive'),
-    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default='mysql+mysqlconnector',
                help='driver for db connection'),
-    cfg.StrOpt('host', default='',
+    cfg.StrOpt('db_host', default=None,
                help='compute mysql node ip address'),
-    cfg.IntOpt('port', default='3306',
+    cfg.IntOpt('db_port', default=None,
                help='port for mysql connection'),
-    cfg.StrOpt('database_name', default='',
+    cfg.StrOpt('db_name', default=None,
                help='compute database name'),
-    cfg.StrOpt('user', default='',
+    cfg.StrOpt('db_user', default=None,
                help='user for db access'),
-    cfg.StrOpt('password', default='',
+    cfg.StrOpt('db_password', default=None,
                help='password for db access'),
 ]
 
@@ -223,17 +224,17 @@ src_storage_opts = [
                help='name service for storage'),
     cfg.StrOpt('backend', default='iscsi',
                help='backend for storage'),
-    cfg.StrOpt('host', default='',
+    cfg.StrOpt('db_host', default=None,
                help='storage node ip address'),
-    cfg.IntOpt('port', default='3306',
+    cfg.IntOpt('db_port', default=None,
                help='port for mysql connection'),
-    cfg.StrOpt('user', default='',
+    cfg.StrOpt('db_user', default=None,
                help='user for db access (if backend == db)'),
-    cfg.StrOpt('password', default='',
+    cfg.StrOpt('db_password', default=None,
                help='password for db access (if backend == db)'),
-    cfg.StrOpt('database_name', default='',
+    cfg.StrOpt('db_name', default=None,
                help='cinder_database name (if backend == db)'),
-    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default=None,
                help='driver for connection'),
     cfg.StrOpt('protocol_transfer', default='GLANCE',
                help='mode transporting volumes GLANCE or SSH'),
@@ -253,17 +254,17 @@ src_image = cfg.OptGroup(name='src_image',
 src_image_opts = [
     cfg.StrOpt('service', default='glance',
                help='name service for images'),
-    cfg.StrOpt('user', default='',
+    cfg.StrOpt('db_user', default=None,
                help='user for db access (if backend == db)'),
-    cfg.StrOpt('host', default='',
+    cfg.StrOpt('db_host', default=None,
                help='glance mysql node ip address'),
-    cfg.IntOpt('port', default='3306',
+    cfg.IntOpt('db_port', default=None,
                help='port for mysql connection'),
-    cfg.StrOpt('password', default='',
+    cfg.StrOpt('db_password', default=None,
                help='password for db access (if backend == db)'),
-    cfg.StrOpt('database_name', default='',
+    cfg.StrOpt('db_name', default=None,
                help='glance_database name (if backend == db)'),
-    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default=None,
                help='driver for connection'),
     cfg.StrOpt('backend', default='file',
                help='backend for images')
@@ -273,8 +274,24 @@ src_identity = cfg.OptGroup(name='src_identity',
                             title='Config service for identity')
 
 src_identity_opts = [
+    cfg.StrOpt('db_user', default=None,
+               help='user for mysql'),
+    cfg.StrOpt('db_password', default=None,
+               help='password for mysql'),
+    cfg.StrOpt('db_host', default=None,
+               help='host of mysql'),
+    cfg.IntOpt('db_port', default=None,
+               help='port for mysql connection'),
+    cfg.StrOpt('db_connection', default=None,
+               help='driver for connection'),
     cfg.StrOpt('service', default='keystone',
-               help='name service for keystone')
+               help='name service for keystone'),
+    cfg.BoolOpt('optimize_user_role_fetch', default=True,
+                help=("Uses low-level DB requests if set to True, "
+                      "may be incompatible with more recent versions of Keystone. "
+                      "Tested on grizzly, icehouse and juno.")),
+    cfg.StrOpt('db_name', default='',
+               help='database name')
 ]
 
 
@@ -285,17 +302,17 @@ src_network_opts = [
     cfg.StrOpt('service', default='auto',
                help='name service for network, '
                     'auto - detect avaiable service'),
-    cfg.StrOpt('host', default='localhost',
+    cfg.StrOpt('db_host', default=None,
                help='Neutron DB node host'),
-    cfg.IntOpt('port', default='3306',
+    cfg.IntOpt('db_port', default=None,
                help='port for mysql connection'),
-    cfg.StrOpt('password', default='',
+    cfg.StrOpt('db_password', default=None,
                help='Neutron DB password'),
-    cfg.StrOpt('database_name', default='neutron',
+    cfg.StrOpt('db_name', default=None,
                help='Neutron database name'),
-    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default=None,
                help='Neutron DB connection type'),
-    cfg.StrOpt('user', default="root",
+    cfg.StrOpt('db_user', default=None,
                help="DB user for the networking backend")
 ]
 
@@ -304,22 +321,24 @@ src_objstorage = cfg.OptGroup(name='src_objstorage',
 
 src_objstorage_opts = [
     cfg.StrOpt('service', default='swift',
-               help='service name for object storage')
+               help='service name for object storage'),
+    cfg.StrOpt('db_name', default='',
+               help='database name'),
 ]
 
 dst_mysql = cfg.OptGroup(name='dst_mysql',
                          title='Config mysql for destination cloud')
 
 dst_mysql_opts = [
-    cfg.StrOpt('user', default='-',
+    cfg.StrOpt('db_user', default='-',
                help='user for mysql'),
-    cfg.StrOpt('password', default='-',
+    cfg.StrOpt('db_password', default='-',
                help='password for mysql'),
-    cfg.StrOpt('host', default='-',
+    cfg.StrOpt('db_host', default='-',
                help='host of mysql'),
-    cfg.IntOpt('port', default='3306',
+    cfg.IntOpt('db_port', default='3306',
                help='port for mysql connection'),
-    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default='mysql+mysqlconnector',
                help='driver for connection'),
 ]
 
@@ -332,7 +351,9 @@ dst_rabbit_opts = [
     cfg.StrOpt('password', default='guest',
                help='password for RabbitMQ'),
     cfg.StrOpt('hosts', default='-',
-               help='comma separated RabbitMQ hosts')
+               help='comma separated RabbitMQ hosts'),
+    cfg.StrOpt('db_name', default=None,
+               help='database name'),
 ]
 
 
@@ -344,10 +365,6 @@ dst_compute_opts = [
                help='name service for compute'),
     cfg.StrOpt('backend', default='ceph',
                help='backend for ephemeral drives'),
-    cfg.StrOpt('convert_diff_file', default='qcow2',
-               help='convert diff file to'),
-    cfg.StrOpt('convert_ephemeral_disk', default='qcow2',
-               help='convert ephemeral disk to'),
     cfg.BoolOpt('disk_overcommit', default=False,
                help='live-migration allow disk overcommit'),
     cfg.BoolOpt('block_migration', default=False,
@@ -360,17 +377,17 @@ dst_compute_opts = [
                  help='ram allocation ratio'),
     cfg.FloatOpt('disk_allocation_ratio', default='0.9',
                  help='disk allocation ratio'),
-    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default=None,
                help='driver for db connection'),
-    cfg.StrOpt('host', default='',
+    cfg.StrOpt('db_host', default=None,
                help='compute mysql node ip address'),
-    cfg.IntOpt('port', default='3306',
+    cfg.IntOpt('db_port', default=None,
                help='port for mysql connection'),
-    cfg.StrOpt('database_name', default='',
+    cfg.StrOpt('db_name', default=None,
                help='compute database name'),
-    cfg.StrOpt('user', default='',
+    cfg.StrOpt('db_user', default=None,
                help='user for db access'),
-    cfg.StrOpt('password', default='',
+    cfg.StrOpt('db_password', default=None,
                help='password for db access'),
 ]
 
@@ -383,17 +400,17 @@ dst_storage_opts = [
                help='name service for storage'),
     cfg.StrOpt('backend', default='iscsi',
                help='backend for storage'),
-    cfg.StrOpt('host', default='',
+    cfg.StrOpt('db_host', default=None,
                help='storage node ip address'),
-    cfg.IntOpt('port', default='3306',
+    cfg.IntOpt('db_port', default=None,
                help='port for mysql connection'),
-    cfg.StrOpt('user', default='',
+    cfg.StrOpt('db_user', default=None,
                help='user for db access (if backend == db)'),
-    cfg.StrOpt('password', default='',
+    cfg.StrOpt('db_password', default=None,
                help='password for db access (if backend == db)'),
-    cfg.StrOpt('database_name', default='',
+    cfg.StrOpt('db_name', default=None,
                help='cinder_database name (if backend == db)'),
-    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default=None,
                help='driver for connection'),
     cfg.StrOpt('protocol_transfer', default='GLANCE',
                help='mode transporting volumes GLANCE or SSH'),
@@ -415,17 +432,17 @@ dst_image_opts = [
                help='name service for images'),
     cfg.BoolOpt('convert_to_raw', default='True',
                 help='convert to raw images'),
-    cfg.StrOpt('host', default='',
+    cfg.StrOpt('db_host', default=None,
                help='glance mysql node ip address'),
-    cfg.IntOpt('port', default='3306',
+    cfg.IntOpt('db_port', default=None,
                help='port for mysql connection'),
-    cfg.StrOpt('user', default='',
+    cfg.StrOpt('db_user', default=None,
                help='user for db access (if backend == db)'),
-    cfg.StrOpt('password', default='',
+    cfg.StrOpt('db_password', default=None,
                help='password for db access (if backend == db)'),
-    cfg.StrOpt('database_name', default='',
+    cfg.StrOpt('db_name', default=None,
                help='glance_database name (if backend == db)'),
-    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default=None,
                help='driver for connection'),
     cfg.StrOpt('backend', default='file',
                help='backend for images')
@@ -435,8 +452,24 @@ dst_identity = cfg.OptGroup(name='dst_identity',
                             title='Config service for identity')
 
 dst_identity_opts = [
+    cfg.StrOpt('db_user', default=None,
+               help='user for mysql'),
+    cfg.StrOpt('db_password', default=None,
+               help='password for mysql'),
+    cfg.StrOpt('db_host', default=None,
+               help='host of mysql'),
+    cfg.IntOpt('db_port', default=None,
+               help='port for mysql connection'),
+    cfg.StrOpt('db_connection', default=None,
+               help='driver for connection'),
     cfg.StrOpt('service', default='keystone',
-               help='name service for keystone')
+               help='name service for keystone'),
+    cfg.BoolOpt('optimize_user_role_fetch', default=True,
+                help=("Uses low-level DB requests if set to True, "
+                      "may be incompatible with more recent versions of Keystone. "
+                      "Tested on grizzly, icehouse and juno.")),
+    cfg.StrOpt('db_name', default=None,
+               help='database name')
 ]
 
 
@@ -447,17 +480,17 @@ dst_network_opts = [
     cfg.StrOpt('service', default='auto',
                help='name service for network, '
                     'auto - detect available service'),
-    cfg.StrOpt('host', default='localhost',
+    cfg.StrOpt('db_host', default=None,
                help='Neutron DB node host'),
-    cfg.IntOpt('port', default='3306',
+    cfg.IntOpt('db_port', default=None,
                help='port for mysql connection'),
-    cfg.StrOpt('password', default='',
+    cfg.StrOpt('db_password', default=None,
                help='Neutron DB password'),
-    cfg.StrOpt('database_name', default='neutron',
+    cfg.StrOpt('db_name', default=None,
                help='Neutron database name'),
-    cfg.StrOpt('connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default=None,
                help='Neutron DB connection type'),
-    cfg.StrOpt('user', default="root",
+    cfg.StrOpt('db_user', default=None,
                help="DB user for the networking backend")
 ]
 
@@ -466,7 +499,9 @@ dst_objstorage = cfg.OptGroup(name='dst_objstorage',
 
 dst_objstorage_opts = [
     cfg.StrOpt('service', default='swift',
-               help='service name for object storage')
+               help='service name for object storage'),
+    cfg.StrOpt('db_name', default=None,
+               help='database name')
 ]
 
 import_rules = cfg.OptGroup(name='import_rules',

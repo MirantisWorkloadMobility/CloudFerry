@@ -1,3 +1,5 @@
+img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
+
 # Users to create/delete
 users = [
     {'name': 'user1', 'password': 'passwd1', 'email': 'mail@example.com',
@@ -11,7 +13,10 @@ users = [
     {'name': 'test_volume_migration', 'password': 'passwd', 'enabled': True,
      'email': 'volume_test@example.com', 'tenant': 'tenant1', 'deleted': True},
     {'name': 'user5', 'password': 'passwd', 'email': 'asdasd@example.com',
-     'tenant': 'tenant3', 'enabled': True}
+     'tenant': 'tenant3', 'enabled': True},
+    {'name': 'user6', 'password': 'passwd', 'email': 'testd@example.com',
+     'tenant': 'tenant3', 'enabled': True, 'additional_tenants':
+        [{'name': 'tenant1', 'role': '_member_'}]}
 ]
 
 # Roles to create/delete
@@ -64,8 +69,8 @@ tenants = [
          {'name': 'tn2server1', 'image': 'image1', 'flavor': 'flavorname2',
           'key_name': 'key2'},
          {'name': 'keypair_test_server', 'image': 'image1',
-          'flavor': 'flavorname2', 'key_name': 'key2', 'nics':[
-             {'net-id':'tenantnet2'}]}],
+          'flavor': 'flavorname2', 'key_name': 'key2', 'nics': [
+              {'net-id': 'tenantnet2'}]}],
      'networks': [{'name': 'tenantnet2', 'admin_state_up': True}],
      'subnets': [{'cidr': '22.2.2.0/24', 'ip_version': 4}],
      'cinder_volumes': [
@@ -75,21 +80,22 @@ tenants = [
      'unassociated_fip': 1
      },
     {'name': 'tenant3', 'description': 'This tenant will be deleted',
-     'enabled': True, 'deleted': True}
+     'enabled': True, 'deleted': True,
+     'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': True}]}
 ]
+
 
 # Images to create/delete
 images = [
-    {'name': 'image1', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'is_public': True},
-    {'name': 'image2', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False},
-    {'name': 'image3', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False},
-    {'name': 'image4', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False},
-    {'name': 'image5', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False}
+    {'name': 'image1', 'copy_from': img_url, 'is_public': True},
+    {'name': 'image2', 'copy_from': img_url, 'container_format': 'bare',
+     'disk_format': 'qcow2', 'is_public': False},
+    {'name': 'image3', 'copy_from': img_url, 'container_format': 'bare',
+     'disk_format': 'qcow2', 'is_public': False},
+    {'name': 'image4', 'copy_from': img_url, 'container_format': 'bare',
+     'disk_format': 'qcow2', 'is_public': False},
+    {'name': 'image5', 'copy_from': img_url, 'container_format': 'bare',
+     'disk_format': 'qcow2', 'is_public': False}
 ]
 
 # Images not to be migrated:
@@ -124,7 +130,7 @@ networks = [
 # Subnets to create/delete
 subnets = [
 
-    {'cidr': '10.4.2.0/24', 'ip_version': 4, 'name':'subnet_1'},
+    {'cidr': '10.4.2.0/24', 'ip_version': 4, 'name': 'subnet_1'},
     {'cidr': '192.168.1.0/24', 'ip_version': 4, 'name': 'external_subnet',
      'allocation_pools': [{'start': '192.168.1.100', 'end': '192.168.1.254'}]}
 ]
@@ -204,10 +210,10 @@ keypairs = [
         'iZVICtvQUnB89xnH3RNYDBGFQKS3gOUtjvOb0oP9RVNELHftrGMnjJOQCLF+R0eG+Byc'
         '9DZy3PfajJftUZsgCyzIkVT7YBZVQ7VubB3jOGZqXCpMfLFZtZad2+G+C3sYm3rMGu8l'
         'b+wS90o98IrpF4av6y13cfkqkucw3sJ18+wzPbWKQ41YW9QyZ6Er0Vu4+4pJcj+1qn+O'
-        'kINp0A7C2WbXXgiyeaxBR8nBV9A01cFm/W6Q63/r vagrant@grizzly'}
-     ]
+        'kINp0A7C2WbXXgiyeaxBR8nBV9A01cFm/W6Q63/r vagrant@grizzly'}]
 
-private_key = {'name': 'key2',
+private_key = {
+    'name': 'key2',
     'id_rsa': '-----BEGIN RSA PRIVATE KEY-----\n'
     'MIIEowIBAAKCAQEA7b1GkWHcMyAS/gqUmsmH23k7Z2TabHvxcdRQDF+w0AQQ+2oI\n'
     'TZG0DI1a3RqSO4TkibFNdRpoZePwdyxU7vKE1GTX8/JzPoNH04mVSArb0FJwfPcZ\n'

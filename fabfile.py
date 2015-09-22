@@ -91,24 +91,34 @@ def evacuate(name_config=None, debug=False, iteration=False):
     LOG.info("running evacuation")
     evacuation_chain.process_chain(cloud, iteration)
 
+    freed_nodes = get_freed_nodes(iteration)
+
+    if not freed_nodes:
+        LOG.warning("Evacuation cannot be completed, because there are no "
+                    "available compute nodes, that should be freed")
+        return
+
     LOG.info("Following nodes will be freed once in-cloud migration finishes, "
-             "and can be moved from source to destination: %s",
-             get_freed_nodes(iteration))
+             "and can be moved from source to destination: %s", freed_nodes)
 
 
 @task
 def get_groups(name_config=None, group_file=None, cloud_id='src',
-               validate_users_group=False):
+               validate_users_group=False, debug=False):
     """
-    Function to group VM's by any of those dependencies (f.e. tenants,
+    Function to group VMs by any of those dependencies (f.e. tenants,
     networks, etc.).
 
     :param name_config: name of config ini-file, example 'config.ini',
     :param group_file: name of groups defined yaml-file, example 'groups.yaml',
-    :param validate_users_group: Remove dublicate id's and check if valid
+    :param validate_users_group: Remove duplicate IDs and check if valid
            VM id specified. Takes more time because of nova API multiple calls
     :return: yaml-file with tree-based groups defined based on grouping rules.
     """
+
+    if debug:
+        utils.configure_logging("DEBUG")
+
     cfglib.collector_configs_plugins()
     cfglib.init_config(name_config)
     group = grouping.Grouping(cfglib.CONF, group_file, cloud_id)

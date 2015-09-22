@@ -11,7 +11,6 @@ keep_ip = yes
 keep_floatingip = yes
 keep_volume_storage = False
 speed_limit = 100MB
-instances = key_name-qwerty
 file_compression = gzip
 level_compression = 9
 overwrite_user_passwords = False
@@ -42,11 +41,11 @@ password = <src_password>
 tenant = <src_tenant>
 
 [src_mysql]
-user = <src_mysql_user>
-password = <src_mysql_password>
-host = <src_ip>
-port = 3306
-connection = mysql+mysqlconnector
+db_user = <src_mysql_user>
+db_password = <src_mysql_password>
+db_host = <src_ip>
+db_port = 3306
+db_connection = mysql+mysqlconnector
 
 [src_rabbit]
 password = <src_rabbit_password>
@@ -55,25 +54,23 @@ hosts = <src_ip>:5672
 [src_compute]
 service = nova
 backend = iscsi
-convert_diff_file = qcow2
-convert_ephemeral_disk = qcow2
 host_eph_drv = <src_ip>
-connection = mysql+mysqlconnector
-host = <src_ip>
-port = 3306
-database_name = nova
-user = <src_mysql_user>
-password = <src_mysql_password>
+db_connection = mysql+mysqlconnector
+db_host = <src_ip>
+db_port = 3306
+db_name = nova
+db_user = <src_mysql_user>
+db_password = <src_mysql_password>
 
 [src_storage]
 service = cinder
 backend = ceph
-host = <src_ip>
-port = 3306
-connection = mysql+mysqlconnector
-user = <src_mysql_user>
-password = <src_mysql_password>
-database_name = cinder
+db_host = <src_ip>
+db_port = 3306
+db_connection = mysql+mysqlconnector
+db_user = <src_mysql_user>
+db_password = <src_mysql_password>
+db_name = cinder
 protocol_transfer = <src_storage_protocol_transfer>
 disk_format = qcow2
 
@@ -81,23 +78,23 @@ disk_format = qcow2
 service = glance
 backend = swift
 disk_format = qcow2
-user = <src_mysql_user>
-password = <src_mysql_password>
-host = <src_ip>
-port = 3306
-connection = mysql+mysqlconnector
-database_name = glance
+db_user = <src_mysql_user>
+db_password = <src_mysql_password>
+db_host = <src_ip>
+db_port = 3306
+db_connection = mysql+mysqlconnector
+db_name = glance
 
 [src_identity]
 service = keystone
 
 [src_network]
 service = auto
-user = <src_mysql_user>
-password = <src_mysql_password>
-host = <src_ip>
-connection = mysql+mysqlconnector
-database_name = quantum
+db_user = <src_mysql_user>
+db_password = <src_mysql_password>
+db_host = <src_ip>
+db_connection = mysql+mysqlconnector
+db_name = quantum
 
 [src_objstorage]
 service =
@@ -113,26 +110,25 @@ ext_cidr = <dst_ext_cidr>
 user = <dst_user>
 password = <dst_password> 
 tenant = <dst_tenant>
+service_tenant = service
 
 [dst_mysql]
-user = <dst_mysql_user> 
-password = <dst_mysql_password> 
-host = <dst_ip>
-port = 3306
-connection = mysql+mysqlconnector
+db_user = <dst_mysql_user>
+db_password = <dst_mysql_password>
+db_host = <dst_ip>
+db_port = 3306
+db_connection = mysql+mysqlconnector
 
 [dst_compute]
 service = nova
 backend = iscsi
-convert_diff_file = qcow2
-convert_ephemeral_disk = qcow2
 host_eph_drv = <dst_ip>
-connection = mysql+mysqlconnector
-host = <dst_ip>
-port = 3306
-database_name = nova
-user = <dst_mysql_user>
-password = <dst_mysql_password>
+db_connection = mysql+mysqlconnector
+db_host = <dst_ip>
+db_port = 3306
+db_name = nova
+db_user = <dst_mysql_user>
+db_password = <dst_mysql_password>
 
 [dst_rabbit]
 password = <dst_rabbit_password>
@@ -141,35 +137,35 @@ hosts = <dst_ip>:5672
 [dst_storage]
 service = cinder
 backend = ceph
-host = <dst_ip>
-port = 3306
+db_host = <dst_ip>
+db_port = 3306
 protocol_transfer = <dst_storage_protocol_transfer>
-connection = mysql+mysqlconnector
-user = <dst_mysql_user>
-password = <dst_mysql_password>
-database_name = cinder
+db_connection = mysql+mysqlconnector
+db_user = <dst_mysql_user>
+db_password = <dst_mysql_password>
+db_name = cinder
 
 [dst_image]
 service = glance
 convert_to_raw = False
 backend = swift
-user = <dst_mysql_user>
-password = <dst_mysql_password>
-host = <dst_ip>
-port = 3306
-connection = mysql+mysqlconnector
-database_name = glance
+db_user = <dst_mysql_user>
+db_password = <dst_mysql_password>
+db_host = <dst_ip>
+db_port = 3306
+db_connection = mysql+mysqlconnector
+db_name = glance
 
 [dst_identity]
 service = keystone
 
 [dst_network]
 service=auto
-user = <dst_mysql_user>
-password = <dst_mysql_password>
-host = <dst_ip>
-connection = mysql+mysqlconnector
-database_name = neutron
+db_user = <dst_mysql_user>
+db_password = <dst_mysql_password>
+db_host = <dst_ip>
+db_connection = mysql+mysqlconnector
+db_name = neutron
 
 [import_rules]
 key = {name:dest-key-1}
@@ -186,9 +182,7 @@ factor = 0.1
 test_file_size = 10
 
 [condense]
-nova_file=
 group_file=
-node_file=
 
 [database]
 host = localhost

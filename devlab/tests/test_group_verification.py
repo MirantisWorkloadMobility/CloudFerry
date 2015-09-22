@@ -15,11 +15,10 @@
 import os
 import yaml
 import unittest
+import functional_test
 
-from generate_load import Prerequisites
 
-
-class GroupProcedureVerification(unittest.TestCase):
+class GroupProcedureVerification(functional_test.FunctionalTest):
     """
     Testing class for grouping verification.
     """
@@ -27,7 +26,6 @@ class GroupProcedureVerification(unittest.TestCase):
         """
         SetUp method.
         """
-        self.src_cloud = Prerequisites(cloud_prefix='SRC')
         self.main_folder = os.path.dirname(os.path.dirname(os.getcwd()))
         # TODO:
         #  Using relative paths is a bad practice, unfortunately this is the
@@ -38,7 +36,8 @@ class GroupProcedureVerification(unittest.TestCase):
         cmd_no_path = './../../devlab/provision/generate_config.sh' \
                       ' --cloudferry-path {} --destination {}'
         cmd = cmd_no_path.format(self.main_folder,
-                                 os.path.join(self.main_folder, self.conf_path))
+                                 os.path.join(self.main_folder,
+                                              self.conf_path))
         os.system(cmd)
 
     def tearDown(self):
@@ -47,7 +46,8 @@ class GroupProcedureVerification(unittest.TestCase):
         """
         cmd_1 = 'rm {}'.format(os.path.join(self.main_folder, 'devlab/tests',
                                             self.new_file_name.lstrip('/')))
-        cmd_2 = 'rm {}'.format(os.path.join(self.main_folder, 'vm_groups.yaml'))
+        cmd_2 = 'rm {}'.format(os.path.join(self.main_folder,
+                                            'vm_groups.yaml'))
         for cmd in [cmd_1, cmd_2]:
             try:
                 os.system(cmd)
@@ -88,9 +88,9 @@ class GroupProcedureVerification(unittest.TestCase):
         with open(file_to_write_into, 'w') as stream:
             yaml.dump(self.pre_conf_dict, stream, default_flow_style=False)
         fab_path = os.path.join('devlab/tests', self.new_file_name)
-        cmd = 'cd {cf_folder} && fab get_groups:{config_ini},{new_file}'.format(
-            cf_folder=main_folder, config_ini='devlab/tests/configuration.ini',
-            new_file=fab_path)
+        _cmd = 'cd {cf_folder} && fab get_groups:{config_ini},{new_file}'
+        cmd = _cmd.format(cf_folder=main_folder, new_file=fab_path,
+                          config_ini='devlab/tests/configuration.ini')
         os.system(cmd)
         post_file_path = os.path.join(main_folder, 'vm_groups.yaml')
         post_conf = file(post_file_path, 'r')
@@ -141,7 +141,7 @@ class GroupProcedureVerification(unittest.TestCase):
                             network = neutron.show_network(network_id)
                             network_name = network['network']['name']
                             self.assertTrue(network_name in self.src_vms[index]
-                                             ['addresses'].keys())
+                                            ['addresses'].keys())
                     else:
                         self._verify_user_groups(user_defined_groups_list,
                                                  verify_vm_state)

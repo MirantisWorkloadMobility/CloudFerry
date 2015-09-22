@@ -39,8 +39,8 @@ tenants = [
           },
          {'name': 'sg12', 'description': 'Blah blah group2'}],
      'cinder_volumes': [
-         {'name': 'cinder_volume1', 'size': 1, 'server_to_attach': 'tn1server1',
-          'device': '/dev/vdb'},
+         {'name': 'cinder_volume1', 'size': 1, 'device': '/dev/vdb',
+          'server_to_attach': 'tn1server1'},
          {'name': 'cinder_volume2', 'size': 1}
      ],
      'cinder_snapshots': [
@@ -51,13 +51,13 @@ tenants = [
 ]
 
 # Images to create/delete
+img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
 images = [
-    {'name': 'image1', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'is_public': True},
-    {'name': 'image3', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False},
-    {'name': 'image4', 'copy_from': 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img',
-     'container_format': 'bare', 'disk_format': 'qcow2', 'is_public': False}
+    {'name': 'image1', 'copy_from': img_url, 'is_public': True},
+    {'name': 'image3', 'copy_from': img_url, 'container_format': 'bare',
+     'disk_format': 'qcow2', 'is_public': False},
+    {'name': 'image4', 'copy_from': img_url, 'container_format': 'bare',
+     'disk_format': 'qcow2', 'is_public': False}
 ]
 
 # Images not to be migrated:
@@ -83,15 +83,17 @@ flavors = [
 # Networks to create/delete
 # Connected to tenants
 networks = [
-    {'name': 'tenantnet1', 'admin_state_up': True, 'shared': False, 'router:external': False},
-    {'name': 'shared_net', 'admin_state_up': True, 'shared': True, 'router:external': True}
+    {'name': 'tenantnet1', 'admin_state_up': True, 'shared': False,
+     'router:external': False},
+    {'name': 'shared_net', 'admin_state_up': True, 'shared': True,
+     'router:external': True}
 
 ]
 
 # Subnets to create/delete
 subnets = [
     {'cidr': '10.5.2.0/24', 'ip_version': 4},
-    {'cidr': '172.18.10.0/24', 'ip_version': 4, 'name':'subnet_2'}
+    {'cidr': '172.18.10.0/24', 'ip_version': 4, 'name': 'subnet_2'}
 ]
 
 # VM's to create/delete
@@ -153,10 +155,10 @@ keypairs = [
         'iZVICtvQUnB89xnH3RNYDBGFQKS3gOUtjvOb0oP9RVNELHftrGMnjJOQCLF+R0eG+Byc'
         '9DZy3PfajJftUZsgCyzIkVT7YBZVQ7VubB3jOGZqXCpMfLFZtZad2+G+C3sYm3rMGu8l'
         'b+wS90o98IrpF4av6y13cfkqkucw3sJ18+wzPbWKQ41YW9QyZ6Er0Vu4+4pJcj+1qn+O'
-        'kINp0A7C2WbXXgiyeaxBR8nBV9A01cFm/W6Q63/r vagrant@grizzly'}
-     ]
+        'kINp0A7C2WbXXgiyeaxBR8nBV9A01cFm/W6Q63/r vagrant@grizzly'}]
 
-private_key = {'name': 'key2',
+private_key = {
+    'name': 'key2',
     'id_rsa': '-----BEGIN RSA PRIVATE KEY-----\n'
     'MIIEowIBAAKCAQEA7b1GkWHcMyAS/gqUmsmH23k7Z2TabHvxcdRQDF+w0AQQ+2oI\n'
     'TZG0DI1a3RqSO4TkibFNdRpoZePwdyxU7vKE1GTX8/JzPoNH04mVSArb0FJwfPcZ\n'

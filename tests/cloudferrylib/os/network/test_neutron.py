@@ -30,6 +30,7 @@ FAKE_CONFIG = utils.ext_dict(
                           'password': 'fake_password',
                           'tenant': 'fake_tenant',
                           'auth_url': 'http://1.1.1.1:35357/v2.0/',
+                          'region': None,
                           'service_tenant': 'services'}),
     migrate=utils.ext_dict({'ext_net_map': 'fake_ext_net_map.yaml',
                             'speed_limit': '10MB',
@@ -606,3 +607,84 @@ class NeutronTestCase(test.TestCase):
         net1_hash = neutron.NeutronNetwork.get_resource_hash(net1, 'cidr')
         net2_hash = neutron.NeutronNetwork.get_resource_hash(net2, 'cidr')
         self.assertEqual(net1_hash, net2_hash)
+
+    def test_get_network_from_list_by_id(self):
+        networks_list = [self.net_1_info, self.net_2_info]
+
+        network = neutron.get_network_from_list_by_id('fake_network_id_2',
+                                                      networks_list)
+        self.assertEqual(self.net_2_info, network)
+
+    def test_get_network_from_list(self):
+        subnet1 = copy.deepcopy(self.subnet_1_info)
+        subnet2 = copy.deepcopy(self.subnet_2_info)
+        subnet1['tenant_id'] = 'fake_tenant_id_1'
+        subnet2['tenant_id'] = 'fake_tenant_id_2'
+        subnet2['cidr'] = '192.168.1.0/24'
+
+        subnets_list = [subnet1, subnet2]
+        networks_list = [self.net_1_info, self.net_2_info]
+
+        network = neutron.get_network_from_list(ip='192.168.1.13',
+                                                tenant_id='fake_tenant_id_2',
+                                                networks_list=networks_list,
+                                                subnets_list=subnets_list)
+
+        self.assertEqual(self.net_2_info, network)
+
+
+@mock.patch("cloudferrylib.os.network.neutron.neutron_client.Client")
+@mock.patch("cloudferrylib.os.network.neutron.utl.read_yaml_file",
+            mock.MagicMock())
+class NeutronClientTestCase(test.TestCase):
+    def test_adds_region_if_set_in_config(self, n_client):
+        cloud = mock.MagicMock()
+        config = mock.MagicMock()
+
+        tenant = 'tenant'
+        region = 'region'
+        user = 'user'
+        auth_url = 'auth_url'
+        password = 'password'
+
+        config.cloud.user = user
+        config.cloud.tenant = tenant
+        config.cloud.region = region
+        config.cloud.auth_url = auth_url
+        config.cloud.password = password
+
+        n = neutron.NeutronNetwork(config, cloud)
+        n.get_client()
+
+        n_client.assert_called_with(
+            region_name=region,
+            tenant_name=tenant,
+            password=password,
+            auth_url=auth_url,
+            username=user
+        )
+
+    def test_does_not_add_region_if_not_set_in_config(self, n_client):
+        cloud = mock.MagicMock()
+        config = mock.MagicMock()
+
+        tenant = 'tenant'
+        user = 'user'
+        auth_url = 'auth_url'
+        password = 'password'
+
+        config.cloud.region = None
+        config.cloud.user = user
+        config.cloud.tenant = tenant
+        config.cloud.auth_url = auth_url
+        config.cloud.password = password
+
+        n = neutron.NeutronNetwork(config, cloud)
+        n.get_client()
+
+        n_client.assert_called_with(
+            tenant_name=tenant,
+            password=password,
+            auth_url=auth_url,
+            username=user
+        )

@@ -16,6 +16,7 @@ preparation:
           - check_src_sql: True
           - check_src_rabbit: True
           - act_get_info_objects_src: False
+          - check_src_instance_networks: True
       - dst_test:
           - act_check_image_api_dst: True
           - act_check_compute_api_dst: True
@@ -26,6 +27,7 @@ preparation:
           - check_dst_sql: True
           - check_dst_rabbit: True
           - act_get_info_objects_dst: False
+      - check_networks: True
   - create_snapshot: True
   - create_vm_snapshot_src: True
   - create_vm_snapshot_dst: True
@@ -63,6 +65,8 @@ process:
           - transport_resource_inst:
               - transport_images:
                   - act_conv_comp_img: True
+                  - act_is_boot_image_deleted: ['act_copy_inst_images']
+                  - act_recreate_boot_image: True
                   - act_copy_inst_images: True
                   - act_conv_image_comp: True
               - set_volume_id_for_attaching: True

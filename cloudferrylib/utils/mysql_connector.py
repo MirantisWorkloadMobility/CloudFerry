@@ -16,6 +16,26 @@
 import sqlalchemy
 
 
+def get_db_host(cloud_config):
+    """Returns DB host based on configuration.
+
+    Useful when MySQL is deployed on multiple nodes, when multiple MySQL nodes
+    are hidden behind a VIP. In this scenario providing VIP in
+    `config.dst_mysql.db_host` will break mysqldump which requires to be run
+    locally on particular DB host.
+
+    :returns: `config.migrate.mysqldump_host` if not `None`, or
+    `config.dst_mysql.db_host` otherwise
+    """
+
+    db_host = cloud_config.mysql.db_host
+
+    if cloud_config.migrate.mysqldump_host:
+        db_host = cloud_config.migrate.mysqldump_host
+
+    return db_host
+
+
 class MysqlConnector():
     def __init__(self, config, db):
         self.config = config
@@ -23,11 +43,11 @@ class MysqlConnector():
         self.connection_url = self.compose_connection_url()
 
     def compose_connection_url(self):
-        return '{}://{}:{}@{}:{}/{}'.format(self.config['connection'],
-                                            self.config['user'],
-                                            self.config['password'],
-                                            self.config['host'],
-                                            self.config['port'],
+        return '{}://{}:{}@{}:{}/{}'.format(self.config['db_connection'],
+                                            self.config['db_user'],
+                                            self.config['db_password'],
+                                            self.config['db_host'],
+                                            self.config['db_port'],
                                             self.db)
 
     def get_engine(self):
@@ -37,3 +57,9 @@ class MysqlConnector():
         with sqlalchemy.create_engine(
                 self.connection_url).begin() as connection:
             return connection.execute(sqlalchemy.text(command), **kwargs)
+
+    def batch_execute(self, commands, **kwargs):
+        with sqlalchemy.create_engine(
+                self.connection_url).begin() as connection:
+            for command in commands:
+                connection.execute(sqlalchemy.text(command), **kwargs)

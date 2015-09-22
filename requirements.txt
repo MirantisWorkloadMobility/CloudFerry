@@ -5,7 +5,10 @@ ipaddr
 jinja2
 jsondate
 mysql-connector-python
+oslo.config==1.15.0
+oslo.utils==1.9.0
 pika==0.9.14
+progressbar==2.3
 pycrypto
 python-cinderclient==1.0.9
 python-glanceclient==0.12.0
@@ -17,7 +20,5 @@ pyyaml
 redis
 requests==2.2.1
 sqlalchemy
-oslo.config==1.15.0
-oslo.utils==1.9.0
 # see https://github.com/paramiko/paramiko/issues/570 and https://github.com/paramiko/paramiko/pull/571
 -e git://github.com/mirrorcoder/paramiko.git#egg=paramiko

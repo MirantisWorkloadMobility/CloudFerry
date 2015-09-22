@@ -17,6 +17,7 @@ import yaml
 
 
 class FilteringUtils(object):
+
     def __init__(self):
         self.main_folder = os.path.dirname(os.path.dirname(
             os.path.split(__file__)[0]))

@@ -55,5 +55,5 @@ ssh root@$DST \
 delete from cinder.volumes;delete from cinder.reservations;delete from cinder.quota_usages;\""
 
 cd $cur_pwd
-bash devlab/utils/os_cli.sh clean dst
-fab migrate:configuration.ini
+bash devlab/utils/os_cli.sh clean dst grizzly icehouse
+fab migrate:configuration.ini,debug=True

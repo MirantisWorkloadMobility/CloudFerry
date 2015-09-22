@@ -5,8 +5,6 @@ import unittest
 import subprocess
 import functional_test
 
-from keystoneclient.exceptions import NotFound
-
 from time import sleep
 
 
@@ -53,13 +51,6 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 self.fail(msg.format(res=resource_name, r_name=i['name']))
 
     def test_migrate_keystone_users(self):
-        src_users = []
-        for u in self.filter_users():
-            try:
-                self.src_cloud.keystoneclient.tenants.find(id=u.tenantId)
-                src_users.append(u)
-            except NotFound:
-                pass
         src_users = self.filter_users()
         dst_users = self.dst_cloud.keystoneclient.users.list()
 
@@ -69,6 +60,19 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.validate_resource_parameter_in_dst(src_users, dst_users,
                                                 resource_name='user',
                                                 parameter='email')
+
+    def test_migrate_keystone_user_tenant_roles(self):
+        src_users = self.filter_users()
+        src_user_names = [user.name for user in src_users]
+        dst_users = self.dst_cloud.keystoneclient.users.list()
+        for dst_user in dst_users:
+            if dst_user.name not in src_user_names:
+                continue
+            src_user_tnt_roles = self.src_cloud.get_user_tenant_roles(dst_user)
+            dst_user_tnt_roles = self.dst_cloud.get_user_tenant_roles(dst_user)
+            self.validate_resource_parameter_in_dst(
+                src_user_tnt_roles, dst_user_tnt_roles,
+                resource_name='user_tenant_role', parameter='name')
 
     def test_migrate_keystone_roles(self):
         src_roles = self.filter_roles()
@@ -146,20 +150,36 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         src_images = filtering_data[0]
 
         self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                     resource_name='image',
-                                                     parameter='name')
+                                                resource_name='image',
+                                                parameter='name')
         self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                     resource_name='image',
-                                                     parameter='disk_format')
+                                                resource_name='image',
+                                                parameter='disk_format')
         self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                     resource_name='image',
-                                                     parameter='container_format')
+                                                resource_name='image',
+                                                parameter='container_format')
         self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                     resource_name='image',
-                                                     parameter='size')
+                                                resource_name='image',
+                                                parameter='size')
         self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                     resource_name='image',
-                                                     parameter='checksum')
+                                                resource_name='image',
+                                                parameter='checksum')
+
+    def test_migrate_glance_belongs_to_deleted_tenant(self):
+        src_images = self.filter_images()
+        src_tnt_ids = [i.id for i in self.filter_tenants()]
+        src_tnt_ids.append(self.src_cloud.get_tenant_id(self.src_cloud.tenant))
+        src_images = [i.name for i in src_images if i.owner not in src_tnt_ids]
+
+        dst_images = self.dst_cloud.glanceclient.images.list()
+        dst_tenant_id = self.dst_cloud.get_tenant_id(self.dst_cloud.tenant)
+
+        for image in dst_images:
+            if image.name not in src_images:
+                continue
+            self.assertEqual(image.owner, dst_tenant_id,
+                             'Image owner on dst is {0} instead of {1}'.format(
+                                 image.owner, dst_tenant_id))
 
     def test_glance_images_not_in_filter_did_not_migrate(self):
         src_images = self.filter_images()
@@ -168,10 +188,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         dst_images = [x.name for x in dst_images_gen]
         images_filtered_out = filtering_data[1]
         for image in images_filtered_out:
-            self.assertTrue(image.name not in dst_images, 'Image migrated despite '
-                                                             'that it was not '
-                                                             'included in filter, '
-                                                             'Image info: \n{}'.format(image))
+            self.assertTrue(image.name not in dst_images,
+                            'Image migrated despite that it was not included '
+                            'in filter, Image info: \n{}'.format(image))
 
     def test_migrate_neutron_networks(self):
         src_nets = self.filter_networks()

@@ -30,7 +30,7 @@ FAKE_CONFIG = utils.ext_dict(
                           'tenant': 'fake_tenant',
                           'host': '1.1.1.1',
                           'auth_url': 'http://1.1.1.1:35357/v2.0/'}),
-    mysql=utils.ext_dict({'host': '1.1.1.1'}),
+    mysql=utils.ext_dict({'db_host': '1.1.1.1'}),
     migrate=utils.ext_dict({
         'retry': '7',
         'time_wait': 5}))

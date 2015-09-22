@@ -27,7 +27,6 @@ from glanceclient.v1.images import CREATE_PARAMS
 
 from cloudferrylib.base import exception
 from cloudferrylib.base import image
-from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import file_like_proxy
 from cloudferrylib.utils import utils as utl
 
@@ -50,31 +49,15 @@ class GlanceImage(image.Image):
         self.filter_tenant_id = None
         self.filter_image = []
         # get mysql settings
-        self.mysql_connector = self.get_db_connection()
+        self.mysql_connector = cloud.mysql_connector('glance')
         super(GlanceImage, self).__init__(config)
 
     @property
     def glance_client(self):
         return self.proxy(self.get_client(), self.config)
 
-    def get_db_connection(self):
-        if not hasattr(
-                self.cloud.config,
-                self.cloud.position + '_image'):
-            LOG.debug('running on default mysql settings')
-            return mysql_connector.MysqlConnector(
-                self.config.mysql, 'glance')
-        else:
-            LOG.debug('running on custom mysql settings')
-            my_settings = getattr(
-                self.cloud.config,
-                self.cloud.position + '_image')
-            return mysql_connector.MysqlConnector(
-                my_settings, my_settings.database_name)
-
     def get_client(self):
         """ Getting glance client """
-
         endpoint_glance = self.identity_client.get_endpoint_by_service_type(
             service_type='image',
             endpoint_type='publicURL')
@@ -191,8 +174,7 @@ class GlanceImage(image.Image):
             # to map it later to new user id
             user_id = gl_image["properties"].get("user_id")
             usr = keystone.try_get_user_by_id(user_id=user_id)
-            if usr:
-                gl_image["properties"]["user_name"] = usr.name
+            gl_image["properties"]["user_name"] = usr.name
         return gl_image
 
     def is_snapshot(self, img):
@@ -299,6 +281,8 @@ class GlanceImage(image.Image):
                 info['images'][glance_image.id] = {'image': gl_image,
                                                    'meta': {},
                                                    }
+                LOG.debug("find image with ID {}({})".format(glance_image.id,
+                                                             glance_image.name))
             else:
                 LOG.warning("image {img} was not migrated according to "
                             "status = {status}, (expected status "
@@ -310,7 +294,8 @@ class GlanceImage(image.Image):
 
         return info
 
-    def deploy(self, info, callback=None):
+    def deploy(self, info):
+        LOG.info("Glance images deployment started...")
         info = copy.deepcopy(info)
         new_info = {'images': {}}
         migrate_images_list = []
@@ -334,8 +319,9 @@ class GlanceImage(image.Image):
                         (dst_img_checksums[checksum_current], meta))
                     continue
 
-                LOG.debug("updating owner of image {image}".format(
-                    image=gl_image["image"]["owner"]))
+                LOG.debug("Updating owner '{owner}' of image '{image}'".format(
+                    owner=gl_image["image"]["owner_name"],
+                    image=gl_image["image"]["name"]))
                 gl_image["image"]["owner"] = \
                     self.identity_client.get_tenant_id_by_name(
                     gl_image["image"]["owner_name"])
@@ -360,8 +346,9 @@ class GlanceImage(image.Image):
                                 username=metadata["user_name"]).id
                         del metadata["user_name"]
 
-                LOG.debug("migrating image {image}".format(
-                    image=gl_image["image"]["id"]))
+                LOG.debug("Creating image '{image}' ({image_id})".format(
+                    image=gl_image["image"]["name"],
+                    image_id=gl_image['image']['id']))
                 # we can face situation when image has no
                 # disk_format and container_format properties
                 # this situation appears, when image was created
@@ -383,8 +370,8 @@ class GlanceImage(image.Image):
                         properties=gl_image['image']['properties'],
                         data=file_like_proxy.FileLikeProxy(
                             gl_image['image'],
-                            callback,
                             self.config['migrate']['speed_limit']))
+                    LOG.debug("new image ID {}".format(migrate_image.id))
                 except exception.ImageDownloadError:
                     LOG.warning("Unable to reach image's data due to "
                                 "Glance HTTPInternalServerError. Skipping "
@@ -409,6 +396,8 @@ class GlanceImage(image.Image):
         if migrate_images_list:
             im_name_list = [(im.name, tmp_meta) for (im, tmp_meta) in
                             migrate_images_list]
+            LOG.debug("images on destination: {}".format(
+                [im for (im, tmp_meta) in im_name_list]))
             new_info = self.read_info(images_list_meta=im_name_list)
         new_info['images'].update(empty_image_list)
         # on this step we need to create map between source ids and dst ones
@@ -432,6 +421,7 @@ class GlanceImage(image.Image):
                     can_share)
         self.delete_fields('disk_format', delete_disk_format)
         self.delete_fields('container_format', delete_container_format)
+        LOG.info("Glance images deployment finished.")
         return new_info
 
     def delete_fields(self, field, list_of_ids):
@@ -458,15 +448,8 @@ class GlanceImage(image.Image):
 
     def glance_img_create(self, runner, image_name, image_format, file_path):
         cfg = self.cloud.cloud_config.cloud
-        out = runner.run(("glance --os-username=%s --os-password=%s --os-tenant-name=%s --os-auth-url=%s " +
-                          "image-create --name %s --disk-format=%s --container-format=bare --file %s " +
-                          "| grep id") %
-                         (cfg.user,
-                          cfg.password,
-                          cfg.tenant,
-                          cfg.auth_url,
-                          image_name,
-                          image_format,
-                          file_path))
+        cmd = image.glance_image_create_cmd(cfg, image_name, image_format,
+                                            file_path)
+        out = runner.run(cmd)
         image_id = out.split("|")[2].replace(' ', '')
         return image_id

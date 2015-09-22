@@ -108,7 +108,7 @@ class NovaCompute(compute.Compute):
         self.cloud = cloud
         self.filter_tenant_id = None
         self.identity = cloud.resources['identity']
-        self.mysql_connector = self.get_db_connection()
+        self.mysql_connector = cloud.mysql_connector('nova')
 
     @property
     def nova_client(self):
@@ -119,8 +119,14 @@ class NovaCompute(compute.Compute):
 
         params = self.config if not params else params
 
-        client = nova_client.Client(params.cloud.user, params.cloud.password,
-                                    params.cloud.tenant, params.cloud.auth_url)
+        client_args = [params.cloud.user, params.cloud.password,
+                       params.cloud.tenant, params.cloud.auth_url]
+
+        client_kwargs = {}
+        if params.cloud.region:
+            client_kwargs["region_name"] = params.cloud.region
+
+        client = nova_client.Client(*client_args, **client_kwargs)
         LOG.debug("Authenticating as '%s' in tenant '%s'",
                   params.cloud.user, params.cloud.tenant)
         client.authenticate()
@@ -135,7 +141,7 @@ class NovaCompute(compute.Compute):
             my_settings = getattr(self.cloud.config,
                                   self.cloud.position + '_compute')
             return mysql_connector.MysqlConnector(my_settings,
-                                                  my_settings.database_name)
+                                                  my_settings.db_name)
 
     def _read_info_quotas(self):
         admin_tenant_id = self.identity.get_tenant_id_by_name(

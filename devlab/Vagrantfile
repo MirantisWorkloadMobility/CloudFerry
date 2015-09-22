@@ -23,21 +23,21 @@ uid = %x(id -u #{user}).strip()
 
 nodes = {
   "grizzly#{ENV["BUILD_NAME"]}" => {
-    "box" => "http://172.18.124.79:8000/precise-grizzly.box",
+    "box" => "openstack-user/precise-grizzly",
     "ip" => "#{options['grizzly_ip']}",
     "memory" => 2560,
     "sshport" => "#{ENV["SSH_PORT_GRIZZLY"]}",
     "role" => "openstack"
   },
   "icehouse#{ENV["BUILD_NAME"]}" => {
-    "box" => "http://172.18.124.79:8000/trusty-icehouse.box",
+    "box" => "openstack-user/trusty-icehouse",
     "ip" => "#{options['icehouse_ip']}",
     "memory" => 4096,
     "sshport" => "#{ENV["SSH_PORT_ICEHOUSE"]}",
     "role" => "openstack"
   },
   "juno#{ENV["BUILD_NAME"]}" => {
-    "box" => "http://172.18.124.79:8000/juno.box",
+    "box" => "openstack-user/juno",
     "ip" => "#{options['juno_ip']}",
     "memory" => 4096,
     "sshport" => "#{ENV["SSH_PORT_JUNO"]}",
@@ -55,7 +55,7 @@ nodes = {
     "role" => "lab"
   },
   "nfs#{ENV["BUILD_NAME"]}" => {
-    "box" => "http://172.18.124.79:8000/nfs.box",
+    "box" => "openstack-user/nfs-server",
     "ip" => "#{options['nfs_ip']}",
     "memory" => 256,
     "cpus" => 1,
@@ -113,8 +113,10 @@ Vagrant.configure(2) do |config|
           end
           thisnode.vm.provision "shell", path: "./provision/libvirt.sh"
           if nodename == "grizzly" then
+            thisnode.vm.provision "shell", path: "./provision/fix_interfaces.sh"
             thisnode.vm.provision "shell", path: "./provision/qemu.sh"
           elsif nodename == "icehouse" then
+            thisnode.vm.provision "shell", path: "./provision/fix_interfaces.sh"
             thisnode.vm.provision "shell", path: "./provision/cleanup_nova_instances.sh"
           end
         when "dev"

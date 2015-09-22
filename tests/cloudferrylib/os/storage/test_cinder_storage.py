@@ -34,7 +34,7 @@ FAKE_CONFIG = utils.ext_dict(
                             'time_wait': 5,
                             'keep_volume_storage': False,
                             'keep_volume_snapshots': False}),
-    mysql=utils.ext_dict({'host': '1.1.1.1'}),
+    mysql=utils.ext_dict({'db_host': '1.1.1.1'}),
     storage=utils.ext_dict({'backend': 'ceph',
                             'rbd_pool': 'volumes',
                             'volume_name_template': 'volume-',

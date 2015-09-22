@@ -20,7 +20,6 @@ from neutronclient.v2_0 import client as neutron_client
 
 from cloudferrylib.base import network
 from cloudferrylib.os.identity import keystone as ksresource
-from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import utils as utl
 
 
@@ -41,28 +40,24 @@ class NeutronNetwork(network.Network):
         self.filter_tenant_id = None
         self.ext_net_map = \
             utl.read_yaml_file(self.config.migrate.ext_net_map) or {}
+        self.mysql_connector = cloud.mysql_connector('neutron')
 
     @property
     def neutron_client(self):
         return self.proxy(self.get_client(), self.config)
 
     def get_client(self):
-        return neutron_client.Client(
-            username=self.config.cloud.user,
-            password=self.config.cloud.password,
-            tenant_name=self.config.cloud.tenant,
-            auth_url=self.config.cloud.auth_url)
+        kwargs = {
+            "username": self.config.cloud.user,
+            "password": self.config.cloud.password,
+            "tenant_name": self.config.cloud.tenant,
+            "auth_url": self.config.cloud.auth_url
+        }
 
-    def get_db_connection(self):
-        if not hasattr(self.cloud.config, self.cloud.position + '_network'):
-            LOG.debug('Running on default mysql settings')
-            return mysql_connector.MysqlConnector(self.config.mysql, 'neutron')
-        else:
-            my_settings = getattr(self.cloud.config,
-                                  self.cloud.position + '_network')
-            LOG.debug('Running on custom mysql settings')
-            return mysql_connector.MysqlConnector(my_settings,
-                                                  my_settings.database_name)
+        if self.config.cloud.region:
+            kwargs["region_name"] = self.config.cloud.region
+
+        return neutron_client.Client(**kwargs)
 
     def read_info(self, **kwargs):
 
@@ -116,12 +111,12 @@ class NeutronNetwork(network.Network):
         self.upload_networks(deploy_info['networks'])
         self.upload_subnets(deploy_info['networks'],
                             deploy_info['subnets'])
-        self.upload_routers(deploy_info['networks'],
-                            deploy_info['subnets'],
-                            deploy_info['routers'])
         if self.config.migrate.keep_floatingip:
             self.upload_floatingips(deploy_info['networks'],
                                     deploy_info['floating_ips'])
+        self.upload_routers(deploy_info['networks'],
+                            deploy_info['subnets'],
+                            deploy_info['routers'])
         self.upload_neutron_security_groups(deploy_info['security_groups'])
         self.upload_sec_group_rules(deploy_info['security_groups'])
         if self.config.migrate.keep_lbaas:
@@ -172,7 +167,7 @@ class NeutronNetwork(network.Network):
     def get_network(self, network_info, tenant_id, keep_ip=False):
         if keep_ip:
             instance_addr = ipaddr.IPAddress(network_info['ip'])
-            for snet in self.neutron_client.list_subnets()['subnets']:
+            for snet in self.get_subnets_list():
                 network = self.get_network({"id": snet['network_id']}, None)
                 if snet['tenant_id'] == tenant_id or network['shared']:
                     if ipaddr.IPNetwork(snet['cidr']).Contains(instance_addr):
@@ -284,7 +279,8 @@ class NeutronNetwork(network.Network):
                                                  'allocation_pools',
                                                  'gateway_ip',
                                                  'cidr',
-                                                 'tenant_name')
+                                                 'tenant_name',
+                                                 'network_name')
 
         result['res_hash'] = res_hash
 
@@ -566,10 +562,12 @@ class NeutronNetwork(network.Network):
         return self.neutron_client.list_networks(
             tenant_id=tenant_id)['networks']
 
+    def get_subnets_list(self, tenant_id=''):
+        return self.neutron_client.list_subnets(tenant_id=tenant_id)['subnets']
+
     def get_subnets(self, tenant_id=''):
         LOG.info("Get subnets...")
-        subnets = self.neutron_client.list_subnets(
-            tenant_id=tenant_id)['subnets']
+        subnets = self.get_subnets_list(tenant_id)
         subnets_info = []
 
         for snet in subnets:
@@ -1186,14 +1184,33 @@ class NeutronNetwork(network.Network):
                 LOG.debug("Creating FIP on net '%s'", ext_net_id)
                 created_fip = self.neutron_client.create_floatingip(new_fip)
 
-            dst_mysql = self.get_db_connection()
-            sql = ('UPDATE floatingips '
-                   'SET floating_ip_address="{ip}" '
-                   'WHERE id="{fip_id}"').format(
-                ip=fip['floating_ip_address'],
-                fip_id=created_fip['floatingip']['id'])
-            LOG.debug(sql)
-            dst_mysql.execute(sql)
+            ip = fip['floating_ip_address']
+            fip_id = created_fip['floatingip']['id']
+            sqls = [('UPDATE floatingips '
+                     'SET floating_ip_address = "{ip}" '
+                     'WHERE id = "{fip_id}"').format(ip=ip, fip_id=fip_id),
+                    ('UPDATE ipallocations '
+                     'SET ip_address = "{ip}" '
+                     'WHERE port_id = ('
+                         'SELECT floating_port_id '
+                         'FROM floatingips '
+                         'WHERE id = "{fip_id}")').format(
+                        ip=ip, fip_id=fip_id),
+                    ('DELETE FROM ipavailabilityranges '
+                     'WHERE allocation_pool_id in ( '
+                         'SELECT id '
+                         'FROM ipallocationpools '
+                         'WHERE subnet_id = ( '
+                             'SELECT subnet_id '
+                             'FROM ipallocations '
+                             'WHERE port_id = ('
+                                 'SELECT floating_port_id '
+                                 'FROM floatingips '
+                                 'WHERE id = "{fip_id}")))').format(
+                        fip_id=fip_id)]
+            LOG.debug(sqls)
+            dst_mysql = self.mysql_connector
+            dst_mysql.batch_execute(sqls)
 
         LOG.info("Done")
 
@@ -1242,3 +1259,41 @@ class NeutronNetwork(network.Network):
             net_hash = self.get_res_hash_by_id(src_nets, src_net_id)
             dst_net_id = self.get_res_by_hash(dst_nets, net_hash)['id']
         return dst_net_id
+
+
+def get_network_from_list_by_id(network_id, networks_list):
+    """Get Neutron network by id from provided networks list.
+
+    :param network_id: Neutron network ID
+    :param networks_list: List of Neutron networks, where target network should
+                          be searched
+    """
+
+    for net in networks_list:
+        if net['id'] == network_id:
+            return net
+
+    LOG.warning("Cannot obtain network with id='%s' from provided networks "
+                "list", network_id)
+
+
+def get_network_from_list(ip, tenant_id, networks_list, subnets_list):
+        """Get Neutron network by parameters from provided list.
+
+        :param ip: IP address of VM from this network
+        :param tenant_id: Tenant Id of VM in this network
+        :param networks_list: List of Neutron networks, where target network
+                              should be searched
+        :param subnets_list: List of Neutron subnets, where target network
+                             should be searched
+        """
+
+        instance_ip = ipaddr.IPAddress(ip)
+
+        for subnet in subnets_list:
+            network_id = subnet['network_id']
+            net = get_network_from_list_by_id(network_id, networks_list)
+            if subnet['tenant_id'] == tenant_id or net['shared']:
+                if ipaddr.IPNetwork(subnet['cidr']).Contains(instance_ip):
+                    return get_network_from_list_by_id(network_id,
+                                                       networks_list)
