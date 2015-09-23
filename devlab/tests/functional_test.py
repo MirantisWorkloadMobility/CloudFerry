@@ -106,9 +106,9 @@ class FunctionalTest(unittest.TestCase):
         return self._get_nova_resources('keypairs', keypairs)
 
     def filter_security_groups(self):
-        sgs = [sg for i in config.tenants if 'security_groups' in i
+        sgs = [sg['name'] for i in config.tenants if 'security_groups' in i
                for sg in i['security_groups']]
-        return self._get_nova_resources('security_groups', sgs)
+        return self._get_neutron_resources('security_groups', sgs)
 
     def filter_images(self):
         images = [i['name'] for i in config.images]
