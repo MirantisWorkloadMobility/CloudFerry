@@ -502,7 +502,7 @@ class KeystoneIdentity(identity.Identity):
             tenant_list = []
         if user_list is None:
             user_list = []
-        if not self.config.identity.optimize_user_role_fetch:
+        if not self.config.migrate.optimize_user_role_fetch:
             user_tenants_roles = self._get_user_tenants_roles_by_api(tenant_list,
                                                                      user_list)
         else:
@@ -536,7 +536,7 @@ class KeystoneIdentity(identity.Identity):
 
     def _get_user_roles_cached(self):
         all_roles = {}
-        if self.config.identity.optimize_user_role_fetch:
+        if self.config.migrate.optimize_user_role_fetch:
             res = self._get_roles_sql_request()
             for user_id, tenant_id, roles_field in res:
                 roles_ids = ast.literal_eval(roles_field)['roles']
@@ -548,7 +548,7 @@ class KeystoneIdentity(identity.Identity):
                 all_roles[user_id][tenant_id].extend(roles_ids)
 
         def _get_user_roles(user_id, tenant_id):
-            if not self.config.identity.optimize_user_role_fetch:
+            if not self.config.migrate.optimize_user_role_fetch:
                 roles = self.roles_for_user(user_id, tenant_id)
             else:
                 roles = all_roles.get(user_id, {}).get(tenant_id, [])
