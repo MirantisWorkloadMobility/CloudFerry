@@ -633,6 +633,27 @@ class NeutronTestCase(test.TestCase):
         self.assertEqual(self.net_2_info, network)
 
 
+class NeutronRouterTestCase(test.TestCase):
+    def test_router_class(self):
+        router_info = {'id': 'routerID',
+                       'tenant_name': 'Tenant1',
+                       'ext_net_id': 'ext_network',
+                       'subnet_ids': ['sub1', 'sub2'],
+                       'ips': ['10.0.0.2', '123.0.0.15']}
+        subnets = {'sub1': {'network_id': 'ext_network',
+                            'cidr': '123.0.0.0/24'},
+                   'sub2': {'network_id': 'int_network',
+                            'cidr': '10.0.0.0/24'}}
+        router = neutron.Router(router_info, subnets)
+        self.assertEqual('routerID', router.id)
+        self.assertEqual('ext_network', router.ext_net_id)
+        self.assertEqual(['10.0.0.0/24'], router.int_cidr)
+        self.assertEqual('123.0.0.0/24', router.ext_cidr)
+        self.assertEqual('sub1', router.ext_subnet_id)
+        self.assertEqual('Tenant1', router.tenant_name)
+        self.assertEqual('123.0.0.15', router.ext_ip)
+
+
 @mock.patch("cloudferrylib.os.network.neutron.neutron_client.Client")
 @mock.patch("cloudferrylib.os.network.neutron.utl.read_yaml_file",
             mock.MagicMock())
