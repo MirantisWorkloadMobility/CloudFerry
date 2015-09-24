@@ -132,14 +132,13 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     def test_migrate_nova_security_groups(self):
         src_sec_gr = self.filter_security_groups()
-        dst_sec_gr = self.dst_cloud.novaclient.security_groups.list()
-
-        self.validate_resource_parameter_in_dst(src_sec_gr, dst_sec_gr,
-                                                resource_name='security_group',
-                                                parameter='name')
-        self.validate_resource_parameter_in_dst(src_sec_gr, dst_sec_gr,
-                                                resource_name='security_group',
-                                                parameter='description')
+        dst_sec_gr = self.dst_cloud.neutronclient.list_security_groups()
+        self.validate_neutron_resource_parameter_in_dst(
+            src_sec_gr, dst_sec_gr, resource_name='security_groups',
+            parameter='name')
+        self.validate_neutron_resource_parameter_in_dst(
+            src_sec_gr, dst_sec_gr, resource_name='security_groups',
+            parameter='description')
 
     def test_migrate_glance_images(self):
         src_images = self.filter_images()
