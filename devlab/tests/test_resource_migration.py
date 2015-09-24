@@ -12,6 +12,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     def validate_resource_parameter_in_dst(self, src_list, dst_list,
                                            resource_name, parameter):
+        if not src_list:
+            self.skipTest(
+                'Nothing to migrate - source resources list is empty')
         name_attr = 'name'
         if resource_name == 'volume':
             name_attr = 'display_name'
@@ -35,6 +38,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
     def validate_neutron_resource_parameter_in_dst(self, src_list, dst_list,
                                                    resource_name='networks',
                                                    parameter='name'):
+        if not src_list[resource_name]:
+            self.skipTest(
+                'Nothing to migrate - source resources list is empty')
         for i in src_list[resource_name]:
             for j in dst_list[resource_name]:
                 if i['name'] != j['name']:
