@@ -1,3 +1,4 @@
+#!/bin/bash
 # Add physical eth1 interface to the floating bridge
 # This allows access to the vm's inside of openstack directly
 # from the host-server
