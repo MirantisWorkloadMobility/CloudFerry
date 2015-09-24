@@ -138,6 +138,7 @@ class NeutronNetwork(network.Network):
         self.upload_networks(deploy_info['networks'])
         self.upload_subnets(deploy_info['networks'],
                             deploy_info['subnets'])
+        dst_router_ip_ids = None
         if self.config.migrate.keep_floatingip:
             self.upload_floatingips(deploy_info['networks'],
                                     deploy_info['floating_ips'])
