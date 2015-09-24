@@ -189,7 +189,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                  image.owner, dst_tenant_id))
         msg = ("Either migration is not initiated or it was not successful for"
                " resource 'Image'.")
-        self.assertTrue(least_user_match, msg=msg)
+        self.assertTrue(least_image_check, msg=msg)
 
     def test_glance_images_not_in_filter_did_not_migrate(self):
         src_images = self.filter_images()
