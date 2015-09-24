@@ -157,7 +157,11 @@ migrate_opts = [
                     'Possible values: "nova", "cobalt".'),
     cfg.StrOpt('mysqldump_host',
                help='IP or hostname used for creating MySQL dump for rollback.'
-                    'If not set uses `[dst] db_host` config option.')
+                    'If not set uses `[dst] db_host` config option.'),
+    cfg.BoolOpt('optimize_user_role_fetch', default=True,
+                help=("Uses low-level DB requests if set to True, "
+                      "may be incompatible with more recent versions of "
+                      "Keystone. Tested on grizzly, icehouse and juno."))
 ]
 
 mail = cfg.OptGroup(name='mail',
@@ -304,10 +308,6 @@ src_identity_opts = [
                help='driver for connection'),
     cfg.StrOpt('service', default='keystone',
                help='name service for keystone'),
-    cfg.BoolOpt('optimize_user_role_fetch', default=True,
-                help=("Uses low-level DB requests if set to True, "
-                      "may be incompatible with more recent versions of "
-                      "Keystone. Tested on grizzly, icehouse and juno.")),
     cfg.StrOpt('db_name', default='',
                help='database name')
 ]
@@ -484,10 +484,6 @@ dst_identity_opts = [
                help='driver for connection'),
     cfg.StrOpt('service', default='keystone',
                help='name service for keystone'),
-    cfg.BoolOpt('optimize_user_role_fetch', default=True,
-                help=("Uses low-level DB requests if set to True, "
-                      "may be incompatible with more recent versions of "
-                      "Keystone. Tested on grizzly, icehouse and juno.")),
     cfg.StrOpt('db_name', default=None,
                help='database name')
 ]

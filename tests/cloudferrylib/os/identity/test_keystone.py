@@ -38,9 +38,9 @@ FAKE_CONFIG = utils.ext_dict(
                             'time_wait': 5,
                             'keep_user_passwords': False,
                             'overwrite_user_passwords': False,
-                            'migrate_users': True}),
-    mail=utils.ext_dict({'server': '-'}),
-    identity=utils.ext_dict({'optimize_user_role_fetch': False}))
+                            'migrate_users': True,
+                            'optimize_user_role_fetch': False}),
+    mail=utils.ext_dict({'server': '-'}))
 
 
 @mock.patch("cloudferrylib.base.clients", mock.MagicMock())
