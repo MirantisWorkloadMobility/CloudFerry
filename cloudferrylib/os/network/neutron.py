@@ -1207,7 +1207,14 @@ class NeutronNetwork(network.Network):
         LOG.info("Uploading floating IPs...")
         existing_networks = self.get_networks()
         new_floating_ids = []
+        fips_dst = self.neutron_client.list_floatingips()['floatingips']
+        ipfloatings = {fip['floating_ip_address']: fip['id']
+                       for fip in fips_dst}
         for fip in src_floats:
+            ip = fip['floating_ip_address']
+            if ip in ipfloatings:
+                new_floating_ids.append(ipfloatings[ip])
+                continue
             # keystone auth fails if done with token for some reason
             with ksresource.AddAdminUserToNonAdminTenant(
                     self.identity_client.keystone_client,
@@ -1241,7 +1248,6 @@ class NeutronNetwork(network.Network):
                 LOG.debug("Creating FIP on net '%s'", ext_net_id)
                 created_fip = self.neutron_client.create_floatingip(new_fip)
 
-            ip = fip['floating_ip_address']
             fip_id = created_fip['floatingip']['id']
             new_floating_ids.append(fip_id)
             sqls = [('UPDATE floatingips '
