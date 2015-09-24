@@ -65,14 +65,19 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         src_users = self.filter_users()
         src_user_names = [user.name for user in src_users]
         dst_users = self.dst_cloud.keystoneclient.users.list()
+        least_user_match = False
         for dst_user in dst_users:
             if dst_user.name not in src_user_names:
                 continue
+            least_user_match = True
             src_user_tnt_roles = self.src_cloud.get_user_tenant_roles(dst_user)
             dst_user_tnt_roles = self.dst_cloud.get_user_tenant_roles(dst_user)
             self.validate_resource_parameter_in_dst(
                 src_user_tnt_roles, dst_user_tnt_roles,
                 resource_name='user_tenant_role', parameter='name')
+        msg = ("Either migration is not initiated or it was not successful for"
+               " resource 'USER'.")
+        self.assertTrue(least_user_match, msg=msg)
 
     def test_migrate_keystone_roles(self):
         src_roles = self.filter_roles()
@@ -174,12 +179,17 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         dst_images = self.dst_cloud.glanceclient.images.list()
         dst_tenant_id = self.dst_cloud.get_tenant_id(self.dst_cloud.tenant)
 
+        least_image_check = False
         for image in dst_images:
             if image.name not in src_images:
                 continue
+            least_image_check = True
             self.assertEqual(image.owner, dst_tenant_id,
                              'Image owner on dst is {0} instead of {1}'.format(
                                  image.owner, dst_tenant_id))
+        msg = ("Either migration is not initiated or it was not successful for"
+               " resource 'Image'.")
+        self.assertTrue(least_user_match, msg=msg)
 
     def test_glance_images_not_in_filter_did_not_migrate(self):
         src_images = self.filter_images()
