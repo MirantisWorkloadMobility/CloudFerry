@@ -66,28 +66,42 @@ migrate = cfg.OptGroup(name='migrate',
 
 migrate_opts = [
     cfg.BoolOpt('keep_user_passwords', default=True,
-               help='True - keep user passwords, '
-                    'False - not keep user passwords'),
+                help='True - keep user passwords, '
+                     'False - not keep user passwords'),
     cfg.StrOpt('key_filename', default='id_rsa',
                help='name pub key'),
     cfg.BoolOpt('keep_ip', default=False,
-               help='yes - keep ip, no - not keep ip'),
+                help='yes - keep ip, no - not keep ip'),
     cfg.BoolOpt('migrate_extnets', default=False,
-               help='yes - migrate external networks, no - do not migrate external networks'),
+                help='yes - migrate external networks, '
+                     'no - do not migrate external networks'),
     cfg.StrOpt('ext_net_map', default='configs/ext_net_map.yaml',
                help='path to the map of external networks, which contains '
                     'references between old and new ids'),
     cfg.BoolOpt('keep_floatingip', default=False,
-               help='yes - keep floatingip, no - not keep floatingip'),
+                help='yes - keep floatingip, no - not keep floatingip'),
+    cfg.BoolOpt('change_router_ips', default=False,
+                help='change router external ip on dst cloud to '
+                     'avoid ip collision by making additional floatingip '
+                     'on dst as stub'),
+    cfg.BoolOpt('clean_router_ips_stub', default=False,
+                help='delete floating ip stub on dst after router migration'),
+    cfg.StrOpt('router_ips_stub_tenant', default=None,
+               help='tenant for creation router ip stubs, if it "None" as '
+                    'default stub creates in router tenant'),
     cfg.StrOpt('cinder_migration_strategy',
                default='cloudferrylib.os.storage.cinder_storage.CinderStorage',
-               help='path to class that will perform cinder migration actions'),
+               help='path to class that will perform '
+                    'cinder migration actions'),
     cfg.BoolOpt('keep_lbaas', default=False,
-               help='yes - keep lbaas settings, no - not keep lbaas settings'),
+                help='yes - keep lbaas settings, '
+                     'no - not keep lbaas settings'),
     cfg.BoolOpt('keep_volume_snapshots', default=False,
-               help='yes - keep volume snapshots, no - not keep volume snapshots'),
+                help='yes - keep volume snapshots, '
+                     'no - not keep volume snapshots'),
     cfg.BoolOpt('keep_volume_storage', default=False,
-               help='True - keep volume_storage, False - not keep volume_storage'),
+                help='True - keep volume_storage, '
+                     'False - not keep volume_storage'),
     cfg.StrOpt('speed_limit', default='10MB',
                help='speed limit for glance to glance'),
     cfg.StrOpt('file_compression', default='dd',
@@ -108,9 +122,11 @@ migrate_opts = [
     cfg.StrOpt('container_format', default='bare',
                help='container format when covert volume to image'),
     cfg.BoolOpt('direct_compute_transfer', default=False,
-                help='Direct data transmission between compute nodes via external network'),
+                help='Direct data transmission between compute nodes '
+                     'via external network'),
     cfg.StrOpt('filter_path', default='configs/filter.yaml',
-               help='path to the filter yaml file with options for search resources'),
+               help='path to the filter yaml file with options '
+                    'for search resources'),
     cfg.IntOpt('retry', default='7',
                help='Number retry if except Performing error'),
     cfg.IntOpt('time_wait', default=5,
@@ -141,7 +157,11 @@ migrate_opts = [
                     'Possible values: "nova", "cobalt".'),
     cfg.StrOpt('mysqldump_host',
                help='IP or hostname used for creating MySQL dump for rollback.'
-                    'If not set uses `[dst] db_host` config option.')
+                    'If not set uses `[dst] db_host` config option.'),
+    cfg.BoolOpt('optimize_user_role_fetch', default=True,
+                help=("Uses low-level DB requests if set to True, "
+                      "may be incompatible with more recent versions of "
+                      "Keystone. Tested on grizzly, icehouse and juno."))
 ]
 
 mail = cfg.OptGroup(name='mail',
@@ -241,11 +261,13 @@ src_storage_opts = [
     cfg.StrOpt('disk_format', default='qcow2',
                help='convert volume'),
     cfg.StrOpt('volume_name_template', default='volume-',
-               help='template for creating names of volumes on storage backend'),
+               help='template for creating names of volumes '
+                    'on storage backend'),
     cfg.StrOpt('rbd_pool', default='volumes',
                help='name of pool for volumes in Ceph RBD storage'),
     cfg.StrOpt('snapshot_name_template', default='snapshot-',
-               help='template for creating names of snapshots on storage backend')
+               help='template for creating names of snapshots '
+                    'on storage backend')
 ]
 
 src_image = cfg.OptGroup(name='src_image',
@@ -286,10 +308,6 @@ src_identity_opts = [
                help='driver for connection'),
     cfg.StrOpt('service', default='keystone',
                help='name service for keystone'),
-    cfg.BoolOpt('optimize_user_role_fetch', default=True,
-                help=("Uses low-level DB requests if set to True, "
-                      "may be incompatible with more recent versions of Keystone. "
-                      "Tested on grizzly, icehouse and juno.")),
     cfg.StrOpt('db_name', default='',
                help='database name')
 ]
@@ -366,9 +384,9 @@ dst_compute_opts = [
     cfg.StrOpt('backend', default='ceph',
                help='backend for ephemeral drives'),
     cfg.BoolOpt('disk_overcommit', default=False,
-               help='live-migration allow disk overcommit'),
+                help='live-migration allow disk overcommit'),
     cfg.BoolOpt('block_migration', default=False,
-               help='live-migration without shared_storage'),
+                help='live-migration without shared_storage'),
     cfg.StrOpt('host_eph_drv', default='-',
                help='host ephemeral drive'),
     cfg.FloatOpt('cpu_allocation_ratio', default='16',
@@ -417,11 +435,13 @@ dst_storage_opts = [
     cfg.StrOpt('disk_format', default='qcow2',
                help='convert volume'),
     cfg.StrOpt('volume_name_template', default='volume-',
-               help='template for creating names of volumes on storage backend'),
+               help='template for creating names of volumes '
+                    'on storage backend'),
     cfg.StrOpt('rbd_pool', default='volumes',
                help='name of pool for volumes in Ceph RBD storage'),
     cfg.StrOpt('snapshot_name_template', default='snapshot-',
-               help='template for creating names of snapshots on storage backend')
+               help='template for creating names of snapshots '
+                    'on storage backend')
 ]
 
 dst_image = cfg.OptGroup(name='dst_image',
@@ -464,10 +484,6 @@ dst_identity_opts = [
                help='driver for connection'),
     cfg.StrOpt('service', default='keystone',
                help='name service for keystone'),
-    cfg.BoolOpt('optimize_user_role_fetch', default=True,
-                help=("Uses low-level DB requests if set to True, "
-                      "may be incompatible with more recent versions of Keystone. "
-                      "Tested on grizzly, icehouse and juno.")),
     cfg.StrOpt('db_name', default=None,
                help='database name')
 ]

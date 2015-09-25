@@ -40,8 +40,8 @@ tenants = [
          {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr'}],
      'networks': [{'name': 'tenantnet1', 'admin_state_up': True},
                   {'name': 'tenant1_net2', 'admin_state_up': True}],
-     'subnets': [{'cidr': '10.5.2.0/24', 'ip_version': 4},
-                 {'cidr': '10.6.2.0/24', 'ip_version': 4}],
+     'subnets': [{'cidr': '10.5.2.0/24', 'ip_version': 4, 'name': 't1_s1'},
+                 {'cidr': '10.6.2.0/24', 'ip_version': 4, 'name': 't1_s2'}],
      'security_groups': [
          {'name': 'sg11', 'description': 'Blah blah group', 'rules': [
              {'ip_protocol': 'icmp',
@@ -72,7 +72,7 @@ tenants = [
           'flavor': 'flavorname2', 'key_name': 'key2', 'nics': [
               {'net-id': 'tenantnet2'}]}],
      'networks': [{'name': 'tenantnet2', 'admin_state_up': True}],
-     'subnets': [{'cidr': '22.2.2.0/24', 'ip_version': 4}],
+     'subnets': [{'cidr': '22.2.2.0/24', 'ip_version': 4, 'name': 't2_s1'}],
      'cinder_volumes': [
          {'name': 'tn_volume1', 'size': 1, 'server_to_attach': 'tn2server1',
           'device': '/dev/vdb'}

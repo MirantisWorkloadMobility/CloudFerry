@@ -39,15 +39,22 @@ class FunctionalTest(unittest.TestCase):
         self.filtering_utils = FilteringUtils()
 
     def filter_networks(self):
-        cfg = [i['name'] for i in config.networks]
-        networks = [cfg.extend(i['networks'])
-                    for i in config.tenants if 'networks' in i]
+        networks = [i['name'] for i in config.networks]
+        for i in config.tenants:
+            if 'networks' in i:
+                for j in i['networks']:
+                    networks.append(j['name'])
         return self._get_neutron_resources('networks', networks)
 
+    # TODO(raies): Currently we support filtering of those subnets which has
+    # 'name' parameter in it's detail.
+    # Implimentation of Subnet filtering for no name subnets is still needed.
     def filter_subnets(self):
-        cfg = [i['name'] for i in config.networks]
-        subnets = [cfg.extend(i['subnets'])
-                   for i in config.tenants if 'subnets' in i]
+        subnets = [i['name'] for i in config.subnets]
+        for i in config.tenants:
+            if 'subnets' in i:
+                for subnet in i['subnets']:
+                    subnets.append(subnet['name'])
         return self._get_neutron_resources('subnets', subnets)
 
     def filter_routers(self):
@@ -106,9 +113,9 @@ class FunctionalTest(unittest.TestCase):
         return self._get_nova_resources('keypairs', keypairs)
 
     def filter_security_groups(self):
-        sgs = [sg for i in config.tenants if 'security_groups' in i
+        sgs = [sg['name'] for i in config.tenants if 'security_groups' in i
                for sg in i['security_groups']]
-        return self._get_nova_resources('security_groups', sgs)
+        return self._get_neutron_resources('security_groups', sgs)
 
     def filter_images(self):
         images = [i['name'] for i in config.images]
