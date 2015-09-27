@@ -29,6 +29,7 @@ from cloudferrylib.base import exception
 from cloudferrylib.base import image
 from cloudferrylib.utils import file_like_proxy
 from cloudferrylib.utils import utils as utl
+from cloudferrylib.utils import remote_runner
 
 
 LOG = utl.get_log(__name__)
@@ -50,6 +51,8 @@ class GlanceImage(image.Image):
         self.filter_image = []
         # get mysql settings
         self.mysql_connector = cloud.mysql_connector('glance')
+        self.runner = remote_runner.RemoteRunner(self.host,
+                                                 self.config.cloud.ssh_user)
         super(GlanceImage, self).__init__(config)
 
     @property
@@ -89,7 +92,8 @@ class GlanceImage(image.Image):
             filters = {'is_public': None}
             img_list = get_img_list(filters=filters)
             # getting images if tenant is member
-            for img in self.glance_client.image_members.list(member=self.filter_tenant_id):
+            for img in self.glance_client.image_members.list(
+                    member=self.filter_tenant_id):
                 for i in img_list:
                     if i.id == img.image_id:
                         LOG.debug("append image(by member) ID {}".format(i.id))
@@ -278,11 +282,26 @@ class GlanceImage(image.Image):
             if glance_image.status == "active":
                 gl_image = self.convert(glance_image, self.cloud)
 
-                info['images'][glance_image.id] = {'image': gl_image,
-                                                   'meta': {},
-                                                   }
-                LOG.debug("find image with ID {}({})".format(glance_image.id,
-                                                             glance_image.name))
+                command = ("SELECT value FROM image_locations "
+                           "WHERE image_id=\"{}\" AND deleted=\"0\";"
+                           .format(glance_image.id))
+                res = self.mysql_connector.execute(command)
+                img_loc = None
+                for row in res:
+                    if img_loc is not None:
+                        LOG.warning("ignoring multi locations for image {}"
+                                    .format(glance_image.name))
+                        break
+                    img_loc = row[0]
+
+                info['images'][glance_image.id] = {
+                    'image': gl_image,
+                    'meta': {
+                        'img_loc': img_loc
+                    },
+                }
+                LOG.debug("find image with ID {}({})"
+                          .format(glance_image.id, glance_image.name))
             else:
                 LOG.warning("image {img} was not migrated according to "
                             "status = {status}, (expected status "
@@ -345,6 +364,26 @@ class GlanceImage(image.Image):
                             self.identity_client.keystone_client.users.find(
                                 username=metadata["user_name"]).id
                         del metadata["user_name"]
+                if gl_image["image"]["checksum"] is None:
+                    LOG.warning("re-creating image {} "
+                                "from original source URL"
+                                .format(gl_image["image"]["id"]))
+                    if meta['img_loc'] is not None:
+                        self.glance_img_create(
+                            gl_image['image']['name'],
+                            gl_image['image']['disk_format'] or "qcow2",
+                            meta['img_loc']
+                        )
+                        recreated_image = utl.ext_dict(
+                            name=gl_image["image"]["name"]
+                        )
+                        migrate_images_list.append(
+                            (recreated_image, gl_image['meta'])
+                        )
+                    else:
+                        raise exception.AbortMigrationError(
+                            "image information has no original source URL")
+                    continue
 
                 LOG.debug("Creating image '{image}' ({image_id})".format(
                     image=gl_image["image"]["name"],
@@ -362,7 +401,8 @@ class GlanceImage(image.Image):
                         name=gl_image['image']['name'],
                         container_format=(gl_image['image']['container_format']
                                           or "bare"),
-                        disk_format=gl_image['image']['disk_format'] or "qcow2",
+                        disk_format=(gl_image['image']['disk_format']
+                                     or "qcow2"),
                         is_public=gl_image['image']['is_public'],
                         protected=gl_image['image']['protected'],
                         owner=gl_image['image']['owner'],
@@ -449,10 +489,10 @@ class GlanceImage(image.Image):
                     run("rbd -p images info %s --format json" % image_id))
                 image_from_glance.update(size=out["size"])
 
-    def glance_img_create(self, runner, image_name, image_format, file_path):
+    def glance_img_create(self, img_name, img_format, file_path):
         cfg = self.cloud.cloud_config.cloud
-        cmd = image.glance_image_create_cmd(cfg, image_name, image_format,
+        cmd = image.glance_image_create_cmd(cfg, img_name, img_format,
                                             file_path)
-        out = runner.run(cmd)
+        out = self.runner.run(cmd)
         image_id = out.split("|")[2].replace(' ', '')
         return image_id
