@@ -100,9 +100,10 @@ class FunctionalTest(unittest.TestCase):
     def filter_vms(self):
         vms = config.vms
         [vms.extend(i['vms']) for i in config.tenants if 'vms' in i]
+        vms_names = [vm['name'] for vm in vms]
         opts = {'search_opts': {'all_tenants': 1}}
         return [i for i in self.src_cloud.novaclient.servers.list(**opts)
-                if i.name in vms]
+                if i.name in vms_names]
 
     def filter_flavors(self):
         flavors = [i['name'] for i in config.flavors]
