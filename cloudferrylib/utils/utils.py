@@ -306,7 +306,8 @@ class forward_agent(object):
 
     def _agent_already_running(self):
         with settings(hide('warnings', 'running', 'stdout', 'stderr'),
-                      warn_only=True):
+                      warn_only=True,
+                      connection_attempts=env.connection_attempts):
             res = local("ssh-add -l", capture=True)
 
             if res.succeeded:
@@ -383,13 +384,15 @@ class up_ssh_tunnel_class:
 
     def __enter__(self):
         self.port = self.get_free_port()
-        with settings(host_string=self.host):
+        with settings(host_string=self.host,
+                      connection_attempts=env.connection_attempts):
             run(self.cmd % (self.port, self.address_dest_compute, self.port, self.port,
                             self.address_dest_controller) + " && sleep 2")
         return self.port
 
     def __exit__(self, type, value, traceback):
-        with settings(host_string=self.host):
+        with settings(host_string=self.host,
+                      connection_attempts=env.connection_attempts):
             run(("pkill -f '"+self.cmd+"'") % (self.port, self.address_dest_compute, self.port, self.port,
                                                self.address_dest_controller))
         time.sleep(2)
@@ -422,7 +425,8 @@ def get_libvirt_block_info(libvirt_name, init_host, compute_host, ssh_user,
     with settings(host_string=compute_host,
                   user=ssh_user,
                   password=ssh_sudo_password,
-                  gateway=init_host):
+                  gateway=init_host,
+                  connection_attempts=env.connection_attempts):
         out = sudo("virsh domblklist %s" % libvirt_name)
         libvirt_output = out.split()
     return libvirt_output
@@ -458,7 +462,8 @@ def get_disk_path(instance, blk_list, is_ceph_ephemeral=False, disk=DISK):
 def get_ips(init_host, compute_host, ssh_user):
     with settings(host_string=compute_host,
                   user=ssh_user,
-                  gateway=init_host):
+                  gateway=init_host,
+                  connection_attempts=env.connection_attempts):
         cmd = ("ifconfig | awk -F \"[: ]+\" \'/inet addr:/ "
                "{ if ($4 != \"127.0.0.1\") print $4 }\'")
         out = run(cmd)

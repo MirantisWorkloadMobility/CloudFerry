@@ -43,13 +43,16 @@ class RemoteRunner(object):
         if not self.ignore_errors:
             abort_exception = RemoteExecutionError
 
+        ssh_attempts = cfglib.CONF.migrate.ssh_connection_attempts
+
         with settings(warn_only=self.ignore_errors,
                       host_string=self.host,
                       user=self.user,
                       password=self.password,
                       abort_exception=abort_exception,
                       reject_unkown_hosts=False,
-                      combine_stderr=False):
+                      combine_stderr=False,
+                      connection_attempts=ssh_attempts):
             with forward_agent(self.key):
                 LOG.debug("running '%s' on '%s' host as user '%s'",
                           cmd, self.host, self.user)

@@ -25,7 +25,8 @@ def transfer_file_to_file(src_cloud, dst_cloud, host_src, host_dst, path_src, pa
     LOG.debug("| | copy file")
     ssh_ip_src = src_cloud.getIpSsh()
     ssh_ip_dst = dst_cloud.getIpSsh()
-    with settings(host_string=ssh_ip_src):
+    with settings(host_string=ssh_ip_src,
+                  connection_attempts=env.connection_attempts):
         with utils.forward_agent(cfg_migrate.key_filename):
             with utils.up_ssh_tunnel(host_dst, ssh_ip_dst, ssh_ip_src) as port:
                 if cfg_migrate.file_compression == "dd":
@@ -40,7 +41,8 @@ def transfer_file_to_file(src_cloud, dst_cloud, host_src, host_dst, path_src, pa
 
 
 def delete_file_from_rbd(ssh_ip, file_path):
-    with settings(host_string=ssh_ip):
+    with settings(host_string=ssh_ip,
+                  connection_attempts=env.connection_attempts):
         with utils.forward_agent(env.key_filename):
             run("rbd rm %s" % file_path)
 

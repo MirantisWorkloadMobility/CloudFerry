@@ -8,7 +8,9 @@ class ConvertImageToFile(action.Action):
 
     def run(self, image_id=None, base_filename=None, **kwargs):
         cfg = self.cloud.cloud_config.cloud
-        with settings(host_string=cfg.host):
+        ssh_attempts = self.cloud.cloud_config.migrate.ssh_connection_attempts
+
+        with settings(host_string=cfg.host, connection_attempts=ssh_attempts):
             with forward_agent(env.key_filename):
                 cmd = image.glance_image_download_cmd(cfg, image_id,
                                                       base_filename)
