@@ -14,7 +14,7 @@
 
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
-from keystoneclient.openstack.common.apiclient import exceptions as keystone_exc
+from keystoneclient.openstack.common.apiclient import exceptions as ks_exc
 from novaclient import exceptions as nova_exc
 from cloudferrylib.base import exception
 
@@ -32,8 +32,8 @@ class CheckCloud(action.Action):
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
         volume_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
         net_resource = self.cloud.resources[utl.NETWORK_RESOURCE]
-        admin_tenant_name = self.cloud.cloud_config.cloud.tenant
-        admin_tenant_id = ident_resource.get_tenant_id_by_name(admin_tenant_name)
+        adm_tenant_name = self.cloud.cloud_config.cloud.tenant
+        adm_tenant_id = ident_resource.get_tenant_id_by_name(adm_tenant_name)
         tenant_name = 'test_name'
         flavor_id = 'c0c0c0c0'
         err_message = 'Failed to create object in the cloud'
@@ -65,8 +65,7 @@ class CheckCloud(action.Action):
             ident_resource._deploy_tenants(tenant)
             tenant_id = ident_resource.get_tenant_id_by_name(tenant_name)
             compute_resource._deploy_flavors(flavor, None)
-        except (keystone_exc.ClientException,
-                nova_exc.ClientException) as e:
+        except (ks_exc.ClientException, nova_exc.ClientException):
             LOG.error(err_message)
             raise exception.AbortMigrationError(err_message)
         migrate_image = image_res.create_image(
@@ -75,7 +74,7 @@ class CheckCloud(action.Action):
             disk_format='qcow2',
             is_public=True,
             protected=False,
-            owner=admin_tenant_id,
+            owner=adm_tenant_id,
             size=4,
             properties={'user_name': 'test_user_name'},
             data='test'
@@ -106,7 +105,7 @@ class CheckCloud(action.Action):
             }
         }
 
-        subnet = net_resource.neutron_client.create_subnet(subnet_info)
+        net_resource.neutron_client.create_subnet(subnet_info)
 
         nics = [{'net-id': private_network_id}]
 
@@ -123,7 +122,7 @@ class CheckCloud(action.Action):
                         'user_id': '1',
                         'boot_mode': utl.BOOT_FROM_IMAGE,
                         'availability_zone': 'nova',
-                        'tenant_name': admin_tenant_name
+                        'tenant_name': adm_tenant_name
                     }
                 }
             },
@@ -146,7 +145,7 @@ class CheckCloud(action.Action):
         volume_resource.cinder_client.volumes.delete(vol_new_ids.keys()[0])
         network_info = {
             'network': {
-                'tenant_id': admin_tenant_id,
+                'tenant_id': adm_tenant_id,
                 'admin_state_up': True,
                 'shared': True,
                 'name': 'test_net',
@@ -157,7 +156,10 @@ class CheckCloud(action.Action):
             network_info)['network']['id']
         net_resource.neutron_client.delete_network(new_net_id)
         vm_new_ids = compute_resource._deploy_instances(info)
-        if not vm_new_ids or not vol_new_ids or not migrate_image or not new_net_id:
+        if (not vm_new_ids or
+                not vol_new_ids or
+                not migrate_image or
+                not new_net_id):
             LOG.error(err_message)
             raise exception.AbortMigrationError(err_message)
         compute_resource.nova_client.servers.delete(vm_new_ids.keys()[0])

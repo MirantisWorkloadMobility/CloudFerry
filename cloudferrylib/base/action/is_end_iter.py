@@ -33,8 +33,3 @@ class IsEndIter(action.Action):
         else:
             self.num_element = 0
         return {}
-
-
-
-
-

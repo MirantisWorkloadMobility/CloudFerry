@@ -13,7 +13,8 @@ class ConvertFile(action.Action):
         if image_res.config.image.convert_to_raw:
             return {}
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
-            image_id = info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id']
+            image_id = \
+                info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id']
             images = image_res.read_info(image_id=image_id)
             image = images[utl.IMAGES_TYPE][image_id]
             disk_format = image[utl.IMAGE_BODY]['disk_format']

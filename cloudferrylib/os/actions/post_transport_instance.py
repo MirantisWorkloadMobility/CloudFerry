@@ -15,22 +15,9 @@
 
 import copy
 
-from fabric.api import env
-from fabric.api import run
-from fabric.api import settings
-
 from cloudferrylib.base.action import action
-from cloudferrylib.os.actions import convert_file_to_image
-from cloudferrylib.os.actions import convert_image_to_file
-from cloudferrylib.os.actions import convert_volume_to_image
-from cloudferrylib.os.actions import copy_g2g
 from cloudferrylib.os.actions import task_transfer
-from cloudferrylib.utils import utils as utl, forward_agent
-
-from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
-from cloudferrylib.utils.drivers import ssh_ceph_to_file
-from cloudferrylib.utils.drivers import ssh_file_to_file
-from cloudferrylib.utils.drivers import ssh_file_to_ceph
+from cloudferrylib.utils import utils as utl
 
 
 CLOUD = 'cloud'
@@ -66,7 +53,7 @@ class PostTransportInstance(action.Action):
 
     def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)
-        #Init before run
+        # Init before run
         src_compute = self.src_cloud.resources[utl.COMPUTE_RESOURCE]
         dst_compute = self.dst_cloud.resources[utl.COMPUTE_RESOURCE]
         backend_ephem_drv_src = src_compute.config.compute.backend
@@ -76,7 +63,7 @@ class PostTransportInstance(action.Action):
             }
         }
 
-        #Get next one instance
+        # Get next one instance
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             instance_boot = instance[utl.INSTANCE_BODY]['boot_mode']
             one_instance = {
@@ -84,9 +71,12 @@ class PostTransportInstance(action.Action):
                     instance_id: instance
                 }
             }
-            if (instance_boot == utl.BOOT_FROM_IMAGE) and (backend_ephem_drv_src == ISCSI) \
-                and (backend_ephem_drv_dst == ISCSI):
-                self.copy_diff_file(self.src_cloud, self.dst_cloud, one_instance)
+            if ((instance_boot == utl.BOOT_FROM_IMAGE) and
+                    (backend_ephem_drv_src == ISCSI) and
+                    (backend_ephem_drv_dst == ISCSI)):
+                self.copy_diff_file(self.src_cloud,
+                                    self.dst_cloud,
+                                    one_instance)
 
             new_info[utl.INSTANCES_TYPE].update(
                 one_instance[utl.INSTANCES_TYPE])
@@ -95,7 +85,13 @@ class PostTransportInstance(action.Action):
             'info': new_info
         }
 
-    def copy_data_via_ssh(self, src_cloud, dst_cloud, info, body, resources, types):
+    def copy_data_via_ssh(self,
+                          src_cloud,
+                          dst_cloud,
+                          info,
+                          body,
+                          resources,
+                          types):
         dst_storage = dst_cloud.resources[resources]
         src_compute = src_cloud.resources[resources]
         src_backend = src_compute.config.compute.backend

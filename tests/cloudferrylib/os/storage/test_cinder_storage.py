@@ -58,10 +58,8 @@ class CinderStorageTestCase(test.TestCase):
         self.fake_cloud.resources = dict(identity=self.identity_mock,
                                          compute=self.compute_mock)
 
-        with mock.patch(
-                'cloudferrylib.os.storage.cinder_storage.mysql_connector'):
-            self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG,
-                                                              self.fake_cloud)
+        self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG,
+                                                          self.fake_cloud)
 
         self.fake_volume_0 = mock.Mock()
         self.fake_volume_1 = mock.Mock()

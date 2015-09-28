@@ -20,7 +20,13 @@ from cloudferrylib.utils import utils as utl
 LOG = utils.get_log(__name__)
 
 
-def transfer_file_to_file(src_cloud, dst_cloud, host_src, host_dst, path_src, path_dst, cfg_migrate):
+def transfer_file_to_file(src_cloud,
+                          dst_cloud,
+                          host_src,
+                          host_dst,
+                          path_src,
+                          path_dst,
+                          cfg_migrate):
     # TODO: Delete after transport_db_via_ssh action rewriting
     LOG.debug("| | copy file")
     ssh_ip_src = src_cloud.getIpSsh()
@@ -30,12 +36,15 @@ def transfer_file_to_file(src_cloud, dst_cloud, host_src, host_dst, path_src, pa
         with utils.forward_agent(cfg_migrate.key_filename):
             with utils.up_ssh_tunnel(host_dst, ssh_ip_dst, ssh_ip_src) as port:
                 if cfg_migrate.file_compression == "dd":
-                    run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M if=%s' " +
-                         "| ssh -oStrictHostKeyChecking=no -p %s localhost 'dd bs=1M of=%s'") %
+                    run(("ssh -oStrictHostKeyChecking=no %s 'dd bs=1M " +
+                         "if=%s' | ssh -oStrictHostKeyChecking=no " +
+                         "-p %s localhost 'dd bs=1M of=%s'") %
                         (host_src, path_src, port, path_dst))
                 elif cfg_migrate.file_compression == "gzip":
-                    run(("ssh -oStrictHostKeyChecking=no %s 'gzip -%s -c %s' " +
-                         "| ssh -oStrictHostKeyChecking=no -p %s localhost 'gunzip | dd bs=1M of=%s'") %
+                    run(("ssh -oStrictHostKeyChecking=no " +
+                         "%s 'gzip -%s -c %s' " +
+                         "| ssh -oStrictHostKeyChecking=no -p %s localhost " +
+                         "'gunzip | dd bs=1M of=%s'") %
                         (host_src, cfg_migrate.level_compression,
                          path_src, port, path_dst))
 

@@ -14,7 +14,6 @@
 
 
 from cloudferrylib.base.action import action
-import copy
 
 
 class CreateReference(action.Action):
@@ -28,4 +27,3 @@ class CreateReference(action.Action):
         return {
             self.info_name: kwargs[self.original_info_name]
         }
-

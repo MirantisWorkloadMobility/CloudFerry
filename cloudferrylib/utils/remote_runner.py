@@ -28,7 +28,8 @@ class RemoteExecutionError(RuntimeError):
 
 
 class RemoteRunner(object):
-    def __init__(self, host, user, password=None, sudo=False, key=None, ignore_errors=False):
+    def __init__(self, host, user, password=None, sudo=False, key=None,
+                 ignore_errors=False):
         self.host = host
         if key is None:
             key = cfglib.CONF.migrate.key_filename

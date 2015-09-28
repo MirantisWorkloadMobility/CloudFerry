@@ -61,7 +61,8 @@ class CheckNeededComputeResources(action.Action):
         # is in this flavor, it will keep the old flavor id, can not be matched
         # to existing flavors
         src_compute = self.src_cloud.resources[utl.COMPUTE_RESOURCE]
-        src_flavor_ids = [flavor.id for flavor in src_compute.get_flavor_list()]
+        src_flavor_ids = \
+            [flavor.id for flavor in src_compute.get_flavor_list()]
         dst_compute = self.dst_cloud.resources[utl.COMPUTE_RESOURCE]
         dst_flavors = dst_compute.get_flavor_list()
         dst_flavor_ids = [flavor.id for flavor in dst_flavors]
@@ -82,5 +83,6 @@ class CheckNeededComputeResources(action.Action):
                                           ram=flav_details['memory_mb'],
                                           vcpus=flav_details['vcpus'],
                                           disk=flav_details['root_gb'],
-                                          ephemeral=flav_details['ephemeral_gb'])
+                                          ephemeral=flav_details[
+                                              'ephemeral_gb'])
                 src_flavor_ids.append(_instance['flavor_id'])

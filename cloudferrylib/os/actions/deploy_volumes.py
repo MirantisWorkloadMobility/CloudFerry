@@ -48,7 +48,3 @@ class DeployVolumes(action.Action):
         return {
             'storage_info': storage_info_new
         }
-
-
-
-

@@ -71,7 +71,8 @@ class ConvertComputeToImage(action.Action):
                         images_body[image_id][utl.META_INFO][
                             utl.INSTANCE_BODY] = [instance]
                     else:
-                        LOG.warning("No boot image for instance, need to re-create it")
+                        LOG.warning("No boot image for instance, "
+                                    "need to re-create it")
                         missing_images[instance_id] = image_id
             else:
                 compute_ignored_images[instance_id] = instance

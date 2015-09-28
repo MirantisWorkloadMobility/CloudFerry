@@ -9,4 +9,3 @@ class SelectBootVolume(action.Action):
         return {
             'info': info_boot
         }
-

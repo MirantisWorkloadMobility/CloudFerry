@@ -140,7 +140,7 @@ class TransportEphemeral(action.Action):
         qemu_img_dst = dst_cloud.qemu_img
         qemu_img_src = src_cloud.qemu_img
 
-        temp_path_src = temp_src+"/%s"+utl.DISK_EPHEM
+        temp_path_src = temp_src + "/%s" + utl.DISK_EPHEM
         for inst_id, inst in instances.iteritems():
 
             path_src_id_temp = temp_path_src % inst_id

@@ -21,6 +21,8 @@ CEPH = 'ceph'
 ISCSI = 'iscsi'
 PATH_COPY_DIFF = 0
 DEFAULT = 1
+INST = utl.INSTANCES_TYPE
+BODY = utl.INSTANCE_BODY
 
 
 class IsNotCopyDiffFile(action.Action):
@@ -31,9 +33,10 @@ class IsNotCopyDiffFile(action.Action):
         dst_compute = self.dst_cloud.resources[utl.COMPUTE_RESOURCE]
         backend_ephem_drv_src = src_compute.config.compute.backend
         backend_ephem_drv_dst = dst_compute.config.compute.backend
-        instance_boot = info[utl.INSTANCES_TYPE].values()[0][utl.INSTANCE_BODY]['boot_mode']
-        if (instance_boot == utl.BOOT_FROM_IMAGE) and (backend_ephem_drv_src == ISCSI) \
-            and (backend_ephem_drv_dst == ISCSI):
+        instance_boot = \
+            info[INST].values()[0][BODY]['boot_mode']
+        if ((instance_boot == utl.BOOT_FROM_IMAGE) and
+                (backend_ephem_drv_src == ISCSI) and
+                (backend_ephem_drv_dst == ISCSI)):
             self.set_next_path(PATH_COPY_DIFF)
-        return {
-        }
+        return {}
