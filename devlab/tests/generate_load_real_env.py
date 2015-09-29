@@ -233,7 +233,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Script to generate load for Openstack and delete '
                     'generated objects')
-    parser.add_argument('--clean',  action='store_true',
+    parser.add_argument('--clean', action='store_true',
                         help='clean objects described in real_env_conf.ini')
     args = parser.parse_args()
     if args.clean:

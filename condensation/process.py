@@ -29,7 +29,7 @@ def process(nodes, flavors, vms, groups):
     # read files with nova data and node data
     LOG.info("started creating schedule for node condensation")
 
-    source = cloud.Cloud.from_dicts('source',  nodes, flavors, vms, groups)
+    source = cloud.Cloud.from_dicts('source', nodes, flavors, vms, groups)
     source.migrate_to(cloud.Cloud('destination'))
 
 
