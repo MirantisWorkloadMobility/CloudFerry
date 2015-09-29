@@ -95,7 +95,10 @@ images = [
     {'name': 'image4', 'copy_from': img_url, 'container_format': 'bare',
      'disk_format': 'qcow2', 'is_public': False},
     {'name': 'image5', 'copy_from': img_url, 'container_format': 'bare',
-     'disk_format': 'qcow2', 'is_public': False}
+     'disk_format': 'qcow2', 'is_public': False},
+    # When location field is specified, glance creates images without checksum
+    {'name': 'without_checksum', 'location': img_url, 'disk_format': 'qcow2',
+     'container_format': 'bare'}
 ]
 
 # Images not to be migrated:
