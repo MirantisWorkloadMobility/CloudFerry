@@ -13,18 +13,15 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import mock
-import exceptions
 
-from tests import test
+import mock
+
+from cloudferrylib.base import exception
 from cloudferrylib.os.actions import check_networks
+from tests import test
 
 
 class CheckNetworksTestCase(test.TestCase):
-
-    def setUp(self):
-        super(CheckNetworksTestCase, self).setUp()
-
     @staticmethod
     def get_action(src_net_info, dst_net_info):
         fake_src_net = mock.Mock()
@@ -52,7 +49,10 @@ class CheckNetworksTestCase(test.TestCase):
 
     def test_empty_dst(self):
         src_net_info = {'networks': [{'id': 'id1',
-                                      'res_hash': 1}],
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
@@ -63,13 +63,19 @@ class CheckNetworksTestCase(test.TestCase):
 
     def test_equals_networks(self):
         src_net_info = {'networks': [{'id': 'id1',
-                                      'res_hash': 1}],
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
                                      'id': 'sub1'}]}
         dst_net_info = {'networks': [{'id': 'id2',
-                                      'res_hash': 1}],
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id2',
@@ -78,7 +84,10 @@ class CheckNetworksTestCase(test.TestCase):
 
     def test_equals_and_new_networks(self):
         src_net_info = {'networks': [{'id': 'id1',
-                                      'res_hash': 1}],
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
@@ -88,7 +97,10 @@ class CheckNetworksTestCase(test.TestCase):
                                      'network_id': 'id1',
                                      'id': 'sub2'}]}
         dst_net_info = {'networks': [{'id': 'id2',
-                                      'res_hash': 1}],
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id2',
@@ -97,32 +109,92 @@ class CheckNetworksTestCase(test.TestCase):
 
     def test_diff(self):
         src_net_info = {'networks': [{'id': 'id1',
-                                      'res_hash': 1}],
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
                                      'id': 'sub1'}]}
         dst_net_info = {'networks': [{'id': 'id2',
-                                      'res_hash': 1}],
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 3,
                                      'network_id': 'id2',
                                      'id': 'sub2'}]}
         action = self.get_action(src_net_info, dst_net_info)
-        self.assertRaises(exceptions.EnvironmentError, action.run)
+        self.assertRaises(exception.AbortMigrationError, action.run)
 
     def test_overlap(self):
         src_net_info = {'networks': [{'id': 'id1',
-                                      'res_hash': 1}],
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None}],
                         'subnets': [{'cidr': '10.0.0.0/28',
                                      'res_hash': 2,
                                      'network_id': 'id1',
                                      'id': 'sub1'}]}
         dst_net_info = {'networks': [{'id': 'id2',
-                                      'res_hash': 1}],
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 3,
                                      'network_id': 'id2',
                                      'id': 'sub2'}]}
         action = self.get_action(src_net_info, dst_net_info)
-        self.assertRaises(exceptions.EnvironmentError, action.run)
+        self.assertRaises(exception.AbortMigrationError, action.run)
+
+    def test_check_segmentation_id_overlapping_no_dst_networks(self):
+        src_net_info = {'networks': [{'id': 'id1',
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'gre',
+                                      'provider:segmentation_id': 200}],
+                        'subnets': []}
+
+        dst_net_info = {'networks': [],
+                        'subnets': []}
+
+        self.get_action(src_net_info, dst_net_info).run()
+
+    def test_check_segmentation_id_overlapping_same_network(self):
+        src_net_info = {'networks': [{'id': 'id1',
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'gre',
+                                      'provider:segmentation_id': 200}],
+                        'subnets': []}
+
+        dst_net_info = {'networks': [{'id': 'id2',
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'gre',
+                                      'provider:segmentation_id': 200}],
+                        'subnets': []}
+
+        self.get_action(src_net_info, dst_net_info).run()
+
+    def test_check_segmentation_id_overlapping_different_network(self):
+        src_net_info = {'networks': [{'id': 'id1',
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'gre',
+                                      'provider:segmentation_id': 200}],
+                        'subnets': []}
+
+        dst_net_info = {'networks': [{'id': 'id2',
+                                      'res_hash': 2,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'gre',
+                                      'provider:segmentation_id': 200}],
+                        'subnets': []}
+
+        action = self.get_action(src_net_info, dst_net_info)
+        self.assertRaises(exception.AbortMigrationError, action.run)
