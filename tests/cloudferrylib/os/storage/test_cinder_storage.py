@@ -83,7 +83,8 @@ class CinderStorageTestCase(test.TestCase):
 
         volumes_list = self.cinder_client.get_volumes_list(search_opts=dict())
 
-        self.mock_client().volumes.list.assert_called_once_with(True, dict(all_tenants=True))
+        self.mock_client().volumes.list.\
+            assert_called_once_with(True, dict(all_tenants=True))
         self.assertEqual(volumes_list, fake_volume_list)
 
     def test_create_volume(self):

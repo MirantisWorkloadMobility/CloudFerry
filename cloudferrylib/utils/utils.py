@@ -410,11 +410,12 @@ class UpSshTunnelClass:
     def __exit__(self, type, value, traceback):
         with settings(host_string=self.host,
                       connection_attempts=env.connection_attempts):
-            run(("pkill -f '"+self.cmd+"'") % (self.port,
-                                               self.address_dest_compute,
-                                               self.port,
-                                               self.port,
-                                               self.address_dest_controller))
+            run(("pkill -f '" + self.cmd + "'") %
+                (self.port,
+                 self.address_dest_compute,
+                 self.port,
+                 self.port,
+                 self.address_dest_controller))
         time.sleep(2)
         self.remove_port(self.port)
 

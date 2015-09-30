@@ -84,7 +84,7 @@ class LibvirtTestCase(test.TestCase):
 
 grizzly_xml = """<domain type='qemu'>
   <name>instance-00000008</name>
-  <uuid>7f9cfeab-05c6-4dcc-91d4-3074383ff73d</uuid>
+  <uuid>7f9cfeab-05c6-4dcc</uuid>
   <memory unit='KiB'>524288</memory>
   <currentMemory unit='KiB'>524288</currentMemory>
   <vcpu placement='static'>1</vcpu>
@@ -94,7 +94,7 @@ grizzly_xml = """<domain type='qemu'>
       <entry name='product'>OpenStack Nova</entry>
       <entry name='version'>2013.1.5</entry>
       <entry name='serial'>72827a02-9e88-41b9-82de-ec2ae162a93c</entry>
-      <entry name='uuid'>7f9cfeab-05c6-4dcc-91d4-3074383ff73d</entry>
+      <entry name='uuid'>7f9cfeab-05c6-4dcc</entry>
     </system>
   </sysinfo>
   <os>
@@ -117,12 +117,12 @@ grizzly_xml = """<domain type='qemu'>
     <emulator>/usr/bin/qemu-system-x86_64</emulator>
     <disk type='file' device='disk'>
       <driver name='qemu' type='qcow2' cache='none'/>
-      <source file='/var/lib/nova/instances/7f9cfeab-05c6-4dcc-91d4-3074383ff73d/disk'/>
+      <source file='/var/lib/nova/instances/7f9cfeab-05c6-4dcc/disk'/>
       <target dev='vda' bus='virtio'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x06' function='0x0'/>
     </disk>
     <controller type='usb' index='0'>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x01' function='0x2'/>
     </controller>
     <controller type='pci' index='0' model='pci-root'/>
     <interface type='bridge'>
@@ -131,7 +131,7 @@ grizzly_xml = """<domain type='qemu'>
       <target dev='tap77e94452-48'/>
       <model type='virtio'/>
       <driver name='qemu'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x03' function='0x0'/>
     </interface>
     <interface type='bridge'>
       <mac address='fa:16:3e:d2:0b:1f'/>
@@ -139,7 +139,7 @@ grizzly_xml = """<domain type='qemu'>
       <target dev='tapcec0ca6c-5b'/>
       <model type='virtio'/>
       <driver name='qemu'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x04' function='0x0'/>
     </interface>
     <interface type='bridge'>
       <mac address='fa:16:3e:31:ff:fc'/>
@@ -147,31 +147,31 @@ grizzly_xml = """<domain type='qemu'>
       <target dev='tapfc3ffd58-07'/>
       <model type='virtio'/>
       <driver name='qemu'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x05' function='0x0'/>
     </interface>
     <serial type='file'>
-      <source path='/var/lib/nova/instances/7f9cfeab-05c6-4dcc-91d4-3074383ff73d/console.log'/>
+      <source path='/var/lib/nova/instances/7f9cfeab-05c6-4dcc/console.log'/>
       <target port='0'/>
     </serial>
     <serial type='pty'>
       <target port='1'/>
     </serial>
     <console type='file'>
-      <source path='/var/lib/nova/instances/7f9cfeab-05c6-4dcc-91d4-3074383ff73d/console.log'/>
+      <source path='/var/lib/nova/instances/7f9cfeab-05c6-4dcc/console.log'/>
       <target type='serial' port='0'/>
     </console>
     <input type='tablet' bus='usb'/>
     <input type='mouse' bus='ps2'/>
     <input type='keyboard' bus='ps2'/>
-    <graphics type='vnc' port='-1' autoport='yes' listen='0.0.0.0' keymap='en-us'>
+    <graphics type='vnc' port='-1' autoport='yes' listen='0.0.0.0' keymap='en'>
       <listen type='address' address='0.0.0.0'/>
     </graphics>
     <video>
       <model type='cirrus' vram='9216' heads='1'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x02' function='0x0'/>
     </video>
     <memballoon model='virtio'>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x07' function='0x0'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x07' function='0x0'/>
     </memballoon>
   </devices>
 </domain>"""
@@ -179,7 +179,7 @@ grizzly_xml = """<domain type='qemu'>
 
 icehouse_xml = """<domain type='qemu' id='4'>
   <name>instance-00000008</name>
-  <uuid>7f9cfeab-05c6-4dcc-91d4-3074383ff73d</uuid>
+  <uuid>7f9cfeab-05c6-4dcc</uuid>
   <memory unit='KiB'>524288</memory>
   <currentMemory unit='KiB'>524288</currentMemory>
   <vcpu placement='static'>1</vcpu>
@@ -192,7 +192,7 @@ icehouse_xml = """<domain type='qemu' id='4'>
       <entry name='product'>OpenStack Nova</entry>
       <entry name='version'>2013.1.5</entry>
       <entry name='serial'>72827a02-9e88-41b9-82de-ec2ae162a93c</entry>
-      <entry name='uuid'>7f9cfeab-05c6-4dcc-91d4-3074383ff73d</entry>
+      <entry name='uuid'>7f9cfeab-05c6-4dcc</entry>
     </system>
   </sysinfo>
   <os>
@@ -218,14 +218,14 @@ icehouse_xml = """<domain type='qemu' id='4'>
     <emulator>/usr/bin/qemu-system-x86_64</emulator>
     <disk type='file' device='disk'>
       <driver name='qemu' type='qcow2' cache='none'/>
-      <source file='/var/lib/nova/instances/d7ca499b-42be-4234-beaf-499456b17684/disk'/>
+      <source file='/var/lib/nova/instances/d7ca499b-42be-4234-beaf/disk'/>
       <target dev='vda' bus='virtio'/>
       <alias name='virtio-disk0'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x06' function='0x0'/>
     </disk>
     <controller type='usb' index='0'>
       <alias name='usb0'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x01' function='0x2'/>
     </controller>
     <controller type='pci' index='0' model='pci-root'>
       <alias name='pci.0'/>
@@ -237,7 +237,7 @@ icehouse_xml = """<domain type='qemu' id='4'>
       <model type='virtio'/>
       <driver name='qemu'/>
       <alias name='net0'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x03' function='0x0'/>
     </interface>
     <interface type='bridge'>
       <mac address='fa:16:3e:d2:0b:1f'/>
@@ -246,7 +246,7 @@ icehouse_xml = """<domain type='qemu' id='4'>
       <model type='virtio'/>
       <driver name='qemu'/>
       <alias name='net1'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x04' function='0x0'/>
     </interface>
     <interface type='bridge'>
       <mac address='fa:16:3e:31:ff:fc'/>
@@ -255,10 +255,10 @@ icehouse_xml = """<domain type='qemu' id='4'>
       <model type='virtio'/>
       <driver name='qemu'/>
       <alias name='net2'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x05' function='0x0'/>
     </interface>
     <serial type='file'>
-      <source path='/var/lib/nova/instances/d7ca499b-42be-4234-beaf-499456b17684/console.log'/>
+      <source path='/var/lib/nova/instances/d7ca499b-42be-4234/console.log'/>
       <target port='0'/>
       <alias name='serial0'/>
     </serial>
@@ -268,7 +268,7 @@ icehouse_xml = """<domain type='qemu' id='4'>
       <alias name='serial1'/>
     </serial>
     <console type='file'>
-      <source path='/var/lib/nova/instances/d7ca499b-42be-4234-beaf-499456b17684/console.log'/>
+      <source path='/var/lib/nova/instances/d7ca499b-42be-4234/console.log'/>
       <target type='serial' port='0'/>
       <alias name='serial0'/>
     </console>
@@ -277,22 +277,22 @@ icehouse_xml = """<domain type='qemu' id='4'>
     </input>
     <input type='mouse' bus='ps2'/>
     <input type='keyboard' bus='ps2'/>
-    <graphics type='vnc' port='5900' autoport='yes' listen='0.0.0.0' keymap='en-us'>
+    <graphics type='vnc' port='59' autoport='yes' listen='0.0.0.0' keymap='en'>
       <listen type='address' address='0.0.0.0'/>
     </graphics>
     <video>
       <model type='cirrus' vram='9216' heads='1'/>
       <alias name='video0'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x02' function='0x0'/>
     </video>
     <memballoon model='virtio'>
       <alias name='balloon0'/>
-      <address type='pci' domain='0x0000' bus='0x00' slot='0x07' function='0x0'/>
+      <address type='pci' domain='0x0' bus='0x00' slot='0x07' function='0x0'/>
     </memballoon>
   </devices>
   <seclabel type='dynamic' model='apparmor' relabel='yes'>
-    <label>libvirt-7f9cfeab-05c6-4dcc-91d4-3074383ff73d</label>
-    <imagelabel>libvirt-7f9cfeab-05c6-4dcc-91d4-3074383ff73d</imagelabel>
+    <label>libvirt-7f9cfeab-05c6-4dcc</label>
+    <imagelabel>libvirt-7f9cfeab-05c6-4dcc</imagelabel>
   </seclabel>
 </domain>"""
 
@@ -300,7 +300,7 @@ icehouse_xml = """<domain type='qemu' id='4'>
 class LibvirtXmlTestCase(test.TestCase):
     def test_returns_disk_file_from_xml(self):
         expected = ("/var/lib/nova/instances/"
-                    "7f9cfeab-05c6-4dcc-91d4-3074383ff73d/disk")
+                    "7f9cfeab-05c6-4dcc/disk")
         lxml = libvirt.LibvirtXml(grizzly_xml)
         self.assertIsInstance(lxml.disk_file, str)
         self.assertEqual(expected, lxml.disk_file)
@@ -318,8 +318,8 @@ class LibvirtXmlTestCase(test.TestCase):
     def test_console_file_allows_update(self):
         lxml = libvirt.LibvirtXml(grizzly_xml)
         self.assertIsInstance(lxml.console_file, str)
-        self.assertEqual('/var/lib/nova/instances/7f9cfeab-05c6-4dcc-91d4-'
-                         '3074383ff73d/console.log', lxml.console_file)
+        self.assertEqual('/var/lib/nova/instances/7f9cfeab-05c6-4dcc/'
+                         'console.log', lxml.console_file)
         expected = "new value"
         lxml.console_file = expected
         self.assertEqual(lxml.console_file, expected)
@@ -328,7 +328,7 @@ class LibvirtXmlTestCase(test.TestCase):
         lxml = libvirt.LibvirtXml(grizzly_xml)
         expected = "new value"
         old_value = ("/var/lib/nova/instances/"
-                     "7f9cfeab-05c6-4dcc-91d4-3074383ff73d/console.log")
+                     "7f9cfeab-05c6-4dcc/console.log")
 
         self.assertIsInstance(lxml.serial_file, str)
         self.assertEqual(lxml.serial_file, old_value)
