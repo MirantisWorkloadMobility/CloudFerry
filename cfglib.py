@@ -334,7 +334,11 @@ src_network_opts = [
     cfg.StrOpt('db_connection', default=None,
                help='Neutron DB connection type'),
     cfg.StrOpt('db_user', default=None,
-               help="DB user for the networking backend")
+               help="DB user for the networking backend"),
+    cfg.StrOpt('get_all_quota', default=False,
+               help="If False, then qoutas will be taken only customs,"
+                    " else All quotas including default and custom")
+
 ]
 
 src_objstorage = cfg.OptGroup(name='src_objstorage',
@@ -510,7 +514,10 @@ dst_network_opts = [
     cfg.StrOpt('db_connection', default=None,
                help='Neutron DB connection type'),
     cfg.StrOpt('db_user', default=None,
-               help="DB user for the networking backend")
+               help="DB user for the networking backend"),
+    cfg.StrOpt('get_all_quota', default=False,
+               help="If False, then qoutas will be taken only customs, "
+                    "else All quotas including default and custom")
 ]
 
 dst_objstorage = cfg.OptGroup(name='dst_objstorage',
