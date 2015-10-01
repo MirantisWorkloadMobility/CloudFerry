@@ -1,5 +1,10 @@
 colorlog
 ecdsa
+oslo.i18n==1.5.0
+stevedore==1.5.0
+oslo.serialization==1.4.0
+debtcollector==0.3.0
+cliff==1.4.3
 fabric>=1.8.2
 ipaddr
 jinja2
@@ -18,7 +23,7 @@ python-novaclient==2.20.0
 python-swiftclient==2.3.1
 pyyaml
 redis
-requests==2.2.1
+nose
 sqlalchemy
 # see https://github.com/paramiko/paramiko/issues/570 and https://github.com/paramiko/paramiko/pull/571
--e git://github.com/mirrorcoder/paramiko.git#egg=paramiko
+-e git://github.com/mirrorcoder/paramiko.git#egg=paramiko-1.16.0

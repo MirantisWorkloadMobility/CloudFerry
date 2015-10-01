@@ -60,45 +60,35 @@ to implement in nearest future.
 
 # Installation
 
-Currently the tool is not packaged in any manner, so the installation is based on simply cloning git repo
-and installing all the requirements into python virtualenv:
 ```
-# there are several requirements for the python libraries used in CloudFerry
-# which are not installed on ubuntu by default
-sudo apt-get install python-virtualenv python-dev libffi-dev -y
-
-git clone https://github.com/MirantisWorkloadMobility/CloudFerry.git
-cd CloudFerry
-virtualenv .venv
-source .venv/bin/activate
-
-# for some reason fabric has dependency resolution problems with pip>=7.0.0
-pip install pip==6.1.1
-pip install --allow-all-external -r requirements.txt
-pip install -r test-requirements.txt
+pip install CloudFerry
 ```
 
 # Usage
 
 ## Overview
-CloudFerry tool is used by running python fabric scripts from the CloudFerry repo directory:
+CloudFerry tool is used by running python fabric scripts from the CloudFerry directory:
 ```
-cd CloudFerry
 # see list of available commands
-fab list
+cloudferry --help
 ```
 
 ## Configuration
 
-Configuration can be done through reusing of `devlab/config.template` and `devlab/provision/generate_config.sh`.
+You can generate sample configs by:
+    ```
+    mkdir my_migration
+    cd my_migration
+    cloudferry init
+    ```
 Configuration process is quite complex and mostly manual try-and-see-if-works process. Configuration documentation
 is TBD.
 
 ## Whole cloud migration
-Use `migrate` fabric command with config file specified:
+Use `migrate` command with config file specified:
 
 ```
-fab migrate:<config file>
+cloudferry migrate <config file>
 ```
 
 ## Migrating specific instances
@@ -116,7 +106,7 @@ instances:
 
 Run migration as usual:
 ```
-fab migrate:<configuration file>
+cloudferry migrate <config file>
 ```
 
 ## Playground

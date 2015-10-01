@@ -1,0 +1,9 @@
+include HACKING.md
+include LICENSE
+include QUICKSTART.md
+include README.rst
+include requirements.txt
+include version.txt
+graft configs
+graft scenario
+graft templates

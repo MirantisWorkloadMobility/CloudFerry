@@ -8,3 +8,6 @@ snapshots
 .DS_Store
 .ubuntu-venv
 .vagrant
+build
+dist
+CloudFerry.egg-info

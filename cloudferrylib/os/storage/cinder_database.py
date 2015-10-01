@@ -66,7 +66,9 @@ class CinderStorage(cinder_storage.CinderStorage):
             params.cloud.user,
             params.cloud.password,
             params.cloud.tenant,
-            params.cloud.auth_url)
+            params.cloud.auth_url,
+            cacert=self.config.cloud.cacert,
+            insecure=self.config.cloud.insecure)
 
     def _check_update_tenant_names(self, entry, tenant_id_key):
         tenant_id = entry[tenant_id_key]

@@ -28,7 +28,9 @@ FAKE_CONFIG = utils.ext_dict(
                           'password': 'fake_password',
                           'tenant': 'fake_tenant',
                           'host': '1.1.1.1',
-                          'auth_url': 'http://1.1.1.1:35357/v2.0/'}),
+                          'auth_url': 'http://1.1.1.1:35357/v2.0/',
+                          'cacert': '',
+                          'insecure': False}),
     migrate=utils.ext_dict({'speed_limit': '10MB',
                             'retry': '7',
                             'time_wait': 5,
@@ -74,7 +76,8 @@ class CinderStorageTestCase(test.TestCase):
 
         self.mock_client.assert_called_once_with('fake_user', 'fake_password',
                                                  'fake_tenant',
-                                                 'http://1.1.1.1:35357/v2.0/')
+                                                 'http://1.1.1.1:35357/v2.0/',
+                                                 cacert='', insecure=False)
         self.assertEqual(self.mock_client(), client)
 
     def test_get_volumes_list(self):

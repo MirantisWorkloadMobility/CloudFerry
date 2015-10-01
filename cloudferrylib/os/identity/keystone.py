@@ -224,7 +224,9 @@ class KeystoneIdentity(identity.Identity):
             "username": self.config.cloud.user,
             "password": self.config.cloud.password,
             "tenant_name": self.config.cloud.tenant,
-            "auth_url": self.config.cloud.auth_url
+            "auth_url": self.config.cloud.auth_url,
+            "cacert": self.config.cloud.cacert,
+            "insecure": self.config.cloud.insecure
         }
 
         if self.config.cloud.region:
