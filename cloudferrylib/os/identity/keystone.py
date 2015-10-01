@@ -126,8 +126,9 @@ class KeystoneIdentity(identity.Identity):
             overwirte_user_passwords = cfg.migrate.overwrite_user_passwords
             return {'user': {'name': identity_obj.name,
                              'id': identity_obj.id,
-                             'email': identity_obj.email,
-                             'tenantId': identity_obj.tenantId},
+                             'email': getattr(identity_obj, 'email', ''),
+                             'tenantId': getattr(identity_obj, 'tenantId', '')
+                             },
                     'meta': {
                         'overwrite_password': overwirte_user_passwords}}
 
@@ -165,12 +166,12 @@ class KeystoneIdentity(identity.Identity):
         has_roles_by_ids_cached = self._get_user_roles_cached()
         for user in user_list:
             usr = self.convert(user, self.config)
-            if has_tenants_by_id_cached(user.tenantId):
+            if has_tenants_by_id_cached(getattr(user, 'tenantId', '')):
                 info['users'].append(usr)
             else:
                 LOG.info("User's '%s' primary tenant '%s' is deleted, "
                          "finding out if user is a member of other tenants",
-                         user.name, user.tenantId)
+                         user.name, getattr(user, 'tenantId', ''))
                 for t in tenant_list:
                     roles = has_roles_by_ids_cached(user.id, t.id)
                     if roles:
