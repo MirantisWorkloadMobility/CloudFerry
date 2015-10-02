@@ -157,13 +157,15 @@ class Prerequisites(object):
                                           self.auth_url)
 
     def create_users(self):
+        def get_params_for_user_creating(_user):
+            if 'tenant' in _user:
+                _user['tenant_id'] = self.get_tenant_id(_user['tenant'])
+            params = ['name', 'password', 'email', 'enabled', 'tenant_id']
+            return {param: _user[param] for param in params if param in _user}
+
         for user in self.config.users:
-            self.keystoneclient.users.create(name=user['name'],
-                                             password=user['password'],
-                                             email=user['email'],
-                                             enabled=user['enabled'],
-                                             tenant_id=self.get_tenant_id(
-                                                 user['tenant']))
+            self.keystoneclient.users.create(
+                **get_params_for_user_creating(user))
             if not user.get('additional_tenants'):
                 continue
             for tenant in user['additional_tenants']:
@@ -172,7 +174,7 @@ class Prerequisites(object):
                     role=self.get_role_id(tenant['role']),
                     user=self.get_user_id(user['name']))
             # Next action for default sec group creation
-            if not user['enabled']:
+            if not user['enabled'] or 'tenant' not in user:
                 continue
             self.switch_user(user=user['name'], password=user['password'],
                              tenant=user['tenant'])

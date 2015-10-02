@@ -74,7 +74,7 @@ class FunctionalTest(unittest.TestCase):
 
         for tenant in config.tenants:
             fips = [fip for user in config.users
-                    if tenant['name'] == user['tenant'] and user['enabled']
+                    if tenant['name'] == user.get('tenant') and user['enabled']
                     and not user.get('deleted')
                     for fip in get_fips(user)]
             return set(fips)
@@ -84,7 +84,7 @@ class FunctionalTest(unittest.TestCase):
         for user in config.users:
             if user.get('deleted'):
                 continue
-            if self._tenant_exists(user['tenant']) or\
+            if self._tenant_exists(user.get('tenant')) or\
                     self._user_has_not_primary_tenants(user['name']):
                 users.append(user['name'])
         return self._get_keystone_resources('users', users)
