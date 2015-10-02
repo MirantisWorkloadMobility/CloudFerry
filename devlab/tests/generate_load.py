@@ -39,6 +39,7 @@ def retry_until_resources_created(resource_name):
 
 
 class Prerequisites(object):
+
     def __init__(self, config, cloud_prefix='SRC'):
         self.filtering_utils = FilteringUtils()
         self.config = config
@@ -76,6 +77,8 @@ class Prerequisites(object):
                                           self.tenant, self.auth_url)
         # will be filled during create all networking step
         self.ext_net_id = None
+        # object of Prerequisites for dst cloud
+        self.dst_cloud = None
 
     def get_tenant_id(self, tenant_name):
         tenants = self.keystoneclient.tenants.list()
@@ -140,6 +143,13 @@ class Prerequisites(object):
         srv = self.novaclient.servers.get(srv)
         return srv.status == 'ACTIVE'
 
+    def tenant_exists(self, tenant_name):
+        try:
+            self.get_tenant_id(tenant_name)
+            return True
+        except IndexError:
+            return False
+
     def switch_user(self, user, password, tenant):
         self.keystoneclient = keystone.Client(auth_url=self.auth_url,
                                               username=user,
@@ -162,14 +172,16 @@ class Prerequisites(object):
                                           user, password, tenant,
                                           self.auth_url)
 
-    def create_users(self):
+    def create_users(self, users=None):
         def get_params_for_user_creating(_user):
             if 'tenant' in _user:
                 _user['tenant_id'] = self.get_tenant_id(_user['tenant'])
             params = ['name', 'password', 'email', 'enabled', 'tenant_id']
             return {param: _user[param] for param in params if param in _user}
 
-        for user in self.config.users:
+        if users is None:
+            users = self.config.users
+        for user in users:
             self.keystoneclient.users.create(
                 **get_params_for_user_creating(user))
             if not user.get('additional_tenants'):
@@ -192,8 +204,21 @@ class Prerequisites(object):
         for role in self.config.roles:
             self.keystoneclient.roles.create(name=role['name'])
 
-    def create_tenants(self):
-        for tenant in self.config.tenants:
+    def create_user_tenant_roles(self, user_tenant_roles=None):
+        if user_tenant_roles is None:
+            user_tenant_roles = self.config.user_tenant_roles
+        for user_roles in user_tenant_roles:
+            for user, roles in user_roles.iteritems():
+                user = self.get_user_id(user)
+                for role in roles:
+                    self.keystoneclient.roles.add_user_role(
+                        user=user, role=self.get_role_id(role['role']),
+                        tenant=self.get_tenant_id(role['tenant']))
+
+    def create_tenants(self, tenants=None):
+        if tenants is None:
+            tenants = self.config.tenants
+        for tenant in tenants:
             self.keystoneclient.tenants.create(tenant_name=tenant['name'],
                                                description=tenant[
                                                    'description'],
@@ -633,12 +658,43 @@ class Prerequisites(object):
         security group, even default, while on src this tenant has security
         group.
         """
-        dst_cloud = Prerequisites(cloud_prefix='DST', config=self.config)
+        self.dst_cloud = Prerequisites(cloud_prefix='DST', config=self.config)
         for t in self.config.tenants:
-            if 'deleted' in t and not t['deleted'] and t['enabled']:
-                dst_cloud.keystoneclient.tenants.create(
+            if not t.get('deleted') and t['enabled']:
+                self.dst_cloud.keystoneclient.tenants.create(
                     tenant_name=t['name'], description=t['description'],
                     enabled=t['enabled'])
+                break
+
+    def create_user_on_dst(self):
+        """
+        Method for check fixed issue, when on dst and src exists user with
+        same user tenant role.
+        1. Get one user tenant role from config
+        2. Get user from config, which should be created
+        3. Create roles, which specified in user tenant roles
+        4. Get tenants, in which user has roles and tenant which the user
+         belongs
+        5. Create tenants
+        6. Create user
+        7. Create user tenant roles
+        """
+        user_tenant_role = self.config.user_tenant_roles[0]
+        username, roles_to_create = user_tenant_role.items()[0]
+        user = [user for user in self.config.users
+                if username == user['name']][0]
+        tenants_names = [user['tenant']]
+        for role in roles_to_create:
+            self.dst_cloud.keystoneclient.roles.create(name=role['role'])
+            if role['tenant'] not in tenants_names:
+                tenants_names.append(role['tenant'])
+
+        tenants_to_create = [t for t in self.config.tenants
+                             if t['name'] in tenants_names
+                             and not self.dst_cloud.tenant_exists(t['name'])]
+        self.dst_cloud.create_tenants(tenants_to_create)
+        self.dst_cloud.create_users([user])
+        self.dst_cloud.create_user_tenant_roles([user_tenant_role])
 
     def run_preparation_scenario(self):
         print('>>> Creating tenants:')
@@ -647,6 +703,8 @@ class Prerequisites(object):
         self.create_users()
         print('>>> Creating roles:')
         self.create_roles()
+        print('>>> Creating user tenant roles:')
+        self.create_user_tenant_roles()
         print('>>> Creating keypairs:')
         self.create_keypairs()
         print('>>> Modifying quotas:')
@@ -681,6 +739,8 @@ class Prerequisites(object):
         self.delete_tenants()
         print('>>> Create tenant on dst, without security group')
         self.create_tenant_wo_sec_group_on_dst()
+        print('>>> Create role on dst')
+        self.create_user_on_dst()
 
     def clean_objects(self):
         def clean_router_ports(router_id):
