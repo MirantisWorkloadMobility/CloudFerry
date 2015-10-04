@@ -308,7 +308,7 @@ class NovaCompute(compute.Compute):
                 instance,
                 instance_block_info,
                 is_ceph_ephemeral=is_ceph,
-                disk=DISK+LOCAL)
+                disk=DISK + LOCAL)
 
         diff = {
             'path_src': None,
@@ -693,8 +693,7 @@ class NovaCompute(compute.Compute):
             'status': lambda status: lambda instance: self.wait_for_status(
                 instance_id,
                 self.get_status,
-                status,
-                )
+                status)
         }
         map_status = {
             'paused': {

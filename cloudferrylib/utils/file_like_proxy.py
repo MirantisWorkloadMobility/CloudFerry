@@ -27,7 +27,8 @@ CHUNK_SIZE = 512 * 1024  # B
 
 class FileLikeProxy:
     def __init__(self, transfer_object, callback, speed_limit='1mb'):
-        self.__callback = callback if callback else lambda size, length, obj_id, name: True
+        self.__callback = callback if callback \
+            else lambda size, length, obj_id, name: True
         self.resp = transfer_object['resource'].get_ref_image(
             transfer_object['id'])
         self.length = (

@@ -53,6 +53,7 @@ def migrate(name_config=None, name_instance=None, debug=False):
     cfglib.init_config(name_config)
     utils.init_singletones(cfglib.CONF)
     env.key_filename = cfglib.CONF.migrate.key_filename
+    env.connection_attempts = cfglib.CONF.migrate.ssh_connection_attempts
     cloud = cloud_ferry.CloudFerry(cfglib.CONF)
     cloud.migrate(Scenario(path_scenario=cfglib.CONF.migrate.scenario,
                            path_tasks=cfglib.CONF.migrate.tasks_mapping))

@@ -1,6 +1,5 @@
 from fabric.api import run, settings, env
 from cloudferrylib.base.action import action
-from cloudferrylib.utils import forward_agent
 from cloudferrylib.utils import utils as utl
 
 INSTANCES = 'instances'
@@ -16,11 +15,15 @@ class MergeBaseDiff(action.Action):
             self.rebase_diff_file(host, base_file, diff_file)
             self.commit_diff_file(host, diff_file)
 
-    def rebase_diff_file(self, host, base_file, diff_file):
+    @staticmethod
+    def rebase_diff_file(host, base_file, diff_file):
         cmd = "qemu-img rebase -u -b %s %s" % (base_file, diff_file)
-        with settings(host_string=host):
+        with settings(host_string=host,
+                      connection_attempts=env.connection_attempts):
             run(cmd)
 
-    def commit_diff_file(self, host, diff_file):
-        with settings(host_string=host):
+    @staticmethod
+    def commit_diff_file(host, diff_file):
+        with settings(host_string=host,
+                      connection_attempts=env.connection_attempts):
             run("qemu-img commit %s" % diff_file)

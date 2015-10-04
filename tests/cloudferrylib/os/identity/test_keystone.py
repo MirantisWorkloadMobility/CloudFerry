@@ -218,7 +218,8 @@ class KeystoneIdentityTestCase(test.TestCase):
         self.mock_client().users.list.return_value = fake_users_list
         self.mock_client().roles.list.return_value = fake_roles_list
         self.keystone_client._get_user_roles_cached = mock.MagicMock()
-        self.keystone_client._get_user_roles_cached.return_value = mock.MagicMock().return_value = [self.fake_role_0]
+        self.keystone_client._get_user_roles_cached.return_value = \
+            mock.MagicMock().return_value = [self.fake_role_0]
         self.mock_client().roles.roles_for_user.return_value = [
             self.fake_role_0]
 

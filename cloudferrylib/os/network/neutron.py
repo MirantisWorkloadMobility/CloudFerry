@@ -15,11 +15,10 @@ import pprint
 
 import ipaddr
 import netaddr
-import collections
 from neutronclient.common import exceptions as neutron_exc
 from neutronclient.v2_0 import client as neutron_client
 
-from cloudferrylib.base import network, exception
+from cloudferrylib.base import network
 from cloudferrylib.os.identity import keystone as ksresource
 from cloudferrylib.utils import utils as utl
 
@@ -881,7 +880,7 @@ class NeutronNetwork(network.Network):
                             'subnet_id': snet_id,
                             'protocol': pool['protocol'],
                             'lb_method': pool['lb_method']
-                            }
+                        }
                 }
                 LOG.debug("Creating LB pool '%s'", pool['name'])
                 pool['meta']['id'] = \

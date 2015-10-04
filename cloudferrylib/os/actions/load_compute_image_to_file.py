@@ -20,13 +20,17 @@ HOST_SRC = 'host_src'
 class LoadComputeImageToFile(action.Action):
     def run(self, info=None, **kwargs):
         cfg = self.cloud.cloud_config.cloud
+        ssh_attempts = self.cloud.cloud_config.migrate.ssh_connection_attempts
+
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             inst = info[utl.INSTANCES_TYPE][instance_id][utl.INSTANCE_BODY]
             image_id = inst['image_id']
 
             base_file = "/tmp/%s" % ("temp%s_base" % instance_id)
             diff_file = "/tmp/%s" % ("temp%s" % instance_id)
-            with settings(host_string=cfg.host):
+
+            with settings(host_string=cfg.host,
+                          connection_attempts=ssh_attempts):
                 with forward_agent(env.key_filename):
                     cmd = image.glance_image_download_cmd(cfg, image_id,
                                                           base_file)

@@ -19,4 +19,3 @@ class ObjStorage(resource.Resource):
 
     def __init__(self):
         super(ObjStorage, self).__init__()
-

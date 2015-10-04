@@ -58,10 +58,8 @@ class CinderStorageTestCase(test.TestCase):
         self.fake_cloud.resources = dict(identity=self.identity_mock,
                                          compute=self.compute_mock)
 
-        with mock.patch(
-                'cloudferrylib.os.storage.cinder_storage.mysql_connector'):
-            self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG,
-                                                              self.fake_cloud)
+        self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG,
+                                                          self.fake_cloud)
 
         self.fake_volume_0 = mock.Mock()
         self.fake_volume_1 = mock.Mock()
@@ -85,7 +83,8 @@ class CinderStorageTestCase(test.TestCase):
 
         volumes_list = self.cinder_client.get_volumes_list(search_opts=dict())
 
-        self.mock_client().volumes.list.assert_called_once_with(True, dict(all_tenants=True))
+        self.mock_client().volumes.list.\
+            assert_called_once_with(True, dict(all_tenants=True))
         self.assertEqual(volumes_list, fake_volume_list)
 
     def test_create_volume(self):

@@ -33,4 +33,3 @@ class SetVolumeId(action.Action):
                 meta_volume_array.append({'volume': volume})
             instance['meta'] = {'volume': meta_volume_array}
         return {'info': info}
-

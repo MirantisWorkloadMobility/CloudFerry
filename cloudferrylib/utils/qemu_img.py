@@ -27,7 +27,8 @@ class QemuImg(ssh_util.SshUtil):
     commit_cd_cmd = cmd_cfg.cd_cmd & commit_cmd
     convert_cmd = cmd_cfg.qemu_img_cmd("convert %s")
     convert_full_image_cmd = cmd_cfg.cd_cmd & convert_cmd("-f %s -O %s %s %s")
-    backing_file_cmd = cmd_cfg.qemu_img_cmd("info %s") >> cmd_cfg.grep_cmd("\"backing file\"")
+    backing_file_cmd = \
+        cmd_cfg.qemu_img_cmd("info %s") >> cmd_cfg.grep_cmd("\"backing file\"")
     rebase_cmd = cmd_cfg.qemu_img_cmd("rebase -u -b %s %s")
     convert_cmd = convert_cmd("-O %s %s %s")
 
@@ -50,12 +51,13 @@ class QemuImg(ssh_util.SshUtil):
         cmd2 = cmd_cfg.move_cmd(path_to_image,
                                 baseimage_tmp,
                                 baseimage)
-        return self.execute(cmd1, host_compute), \
-               self.execute(cmd2, host_compute)
+        return \
+            self.execute(cmd1, host_compute), self.execute(cmd2, host_compute)
 
     def detect_backing_file(self, dest_disk_ephemeral, host_instance):
         cmd = self.backing_file_cmd(dest_disk_ephemeral)
-        return self.parsing_output_backing(self.execute(cmd=cmd, host_exec=host_instance, ignore_errors=True))
+        return self.parsing_output_backing(
+            self.execute(cmd=cmd, host_exec=host_instance, ignore_errors=True))
 
     @staticmethod
     def parsing_output_backing(output):

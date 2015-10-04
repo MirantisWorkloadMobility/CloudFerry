@@ -35,4 +35,3 @@ class Merge(action.Action):
         return {
             self.result: data2
         }
-

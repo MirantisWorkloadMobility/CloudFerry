@@ -31,7 +31,8 @@ class ConvertVolumeToCompute(action.Action):
                 instances[instance_id] = volume['meta']['instance']
                 instances[instance_id]['meta']['volume'] = []
             volume['meta'].pop('instance')
-            instances[instance_id] = self.map_volume(instances[instance_id], volume)
+            instances[instance_id] = self.map_volume(instances[instance_id],
+                                                     volume)
         for inst in instances.itervalues():
             for vol in inst['instance']['volumes']:
                 volumes_old[vol['id']]['volume']['device'] = vol['device']

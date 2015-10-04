@@ -47,7 +47,9 @@ class Scenario(object):
                     args = args[:-1]
                 else:
                     args_map = {}
-                tasks[task] = actions[tasks_file['tasks'][task][0]](init, *args, **args_map)
+                tasks[task] = actions[tasks_file['tasks'][task][0]](init,
+                                                                    *args,
+                                                                    **args_map)
             self.tasks = tasks
 
     def load_scenario(self, path_scenario=None):
@@ -58,7 +60,8 @@ class Scenario(object):
             self.namespace = migrate.get('namespace', {})
             # "migration" yaml chain is responsible for migration
             self.migration = migrate.get("process")
-            # "preparation" yaml chain can be added to process pre-migration tasks
+            # "preparation" yaml chain can be added to process pre-migration
+            # tasks
             self.preparation = migrate.get("preparation")
             # "rollback" yaml chain can be added to rollback to previous state
             #                                    in case of main chain failure
@@ -110,11 +113,13 @@ class Scenario(object):
         list_name_modules = map(lambda x: x.string.replace(".py", ""),
                                 modules_matches)
 
-        modules = [imp.load_source(name, path+'/%s.py' % name) for name in list_name_modules]
+        modules = [imp.load_source(name, path + '/%s.py' % name)
+                   for name in list_name_modules]
         actions = {}
         for module in modules:
             for item in module.__dict__:
-                if inspect.isclass(module.__dict__[item]) and issubclass(module.__dict__[item], action.Action):
+                if inspect.isclass(module.__dict__[item]) and \
+                        issubclass(module.__dict__[item], action.Action):
                     actions[item] = module.__dict__[item]
         return actions
 

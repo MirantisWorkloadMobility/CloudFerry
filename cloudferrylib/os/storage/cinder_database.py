@@ -98,9 +98,13 @@ class CinderStorage(cinder_storage.CinderStorage):
         if DELETED in column_names:
             result = filter(lambda a: a.get(DELETED) == 0, result)
         if PROJECT_ID in column_names:
-            result = filter(lambda e: self._check_update_tenant_names(e, PROJECT_ID), result)
+            result = \
+                filter(lambda e: self._check_update_tenant_names(
+                    e, PROJECT_ID), result)
         if TENANT_ID in column_names:
-            result = filter(lambda e: self._check_update_tenant_names(e, TENANT_ID), result)
+            result = \
+                filter(lambda e: self._check_update_tenant_names(
+                    e, TENANT_ID), result)
         if STATUS in column_names:
             result = filter(lambda e: 'error' not in e[STATUS], result)
         if USER_ID in column_names:
@@ -150,7 +154,8 @@ class CinderStorage(cinder_storage.CinderStorage):
             auto_increment = cursor.fetchone().get("auto_increment")
             return primary_key, auto_increment
 
-        def filter_data(existing_data, data_to_be_added, primary_key, auto_increment):
+        def filter_data(existing_data, data_to_be_added, primary_key,
+                        auto_increment):
             """ handle duplicates in database """
             existing_hash = {i.get(primary_key): i for i in existing_data}
             unique_entries, duplicated_pk = [], []
@@ -171,7 +176,8 @@ class CinderStorage(cinder_storage.CinderStorage):
                         # add entry to database without primary_key
                         # primary key will be generated automaticaly
                         duplicated_pk.append(
-                            {i: candidate[i] for i in candidate if i != primary_key})
+                            {i: candidate[i] for i in candidate
+                             if i != primary_key})
                 else:
                     unique_entries.append(candidate)
             return unique_entries, duplicated_pk

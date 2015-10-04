@@ -69,7 +69,7 @@ def verified_file_copy(src_runner, dst_runner, dst_user, src_path, dst_path,
     """
     copy_failed = True
     attempt = 0
-    while copy_failed and attempt < num_retries+1:
+    while copy_failed and attempt < num_retries + 1:
         attempt += 1
         try:
             LOG.info("Copying file '%s' to '%s', attempt '%d'",
@@ -155,7 +155,7 @@ class CopyFilesBetweenComputeHosts(driver_transporter.DriverTransporter):
 
             src_md5 = remote_md5_sum(src_runner, src_path)
 
-            num_blocks = int(math.ceil(float(file_size)/block_size))
+            num_blocks = int(math.ceil(float(file_size) / block_size))
 
             for i in xrange(num_blocks):
                 part = os.path.basename(src_path) + '.part{i}'.format(i=i)

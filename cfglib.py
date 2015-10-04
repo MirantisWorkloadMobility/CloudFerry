@@ -159,9 +159,12 @@ migrate_opts = [
                help='IP or hostname used for creating MySQL dump for rollback.'
                     'If not set uses `[dst] db_host` config option.'),
     cfg.BoolOpt('optimize_user_role_fetch', default=True,
-                help=("Uses low-level DB requests if set to True, "
-                      "may be incompatible with more recent versions of "
-                      "Keystone. Tested on grizzly, icehouse and juno."))
+                help="Uses low-level DB requests if set to True, "
+                "may be incompatible with more recent versions of "
+                "Keystone. Tested on grizzly, icehouse and juno."),
+    cfg.IntOpt('ssh_connection_attempts', default=3,
+               help='Number of times CloudFerry will attempt to connect when '
+                    'connecting to a new server via SSH.'),
 ]
 
 mail = cfg.OptGroup(name='mail',

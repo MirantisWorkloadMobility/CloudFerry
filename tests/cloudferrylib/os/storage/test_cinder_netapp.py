@@ -54,10 +54,8 @@ class CinderNetAppTestCase(test.TestCase):
         self.fake_cloud.position = 'src'
         self.fake_cloud.resources = dict(identity=self.identity_mock)
 
-        with mock.patch(
-                'cloudferrylib.os.storage.cinder_storage.mysql_connector'):
-            self.cinder_client = cinder_netapp.CinderNetApp(FAKE_CONFIG,
-                                                            self.fake_cloud)
+        self.cinder_client = cinder_netapp.CinderNetApp(FAKE_CONFIG,
+                                                        self.fake_cloud)
 
     def test_make_hostname(self):
         entry_0 = copy.deepcopy(FAKE_ENTRY_0)

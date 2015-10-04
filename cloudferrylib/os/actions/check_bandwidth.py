@@ -64,8 +64,11 @@ class CheckBandwidth(action.Action):
         with files.RemoteDir(runner, temp_dir_name):
             try:
                 with utils.forward_agent(env.key_filename):
-                    dd_command = cmd_cfg.dd_full('/dev/zero', remote_file_path, 1,
-                                                 0, test_file_size)
+                    dd_command = cmd_cfg.dd_full('/dev/zero',
+                                                 remote_file_path,
+                                                 1,
+                                                 0,
+                                                 test_file_size)
                     self.cloud.ssh_util.execute(dd_command)
 
                     LOG.info("Checking upload speed... Wait please.")

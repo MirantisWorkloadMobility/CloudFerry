@@ -37,7 +37,8 @@ class Cloud(object):
 
     def getIpSsh(self):
         return self.cloud_config.cloud.ssh_host \
-            if self.cloud_config.cloud.ssh_host else self.cloud_config.cloud.host
+            if self.cloud_config.cloud.ssh_host \
+            else self.cloud_config.cloud.host
 
     @staticmethod
     def make_cloud_config(config, position):
@@ -75,8 +76,10 @@ class Cloud(object):
     def get_db_method_create_connection(resource, config):
         def get_db_connection(db_name):
             conf_res = getattr(config, resource)
-            conf = {k: getattr(conf_res, k, None) if getattr(conf_res, k, None) else config.mysql[k]
-                    for k in config.mysql.keys()}
+            conf = {
+                k: getattr(conf_res, k, None) if getattr(conf_res, k, None)
+                else config.mysql[k]
+                for k in config.mysql.keys()}
             db_name_use = getattr(conf_res, 'database_name')\
                 if getattr(conf_res, 'database_name', None) else db_name
             return mysql_connector.MysqlConnector(conf, db_name_use)
@@ -85,16 +88,24 @@ class Cloud(object):
     def init_resources(self, cloud_config):
         resources = self.resources
         self.resources = dict()
-        self.rbd_util = rbd_util.RbdUtil(getattr(self.config, "%s" % self.position), self.config.migrate)
-        self.qemu_img = qemu_img.QemuImg(getattr(self.config, "%s" % self.position), self.config.migrate)
-        self.ssh_util = ssh_util.SshUtil(getattr(self.config, "%s" % self.position), self.config.migrate)
+        self.rbd_util = rbd_util.RbdUtil(getattr(self.config,
+                                                 "%s" % self.position),
+                                         self.config.migrate)
+        self.qemu_img = qemu_img.QemuImg(getattr(self.config,
+                                                 "%s" % self.position),
+                                         self.config.migrate)
+        self.ssh_util = ssh_util.SshUtil(getattr(self.config,
+                                                 "%s" % self.position),
+                                         self.config.migrate)
 
-        identity_conf = self.make_resource_config(self.config, self.position,
-                                                  cloud_config, 'identity')
+        ident_conf = self.make_resource_config(self.config,
+                                               self.position,
+                                               cloud_config,
+                                               'identity')
         self.mysql_connector = self.get_db_method_create_connection('identity',
-                                                                    identity_conf)
+                                                                    ident_conf)
         identity = resources['identity'](
-            identity_conf,
+            ident_conf,
             self)
         self.resources['identity'] = identity
 
@@ -107,7 +118,8 @@ class Cloud(object):
                                                             self.position,
                                                             cloud_config,
                                                             resource)
-                self.mysql_connector = self.get_db_method_create_connection(resource,
-                                                                            resource_config)
+                self.mysql_connector = \
+                    self.get_db_method_create_connection(resource,
+                                                         resource_config)
                 self.resources[resource] = resources[resource](
                     resource_config, self)

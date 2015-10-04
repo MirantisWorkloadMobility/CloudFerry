@@ -49,6 +49,7 @@ class CheckInstanceNetworks(action.Action):
                         instance_names.append(compute_info['instance']['name'])
 
         if len(instance_names) > 0:
-            raise exceptions.EnvironmentError("Instances %s spawned "
+            raise exceptions.EnvironmentError(
+                "Instances %s spawned "
                 "in external network directly. CloudFerry can't "
                 "migrate it." % ", ".join(instance_names))

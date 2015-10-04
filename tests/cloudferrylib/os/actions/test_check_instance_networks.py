@@ -52,7 +52,7 @@ class CheckInstanceNetworksTestCase(test.TestCase):
         action.run()
 
     def test_instance_empty(self):
-        action = self.get_action(FakeSubnets().add('1.1.1.1/24',True).toMap(),
+        action = self.get_action(FakeSubnets().add('1.1.1.1/24', True).toMap(),
                                  [])
         action.run()
 
@@ -70,7 +70,7 @@ class CheckInstanceNetworksTestCase(test.TestCase):
                                'name-10.0.0.1',
                                action.run)
 
-    def test_negative(self):
+    def test_negative_ext(self):
         action = self.get_action(FakeSubnets().add('10.0.0.0/24', True)
                                  .add('100.0.0.0/24', True).toMap(),
                                  ['10.0.0.1', '10.0.0.2', '10.0.0.4'])

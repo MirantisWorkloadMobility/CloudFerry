@@ -12,6 +12,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     def validate_resource_parameter_in_dst(self, src_list, dst_list,
                                            resource_name, parameter):
+        if not src_list:
+            self.skipTest(
+                'Nothing to migrate - source resources list is empty')
         name_attr = 'name'
         if resource_name == 'volume':
             name_attr = 'display_name'
@@ -35,6 +38,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
     def validate_neutron_resource_parameter_in_dst(self, src_list, dst_list,
                                                    resource_name='networks',
                                                    parameter='name'):
+        if not src_list[resource_name]:
+            self.skipTest(
+                'Nothing to migrate - source resources list is empty')
         for i in src_list[resource_name]:
             for j in dst_list[resource_name]:
                 if i['name'] != j['name']:
@@ -396,3 +402,25 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             self.fail("{num} floating IPs did not migrate to destination: "
                       "{fips}".format(num=len(missing_fips),
                                       fips=pprint.pformat(missing_fips)))
+
+    @unittest.skipUnless(functional_test.cfglib.CONF.migrate.change_router_ips,
+                         'Change router ips disabled in CloudFerry config')
+    def test_ext_router_ip_changed(self):
+        dst_routers = self.dst_cloud.get_ext_routers()
+        src_routers = self.src_cloud.get_ext_routers()
+        for dst_router in dst_routers:
+            for src_router in src_routers:
+                if dst_router['name'] != src_router['name']:
+                    continue
+                src_gateway = self.src_cloud.neutronclient.list_ports(
+                    device_id=src_router['id'],
+                    device_owner='network:router_gateway')['ports'][0]
+                dst_gateway = self.dst_cloud.neutronclient.list_ports(
+                    device_id=dst_router['id'],
+                    device_owner='network:router_gateway')['ports'][0]
+                self.assertNotEqual(
+                    src_gateway['fixed_ips'][0]['ip_address'],
+                    dst_gateway['fixed_ips'][0]['ip_address'],
+                    'GW ip addresses of router "{0}" are same on src and dst:'
+                    ' {1}'.format(dst_router['name'],
+                                  dst_gateway['fixed_ips'][0]['ip_address']))

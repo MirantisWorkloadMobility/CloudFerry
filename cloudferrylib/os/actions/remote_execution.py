@@ -24,7 +24,9 @@ class RemoteExecution(action.Action):
         self.host = host
         self.int_host = int_host
         self.config_migrate = config_migrate
-        self.remote_exec_obj = SshUtil(self.cloud, self.config_migrate, self.host)
+        self.remote_exec_obj = SshUtil(self.cloud,
+                                       self.config_migrate,
+                                       self.host)
         super(RemoteExecution, self).__init__({})
 
     def run(self, command, **kwargs):

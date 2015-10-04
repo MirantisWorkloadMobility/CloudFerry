@@ -22,11 +22,11 @@ from cloudferrylib.utils import utils as utl
 class ConvertComputeToVolume(action.Action):
 
     def run(self, info=None, **kwargs):
-        compute_info = copy.deepcopy(info)
+        info = copy.deepcopy(info)
         storage_info = {utl.VOLUMES_TYPE: {}}
         ignored = {}
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
-        for instance_id, instance in compute_info[utl.INSTANCES_TYPE].iteritems():
+        for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             volumes_exists = True
             if not instance[utl.INSTANCE_BODY]['volumes']:
                 if 'volume' in instance['meta']:

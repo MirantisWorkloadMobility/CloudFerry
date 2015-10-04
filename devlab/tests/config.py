@@ -1,5 +1,8 @@
 img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
 
+# Path to CloudFerry config relative to the root folder
+cloud_ferry_conf = 'configuration.ini'
+
 # Users to create/delete
 users = [
     {'name': 'user1', 'password': 'passwd1', 'email': 'mail@example.com',
@@ -95,7 +98,10 @@ images = [
     {'name': 'image4', 'copy_from': img_url, 'container_format': 'bare',
      'disk_format': 'qcow2', 'is_public': False},
     {'name': 'image5', 'copy_from': img_url, 'container_format': 'bare',
-     'disk_format': 'qcow2', 'is_public': False}
+     'disk_format': 'qcow2', 'is_public': False},
+    # When location field is specified, glance creates images without checksum
+    {'name': 'without_checksum', 'location': img_url, 'disk_format': 'qcow2',
+     'container_format': 'bare'}
 ]
 
 # Images not to be migrated:

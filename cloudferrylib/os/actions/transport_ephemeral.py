@@ -85,9 +85,11 @@ class TransportEphemeral(action.Action):
             'info': new_info
         }
 
-    def delete_remote_file_on_compute(self, path_file, host_cloud,
+    @staticmethod
+    def delete_remote_file_on_compute(path_file, host_cloud,
                                       host_instance):
-        with settings(host_string=host_cloud):
+        with settings(host_string=host_cloud,
+                      connection_attempts=env.connection_attempts):
             with forward_agent(env.key_filename):
                 run("ssh -oStrictHostKeyChecking=no %s  'rm -rf %s'" %
                     (host_instance, path_file))
@@ -138,7 +140,7 @@ class TransportEphemeral(action.Action):
         qemu_img_dst = dst_cloud.qemu_img
         qemu_img_src = src_cloud.qemu_img
 
-        temp_path_src = temp_src+"/%s"+utl.DISK_EPHEM
+        temp_path_src = temp_src + "/%s" + utl.DISK_EPHEM
         for inst_id, inst in instances.iteritems():
 
             path_src_id_temp = temp_path_src % inst_id

@@ -133,7 +133,7 @@ class DataCollector(object):
                                     'novaclient', arg, 'list')
         return collected_items
 
-    def neutron_collector(self, destination,  *args):
+    def neutron_collector(self, destination, *args):
         """
         Neutron data collector method.
         """

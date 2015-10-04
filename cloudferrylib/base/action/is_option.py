@@ -19,6 +19,7 @@ DEFAULT = 0
 PATH_ONE = 1
 PATH_TWO = 2
 
+
 class IsOption(action.Action):
 
     def __init__(self, init, option_name):
@@ -26,16 +27,10 @@ class IsOption(action.Action):
         super(IsOption, self).__init__(init)
 
     def run(self, **kwargs):
-        self.set_next_path(DEFAULT) # DEFAULT PATH
+        self.set_next_path(DEFAULT)  # DEFAULT PATH
         option_value = self.cfg.migrate[self.option_name]
         if option_value:
             self.set_next_path(PATH_ONE)
         else:
             self.set_next_path(PATH_TWO)
         return {}
-
-
-
-
-
-

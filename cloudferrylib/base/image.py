@@ -39,20 +39,26 @@ def glance_image_download_cmd(config, image_id, destination_file):
         file=destination_file)
 
 
-def glance_image_create_cmd(config, image_name, disk_format, filename,
+def glance_image_create_cmd(config, image_name, disk_format, file_path,
                             container_format="bare"):
     """Generates glance command which creates image based on arguments
     provided. Command output is filtered for 'id'
 
     :returns: Openstack CLI command"""
-    args = ("--name {image_name} "
+    if file_path.startswith("http"):
+        file_prefix = "location"
+    else:
+        file_prefix = "file"
+    args = ("image-create "
+            "--name {image_name} "
             "--disk-format={disk_format} "
             "--container-format={container_format} "
-            "--file {file}").format(
+            "--{file_prefix} {file_path}").format(
         image_name=image_name,
         disk_format=disk_format,
         container_format=container_format,
-        file=filename
+        file_prefix=file_prefix,
+        file_path=file_path
     )
     return "{image_create} | grep '\<id\>'".format(
-        image_create=clients.os_cli_cmd(config, 'image-create', *args))
+        image_create=clients.os_cli_cmd(config, 'glance', args))

@@ -31,7 +31,9 @@ class UploadFileToImage(action.Action):
 
     def run(self, info=None, **kwargs):
         cfg = self.cloud.cloud_config.cloud
+        ssh_attempts = self.cloud.cloud_config.migrate.ssh_connection_attempts
         img_res = self.cloud.resources[utl.IMAGE_RESOURCE]
+
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             # init
             inst_body = info[INSTANCES][instance_id][utl.INSTANCE_BODY]
@@ -43,7 +45,8 @@ class UploadFileToImage(action.Action):
             if img_res.config.image.convert_to_raw:
                 image_format = utl.RAW
             # action
-            with settings(host_string=cfg.host):
+            with settings(host_string=cfg.host,
+                          connection_attempts=ssh_attempts):
                 cmd = image.glance_image_create_cmd(cfg, image_name,
                                                     image_format, base_file)
                 out = run(cmd)

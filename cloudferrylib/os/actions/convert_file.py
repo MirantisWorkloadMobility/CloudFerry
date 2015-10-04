@@ -13,7 +13,8 @@ class ConvertFile(action.Action):
         if image_res.config.image.convert_to_raw:
             return {}
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
-            image_id = info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id']
+            image_id = \
+                info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id']
             images = image_res.read_info(image_id=image_id)
             image = images[utl.IMAGES_TYPE][image_id]
             disk_format = image[utl.IMAGE_BODY]['disk_format']
@@ -24,7 +25,8 @@ class ConvertFile(action.Action):
 
     @staticmethod
     def convert_file_to_raw(host, disk_format, filepath):
-        with settings(host_string=host):
+        with settings(host_string=host,
+                      connection_attempts=env.connection_attempts):
             with forward_agent(env.key_filename):
                 run("qemu-img convert -f %s -O raw %s %s.tmp" %
                     (disk_format, filepath, filepath))

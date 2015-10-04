@@ -51,8 +51,10 @@ class CheckSSH(action.Action):
         runner = remote_runner.RemoteRunner(node, cfg.ssh_user,
                                             password=cfg.ssh_sudo_password)
         gateway = self.cloud.getIpSsh()
+        ssh_attempts = self.cloud.cloud_config.migrate.ssh_connection_attempts
+
         try:
-            with settings(gateway=gateway):
+            with settings(gateway=gateway, connection_attempts=ssh_attempts):
                 runner.run('echo')
         except Exception as error:
             LOG.error("SSH connection from '%s' to '%s' failed with error: "
