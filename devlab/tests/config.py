@@ -1,5 +1,8 @@
 img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
 
+# Path to CloudFerry config relative to the root folder
+cloud_ferry_conf = 'configuration.ini'
+
 # Users to create/delete
 users = [
     {'name': 'user1', 'password': 'passwd1', 'email': 'mail@example.com',
