@@ -30,6 +30,26 @@ LOG = utils.get_log(__name__)
 
 
 class CheckBandwidth(action.Action):
+    """Assesses networking bandwidth between CloudFerry node and controller
+    node defined in `[src|dst] host` config variable.
+
+    Process:
+     1. Generate file of size `[initial_check] test_file_size` on CF node;
+     2. Copy generated file to `[src|dst] host` over network (scp);
+     3. Measure time required for file to be copied over;
+     4. Calculate networking bandwidth based on measuring above;
+     5. If bandwidth is smaller than `[initial_check] claimed_bandwidth` *
+        `[initial_check] factor` - stop migration and display error message.
+
+    Config options:
+     - `[initial_check] test_file_size` - size of the file to be copied over;
+     - `[initial_check] claimed_bandwidth` - expected bandwidth;
+     - `[initial_check] factor` - fraction of 1 for the lowest acceptable
+        bandwidth, e.g. `factor = 0.5` means expected bandwidth should not get
+        below `0.5 * claimed_bandwidth`;
+     - `[src|dst] host` - host the file will be copied to.
+    """
+
     def run(self, **kwargs):
         cfg = self.cloud.cloud_config.cloud
         runner = remote_runner.RemoteRunner(cfg.host, cfg.ssh_user)
