@@ -17,6 +17,7 @@ import pika
 import ast
 
 import keystoneclient
+from keystoneclient import exceptions as ks_exceptions
 from keystoneclient.v2_0 import client as keystone_client
 
 import cfglib
@@ -625,9 +626,14 @@ class KeystoneIdentity(identity.Identity):
                     role = _role['role']
                     if role['name'] in exists_roles:
                         continue
-                    self.keystone_client.roles.add_user_role(
-                        _user['meta']['new_id'], roles_id[role['name']],
-                        _tenant['meta']['new_id'])
+                    try:
+                        self.keystone_client.roles.add_user_role(
+                            _user['meta']['new_id'], roles_id[role['name']],
+                            _tenant['meta']['new_id'])
+                    except ks_exceptions.Conflict:
+                        LOG.info("Role '%s' for user '%s' in tenant '%s' "
+                                 "already exists, skipping", role['name'],
+                                 user['name'], tenant['name'])
 
     def _generate_password(self):
         return self.generator.get_random_password()
