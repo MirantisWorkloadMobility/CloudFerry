@@ -1,0 +1,19 @@
+# The documents in this directory are in LaTex format 
+# and are meant to be converted into another format. 
+# They should convert cleanly into Rich Text Format.
+# The images directory contains images that are used
+# in the documents.
+#
+#
+# Instructions to convert to RTF on Linux are below:
+
+
+# To convert LaTex files into RTF on RedHat/CentOS
+# sudo yum install -y latex2rtf
+# latex2rtf CloudFerry_Brochure.tex
+# 
+
+
+# To convert LaTex files into RTF on Debian/Ubuntu
+# sudo apt-get install -y latex2rtf
+# latex2rtf CloudFerry_Brochure.tex
