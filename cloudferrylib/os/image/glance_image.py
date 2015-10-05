@@ -192,7 +192,6 @@ class GlanceImage(image.Image):
     def get_members(self, images):
         # members structure {image_id: {tenant_name: can_share}}
         result = {}
-
         for img in images:
             for entry in self.glance_client.image_members.list(image=img):
                 if img not in result:
@@ -269,7 +268,6 @@ class GlanceImage(image.Image):
         else:
             for glance_image in self.get_image_list():
                 info = self.make_image_info(glance_image, info)
-
         info.update({
             "tags": self.get_tags(),
             "members": self.get_members(info['images'])
@@ -443,11 +441,14 @@ class GlanceImage(image.Image):
         # on this step we need to create map between source ids and dst ones
         LOG.debug("creating map between source and destination image ids")
         image_ids_map = {}
-        dst_img_checksums = {x.checksum: x.id for x in self.get_image_list()}
+        dst_img_name_checksums = {(x.name,
+                                   x.checksum): x.id
+                                  for x in self.get_image_list()}
         for image_id_src, gl_image in info['images'].iteritems():
             cur_image = gl_image["image"]
             image_ids_map[cur_image["id"]] = \
-                dst_img_checksums[cur_image["checksum"]]
+                dst_img_name_checksums[(cur_image["name"],
+                                        cur_image["checksum"])]
         LOG.debug("deploying image members")
         for image_id, data in info.get("members", {}).items():
             for tenant_name, can_share in data.items():
