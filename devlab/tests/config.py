@@ -45,10 +45,18 @@ tenants = [
          {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1',
           'fip': True},
          {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr'}],
-     'networks': [{'name': 'tenantnet1', 'admin_state_up': True},
-                  {'name': 'tenant1_net2', 'admin_state_up': True}],
-     'subnets': [{'cidr': '10.5.2.0/24', 'ip_version': 4, 'name': 't1_s1'},
-                 {'cidr': '10.6.2.0/24', 'ip_version': 4, 'name': 't1_s2'}],
+     'networks': [
+         {'name': 'tenantnet1', 'admin_state_up': True,
+          'subnets': [
+              {'cidr': '10.5.2.0/24', 'ip_version': 4, 'name': 't1_s1',
+               'routers_to_connect': ['ext_router']}]},
+         {'name': 'tenant1_net2', 'admin_state_up': True,
+          'subnets': [
+              {'cidr': '10.6.2.0/24', 'ip_version': 4, 'name': 't1_s2',
+               'routers_to_connect': ['ext_router']}]
+          }
+     ],
+
      'security_groups': [
          {'name': 'sg11', 'description': 'Blah blah group', 'rules': [
              {'ip_protocol': 'icmp',
@@ -78,8 +86,13 @@ tenants = [
          {'name': 'keypair_test_server', 'image': 'image1',
           'flavor': 'flavorname2', 'key_name': 'key2', 'nics': [
               {'net-id': 'tenantnet2'}], 'fip': True}],
-     'networks': [{'name': 'tenantnet2', 'admin_state_up': True}],
-     'subnets': [{'cidr': '22.2.2.0/24', 'ip_version': 4, 'name': 't2_s1'}],
+     'networks': [
+         {'name': 'tenantnet2', 'admin_state_up': True,
+          'subnets': [
+              {'cidr': '22.2.2.0/24', 'ip_version': 4, 'name': 't2_s1',
+               'routers_to_connect': ['ext_router']}]
+          }
+     ],
      'cinder_volumes': [
          {'name': 'tn_volume1', 'size': 1, 'server_to_attach': 'tn2server1',
           'device': '/dev/vdb'}
@@ -129,20 +142,30 @@ flavors = [
 ]
 
 # Networks to create/delete
-# Connected to tenants
+# Only one gateway can be assigned to router. If two networks have the same
+# router in 'routers_to_connect', gateway set for last networks (updating)
 networks = [
-    {'name': 'mynetwork1', 'admin_state_up': True},
+    {'name': 'mynetwork1', 'admin_state_up': True,
+     'subnets': [
+         {'cidr': '10.4.2.0/24', 'ip_version': 4, 'name': 'subnet_1',
+          'connect_to_ext_router': True, 'routers_to_connect': ['ext_router']}]
+     },
     {'name': 'shared_net', 'admin_state_up': True, 'shared': True,
-     'router:external': True}
-
-]
-
-# Subnets to create/delete
-subnets = [
-
-    {'cidr': '10.4.2.0/24', 'ip_version': 4, 'name': 'subnet_1'},
-    {'cidr': '192.168.1.0/24', 'ip_version': 4, 'name': 'external_subnet',
-     'allocation_pools': [{'start': '192.168.1.100', 'end': '192.168.1.254'}]}
+     'router:external': True, 'real_network': True,
+     'subnets': [
+         {'cidr': '192.168.1.0/24', 'ip_version': 4, 'name': 'external_subnet',
+          'routers_to_connect': ['ext_router'], 'allocation_pools': [
+              {'start': '192.168.1.100', 'end': '192.168.1.254'}]
+          }]
+     },
+    {'name': 'second_shared_net', 'admin_state_up': True, 'shared': True,
+     'router:external': True,
+     'subnets': [
+         {'cidr': '192.168.7.0/24', 'ip_version': 4, 'name': 'shared_subnet',
+          'routers_to_connect': [], 'allocation_pools': [
+              {'start': '192.168.7.10', 'end': '192.168.7.192'}]
+          }]
+     }
 ]
 
 # VM's to create/delete
@@ -157,12 +180,9 @@ vms = [
 ]
 
 routers = [
-    {
-        'router': {
-            'external_gateway_info': {
-                'network_id': 'shared_net'},
-            'name': 'ext_router',
-            'admin_state_up': True}}
+    {'router': {'external_gateway_info': {}, 'name': 'ext_router',
+                'admin_state_up': True}
+     }
 ]
 
 # VM's snapshots to create/delete

@@ -437,58 +437,65 @@ class Prerequisites(object):
             snp_ids.append(snp.id)
         wait_until_vm_snapshots_created(snp_ids)
 
-    def create_networks(self, network_list, subnet_list):
-        ext_router_id = self.get_router_id('ext_router')
-        for network, subnet in zip(network_list, subnet_list):
-            if network.get('router:external'):
-                continue
-            net = self.neutronclient.create_network({'network': network})
-            subnet['network_id'] = net['network']['id']
-            subnet = self.neutronclient.create_subnet({'subnet': subnet})
-            self.neutronclient.create_port(
-                {"port": {"network_id": net['network']['id']}})
-            self.neutronclient.add_interface_router(
-                ext_router_id, {"subnet_id": subnet['subnet']['id']})
+    def create_networks(self, networks):
+        
+        def get_body_for_network_creating(_net):
+            # Possible parameters for network creating
+            params = ['name', 'admin_state_up', 'shared', 'router:external',
+                      'provider:network_type', 'provider:segmentation_id',
+                      'provider:physical_network']
+            return {param: _net[param] for param in params if param in _net}
 
-    def create_router(self, router_list):
-        for router in router_list:
-            router['router']['external_gateway_info']['network_id'] = \
-                self.get_net_id(
-                    router['router']['external_gateway_info']['network_id'])
+        def get_body_for_subnet_creating(_subnet):
+            # Possible parameters for subnet creating
+            params = ['name', 'cidr', 'allocation_pools', 'dns_nameservers',
+                      'host_routes', 'ip_version', 'network_id']
+            return {param: _subnet[param] for param in params
+                    if param in _subnet}
+
+        for network in networks:
+            net = self.neutronclient.create_network(
+                {'network': get_body_for_network_creating(network)})
+            for subnet in network['subnets']:
+                subnet['network_id'] = net['network']['id']
+                _subnet = self.neutronclient.create_subnet(
+                    {'subnet': get_body_for_subnet_creating(subnet)})
+                if not subnet.get('routers_to_connect'):
+                    continue
+                # If network has attribute routers_to_connect, interface to
+                # this network is crated for given router, in case when network
+                # is internal and gateway set if - external.
+                for router in subnet['routers_to_connect']:
+                    router_id = self.get_router_id(router)
+                    if network.get('router:external'):
+                        self.neutronclient.add_gateway_router(
+                            router_id, {"network_id": net['network']['id']})
+                    else:
+                        self.neutronclient.add_interface_router(
+                            router_id, {"subnet_id": _subnet['subnet']['id']})
+
+    def create_routers(self):
+        for router in self.config.routers:
             self.neutronclient.create_router(router)
 
-    def create_external_network(self):
-        for network in self.config.networks:
-            if network.get('router:external'):
-                net = self.neutronclient.create_network({'network': network})
-                break
-        else:
-            raise RuntimeError('Please specify external network in config.py')
-        for subnet in self.config.subnets:
-            if subnet.get('name') == 'external_subnet':
-                subnet['network_id'] = net['network']['id']
-                self.neutronclient.create_subnet({'subnet': subnet})
-                break
-        else:
-            raise RuntimeError('Please specify subnet for external network in '
-                               'config.py (make sure subnet has field '
-                               '"name": "external_subnet").')
-        return net['network']['id']
-
     def create_all_networking(self):
-        self.ext_net_id = self.create_external_network()
-        self.create_router(self.config.routers)
-        self.create_networks(self.config.networks, self.config.subnets)
+        self.create_routers()
+        self.create_networks(self.config.networks)
+        # Getting ip address for real network. This networks will be used to
+        # allocation floating ips.
+        self.ext_net_id = self.get_net_id(
+            [n['name'] for n in self.config.networks
+             if n.get('real_network')][0])
         for tenant in self.config.tenants:
             if tenant.get('networks'):
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
-                self.create_networks(tenant['networks'], tenant['subnets'])
-            if tenant.get('unassociated_fip'):
-                for i in range(tenant['unassociated_fip']):
-                    self.neutronclient.create_floatingip(
-                        {"floatingip": {"floating_network_id": self.ext_net_id}
-                         })
+                self.create_networks(tenant['networks'])
+            if not tenant.get('unassociated_fip'):
+                continue
+            for i in range(tenant['unassociated_fip']):
+                self.neutronclient.create_floatingip(
+                    {"floatingip": {"floating_network_id": self.ext_net_id}})
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
