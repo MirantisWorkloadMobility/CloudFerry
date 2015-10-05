@@ -65,19 +65,18 @@ class CheckNeededComputeResources(action.Action):
             [flavor.id for flavor in src_compute.get_flavor_list()]
         dst_compute = self.dst_cloud.resources[utl.COMPUTE_RESOURCE]
         dst_flavors = dst_compute.get_flavor_list()
-        dst_flavor_ids = [flavor.id for flavor in dst_flavors]
-        flavor_ids = src_flavor_ids + dst_flavor_ids
-
         for instance in objs.values():
             inst_flavor_id = instance['instance']['flavor_id']
-            if inst_flavor_id not in flavor_ids:
-                _instance = instance['instance']
-                instance_id = _instance['id']
-                flav_details = \
-                    info['instances'][instance_id]['instance']['flav_details']
-                for flavor in dst_flavors:
-                    if flavor.name == flav_details['name']:
-                        dst_compute.delete_flavor(flavor.id)
+            _instance = instance['instance']
+            instance_id = _instance['id']
+            flav_details = \
+                info['instances'][instance_id]['instance']['flav_details']
+            re_create_dst_flavor = False
+            for flavor in dst_flavors:
+                if flavor.name == flav_details['name']:
+                    dst_compute.delete_flavor(flavor.id)
+                    re_create_dst_flavor = True
+            if inst_flavor_id not in src_flavor_ids or re_create_dst_flavor:
                 dst_compute.create_flavor(name=flav_details['name'],
                                           flavorid=_instance['flavor_id'],
                                           ram=flav_details['memory_mb'],
