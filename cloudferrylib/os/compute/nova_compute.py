@@ -357,7 +357,7 @@ class NovaCompute(compute.Compute):
                              },
                 'ephemeral': ephemeral_path,
                 'diff': diff,
-                'meta': {},
+                'meta': {'old_id': instance.id},
                 }
 
         return inst

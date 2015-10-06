@@ -101,3 +101,5 @@ process:
       - save_result_migrate_instances: True
       - is_instances: ['get_next_instance']
       - rename_info_iter: True
+  - verify:
+      - verify_vms: True
