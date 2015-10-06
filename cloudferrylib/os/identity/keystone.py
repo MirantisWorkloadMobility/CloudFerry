@@ -17,6 +17,7 @@ import pika
 import ast
 
 import keystoneclient
+from keystoneclient import exceptions as ks_exceptions
 from keystoneclient.v2_0 import client as keystone_client
 
 import cfglib
@@ -126,8 +127,9 @@ class KeystoneIdentity(identity.Identity):
             overwirte_user_passwords = cfg.migrate.overwrite_user_passwords
             return {'user': {'name': identity_obj.name,
                              'id': identity_obj.id,
-                             'email': identity_obj.email,
-                             'tenantId': identity_obj.tenantId},
+                             'email': getattr(identity_obj, 'email', ''),
+                             'tenantId': getattr(identity_obj, 'tenantId', '')
+                             },
                     'meta': {
                         'overwrite_password': overwirte_user_passwords}}
 
@@ -165,12 +167,12 @@ class KeystoneIdentity(identity.Identity):
         has_roles_by_ids_cached = self._get_user_roles_cached()
         for user in user_list:
             usr = self.convert(user, self.config)
-            if has_tenants_by_id_cached(user.tenantId):
+            if has_tenants_by_id_cached(getattr(user, 'tenantId', '')):
                 info['users'].append(usr)
             else:
                 LOG.info("User's '%s' primary tenant '%s' is deleted, "
                          "finding out if user is a member of other tenants",
-                         user.name, user.tenantId)
+                         user.name, getattr(user, 'tenantId', ''))
                 for t in tenant_list:
                     roles = has_roles_by_ids_cached(user.id, t.id)
                     if roles:
@@ -624,9 +626,14 @@ class KeystoneIdentity(identity.Identity):
                     role = _role['role']
                     if role['name'] in exists_roles:
                         continue
-                    self.keystone_client.roles.add_user_role(
-                        _user['meta']['new_id'], roles_id[role['name']],
-                        _tenant['meta']['new_id'])
+                    try:
+                        self.keystone_client.roles.add_user_role(
+                            _user['meta']['new_id'], roles_id[role['name']],
+                            _tenant['meta']['new_id'])
+                    except ks_exceptions.Conflict:
+                        LOG.info("Role '%s' for user '%s' in tenant '%s' "
+                                 "already exists, skipping", role['name'],
+                                 user['name'], tenant['name'])
 
     def _generate_password(self):
         return self.generator.get_random_password()

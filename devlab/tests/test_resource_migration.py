@@ -151,6 +151,33 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             src_sec_gr, dst_sec_gr, resource_name='security_groups',
             parameter='description')
 
+    def test_image_members(self):
+
+        def member_list_collector(_images, client, auth_client):
+            _members = []
+            for img in _images:
+                members = client.image_members.list(img.id)
+                if not members:
+                    continue
+                mbr_list = []
+                for mem in members:
+                    mem_name = auth_client.tenants.find(id=mem.member_id).name
+                    mbr_list.append(mem_name)
+                _members.append({img.name: sorted(mbr_list)})
+            return sorted(_members)
+
+        src_images = self.filter_images()
+        dst_images = [x for x in self.dst_cloud.glanceclient.images.list()]
+        src_images = self.filtering_utils.filter_images(src_images)[0]
+
+        src_members = member_list_collector(src_images,
+                                            self.src_cloud.glanceclient,
+                                            self.src_cloud.keystoneclient)
+        dst_members = member_list_collector(dst_images,
+                                            self.dst_cloud.glanceclient,
+                                            self.dst_cloud.keystoneclient)
+        self.assertListEqual(src_members, dst_members)
+
     def test_migrate_glance_images(self):
         src_images = self.filter_images()
         dst_images_gen = self.dst_cloud.glanceclient.images.list()

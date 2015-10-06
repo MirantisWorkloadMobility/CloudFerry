@@ -357,7 +357,7 @@ class NovaCompute(compute.Compute):
                              },
                 'ephemeral': ephemeral_path,
                 'diff': diff,
-                'meta': {},
+                'meta': {'old_id': instance.id},
                 }
 
         return inst
@@ -482,10 +482,15 @@ class NovaCompute(compute.Compute):
               2. If it's different - delete flavor from destination, and create
                  new.
         """
+        dest_flavor = None
         try:
             dest_flavor = self.get_flavor_from_id(flavor_id)
+        except nova_exc.NotFound:
+            LOG.info("Flavor %s does not exist", flavor['name'])
+            pass
+        if dest_flavor is not None:
             identical = (flavor_id == dest_flavor.id and
-                         flavor['name'] == dest_flavor.name and
+                         flavor['name'].lower() == dest_flavor.name.lower() and
                          flavor['vcpus'] == dest_flavor.vcpus and
                          flavor['ram'] == dest_flavor.ram and
                          flavor['disk'] == dest_flavor.disk and
@@ -502,9 +507,13 @@ class NovaCompute(compute.Compute):
                          "differs from source. Deleting flavor '%s' from "
                          "destination.", flavor_id, flavor_id)
                 self.delete_flavor(flavor_id)
-        except nova_exc.NotFound:
-            LOG.info("Flavor %s does not exist", flavor['name'])
-            pass
+        else:
+            dest_flavor_list = self.get_flavor_list()
+            for flv in dest_flavor_list:
+                if flavor['name'].lower() == flv.name.lower():
+                    LOG.info("Flavor with the same name exists ('%s'). "
+                             "Deleting it from destination.", flavor['name'])
+                    self.delete_flavor(flv.id)
 
         LOG.info("Creating flavor '%s'", flavor['name'])
         return self.create_flavor(

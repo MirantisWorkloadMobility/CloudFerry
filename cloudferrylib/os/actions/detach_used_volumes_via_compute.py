@@ -40,6 +40,6 @@ class DetachVolumesCompute(action.Action):
                     compute_resource.detach_volume(instance['instance']['id'],
                                                    vol['id'])
                     LOG.debug("Detach volume %s" % vol['id'])
-                    storage_resource.wait_for_status(vol['id'],
-                                                     'available')
+                    storage_resource.wait_for_status(
+                        vol['id'], storage_resource.get_status, 'available')
         return {}
