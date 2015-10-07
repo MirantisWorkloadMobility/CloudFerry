@@ -17,7 +17,7 @@ import logging
 import sys
 import os
 import unittest
-from generate_load import Prerequisites
+from generate_load import Prerequisites, NotFound
 from filtering_utils import FilteringUtils
 
 
@@ -181,7 +181,7 @@ class FunctionalTest(unittest.TestCase):
         try:
             self.src_cloud.get_tenant_id(tenant_name)
             return True
-        except IndexError:
+        except NotFound:
             return False
 
     def _user_has_not_primary_tenants(self, user_name):

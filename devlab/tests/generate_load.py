@@ -6,19 +6,45 @@ import json
 import yaml
 import config as conf
 
-from neutronclient.common.exceptions import NeutronClientException
-from keystoneclient.exceptions import Unauthorized
-from novaclient.exceptions import NotFound
-from glanceclient import Client as glance
-from novaclient import client as nova
-from neutronclient.neutron import client as neutron
-from keystoneclient.v2_0 import client as keystone
-from cinderclient import client as cinder
 from filtering_utils import FilteringUtils
+
+from cinderclient import client as cinder
+from glanceclient import Client as glance
+from keystoneclient import exceptions as ks_exceptions
+from keystoneclient.v2_0 import client as keystone
+from neutronclient.common import exceptions as nt_exceptions
+from neutronclient.neutron import client as neutron
+from novaclient import client as nova
+from novaclient import exceptions as nv_exceptions
 
 
 TIMEOUT = 600
 VM_SPAWNING_LIMIT = 5
+CREATE_CLEAN_METHODS_MAP = {
+    'create_tenants': 'clean_tenants',
+    'create_users': 'clean_users',
+    'create_roles': 'clean_roles',
+    'create_flavors': 'clean_flavors',
+    'create_all_networking': 'clean_all_networking'
+}
+
+
+def clean_if_exists(func):
+    def wrapper(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except (ks_exceptions.Conflict,
+                nv_exceptions.Conflict,
+                nt_exceptions.NeutronClientException):
+            print('Method "%s" failed, current resource already exists'
+                  % func.__name__)
+            clean_method = getattr(self.clean_tools,
+                                   CREATE_CLEAN_METHODS_MAP[func.__name__])
+            print('Run cleanup method "%s"' % clean_method.__name__)
+            clean_method()
+            print('Run method "%s" one more time' % func.__name__)
+            func(self, *args, **kwargs)
+    return wrapper
 
 
 def retry_until_resources_created(resource_name):
@@ -38,7 +64,12 @@ def retry_until_resources_created(resource_name):
     return actual_decorator
 
 
-class Prerequisites(object):
+class NotFound(Exception):
+    """Raise this exception in case when resource was not found
+    """
+
+
+class BasePrerequisites(object):
 
     def __init__(self, config, cloud_prefix='SRC'):
         self.filtering_utils = FilteringUtils()
@@ -75,55 +106,78 @@ class Prerequisites(object):
         self.cinderclient = cinder.Client(self.config.CINDER_CLIENT_VERSION,
                                           self.username, self.password,
                                           self.tenant, self.auth_url)
-        # will be filled during create all networking step
-        self.ext_net_id = None
-        # object of Prerequisites for dst cloud
-        self.dst_cloud = None
 
     def get_tenant_id(self, tenant_name):
-        tenants = self.keystoneclient.tenants.list()
-        return [x for x in tenants if x.name == tenant_name][0].id
+        for tenant in self.keystoneclient.tenants.list():
+            if tenant.name == tenant_name:
+                return tenant.id
+        raise NotFound('Tenant with name "%s" was not found' % tenant_name)
 
     def get_user_id(self, user_name):
-        users = self.keystoneclient.users.list()
-        return [x for x in users if x.name == user_name][0].id
+        for user in self.keystoneclient.users.list():
+            if user.name == user_name:
+                return user.id
+        raise NotFound('User with name "%s" was not found' % user_name)
 
     def get_router_id(self, router):
-        return self.neutronclient.list_routers(name=router)['routers'][0]['id']
+        _router = self.neutronclient.list_routers(name=router)['routers']
+        if _router:
+            return _router[0]['id']
+        raise NotFound('Router with name "%s" was not found' % router)
 
     def get_image_id(self, image_name):
-        images = self.glanceclient.images.list()
-        return [x for x in images if x.name == image_name][0].id
+        for image in self.glanceclient.images.list():
+            if image.name == image_name:
+                return image.id
+        raise NotFound('Image with name "%s" was not found' % image_name)
 
     def get_flavor_id(self, flavor_name):
-        flavors = self.novaclient.flavors.list()
-        return [x for x in flavors if x.name == flavor_name][0].id
+        for flavor in self.novaclient.flavors.list():
+            if flavor.name == flavor_name:
+                return flavor.id
+        raise NotFound('Flavor with name "%s" was not found' % flavor_name)
 
     def get_vm_id(self, vm_name):
-        vms = self.novaclient.servers.list(search_opts={'all_tenants': 1})
-        return [x for x in vms if x.name == vm_name][0].id
+        for vm in self.novaclient.servers.list(search_opts={'all_tenants': 1}):
+            if vm.name == vm_name:
+                return vm.id
+        raise NotFound('VM with name "%s" was not found' % vm_name)
 
-    def get_role_id(self, role):
-        roles = self.keystoneclient.roles.list()
-        return [x for x in roles if x.name == role][0].id
+    def get_role_id(self, role_name):
+        for role in self.keystoneclient.roles.list():
+            if role.name == role_name:
+                return role.id
+        raise NotFound('Role with name "%s" was not found' % role_name)
 
     def get_net_id(self, net):
-        return self.neutronclient.list_networks(
-            name=net, all_tenants=True)['networks'][0]['id']
+        _net = self.neutronclient.list_networks(
+            name=net, all_tenants=True)['networks']
+        if _net:
+            return _net[0]['id']
+        raise NotFound('Network with name "%s" was not found' % net)
 
     def get_sg_id(self, sg):
-        return self.neutronclient.list_security_groups(
-            name=sg, all_tenants=True)['security_groups'][0]['id']
+        _sg = self.neutronclient.list_security_groups(
+            name=sg, all_tenants=True)['security_groups']
+        if _sg:
+            return _sg[0]['id']
+        raise NotFound('Security group with name "%s" was not found' % sg)
 
     def get_volume_id(self, volume_name):
         volumes = self.cinderclient.volumes.list(
             search_opts={'all_tenants': 1})
-        return [x for x in volumes if x.display_name == volume_name][0].id
+        for volume in volumes:
+            if volume.display_name == volume_name:
+                return volume.id
+        raise NotFound('Volume with name "%s" was not found' % volume_name)
 
     def get_volume_snapshot_id(self, snapshot_name):
         snapshots = self.cinderclient.volume_snapshots.list(
             search_opts={'all_tenants': 1})
-        return [x for x in snapshots if x.display_name == snapshot_name][0].id
+        for snapshot in snapshots:
+            if snapshot.display_name == snapshot_name:
+                return snapshot.id
+        raise NotFound('Snapshot with name "%s" was not found' % snapshot_name)
 
     def get_user_tenant_roles(self, user):
         user_tenant_roles = []
@@ -139,6 +193,11 @@ class Prerequisites(object):
                        if router['external_gateway_info']]
         return ext_routers
 
+    def get_sec_group_id_by_tenant_id(self, tenant_id):
+        sec_group_list = self.neutronclient.list_security_groups()
+        return [i['id'] for i in sec_group_list['security_groups']
+                if i['tenant_id'] == tenant_id]
+
     def check_vm_state(self, srv):
         srv = self.novaclient.servers.get(srv)
         return srv.status == 'ACTIVE'
@@ -147,7 +206,7 @@ class Prerequisites(object):
         try:
             self.get_tenant_id(tenant_name)
             return True
-        except IndexError:
+        except NotFound:
             return False
 
     def switch_user(self, user, password, tenant):
@@ -172,6 +231,18 @@ class Prerequisites(object):
                                           user, password, tenant,
                                           self.auth_url)
 
+
+class Prerequisites(BasePrerequisites):
+
+    def __init__(self, config, cloud_prefix='SRC'):
+        super(Prerequisites, self).__init__(config, cloud_prefix)
+        # will be filled during create all networking step
+        self.ext_net_id = None
+        # object of Prerequisites for dst cloud
+        self.dst_cloud = None
+        self.clean_tools = CleanEnv(config, cloud_prefix)
+
+    @clean_if_exists
     def create_users(self, users=None):
         def get_params_for_user_creating(_user):
             if 'tenant' in _user:
@@ -200,6 +271,7 @@ class Prerequisites(object):
             self.switch_user(user=self.username, password=self.password,
                              tenant=self.tenant)
 
+    @clean_if_exists
     def create_roles(self):
         for role in self.config.roles:
             self.keystoneclient.roles.create(name=role['name'])
@@ -215,6 +287,7 @@ class Prerequisites(object):
                         user=user, role=self.get_role_id(role['role']),
                         tenant=self.get_tenant_id(role['tenant']))
 
+    @clean_if_exists
     def create_tenants(self, tenants=None):
         if tenants is None:
             tenants = self.config.tenants
@@ -328,6 +401,7 @@ class Prerequisites(object):
         with open(file_path, "w") as f:
             yaml.dump(filter_dict, f, default_flow_style=False)
 
+    @clean_if_exists
     def create_flavors(self):
         for flavor in self.config.flavors:
             self.novaclient.flavors.create(**flavor)
@@ -438,7 +512,7 @@ class Prerequisites(object):
         wait_until_vm_snapshots_created(snp_ids)
 
     def create_networks(self, networks):
-        
+
         def get_body_for_network_creating(_net):
             # Possible parameters for network creating
             params = ['name', 'admin_state_up', 'shared', 'router:external',
@@ -478,6 +552,7 @@ class Prerequisites(object):
         for router in self.config.routers:
             self.neutronclient.create_router(router)
 
+    @clean_if_exists
     def create_all_networking(self):
         self.create_routers()
         self.create_networks(self.config.networks)
@@ -520,11 +595,6 @@ class Prerequisites(object):
                 self.create_security_group(tenant['security_groups'])
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
-
-    def get_sec_group_id_by_tenant_id(self, tenant_id):
-        sec_group_list = self.neutronclient.list_security_groups()
-        return [i['id'] for i in sec_group_list['security_groups']
-                if i['tenant_id'] == tenant_id]
 
     def create_security_group_rule(self, group_id, tenant_id, protocol='tcp',
                                    port_range_min=22, port_range_max=22,
@@ -749,32 +819,10 @@ class Prerequisites(object):
         print('>>> Create role on dst')
         self.create_user_on_dst()
 
-    def clean_objects(self):
-        def clean_router_ports(router_id):
-            subnets = self.neutronclient.list_subnets()
-            for subnet in subnets['subnets']:
-                try:
-                    self.neutronclient.remove_interface_router(
-                        router_id, {'subnet_id': subnet['id']})
-                except NeutronClientException:
-                    pass
 
-        def delete_user_keypairs(_user):
-            if not _user.get('enabled'):
-                return
-            try:
-                self.switch_user(user=_user['name'],
-                                 password=_user['password'],
-                                 tenant=_user['tenant'])
-            except Unauthorized:
-                return
+class CleanEnv(BasePrerequisites):
 
-            keypairs = [k.id for k in self.novaclient.keypairs.list()]
-            if keypairs:
-                map(self.novaclient.keypairs.delete, keypairs)
-            self.switch_user(user=self.username, password=self.password,
-                             tenant=self.tenant)
-
+    def clean_vms(self):
         def wait_until_vms_all_deleted():
             timeout = 120
             for i in range(timeout):
@@ -785,44 +833,103 @@ class Prerequisites(object):
                         time.sleep(1)
                     try:
                         self.novaclient.servers.delete(server.id)
-                    except NotFound:
+                    except nv_exceptions.NotFound:
                         pass
                 else:
                     break
             else:
                 raise RuntimeError('Next vms were not deleted')
 
-        for flavor in self.config.flavors:
-            try:
-                self.novaclient.flavors.delete(
-                    self.get_flavor_id(flavor['name']))
-            except Exception as e:
-                print "Flavor %s failed to delete: %s" % (flavor['name'],
-                                                          repr(e))
         vms = self.config.vms
         vms += itertools.chain(*[tenant['vms'] for tenant
                                  in self.config.tenants if tenant.get('vms')])
+        vms_names = [vm['name'] for vm in vms]
+        vms = self.novaclient.servers.list(search_opts={'all_tenants': 1})
         for vm in vms:
-            try:
-                self.novaclient.servers.delete(self.get_vm_id(vm['name']))
-            except Exception as e:
-                print "VM %s failed to delete: %s" % (vm['name'], repr(e))
+            if vm.name not in vms_names:
+                continue
+            self.novaclient.servers.delete(self.get_vm_id(vm.name))
+            print('VM "%s" has been deleted' % vm.name)
         wait_until_vms_all_deleted()
+
+    def clean_volumes(self):
+        volumes = self.config.cinder_volumes
+        volumes += itertools.chain(*[tenant['cinder_volumes'] for tenant
+                                     in self.config.tenants if 'cinder_volumes'
+                                     in tenant])
+        volumes_names = [volume['name'] for volume in volumes]
+        volumes = self.cinderclient.volumes.list(
+            search_opts={'all_tenants': 1})
+        for volume in volumes:
+            if volume.display_name not in volumes_names:
+                continue
+            self.cinderclient.volumes.delete(
+                self.get_volume_id(volume.display_name))
+            print('Volume "%s" has been deleted' % volume.display_name)
+
+    def clean_flavors(self):
+        flavors_names = [flavor['name'] for flavor in self.config.flavors]
+        for flavor in self.novaclient.flavors.list():
+            if flavor.name not in flavors_names:
+                continue
+            self.novaclient.flavors.delete(self.get_flavor_id(flavor.name))
+            print('Flavor "%s" has been deleted' % flavor.name)
+
+    def clean_images(self):
         images = self.config.images
         images += itertools.chain(*[tenant['images'] for tenant
                                   in self.config.tenants
                                   if tenant.get('images')])
-        for image in images:
-            try:
-                self.glanceclient.images.delete(
-                    self.get_image_id(image['name']))
-            except Exception as e:
-                print "Image %s failed to delete: %s" % (image['name'],
-                                                         repr(e))
+        images_names = [image['name'] for image in images]
+        for image in self.glanceclient.images.list():
+            if image.name not in images_names:
+                continue
+            self.glanceclient.images.delete(self.get_image_id(image.name))
+            print('Image "%s" has been deleted' % image.name)
+
+    def clean_snapshots(self):
+        snaps_names = [snapshot['image_name']
+                       for snapshot in self.config.snapshots]
+        for snapshot in self.glanceclient.images.list():
+            if snapshot.name not in snaps_names:
+                continue
+            self.glanceclient.images.delete(
+                self.get_image_id(snapshot.name))
+            print('Snapshot "%s" has been deleted' % snapshot.name)
+
+    def clean_networks(self):
         nets = self.config.networks
         nets += itertools.chain(*[tenant['networks'] for tenant
                                   in self.config.tenants
                                   if tenant.get('networks')])
+        nets_names = [net['name'] for net in nets]
+        for network in self.neutronclient.list_networks()['networks']:
+            if network['name'] not in nets_names:
+                continue
+            self.neutronclient.delete_network(self.get_net_id(network['name']))
+            print('Network "%s" has been deleted' % network['name'])
+
+    def clean_router_ports(self, router_id):
+        subnets = self.neutronclient.list_subnets()
+        for subnet in subnets['subnets']:
+            try:
+                self.neutronclient.remove_interface_router(
+                    router_id, {'subnet_id': subnet['id']})
+            except nt_exceptions.NeutronClientException:
+                pass
+
+    def clean_routers(self):
+        router_names = [router['router']['name']
+                        for router in self.config.routers]
+        for router in self.neutronclient.list_routers()['routers']:
+            if router['name'] not in router_names:
+                continue
+            router_id = self.get_router_id(router['name'])
+            self.clean_router_ports(router_id)
+            self.neutronclient.delete_router(router_id)
+            print('Router "%s" has been deleted' % router['name'])
+
+    def clean_fips(self):
         floatingips = self.neutronclient.list_floatingips()['floatingips']
         for ip in floatingips:
             try:
@@ -831,89 +938,93 @@ class Prerequisites(object):
                 print "Ip %s failed to delete: %s" % (
                     ip['floating_ip_address'], repr(e))
 
-        for router in self.config.routers:
-            try:
-                clean_router_ports(self.get_router_id(
-                    router['router']['name']))
-                self.neutronclient.delete_router(self.get_router_id(
-                    router['router']['name']))
-            except Exception as e:
-                print "Router failed to delete: %s" % repr(e)
-
-        ports = self.neutronclient.list_ports()['ports']
-        ports = [port for port in ports[:]
-                 if port['device_owner'] == 'network:dhcp'
-                 or not port['device_owner']]
-
-        for port in ports:
-            self.neutronclient.delete_port(port['id'])
-        for network in nets:
-            try:
-                self.neutronclient.delete_network(self.get_net_id(
-                    network['name']))
-            except Exception as e:
-                print "Network %s failed to delete: %s" % (network['name'],
-                                                           repr(e))
-        for snapshot in self.config.snapshots:
-            try:
-                self.glanceclient.images.delete(
-                    self.get_image_id(snapshot['image_name']))
-            except Exception as e:
-                print "Image %s failed to delete: %s" % (
-                    snapshot['image_name'], repr(e))
-
+    def clean_security_groups(self):
         sgs = self.neutronclient.list_security_groups()['security_groups']
         for sg in sgs:
             try:
-                print "delete sg {}".format(sg['name'])
                 self.neutronclient.delete_security_group(self.get_sg_id(
                                                          sg['name']))
-            except NeutronClientException as e:
+            except (nt_exceptions.NeutronClientException,
+                    NotFound) as e:
                 print "Security group %s failed to delete: %s" % (sg['name'],
                                                                   repr(e))
+
+    def clean_roles(self):
+        roles_names = [role['name'] for role in self.config.roles]
+        for role in self.keystoneclient.roles.list():
+            if role.name not in roles_names:
+                continue
+            self.keystoneclient.roles.delete(self.get_role_id(role.name))
+            print('Role "%s" has been deleted' % role.name)
+
+    def clean_keypairs(self):
+        def delete_user_keypairs(_user):
+            if not _user.get('enabled'):
+                return
+            try:
+                self.switch_user(user=_user['name'], tenant=_user['tenant'],
+                                 password=_user['password'])
+            except ks_exceptions.Unauthorized:
+                return
+
+            keypairs = [k.id for k in self.novaclient.keypairs.list()]
+            if keypairs:
+                map(self.novaclient.keypairs.delete, keypairs)
+            self.switch_user(user=self.username, password=self.password,
+                             tenant=self.tenant)
+
         for user in self.config.users:
             delete_user_keypairs(user)
-            try:
-                self.keystoneclient.users.delete(
-                    self.get_user_id(user['name']))
-            except Exception as e:
-                print "User %s failed to delete: %s" % (user['name'], repr(e))
-        for role in self.config.roles:
-            try:
-                self.keystoneclient.roles.delete(self.get_role_id(
-                    role['name']))
-            except Exception as e:
-                print "Role %s failed to delete: %s" % (role['name'], repr(e))
+
+    def clean_users(self):
+        users_names = [user['name'] for user in self.config.users]
+        for user in self.keystoneclient.users.list():
+            if user.name not in users_names:
+                continue
+            self.keystoneclient.users.delete(self.get_user_id(user.name))
+            print('User "%s" has been deleted' % user.name)
+
+    def clean_tenants(self):
+        tenants_names = [tenant['name'] for tenant in self.config.tenants]
+        for tenant in self.keystoneclient.tenants.list():
+            if tenant.name not in tenants_names:
+                continue
+            self.keystoneclient.tenants.delete(self.get_tenant_id(tenant.name))
+            print('Tenant "%s" has been deleted' % tenant.name)
+
+    def clean_cinder_snapshots(self):
         snapshots = self.config.cinder_snapshots
         snapshots += itertools.chain(
             *[tenant['cinder_snapshots'] for tenant in self.config.tenants
               if 'cinder_snapshots' in tenant])
+        sn_names = [snapshot['name'] for snapshot in snapshots]
+        snapshots = self.cinderclient.volume_snapshots.list(
+            search_opts={'all_tenants': 1})
         for snapshot in snapshots:
-            try:
-                self.cinderclient.volume_snapshots.delete(
-                    self.get_volume_snapshot_id(snapshot['display_name']))
-            except Exception as e:
-                print "Snapshot %s failed to delete: %s" % (
-                    snapshot['display_name'], repr(e))
+            if snapshot.name not in sn_names:
+                continue
+            self.cinderclient.volume_snapshots.delete(
+                self.get_volume_snapshot_id(snapshot.display_name))
+            print('Snapshot "%s" has been deleted' % snapshot.display_name)
 
-        for tenant in self.config.tenants:
-            try:
-                self.keystoneclient.tenants.delete(
-                    self.get_tenant_id(tenant['name']))
-            except Exception as e:
-                print "Tenant %s failed to delete: %s" % (tenant['name'],
-                                                          repr(e))
-        volumes = self.config.cinder_volumes
-        volumes += itertools.chain(*[tenant['cinder_volumes'] for tenant
-                                     in self.config.tenants if 'cinder_volumes'
-                                     in tenant])
-        for volume in volumes:
-            try:
-                self.cinderclient.volumes.delete(
-                    self.get_volume_id(volume['name']))
-            except Exception as e:
-                print "Volume %s failed to delete: %s" % (volume['name'],
-                                                          repr(e))
+    def clean_all_networking(self):
+        self.clean_fips()
+        self.clean_routers()
+        self.clean_networks()
+
+    def clean_objects(self):
+        self.clean_vms()
+        self.clean_flavors()
+        self.clean_images()
+        self.clean_snapshots()
+        self.clean_cinder_snapshots()
+        self.clean_volumes()
+        self.clean_all_networking()
+        self.clean_security_groups()
+        self.clean_roles()
+        self.clean_keypairs()
+        self.clean_users()
+        self.clean_tenants()
 
 
 if __name__ == '__main__':
@@ -927,6 +1038,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     preqs = Prerequisites(config=conf, cloud_prefix=args.env)
     if args.clean:
-        preqs.clean_objects()
+        preqs.clean_tools.clean_objects()
     else:
         preqs.run_preparation_scenario()
