@@ -1020,7 +1020,7 @@ class NeutronNetwork(network.Network):
                     # attribute to avoid seg_id overlap)
                     list_update_atr = ["provider:network_type"]
                     if phys_net:
-                        list_update_atr.append(phys_net)
+                        list_update_atr.append("provider:physical_network")
                     for atr in list_update_atr:
                         network_info['network'].update({atr: net.get(atr)})
 
