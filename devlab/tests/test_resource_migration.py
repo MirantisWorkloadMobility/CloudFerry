@@ -307,6 +307,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.validate_resource_parameter_in_dst(
             src_volume_list, dst_volume_list, resource_name='volume',
             parameter='size')
+        self.validate_resource_parameter_in_dst(
+            src_volume_list, dst_volume_list, resource_name='volume',
+            parameter='bootable')
 
     @unittest.skip("Temporarily disabled: snapshots doesn't implemented in "
                    "cinder's nfs driver")

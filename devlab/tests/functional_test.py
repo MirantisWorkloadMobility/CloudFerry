@@ -130,6 +130,7 @@ class FunctionalTest(unittest.TestCase):
     def filter_vms(self):
         vms = config.vms
         [vms.extend(i['vms']) for i in config.tenants if 'vms' in i]
+        vms.extend(config.vms_from_volumes)
         vms_names = [vm['name'] for vm in vms]
         opts = {'search_opts': {'all_tenants': 1}}
         return [i for i in self.src_cloud.novaclient.servers.list(**opts)
@@ -158,7 +159,10 @@ class FunctionalTest(unittest.TestCase):
                 if i.name in images]
 
     def filter_volumes(self):
-        volumes = [i['name'] for i in config.cinder_volumes]
+        volumes = config.cinder_volumes
+        [volumes.extend(i['cinder_volumes']) for i in config.tenants
+         if 'cinder_volumes' in i]
+        volumes.extend(config.cinder_volumes_from_images)
         opts = {'search_opts': {'all_tenants': 1}}
         return [i for i in self.src_cloud.cinderclient.volumes.list(**opts)
                 if i.display_name in volumes]

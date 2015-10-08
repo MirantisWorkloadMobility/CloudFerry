@@ -70,9 +70,9 @@ tenants = [
           },
          {'name': 'sg12', 'description': 'Blah blah group2'}],
      'cinder_volumes': [
-         {'name': 'tn1_volume1', 'size': 1, 'server_to_attach': 'tn1server1',
-          'device': '/dev/vdb'},
-         {'name': 'tn1_volume2', 'size': 1}
+         {'display_name': 'tn1_volume1', 'size': 1,
+          'server_to_attach': 'tn1server1', 'device': '/dev/vdb'},
+         {'display_name': 'tn1_volume2', 'size': 1}
      ],
      'cinder_snapshots': [
          # Commented because of unimplemented error in nfs driver for grizzly.
@@ -94,8 +94,8 @@ tenants = [
           }
      ],
      'cinder_volumes': [
-         {'name': 'tn_volume1', 'size': 1, 'server_to_attach': 'tn2server1',
-          'device': '/dev/vdb'}
+         {'display_name': 'tn_volume1', 'size': 1,
+          'server_to_attach': 'tn2server1', 'device': '/dev/vdb'}
      ],
      'unassociated_fip': 1
      },
@@ -179,6 +179,11 @@ vms = [
     {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'}
 ]
 
+vms_from_volumes = [
+    {'name': 'server_from_volume', 'flavor': 'flavorname1',
+     'volume': 'volume_from_image'}
+]
+
 routers = [
     {'router': {'external_gateway_info': {}, 'name': 'ext_router',
                 'admin_state_up': True}
@@ -192,10 +197,15 @@ snapshots = [
 
 # Cinder images to create/delete
 cinder_volumes = [
-    {'name': 'cinder_volume1', 'size': 1},
-    {'name': 'cinder_volume2', 'size': 1,
+    {'display_name': 'cinder_volume1', 'size': 1},
+    {'display_name': 'cinder_volume2', 'size': 1,
      'server_to_attach': 'server2', 'device': '/dev/vdb'},
-    {'name': 'cinder_volume3', 'size': 1, 'user': 'test_volume_migration'}
+    {'display_name': 'cinder_volume3', 'size': 1,
+     'user': 'test_volume_migration'}
+]
+
+cinder_volumes_from_images = [
+    {'display_name': 'volume_from_image', 'size': 1, 'image': 'image1'}
 ]
 
 # Cinder snapshots to create/delete
