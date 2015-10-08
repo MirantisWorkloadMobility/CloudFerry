@@ -72,11 +72,12 @@ class NeutronNetwork(network.Network):
 
         nets = self.get_networks(tenant_id)
         subnets = self.get_subnets(tenant_id)
+        admin_tenant_id = self.identity_client.get_tenant_id_by_name(
+            self.config.cloud.tenant)
 
-        if self.filter_tenant_id:
+        if (self.filter_tenant_id is not None and
+                self.filter_tenant_id != admin_tenant_id):
             # getting all admin nets
-            admin_tenant_id = self.identity_client.get_tenant_id_by_name(
-                self.config.cloud.tenant)
             admin_nets = self.get_networks(admin_tenant_id)
             # getting admin shared nets
             for net in admin_nets:
