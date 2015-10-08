@@ -426,15 +426,6 @@ class Prerequisites(BasePrerequisites):
                     'key_name': _vm.get('key_name')
                     }
 
-        def wait_vm_nic_created(vm_id):
-            for i in range(TIMEOUT):
-                srv = self.novaclient.servers.get(vm_id)
-                if srv.networks:
-                    break
-            else:
-                raise RuntimeError(
-                    'NIC for vm with id {0} was not created'.format(vm_id))
-
         def wait_for_vm_creating():
             """ When limit for creating vms in nova is reached, we receive
                 exception from nova: 'novaclient.exceptions.OverLimit:
@@ -464,7 +455,7 @@ class Prerequisites(BasePrerequisites):
                 vm_ids.append(_vm.id)
                 if not vm.get('fip'):
                     continue
-                wait_vm_nic_created(_vm.id)
+                wait_until_vms_created([_vm.id])
                 fip = self.neutronclient.create_floatingip(
                     {"floatingip": {"floating_network_id": self.ext_net_id}})
                 _vm.add_floating_ip(fip['floatingip']['floating_ip_address'])
@@ -474,8 +465,8 @@ class Prerequisites(BasePrerequisites):
         def wait_until_vms_created(vm_list):
             for vm in vm_list[:]:
                 if self.check_vm_state(vm):
-                    vms.remove(vm)
-            return vms
+                    vm_list.remove(vm)
+            return vm_list
 
         vms = create_vms(self.config.vms)
         for tenant, user in zip(self.config.tenants, self.config.users):
