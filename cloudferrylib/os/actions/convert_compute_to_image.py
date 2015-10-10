@@ -48,6 +48,7 @@ class ConvertComputeToImage(action.Action):
         missing_images = {}
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             _instance = instance[utl.INSTANCE_BODY]
+            image_id = None
             if _instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
                 if _instance['volumes']:
                     volume = get_boot_volume(instance)
@@ -57,7 +58,7 @@ class ConvertComputeToImage(action.Action):
                 image_id = _instance['image_id']
             # TODO: Case when image is None
             if image_id:
-                img = image_resource.read_info(image_id=image_id)
+                img = image_resource.get_image_by_id_converted(image_id)
                 img = img[utl.IMAGES_TYPE]
                 if image_id in images_body:
                     images_body[image_id][utl.META_INFO][

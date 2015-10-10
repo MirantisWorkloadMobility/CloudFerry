@@ -58,7 +58,7 @@ class ConvertVolumeToImage(converter.Converter):
                                            resource_image.get_status,
                                            ACTIVE)
             resource_image.patch_image(resource_image.get_backend(), image_id)
-            image_vol = resource_image.read_info(image_id=image_id)
+            image_vol = resource_image.get_image_by_id_converted(image_id)
             img_new = {
                 utl.IMAGE_BODY: (
                     image_vol[utl.IMAGES_TYPE][image_id][utl.IMAGE_BODY]),

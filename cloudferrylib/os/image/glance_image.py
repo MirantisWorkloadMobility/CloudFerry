@@ -14,9 +14,9 @@
 
 
 import copy
-import datetime
 import json
 import re
+from itertools import ifilter
 
 from fabric.api import run
 from fabric.api import settings
@@ -27,6 +27,8 @@ from glanceclient.v1.images import CREATE_PARAMS
 
 from cloudferrylib.base import exception
 from cloudferrylib.base import image
+from cloudferrylib.utils import filters
+from cloudferrylib.os.image import filters as glance_filters
 from cloudferrylib.utils import file_like_proxy
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import remote_runner
@@ -53,7 +55,19 @@ class GlanceImage(image.Image):
         self.mysql_connector = cloud.mysql_connector('glance')
         self.runner = remote_runner.RemoteRunner(self.host,
                                                  self.config.cloud.ssh_user)
+        self._image_filter = None
         super(GlanceImage, self).__init__(config)
+
+    def get_image_filter(self):
+        if self._image_filter is None:
+            with open(self.config.migrate.filter_path, 'r') as f:
+                filter_yaml = filters.FilterYaml(f)
+                filter_yaml.read()
+
+            self._image_filter = glance_filters.GlanceFilters(
+                self.glance_client, filter_yaml)
+
+        return self._image_filter
 
     @property
     def glance_client(self):
@@ -80,34 +94,19 @@ class GlanceImage(image.Image):
             token=self.identity_client.get_auth_token_from_user())
 
     def get_image_list(self):
-        # let's get all public images and all tenant's images
-        get_img_list = self.glance_client.images.list
-        if self.cloud.position == 'src' and self.filter_tenant_id:
-            image_list = []
-            # getting images if tenant is owner
-            filters = {'is_public': None, 'owner': self.filter_tenant_id}
-            for img in get_img_list(filters=filters):
-                LOG.debug("append tenant's image ID {}".format(img.id))
-                image_list.append(img)
-            filters = {'is_public': None}
-            img_list = get_img_list(filters=filters)
-            # getting images if tenant is member
-            for img in self.glance_client.image_members.list(
-                    member=self.filter_tenant_id):
-                for i in img_list:
-                    if i.id == img.image_id:
-                        LOG.debug("append image(by member) ID {}".format(i.id))
-                        image_list.append(i)
-            # getting public images
-            for img in get_img_list(filters=filters):
-                if img.is_public or (img.id in self.filter_image):
-                    LOG.debug("append public image ID {}".format(img.id))
-                    image_list.append(img)
-            return list(set(image_list))
-        # by some reason - guys from community decided to create that strange
-        # option to get images of all tenants
-        filters = {"is_public": None}
-        return get_img_list(filters=filters)
+        images = self.glance_client.images.list(filters={"is_public": None})
+
+        filtering_enabled = self.cloud.position == 'src'
+
+        if filtering_enabled:
+            for f in self.get_image_filter().get_filters():
+                images = ifilter(f, images)
+            images = [i for i in images]
+
+            LOG.info("Filtered images: %s",
+                     ", ".join((str(i.name) for i in images)))
+
+        return images
 
     def create_image(self, **kwargs):
         return self.glance_client.images.create(**kwargs)
@@ -213,71 +212,47 @@ class GlanceImage(image.Image):
             tenant_id,
             can_share)
 
+    def _convert_images_with_metadata(self, image_list_metadata):
+        info = {'images': {}}
+        for (im, meta) in image_list_metadata:
+            glance_image = self.get_image(im)
+            if glance_image:
+                info = self.make_image_info(glance_image, info)
+                info['images'][glance_image.id]['meta'] = meta
+        return info
+
     def read_info(self, **kwargs):
         """Get info about images or specified image.
 
-        :param image_id: Id of specified image
-        :param image_name: Name of specified image
-        :param images_list: List of specified images
-        :param images_list_meta: Tuple of specified images with metadata in
-                                 format [(image, meta)]
-        :param date: date object. snapshots updated after this date will be
-                     dropped
-        :rtype: Dictionary with all necessary images info
+        :returns: Dictionary containing images data
         """
 
         info = {'images': {}}
 
-        if kwargs.get('tenant_id'):
-            self.filter_tenant_id = kwargs['tenant_id'][0]
-
-        def image_valid(img, date):
-            """ Check if image was updated recently """
-            updated = datetime.datetime.strptime(
-                img.updated_at,
-                "%Y-%m-%dT%H:%M:%S")
-            return date <= updated.date()
-
-        if kwargs.get('date'):
-            for img in self.get_image_list():
-                if (not self.is_snapshot(img)) or image_valid(
-                        img, kwargs.get('date')):
-                    self.make_image_info(img, info)
-
-        if kwargs.get('image_id'):
-            self.filter_image = kwargs['image_id']
-            glance_image = self.get_image_by_id(self.filter_image)
+        for glance_image in self.get_image_list():
             info = self.make_image_info(glance_image, info)
 
-        elif kwargs.get('image_name'):
-            glance_image = self.get_image_by_name(kwargs['image_name'])
-            info = self.make_image_info(glance_image, info)
-
-        elif kwargs.get('images_list'):
-            self.filter_image = kwargs['images_list']
-            for im in self.filter_image:
-                glance_image = self.get_image(im)
-                info = self.make_image_info(glance_image, info)
-
-        elif kwargs.get('images_list_meta'):
-            for (im, meta) in kwargs['images_list_meta']:
-                glance_image = self.get_image(im)
-                info = self.make_image_info(glance_image, info)
-                info['images'][glance_image.id]['meta'] = meta
-
-        else:
-            for glance_image in self.get_image_list():
-                info = self.make_image_info(glance_image, info)
         info.update({
             "tags": self.get_tags(),
             "members": self.get_members(info['images'])
         })
 
+        LOG.info("Read images: %s",
+                 ", ".join(("{name} ({uuid})".format(name=i['image']['name'],
+                                                     uuid=i['image']['id'])
+                            for i in info['images'].itervalues())))
+
         return info
+
+    def get_image_by_id_converted(self, image_id):
+        info = {'images': {}}
+        i = self.get_image_by_id(image_id)
+        return self.make_image_info(i, info)
 
     def make_image_info(self, glance_image, info):
         if glance_image:
             if glance_image.status == "active":
+                LOG.debug("Image '%s' status is active.", glance_image.name)
                 gl_image = self.convert(glance_image, self.cloud)
 
                 command = ("SELECT value FROM image_locations "
@@ -399,8 +374,8 @@ class GlanceImage(image.Image):
                         name=gl_image['image']['name'],
                         container_format=(gl_image['image']['container_format']
                                           or "bare"),
-                        disk_format=(gl_image['image']['disk_format']
-                                     or "qcow2"),
+                        disk_format=(gl_image['image']['disk_format'] or
+                                     "qcow2"),
                         is_public=gl_image['image']['is_public'],
                         protected=gl_image['image']['protected'],
                         owner=gl_image['image']['owner'],
@@ -436,7 +411,7 @@ class GlanceImage(image.Image):
                             migrate_images_list]
             LOG.debug("images on destination: {}".format(
                 [im for (im, tmp_meta) in im_name_list]))
-            new_info = self.read_info(images_list_meta=im_name_list)
+            new_info = self._convert_images_with_metadata(im_name_list)
         new_info['images'].update(empty_image_list)
         # on this step we need to create map between source ids and dst ones
         LOG.debug("creating map between source and destination image ids")

@@ -169,7 +169,7 @@ class PreTransportInstance(action.Action):
         self.merge_file(dst_cloud, base_file, diff_file)
 
         image_res = dst_cloud.resources[utl.IMAGE_RESOURCE]
-        images = image_res.read_info(image_id=image_id)
+        images = image_res.get_image_by_id_converted(image_id=image_id)
         image = images[utl.IMAGE_RESOURCE][utl.IMAGES_TYPE][image_id]
         disk_format = image[utl.IMAGE_BODY]['disk_format']
         if image_res.config.image.convert_to_raw:
