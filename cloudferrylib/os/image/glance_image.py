@@ -25,6 +25,8 @@ from glanceclient import client as glance_client
 from glanceclient import exc
 from glanceclient.v1.images import CREATE_PARAMS
 
+from keystoneclient import exceptions as keystone_exceptions
+
 from cloudferrylib.base import exception
 from cloudferrylib.base import image
 from cloudferrylib.utils import filters
@@ -298,12 +300,13 @@ class GlanceImage(image.Image):
         obsolete_images_ids_list = []
 
         for image_id_src, gl_image in info['images'].iteritems():
-            if gl_image['image'] and gl_image['image']['resource']:
+            img = gl_image['image']
+            if img and img['resource']:
                 dst_img_checksums = {x.checksum: x for x in
                                      self.get_image_list()}
                 dst_img_names = [x.name for x in self.get_image_list()]
-                checksum_current = gl_image['image']['checksum']
-                name_current = gl_image['image']['name']
+                checksum_current = img['checksum']
+                name_current = img['name']
                 meta = gl_image['meta']
                 if checksum_current in dst_img_checksums and (
                         name_current) in dst_img_names:
@@ -312,43 +315,47 @@ class GlanceImage(image.Image):
                     continue
 
                 LOG.debug("Updating owner '{owner}' of image '{image}'".format(
-                    owner=gl_image["image"]["owner_name"],
-                    image=gl_image["image"]["name"]))
-                gl_image["image"]["owner"] = \
+                    owner=img["owner_name"],
+                    image=img["name"]))
+                img["owner"] = \
                     self.identity_client.get_tenant_id_by_name(
-                    gl_image["image"]["owner_name"])
-                del gl_image["image"]["owner_name"]
+                    img["owner_name"])
+                del img["owner_name"]
 
-                if gl_image["image"]["properties"]:
+                if img["properties"]:
                     # update snapshot metadata
-                    metadata = gl_image["image"]["properties"]
+                    metadata = img["properties"]
                     if "owner_id" in metadata:
                         # update tenant id
                         LOG.debug("updating snapshot metadata for field "
                                   "'owner_id' for image {image}".format(
-                                      image=gl_image["image"]["id"]))
-                        metadata["owner_id"] = gl_image["image"]["owner"]
+                                      image=img["id"]))
+                        metadata["owner_id"] = img["owner"]
                     if "user_id" in metadata:
                         # update user id by specified name
                         LOG.debug("updating snapshot metadata for field "
                                   "'user_id' for image {image}".format(
-                                      image=gl_image["image"]["id"]))
-                        metadata["user_id"] = \
-                            self.identity_client.keystone_client.users.find(
+                                      image=img["id"]))
+                        try:
+                            ks_client = self.identity_client.keystone_client
+                            metadata["user_id"] = ks_client.users.find(
                                 username=metadata["user_name"]).id
-                        del metadata["user_name"]
-                if gl_image["image"]["checksum"] is None:
+                            del metadata["user_name"]
+                        except keystone_exceptions.NotFound:
+                            LOG.warning("Cannot update user name for image "
+                                        "{}".format(img['name']))
+                if img["checksum"] is None:
                     LOG.warning("re-creating image {} "
                                 "from original source URL"
-                                .format(gl_image["image"]["id"]))
+                                .format(img["id"]))
                     if meta['img_loc'] is not None:
                         self.glance_img_create(
-                            gl_image['image']['name'],
-                            gl_image['image']['disk_format'] or "qcow2",
+                            img['name'],
+                            img['disk_format'] or "qcow2",
                             meta['img_loc']
                         )
                         recreated_image = utl.ext_dict(
-                            name=gl_image["image"]["name"]
+                            name=img["name"]
                         )
                         migrate_images_list.append(
                             (recreated_image, gl_image['meta'])
@@ -359,8 +366,8 @@ class GlanceImage(image.Image):
                     continue
 
                 LOG.debug("Creating image '{image}' ({image_id})".format(
-                    image=gl_image["image"]["name"],
-                    image_id=gl_image['image']['id']))
+                    image=img["name"],
+                    image_id=img['id']))
                 # we can face situation when image has no
                 # disk_format and container_format properties
                 # this situation appears, when image was created
@@ -371,36 +378,36 @@ class GlanceImage(image.Image):
 
                 try:
                     migrate_image = self.create_image(
-                        name=gl_image['image']['name'],
-                        container_format=(gl_image['image']['container_format']
+                        name=img['name'],
+                        container_format=(img['container_format']
                                           or "bare"),
-                        disk_format=(gl_image['image']['disk_format'] or
+                        disk_format=(img['disk_format'] or
                                      "qcow2"),
-                        is_public=gl_image['image']['is_public'],
-                        protected=gl_image['image']['protected'],
-                        owner=gl_image['image']['owner'],
-                        size=gl_image['image']['size'],
-                        properties=gl_image['image']['properties'],
+                        is_public=img['is_public'],
+                        protected=img['protected'],
+                        owner=img['owner'],
+                        size=img['size'],
+                        properties=img['properties'],
                         data=file_like_proxy.FileLikeProxy(
-                            gl_image['image'],
+                            img,
                             self.config['migrate']['speed_limit']))
                     LOG.debug("new image ID {}".format(migrate_image.id))
                 except exception.ImageDownloadError:
                     LOG.warning("Unable to reach image's data due to "
                                 "Glance HTTPInternalServerError. Skipping "
-                                "image: (id = %s)", gl_image["image"]["id"])
-                    obsolete_images_ids_list.append(gl_image["image"]["id"])
+                                "image: (id = %s)", img["id"])
+                    obsolete_images_ids_list.append(img["id"])
                     continue
 
                 migrate_images_list.append((migrate_image, meta))
-                if not gl_image["image"]["container_format"]:
+                if not img["container_format"]:
                     delete_container_format.append(migrate_image.id)
-                if not gl_image["image"]["disk_format"]:
+                if not img["disk_format"]:
                     delete_disk_format.append(migrate_image.id)
-            elif gl_image['image']['resource'] is None:
-                recreated_image = utl.ext_dict(name=gl_image["image"]["name"])
+            elif img['resource'] is None:
+                recreated_image = utl.ext_dict(name=img["name"])
                 migrate_images_list.append((recreated_image, gl_image['meta']))
-            elif not gl_image['image']:
+            elif not img:
                 empty_image_list[image_id_src] = gl_image
 
         # Remove obsolete/broken images from info
@@ -420,7 +427,7 @@ class GlanceImage(image.Image):
                                    x.checksum): x.id
                                   for x in self.get_image_list()}
         for image_id_src, gl_image in info['images'].iteritems():
-            cur_image = gl_image["image"]
+            cur_image = gl_image['image']
             image_ids_map[cur_image["id"]] = \
                 dst_img_name_checksums[(cur_image["name"],
                                         cur_image["checksum"])]
