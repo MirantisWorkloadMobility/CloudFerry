@@ -7,6 +7,7 @@ preparation:
       - act_get_filter: True
       - act_check_filter: True
       - src_test:
+          - act_check_ident_api_src: True
           - act_check_image_api_src: True
           - act_check_compute_api_src: True
           - act_check_storage_api_src: True
@@ -18,6 +19,7 @@ preparation:
           - act_get_info_objects_src: False
           - check_src_instance_networks: True
       - dst_test:
+          - act_check_ident_api_dst: True
           - act_check_image_api_dst: True
           - act_check_compute_api_dst: True
           - act_check_storage_api_dst: True
@@ -28,6 +30,7 @@ preparation:
           - check_dst_rabbit: True
           - act_get_info_objects_dst: False
       - check_networks: True
+  - check_users_availability: False
   - create_snapshot: True
   - create_vm_snapshot_src: True
   - create_vm_snapshot_dst: True
@@ -40,6 +43,8 @@ rollback:
   - restore_from_snapshot: True
 
 process:
+  - task_check_write_access:
+      - act_check_dst_cloud: True
   - task_resources_transporting:
       - act_identity_trans: True
       - task_images_trans:

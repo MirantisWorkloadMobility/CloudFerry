@@ -40,7 +40,8 @@ class UploadFileToImage(action.Action):
             image_id = inst_body['image_id']
             base_file = "/tmp/%s" % ("temp%s_base" % instance_id)
             image_name = "%s-image" % instance_id
-            images = img_res.read_info(image_id=image_id)[utl.IMAGES_TYPE]
+            internal_image = img_res.get_image_by_id_converted(image_id)
+            images = internal_image[utl.IMAGES_TYPE]
             image_format = images[image_id][utl.IMAGE_BODY]['disk_format']
             if img_res.config.image.convert_to_raw:
                 image_format = utl.RAW

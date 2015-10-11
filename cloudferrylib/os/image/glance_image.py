@@ -14,9 +14,9 @@
 
 
 import copy
-import datetime
 import json
 import re
+from itertools import ifilter
 
 from fabric.api import run
 from fabric.api import settings
@@ -25,8 +25,12 @@ from glanceclient import client as glance_client
 from glanceclient import exc
 from glanceclient.v1.images import CREATE_PARAMS
 
+from keystoneclient import exceptions as keystone_exceptions
+
 from cloudferrylib.base import exception
 from cloudferrylib.base import image
+from cloudferrylib.utils import filters
+from cloudferrylib.os.image import filters as glance_filters
 from cloudferrylib.utils import file_like_proxy
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import remote_runner
@@ -53,7 +57,19 @@ class GlanceImage(image.Image):
         self.mysql_connector = cloud.mysql_connector('glance')
         self.runner = remote_runner.RemoteRunner(self.host,
                                                  self.config.cloud.ssh_user)
+        self._image_filter = None
         super(GlanceImage, self).__init__(config)
+
+    def get_image_filter(self):
+        if self._image_filter is None:
+            with open(self.config.migrate.filter_path, 'r') as f:
+                filter_yaml = filters.FilterYaml(f)
+                filter_yaml.read()
+
+            self._image_filter = glance_filters.GlanceFilters(
+                self.glance_client, filter_yaml)
+
+        return self._image_filter
 
     @property
     def glance_client(self):
@@ -80,34 +96,19 @@ class GlanceImage(image.Image):
             token=self.identity_client.get_auth_token_from_user())
 
     def get_image_list(self):
-        # let's get all public images and all tenant's images
-        get_img_list = self.glance_client.images.list
-        if self.cloud.position == 'src' and self.filter_tenant_id:
-            image_list = []
-            # getting images if tenant is owner
-            filters = {'is_public': None, 'owner': self.filter_tenant_id}
-            for img in get_img_list(filters=filters):
-                LOG.debug("append tenant's image ID {}".format(img.id))
-                image_list.append(img)
-            filters = {'is_public': None}
-            img_list = get_img_list(filters=filters)
-            # getting images if tenant is member
-            for img in self.glance_client.image_members.list(
-                    member=self.filter_tenant_id):
-                for i in img_list:
-                    if i.id == img.image_id:
-                        LOG.debug("append image(by member) ID {}".format(i.id))
-                        image_list.append(i)
-            # getting public images
-            for img in get_img_list(filters=filters):
-                if img.is_public or (img.id in self.filter_image):
-                    LOG.debug("append public image ID {}".format(img.id))
-                    image_list.append(img)
-            return list(set(image_list))
-        # by some reason - guys from community decided to create that strange
-        # option to get images of all tenants
-        filters = {"is_public": None}
-        return get_img_list(filters=filters)
+        images = self.glance_client.images.list(filters={"is_public": None})
+
+        filtering_enabled = self.cloud.position == 'src'
+
+        if filtering_enabled:
+            for f in self.get_image_filter().get_filters():
+                images = ifilter(f, images)
+            images = [i for i in images]
+
+            LOG.info("Filtered images: %s",
+                     ", ".join((str(i.name) for i in images)))
+
+        return images
 
     def create_image(self, **kwargs):
         return self.glance_client.images.create(**kwargs)
@@ -213,71 +214,47 @@ class GlanceImage(image.Image):
             tenant_id,
             can_share)
 
+    def _convert_images_with_metadata(self, image_list_metadata):
+        info = {'images': {}}
+        for (im, meta) in image_list_metadata:
+            glance_image = self.get_image(im)
+            if glance_image:
+                info = self.make_image_info(glance_image, info)
+                info['images'][glance_image.id]['meta'] = meta
+        return info
+
     def read_info(self, **kwargs):
         """Get info about images or specified image.
 
-        :param image_id: Id of specified image
-        :param image_name: Name of specified image
-        :param images_list: List of specified images
-        :param images_list_meta: Tuple of specified images with metadata in
-                                 format [(image, meta)]
-        :param date: date object. snapshots updated after this date will be
-                     dropped
-        :rtype: Dictionary with all necessary images info
+        :returns: Dictionary containing images data
         """
 
         info = {'images': {}}
 
-        if kwargs.get('tenant_id'):
-            self.filter_tenant_id = kwargs['tenant_id'][0]
-
-        def image_valid(img, date):
-            """ Check if image was updated recently """
-            updated = datetime.datetime.strptime(
-                img.updated_at,
-                "%Y-%m-%dT%H:%M:%S")
-            return date <= updated.date()
-
-        if kwargs.get('date'):
-            for img in self.get_image_list():
-                if (not self.is_snapshot(img)) or image_valid(
-                        img, kwargs.get('date')):
-                    self.make_image_info(img, info)
-
-        if kwargs.get('image_id'):
-            self.filter_image = kwargs['image_id']
-            glance_image = self.get_image_by_id(self.filter_image)
+        for glance_image in self.get_image_list():
             info = self.make_image_info(glance_image, info)
 
-        elif kwargs.get('image_name'):
-            glance_image = self.get_image_by_name(kwargs['image_name'])
-            info = self.make_image_info(glance_image, info)
-
-        elif kwargs.get('images_list'):
-            self.filter_image = kwargs['images_list']
-            for im in self.filter_image:
-                glance_image = self.get_image(im)
-                info = self.make_image_info(glance_image, info)
-
-        elif kwargs.get('images_list_meta'):
-            for (im, meta) in kwargs['images_list_meta']:
-                glance_image = self.get_image(im)
-                info = self.make_image_info(glance_image, info)
-                info['images'][glance_image.id]['meta'] = meta
-
-        else:
-            for glance_image in self.get_image_list():
-                info = self.make_image_info(glance_image, info)
         info.update({
             "tags": self.get_tags(),
             "members": self.get_members(info['images'])
         })
 
+        LOG.info("Read images: %s",
+                 ", ".join(("{name} ({uuid})".format(name=i['image']['name'],
+                                                     uuid=i['image']['id'])
+                            for i in info['images'].itervalues())))
+
         return info
+
+    def get_image_by_id_converted(self, image_id):
+        info = {'images': {}}
+        i = self.get_image_by_id(image_id)
+        return self.make_image_info(i, info)
 
     def make_image_info(self, glance_image, info):
         if glance_image:
             if glance_image.status == "active":
+                LOG.debug("Image '%s' status is active.", glance_image.name)
                 gl_image = self.convert(glance_image, self.cloud)
 
                 command = ("SELECT value FROM image_locations "
@@ -323,12 +300,13 @@ class GlanceImage(image.Image):
         obsolete_images_ids_list = []
 
         for image_id_src, gl_image in info['images'].iteritems():
-            if gl_image['image'] and gl_image['image']['resource']:
+            img = gl_image['image']
+            if img and img['resource']:
                 dst_img_checksums = {x.checksum: x for x in
                                      self.get_image_list()}
                 dst_img_names = [x.name for x in self.get_image_list()]
-                checksum_current = gl_image['image']['checksum']
-                name_current = gl_image['image']['name']
+                checksum_current = img['checksum']
+                name_current = img['name']
                 meta = gl_image['meta']
                 if checksum_current in dst_img_checksums and (
                         name_current) in dst_img_names:
@@ -337,43 +315,47 @@ class GlanceImage(image.Image):
                     continue
 
                 LOG.debug("Updating owner '{owner}' of image '{image}'".format(
-                    owner=gl_image["image"]["owner_name"],
-                    image=gl_image["image"]["name"]))
-                gl_image["image"]["owner"] = \
+                    owner=img["owner_name"],
+                    image=img["name"]))
+                img["owner"] = \
                     self.identity_client.get_tenant_id_by_name(
-                    gl_image["image"]["owner_name"])
-                del gl_image["image"]["owner_name"]
+                    img["owner_name"])
+                del img["owner_name"]
 
-                if gl_image["image"]["properties"]:
+                if img["properties"]:
                     # update snapshot metadata
-                    metadata = gl_image["image"]["properties"]
+                    metadata = img["properties"]
                     if "owner_id" in metadata:
                         # update tenant id
                         LOG.debug("updating snapshot metadata for field "
                                   "'owner_id' for image {image}".format(
-                                      image=gl_image["image"]["id"]))
-                        metadata["owner_id"] = gl_image["image"]["owner"]
+                                      image=img["id"]))
+                        metadata["owner_id"] = img["owner"]
                     if "user_id" in metadata:
                         # update user id by specified name
                         LOG.debug("updating snapshot metadata for field "
                                   "'user_id' for image {image}".format(
-                                      image=gl_image["image"]["id"]))
-                        metadata["user_id"] = \
-                            self.identity_client.keystone_client.users.find(
+                                      image=img["id"]))
+                        try:
+                            ks_client = self.identity_client.keystone_client
+                            metadata["user_id"] = ks_client.users.find(
                                 username=metadata["user_name"]).id
-                        del metadata["user_name"]
-                if gl_image["image"]["checksum"] is None:
+                            del metadata["user_name"]
+                        except keystone_exceptions.NotFound:
+                            LOG.warning("Cannot update user name for image "
+                                        "{}".format(img['name']))
+                if img["checksum"] is None:
                     LOG.warning("re-creating image {} "
                                 "from original source URL"
-                                .format(gl_image["image"]["id"]))
+                                .format(img["id"]))
                     if meta['img_loc'] is not None:
                         self.glance_img_create(
-                            gl_image['image']['name'],
-                            gl_image['image']['disk_format'] or "qcow2",
+                            img['name'],
+                            img['disk_format'] or "qcow2",
                             meta['img_loc']
                         )
                         recreated_image = utl.ext_dict(
-                            name=gl_image["image"]["name"]
+                            name=img["name"]
                         )
                         migrate_images_list.append(
                             (recreated_image, gl_image['meta'])
@@ -384,8 +366,8 @@ class GlanceImage(image.Image):
                     continue
 
                 LOG.debug("Creating image '{image}' ({image_id})".format(
-                    image=gl_image["image"]["name"],
-                    image_id=gl_image['image']['id']))
+                    image=img["name"],
+                    image_id=img['id']))
                 # we can face situation when image has no
                 # disk_format and container_format properties
                 # this situation appears, when image was created
@@ -396,36 +378,36 @@ class GlanceImage(image.Image):
 
                 try:
                     migrate_image = self.create_image(
-                        name=gl_image['image']['name'],
-                        container_format=(gl_image['image']['container_format']
+                        name=img['name'],
+                        container_format=(img['container_format']
                                           or "bare"),
-                        disk_format=(gl_image['image']['disk_format']
-                                     or "qcow2"),
-                        is_public=gl_image['image']['is_public'],
-                        protected=gl_image['image']['protected'],
-                        owner=gl_image['image']['owner'],
-                        size=gl_image['image']['size'],
-                        properties=gl_image['image']['properties'],
+                        disk_format=(img['disk_format'] or
+                                     "qcow2"),
+                        is_public=img['is_public'],
+                        protected=img['protected'],
+                        owner=img['owner'],
+                        size=img['size'],
+                        properties=img['properties'],
                         data=file_like_proxy.FileLikeProxy(
-                            gl_image['image'],
+                            img,
                             self.config['migrate']['speed_limit']))
                     LOG.debug("new image ID {}".format(migrate_image.id))
                 except exception.ImageDownloadError:
                     LOG.warning("Unable to reach image's data due to "
                                 "Glance HTTPInternalServerError. Skipping "
-                                "image: (id = %s)", gl_image["image"]["id"])
-                    obsolete_images_ids_list.append(gl_image["image"]["id"])
+                                "image: (id = %s)", img["id"])
+                    obsolete_images_ids_list.append(img["id"])
                     continue
 
                 migrate_images_list.append((migrate_image, meta))
-                if not gl_image["image"]["container_format"]:
+                if not img["container_format"]:
                     delete_container_format.append(migrate_image.id)
-                if not gl_image["image"]["disk_format"]:
+                if not img["disk_format"]:
                     delete_disk_format.append(migrate_image.id)
-            elif gl_image['image']['resource'] is None:
-                recreated_image = utl.ext_dict(name=gl_image["image"]["name"])
+            elif img['resource'] is None:
+                recreated_image = utl.ext_dict(name=img["name"])
                 migrate_images_list.append((recreated_image, gl_image['meta']))
-            elif not gl_image['image']:
+            elif not img:
                 empty_image_list[image_id_src] = gl_image
 
         # Remove obsolete/broken images from info
@@ -436,7 +418,7 @@ class GlanceImage(image.Image):
                             migrate_images_list]
             LOG.debug("images on destination: {}".format(
                 [im for (im, tmp_meta) in im_name_list]))
-            new_info = self.read_info(images_list_meta=im_name_list)
+            new_info = self._convert_images_with_metadata(im_name_list)
         new_info['images'].update(empty_image_list)
         # on this step we need to create map between source ids and dst ones
         LOG.debug("creating map between source and destination image ids")
@@ -445,7 +427,7 @@ class GlanceImage(image.Image):
                                    x.checksum): x.id
                                   for x in self.get_image_list()}
         for image_id_src, gl_image in info['images'].iteritems():
-            cur_image = gl_image["image"]
+            cur_image = gl_image['image']
             image_ids_map[cur_image["id"]] = \
                 dst_img_name_checksums[(cur_image["name"],
                                         cur_image["checksum"])]

@@ -32,8 +32,8 @@ class ConverterVolumeToImageTest(test.TestCase):
         self.fake_storage.get_backend.return_value = 'ceph'
         self.fake_image = mock.Mock()
         self.fake_image.wait_for_status = mock.Mock()
-        self.fake_image.read_info = mock.Mock()
-        self.fake_image.read_info.return_value = {
+        self.fake_image.get_image_by_id_converted = mock.Mock()
+        self.fake_image.get_image_by_id_converted.return_value = {
             'images': {
                 'image_id': {'image': 'image_body', 'meta': {}}}}
         self.fake_image.patch_image = mock.Mock()

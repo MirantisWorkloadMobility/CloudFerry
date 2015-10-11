@@ -43,6 +43,16 @@ class FileLikeProxy:
         self.speed_limit = self.__parse_speed_limit(speed_limit)
         if self.speed_limit != 0:
             self.read = self.speed_limited_read
+        msg = 'Download file {}({}): '.format(self.name, self.id)
+        self.bar = progressbar.ProgressBar(
+            widgets=[
+                msg,
+                progressbar.Bar(left='[',
+                                marker='=',
+                                right=']'),
+                progressbar.Percentage()
+            ]
+        ).start()
 
     def __parse_speed_limit(self, speed_limit):
         if speed_limit is '-':
@@ -77,17 +87,6 @@ class FileLikeProxy:
 
     def __trigger_callback(self, len_data):
         self.delta += len_data
-        if self.delta == len_data:
-            msg = 'Download file {}({}): '.format(self.name, self.id)
-            self.bar = progressbar.ProgressBar(
-                widgets=[
-                    msg,
-                    progressbar.Bar(left='[',
-                                    marker='=',
-                                    right=']'),
-                    progressbar.Percentage()
-                ]
-            ).start()
         self.res += len_data
         if (self.delta > self.percent) or (len_data == 0):
             self.bar.update(self.res * 100 / self.length)

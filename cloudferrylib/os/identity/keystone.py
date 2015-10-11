@@ -298,6 +298,15 @@ class KeystoneIdentity(identity.Identity):
         ks_tenants = self.keystone_client.tenants
         if self.filter_tenant_id:
             result.append(ks_tenants.find(id=self.filter_tenant_id))
+
+            # public image owners must also be migrated
+            image_owners = set()
+            glance = self.cloud.resources[utl.IMAGE_RESOURCE]
+            for image in glance.get_image_list():
+                image_owners.add(image.owner)
+            image_owners -= {self.filter_tenant_id}
+            for owner in image_owners:
+                result.append(ks_tenants.find(id=owner))
         else:
             result = ks_tenants.list()
         return result
@@ -569,13 +578,11 @@ class KeystoneIdentity(identity.Identity):
         roles = {r.id: r for r in self.get_roles_list()}
         res = self._get_roles_sql_request()
         for user_id, tenant_id, roles_field in res:
-            roles_ids = ast.literal_eval(roles_field)['roles']
-
-            if tenant_id not in tenant_ids:
-                LOG.debug("Tenant ID '%s' is filtered from role migration",
-                          tenant_id)
+            # skip filtered tenants and users
+            if user_id not in user_ids or tenant_id not in tenant_ids:
                 continue
 
+            roles_ids = ast.literal_eval(roles_field)['roles']
             user_tenants_roles[user_ids[user_id]][tenant_ids[tenant_id]] = \
                 [{'role': {'name': roles[r].name, 'id': r}}
                  for r in roles_ids]

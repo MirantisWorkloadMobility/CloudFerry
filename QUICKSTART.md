@@ -11,8 +11,8 @@
 
 2. Install vagrant (devlab requires vagrant version >= 1.6)
     ```
-    wget https://dl.bintray.com/mitchellh/vagrant/vagrant_1.7.2_x86_64.deb
-    sudo dpkg -i vagrant_1.7.2_x86_64.deb
+    wget https://dl.bintray.com/mitchellh/vagrant/vagrant_1.7.4_x86_64.deb
+    sudo dpkg -i vagrant_1.7.4_x86_64.deb
     ```
 
 3. Install virtualbox hypervisor
@@ -28,7 +28,7 @@
 
 5. Setup virtual environment for cloudferry
     ```
-    apt-get install python-dev python-virtualenv libffi-dev -y
+    apt-get install python-dev libssl-dev python-virtualenv libffi-dev -y
     cd CloudFerry
     virtualenv .venv
     source .venv/bin/activate

@@ -77,6 +77,7 @@ tasks:
    check_dst_sql: ['CheckSQL', 'dst_cloud']
    check_src_rabbit: ['CheckRabbitMQ', 'src_cloud']
    check_dst_rabbit: ['CheckRabbitMQ', 'dst_cloud']
+   check_users_availability: ['CheckUsersAvailabilityOnSrcAndDst']
    create_snapshot: ['MysqlDump', 'dst_cloud']
    create_vm_snapshot_dst: ['VmSnapshot', 'dst_cloud']
    create_vm_snapshot_src: ['VmSnapshot', 'src_cloud']

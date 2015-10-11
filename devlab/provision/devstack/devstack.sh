@@ -6,7 +6,6 @@
 # Usage ./devstack.sh --branch icehouse_eol
 
 set -e
-
 devstack_dir='devstack'
 
 while [[ $# -ge 1 ]]; do
@@ -21,9 +20,7 @@ cd ${devstack_dir}
 git checkout $branch
 
 cp /tmp/local.conf .
-
 ./stack.sh
-
 
 # Add physical eth1 interface to the floating bridge
 # This allow access to the vm's inside of openstack directly from the host-server
@@ -32,8 +29,6 @@ sudo ovs-vsctl add-port br-ex $floating_interface
 sudo ip addr del `ip addr sh $floating_interface   | grep "inet " | awk '{print $2}'` dev $floating_interface
 sudo ip link set $floating_interface promisc on
 sudo ip link set br-ex promisc on
-
-
 
 #generate openrc file
 . openrc
@@ -48,8 +43,5 @@ function gen_openrc {
             echo "export $i" >> ${destination_openrc}
         done
 }
-
 gen_openrc "../openrc_admin" "admin" "admin"
 gen_openrc "../openrc_demo" "demo" "demo"
-
-

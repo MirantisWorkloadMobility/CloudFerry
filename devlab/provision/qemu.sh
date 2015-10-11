@@ -4,7 +4,6 @@
 # Usage
 #    ./qemu.sh
 
-
 set -e
 set -x
 

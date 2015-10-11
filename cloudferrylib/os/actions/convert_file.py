@@ -15,7 +15,7 @@ class ConvertFile(action.Action):
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             image_id = \
                 info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id']
-            images = image_res.read_info(image_id=image_id)
+            images = image_res.get_image_by_id_converted(image_id=image_id)
             image = images[utl.IMAGES_TYPE][image_id]
             disk_format = image[utl.IMAGE_BODY]['disk_format']
             base_file = "%s/%s" % (cfg.temp, "temp%s_base" % instance_id)
