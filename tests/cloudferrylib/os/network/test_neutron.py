@@ -31,7 +31,9 @@ FAKE_CONFIG = utils.ext_dict(
                           'tenant': 'fake_tenant',
                           'auth_url': 'http://1.1.1.1:35357/v2.0/',
                           'region': None,
-                          'service_tenant': 'services'}),
+                          'service_tenant': 'services',
+                          'cacert': '',
+                          'insecure': False}),
     migrate=utils.ext_dict({'ext_net_map': 'fake_ext_net_map.yaml',
                             'speed_limit': '10MB',
                             'retry': '7',
@@ -145,7 +147,9 @@ class NeutronTestCase(test.TestCase):
             username='fake_user',
             password='fake_password',
             tenant_name='fake_tenant',
-            auth_url='http://1.1.1.1:35357/v2.0/'
+            auth_url='http://1.1.1.1:35357/v2.0/',
+            ca_cert='',
+            insecure=False
         )
         self.assertEqual(self.neutron_mock_client(), client)
 
@@ -667,12 +671,16 @@ class NeutronClientTestCase(test.TestCase):
         user = 'user'
         auth_url = 'auth_url'
         password = 'password'
+        insecure = False
+        cacert = ''
 
         config.cloud.user = user
         config.cloud.tenant = tenant
         config.cloud.region = region
         config.cloud.auth_url = auth_url
         config.cloud.password = password
+        config.cloud.insecure = insecure
+        config.cloud.cacert = cacert
 
         n = neutron.NeutronNetwork(config, cloud)
         n.get_client()
@@ -682,7 +690,9 @@ class NeutronClientTestCase(test.TestCase):
             tenant_name=tenant,
             password=password,
             auth_url=auth_url,
-            username=user
+            username=user,
+            ca_cert=cacert,
+            insecure=insecure
         )
 
     def test_does_not_add_region_if_not_set_in_config(self, n_client):
@@ -693,12 +703,16 @@ class NeutronClientTestCase(test.TestCase):
         user = 'user'
         auth_url = 'auth_url'
         password = 'password'
+        insecure = False
+        cacert = ''
 
         config.cloud.region = None
         config.cloud.user = user
         config.cloud.tenant = tenant
         config.cloud.auth_url = auth_url
         config.cloud.password = password
+        config.cloud.insecure = insecure
+        config.cloud.cacert = cacert
 
         n = neutron.NeutronNetwork(config, cloud)
         n.get_client()
@@ -707,5 +721,7 @@ class NeutronClientTestCase(test.TestCase):
             tenant_name=tenant,
             password=password,
             auth_url=auth_url,
-            username=user
+            username=user,
+            ca_cert=cacert,
+            insecure=insecure
         )

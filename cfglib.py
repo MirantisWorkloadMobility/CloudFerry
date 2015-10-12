@@ -27,7 +27,10 @@ src_opts = [
     cfg.StrOpt('ssh_user', default='root',
                help='user to connect via ssh'),
     cfg.StrOpt('ssh_sudo_password', default='',
-               help='sudo password to connect via ssh, if any')
+               help='sudo password to connect via ssh, if any'),
+    cfg.StrOpt('cacert', default='', help='SSL certificate'),
+    cfg.BoolOpt('insecure', default=False,
+                help='Allow to access servers without checking SSL certs')
 ]
 
 dst = cfg.OptGroup(name='dst',
@@ -58,7 +61,10 @@ dst_opts = [
     cfg.StrOpt('ssh_user', default='root',
                help='user to connect via ssh'),
     cfg.StrOpt('ssh_sudo_password', default='',
-               help='sudo password to connect via ssh, if any')
+               help='sudo password to connect via ssh, if any'),
+    cfg.StrOpt('cacert', default='', help='SSL certificate'),
+    cfg.BoolOpt('insecure', default=False,
+                help='Allow to access servers without checking SSL certs')
 ]
 
 migrate = cfg.OptGroup(name='migrate',
@@ -660,10 +666,7 @@ def merge_cfg(cfg):
 
 
 def collector_configs_plugins():
-    plugins = get_plugins()
-    for plugin in plugins:
-        merge_cfg(plugin[1].cfg_for_reg)
-        name_configs.append('addons/%s/configs/config.ini' % plugin[0])
+    pass
 
 if __name__ == '__main__':
     collector_configs_plugins()

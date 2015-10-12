@@ -122,7 +122,8 @@ class NovaCompute(compute.Compute):
         client_args = [params.cloud.user, params.cloud.password,
                        params.cloud.tenant, params.cloud.auth_url]
 
-        client_kwargs = {}
+        client_kwargs = {"cacert": params.cloud.cacert,
+                         "insecure": params.cloud.insecure}
         if params.cloud.region:
             client_kwargs["region_name"] = params.cloud.region
 
