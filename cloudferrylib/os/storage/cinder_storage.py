@@ -14,6 +14,7 @@
 
 
 from cinderclient.v1 import client as cinder_client
+from cinderclient import exceptions as cinder_exc
 
 from cloudferrylib.base import storage
 from cloudferrylib.utils import utils as utl
@@ -139,9 +140,18 @@ class CinderStorage(storage.Storage):
         return self.cinder_client.volumes.detach(volume_id)
 
     def finish(self, vol):
-        self.__patch_option_bootable_of_volume(
-            vol[utl.VOLUME_BODY]['id'],
-            vol[utl.VOLUME_BODY]['bootable'])
+        try:
+            self.cinder_client.volumes.set_bootable(
+                vol[utl.VOLUME_BODY]['id'],
+                vol[utl.VOLUME_BODY]['bootable']
+            )
+        except cinder_exc.BadRequest:
+            LOG.info("Can't update bootable flag of volume with id = %s "
+                     "using API, trying to use DB..." %
+                     vol[utl.VOLUME_BODY]['id'])
+            self.__patch_option_bootable_of_volume(
+                vol[utl.VOLUME_BODY]['id'],
+                vol[utl.VOLUME_BODY]['bootable'])
 
     def upload_volume_to_image(self, volume_id, force, image_name,
                                container_format, disk_format):
