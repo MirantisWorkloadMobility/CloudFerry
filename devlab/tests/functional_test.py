@@ -163,9 +163,10 @@ class FunctionalTest(unittest.TestCase):
         [volumes.extend(i['cinder_volumes']) for i in config.tenants
          if 'cinder_volumes' in i]
         volumes.extend(config.cinder_volumes_from_images)
+        volumes_names = [volume['display_name'] for volume in volumes]
         opts = {'search_opts': {'all_tenants': 1}}
         return [i for i in self.src_cloud.cinderclient.volumes.list(**opts)
-                if i.display_name in volumes]
+                if i.display_name in volumes_names]
 
     def _get_neutron_resources(self, res, names):
         _list = getattr(self.src_cloud.neutronclient, 'list_' + res)()
