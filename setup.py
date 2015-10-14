@@ -14,12 +14,14 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import os
+
 from setuptools import setup
 from setuptools import find_packages
 from pip.req import parse_requirements
 
 setup(name='CloudFerry',
-      version=open('version.txt').read().strip(),
+      version=os.environ['CLOUDFERRY_VERSION'],
       description='Tool for migrate resources and workloads between clouds',
       author='Mirantis Inc.',
       author_email='workloadmobility@mirantis.com',
