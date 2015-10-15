@@ -1,11 +1,12 @@
-import re
-import pprint
 import config
-import unittest
-import subprocess
 import functional_test
 
-from time import sleep
+import pprint
+import unittest
+
+from fabric.api import run, settings
+from fabric.network import NetworkError
+from neutronclient.common.exceptions import NeutronClientException
 
 
 class ResourceMigrationTests(functional_test.FunctionalTest):
@@ -306,6 +307,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.validate_resource_parameter_in_dst(
             src_volume_list, dst_volume_list, resource_name='volume',
             parameter='size')
+        self.validate_resource_parameter_in_dst(
+            src_volume_list, dst_volume_list, resource_name='volume',
+            parameter='bootable')
 
     @unittest.skip("Temporarily disabled: snapshots doesn't implemented in "
                    "cinder's nfs driver")
@@ -351,31 +355,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 src_quotas[tenant], _dst_quotas,
                 'Quotas for tenant %s on src and dst are different' % tenant)
 
-    @unittest.skip("Temporarily disabled: test failed and should be fixed")
     def test_ssh_connectivity_by_keypair(self):
-        def retry_cmd_execute(cmd):
-            timeout = 300  # set timeout for retry 300 seconds
-            for i in range(timeout):
-                try:
-                    subprocess.check_output(cmd, shell=True)
-                    return
-                except Exception:
-                    sleep(1)
-            raise RuntimeError("Command %s was failed" % cmd)
-
-        dst_key_name = 'test_prv_key.pem'  # random name for new key
-
-        ip_regexp = '.+(\d{3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).+'
-        ip = re.match(ip_regexp, self.dst_cloud.auth_url).group(1)
-        cmd = 'ssh -i {0} root@{1} "%s"'.format(config.dst_prv_key_path, ip)
-
-        # create privet key on dst node
-        create_key_cmd = "echo '{0}' > {1}".format(
-            config.private_key['id_rsa'], dst_key_name)
-        subprocess.check_output(cmd % create_key_cmd, shell=True)
-        cmd_change_rights = 'chmod 400 %s' % dst_key_name
-        subprocess.check_output(cmd % cmd_change_rights, shell=True)
-        # find vm with valid keypair
         vms = self.dst_cloud.novaclient.servers.list(
             search_opts={'all_tenants': 1})
         for _vm in vms:
@@ -383,23 +363,11 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 vm = _vm
                 break
         else:
-            raise RuntimeError('VM for current test was not spawned')
-
-        # get net id for ssh through namespace
-        net_list = self.dst_cloud.neutronclient.list_networks()['networks']
-        for net in net_list:
-            if net['name'] in vm.networks:
-                net_id = net['id']
-                ip_address = vm.networks[net['name']].pop()
-                break
-        else:
             raise RuntimeError(
-                "Networks for vm %s were not configured" % vm.name)
+                'VM for current test was not spawned on dst. Make sure vm with'
+                'name keypair_test has been created on src')
+        ip_addr = self.filtering_utils.get_vm_fip(vm)
 
-        cmd_ssh_to_vm = 'sudo ip netns exec {2} ssh' \
-                        ' -o StrictHostKeyChecking=no -i {0} root@{1} date'
-        cmd_ssh_to_vm = cmd_ssh_to_vm.format(dst_key_name, ip_address,
-                                             'qdhcp-' + net_id)
         # make sure 22 port in sec group is open
         sec_grps = self.dst_cloud.get_sec_group_id_by_tenant_id(vm.tenant_id)
         for sec_gr in sec_grps:
@@ -407,13 +375,22 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 self.dst_cloud.create_security_group_rule(
                     sec_gr, vm.tenant_id, protocol='tcp', port_range_max=22,
                     port_range_min=22, direction='ingress')
-            except Exception:
+            except NeutronClientException:
                 pass
-
-        try:
-            retry_cmd_execute(cmd % cmd_ssh_to_vm)
-        finally:
-            subprocess.check_output(cmd % 'rm ' + dst_key_name, shell=True)
+        # try to connect to vm via key pair
+        with settings(host_string=ip_addr, user="root",
+                      key=config.private_key['id_rsa'],
+                      abort_on_prompts=True, connection_attempts=3,
+                      disable_known_hosts=True):
+            try:
+                run("pwd", shell=False)
+            except NetworkError:
+                msg = 'VM with name {name} and ip: {addr} is not accessible'
+                self.fail(msg.format(name=vm.name, addr=ip_addr))
+            except SystemExit:
+                msg = 'VM with name {name} and ip: {addr} is not accessible ' \
+                      'via key pair'
+                self.fail(msg.format(name=vm.name, addr=ip_addr))
 
     def test_floating_ips_migrated(self):
         def get_fips(client):

@@ -68,3 +68,12 @@ class FilteringUtils(object):
                 index = src_data_list.index(tenant)
                 src_data_list.pop(index)
         return [src_data_list, popped_tenant_list]
+
+    @staticmethod
+    def get_vm_fip(vm):
+        for net in vm.addresses:
+            for addr in vm.addresses[net]:
+                if addr['OS-EXT-IPS:type'] == 'floating':
+                    return addr['addr']
+        raise RuntimeError('VM with name {} and id {} doesnt have fip'.format(
+            vm.name, vm.id))

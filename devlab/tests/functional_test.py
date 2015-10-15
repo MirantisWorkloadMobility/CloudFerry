@@ -17,7 +17,7 @@ import logging
 import sys
 import os
 import unittest
-from generate_load import Prerequisites
+from generate_load import Prerequisites, NotFound
 from filtering_utils import FilteringUtils
 
 
@@ -56,16 +56,36 @@ class FunctionalTest(unittest.TestCase):
                     networks.append(j['name'])
         return self._get_neutron_resources('networks', networks)
 
-    # TODO(raies): Currently we support filtering of those subnets which has
-    # 'name' parameter in it's detail.
-    # Implimentation of Subnet filtering for no name subnets is still needed.
     def filter_subnets(self):
-        subnets = [i['name'] for i in config.subnets]
-        for i in config.tenants:
-            if 'subnets' in i:
-                for subnet in i['subnets']:
-                    subnets.append(subnet['name'])
-        return self._get_neutron_resources('subnets', subnets)
+        subnets = []
+        admin_tenant_id = self.src_cloud.get_tenant_id(self.src_cloud.tenant)
+        for net in config.networks:
+            if not net.get('subnets'):
+                continue
+            for subnet in net['subnets']:
+                subnet['tenant_id'] = admin_tenant_id
+                subnets.append(subnet)
+        subnets = [i for net in config.networks if net.get('subnets')
+                   for i in net['subnets']]
+        for tenant in config.tenants:
+            if 'networks' not in tenant:
+                continue
+            for network in tenant['networks']:
+                if 'subnets' not in network:
+                    continue
+                for subnet in network['subnets']:
+                    subnet['tenant_id'] = self.src_cloud.get_tenant_id(
+                        tenant['name'])
+                    subnets.append(subnet)
+        env_subnets = self.src_cloud.neutronclient.list_subnets()['subnets']
+        filtered_subnets = {'subnets': []}
+        for env_subnet in env_subnets:
+            for subnet in subnets:
+                same_cidr = env_subnet['cidr'] == subnet['cidr']
+                same_tenant = env_subnet['tenant_id'] == subnet['tenant_id']
+                if same_cidr and same_tenant:
+                    filtered_subnets['subnets'].append(env_subnet)
+        return filtered_subnets
 
     def filter_routers(self):
         routers = [i['router']['name'] for i in config.routers]
@@ -110,6 +130,7 @@ class FunctionalTest(unittest.TestCase):
     def filter_vms(self):
         vms = config.vms
         [vms.extend(i['vms']) for i in config.tenants if 'vms' in i]
+        vms.extend(config.vms_from_volumes)
         vms_names = [vm['name'] for vm in vms]
         opts = {'search_opts': {'all_tenants': 1}}
         return [i for i in self.src_cloud.novaclient.servers.list(**opts)
@@ -138,10 +159,14 @@ class FunctionalTest(unittest.TestCase):
                 if i.name in images]
 
     def filter_volumes(self):
-        volumes = [i['name'] for i in config.cinder_volumes]
+        volumes = config.cinder_volumes
+        [volumes.extend(i['cinder_volumes']) for i in config.tenants
+         if 'cinder_volumes' in i]
+        volumes.extend(config.cinder_volumes_from_images)
+        volumes_names = [volume['display_name'] for volume in volumes]
         opts = {'search_opts': {'all_tenants': 1}}
         return [i for i in self.src_cloud.cinderclient.volumes.list(**opts)
-                if i.display_name in volumes]
+                if i.display_name in volumes_names]
 
     def _get_neutron_resources(self, res, names):
         _list = getattr(self.src_cloud.neutronclient, 'list_' + res)()
@@ -161,7 +186,7 @@ class FunctionalTest(unittest.TestCase):
         try:
             self.src_cloud.get_tenant_id(tenant_name)
             return True
-        except IndexError:
+        except NotFound:
             return False
 
     def _user_has_not_primary_tenants(self, user_name):
