@@ -107,3 +107,4 @@ tasks:
    check_networks: ['CheckNetworks']
    check_src_instance_networks: ['CheckInstanceNetworks', 'src_cloud']
    verify_vms: ['VerifyVms', src_cloud]
+   act_filter_similar_vms_from_dst: ['FilterSimilarVMsFromDST', 'dst_cloud']
