@@ -157,14 +157,6 @@ networks = [
           'routers_to_connect': ['ext_router'], 'allocation_pools': [
               {'start': '192.168.1.100', 'end': '192.168.1.254'}]
           }]
-     },
-    {'name': 'second_shared_net', 'admin_state_up': True, 'shared': True,
-     'router:external': True,
-     'subnets': [
-         {'cidr': '192.168.7.0/24', 'ip_version': 4, 'name': 'shared_subnet',
-          'routers_to_connect': [], 'allocation_pools': [
-              {'start': '192.168.7.10', 'end': '192.168.7.192'}]
-          }]
      }
 ]
 

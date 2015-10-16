@@ -537,6 +537,8 @@ class Prerequisites(BasePrerequisites):
                 subnet['network_id'] = net['network']['id']
                 _subnet = self.neutronclient.create_subnet(
                     {'subnet': get_body_for_subnet_creating(subnet)})
+                self.neutronclient.create_port(
+                    {"port": {"network_id": net['network']['id']}})
                 if not subnet.get('routers_to_connect'):
                     continue
                 # If network has attribute routers_to_connect, interface to
