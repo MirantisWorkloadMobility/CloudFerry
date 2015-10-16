@@ -1236,12 +1236,6 @@ class NeutronNetwork(network.Network):
                 tenant = self.identity_client.keystone_client.tenants.find(
                     name=fip['tenant_name'])
 
-                if self.filter_tenant_id and \
-                        (self.filter_tenant_id != tenant.id):
-                    LOG.info("Skipping floating IP '%s' based on filter rules",
-                             fip['floating_ip_address'])
-                    continue
-
                 new_fip = {
                     'floatingip': {
                         'floating_network_id': ext_net_id,
