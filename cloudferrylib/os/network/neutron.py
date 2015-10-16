@@ -1019,8 +1019,6 @@ class NeutronNetwork(network.Network):
         LOG.info("Creating networks on destination")
 
         existing_networks = self.get_networks()
-        existing_nets_hashlist = (
-            [ex_net['res_hash'] for ex_net in existing_networks])
 
         # we need to handle duplicates in segmentation ids
         # hash is used with structure {"gre": [1, 2, ...],

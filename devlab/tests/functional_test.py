@@ -115,8 +115,8 @@ class FunctionalTest(unittest.TestCase):
         for user in config.users:
             if user.get('deleted'):
                 continue
-            if self._tenant_exists(user.get('tenant')) or\
-                    self._user_has_not_primary_tenants(user['name']):
+            if self.src_cloud.tenant_exists(user.get('tenant')) or\
+                    self.src_cloud.user_has_not_primary_tenants(user['name']):
                 users.append(user['name'])
         return self._get_keystone_resources('users', users)
 
@@ -142,8 +142,7 @@ class FunctionalTest(unittest.TestCase):
         return self._get_nova_resources('flavors', flavors)
 
     def filter_keypairs(self):
-        keypairs = [i['name'] for i in config.keypairs]
-        return self._get_nova_resources('keypairs', keypairs)
+        return self.src_cloud.get_users_keypairs()
 
     def filter_security_groups(self):
         sgs = [sg['name'] for i in config.tenants if 'security_groups' in i
@@ -182,21 +181,6 @@ class FunctionalTest(unittest.TestCase):
         client = getattr(self.src_cloud.keystoneclient, res)
         return [i for i in client.list()
                 if i.name in names]
-
-    def _tenant_exists(self, tenant_name):
-        try:
-            self.src_cloud.get_tenant_id(tenant_name)
-            return True
-        except NotFound:
-            return False
-
-    def _user_has_not_primary_tenants(self, user_name):
-        user_id = self.src_cloud.get_user_id(user_name)
-        for tenant in self.src_cloud.keystoneclient.tenants.list():
-            if self.src_cloud.keystoneclient.roles.roles_for_user(
-                    user=user_id, tenant=tenant.id):
-                return True
-        return False
 
     def get_vms_with_fip_associated(self):
         vms = config.vms

@@ -208,11 +208,44 @@ class BasePrerequisites(object):
         return [i['id'] for i in sec_group_list['security_groups']
                 if i['tenant_id'] == tenant_id]
 
+    def get_users_keypairs(self):
+        self.switch_user(self.username, self.password, self.tenant)
+        user_names = [u['name'] for u in self.config.users]
+        keypairs = []
+        for user in self.config.users:
+            if user['name'] not in user_names:
+                continue
+            if not user.get('enabled') or user.get('deleted'):
+                continue
+            if not self.tenant_exists(user['tenant']) or \
+                    not self.user_has_not_primary_tenants(user['name']):
+                continue
+            try:
+                self.switch_user(user['name'], user['password'],
+                                 user['tenant'])
+            except ks_exceptions.Unauthorized:
+                self.keystoneclient.users.update(
+                    self.get_user_id(user['name']), password=user['password'],
+                    tenant=user['tenant'])
+                self.switch_user(user['name'], user['password'],
+                                 user['tenant'])
+            keypairs.extend(self.novaclient.keypairs.list())
+        return keypairs
+
+    def user_has_not_primary_tenants(self, user_name):
+        user_id = self.get_user_id(user_name)
+        for tenant in self.keystoneclient.tenants.list():
+            if self.keystoneclient.roles.roles_for_user(user=user_id,
+                                                        tenant=tenant.id):
+                return True
+        return False
+
     def check_vm_state(self, srv):
         srv = self.novaclient.servers.get(srv)
         return srv.status == 'ACTIVE'
 
     def tenant_exists(self, tenant_name):
+        self.switch_user(self.username, self.password, self.tenant)
         try:
             self.get_tenant_id(tenant_name)
             return True
