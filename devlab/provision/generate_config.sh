@@ -51,12 +51,12 @@ fi
 
 config=${CF_PATH}/devlab/config.ini
 if grep -q '^src_ip' $config ; then
-    sed -i "s/^src_ip.*/src_ip = ${SRC_IP}/" $config
+    sed -i.bak "s/^src_ip.*/src_ip = ${SRC_IP}/" $config
 else
     echo "src_ip = ${SRC_IP}" >> $config
 fi
 if grep -q '^dst_ip' $config ; then
-    sed -i "s/^dst_ip.*/dst_ip = ${DST_IP}/" $config
+    sed -i.bak "s/^dst_ip.*/dst_ip = ${DST_IP}/" $config
 else
     echo "dst_ip = ${DST_IP}" >> $config
 fi
@@ -65,7 +65,13 @@ while read key value
 do
     value=($value)
     value=${value[1]}
-    sed -i "s|<${key}>|${value}|g" ${result_config}
+
+    # ignore empty and commented strings
+    if [[ -z $key || "$key" =~ ^[[:blank:]]*#.*$ ]]; then
+        continue
+    fi
+
+    sed -i.bak "s|<${key}>|${value}|g" ${result_config}
 done < ${CF_PATH}/devlab/config.ini
 
 echo "CloudFerry config is saved in ${result_config}"
