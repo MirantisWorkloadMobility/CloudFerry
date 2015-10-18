@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import re
 import yaml
 import unittest
 import functional_test
@@ -33,11 +34,15 @@ class GroupProcedureVerification(functional_test.FunctionalTest):
         #  Should be fixed by implementing proper package module for Cloud
         #  Ferry.
         self.conf_path = 'devlab/tests'
+        dst_ip = self._get_ip_from_url(self.dst_cloud.auth_url)
+        src_ip = self._get_ip_from_url(self.src_cloud.auth_url)
         cmd_no_path = './../../devlab/provision/generate_config.sh' \
-                      ' --cloudferry-path {} --destination {}'
+                      ' --cloudferry-path {} --destination {} --src-ip {}' \
+                      ' --dst-ip {}'
         cmd = cmd_no_path.format(self.main_folder,
                                  os.path.join(self.main_folder,
-                                              self.conf_path))
+                                              self.conf_path),
+                                 src_ip, dst_ip)
         os.system(cmd)
 
     def tearDown(self):
@@ -54,6 +59,10 @@ class GroupProcedureVerification(functional_test.FunctionalTest):
             except Exception as e:
                 print 'Was unable to delete testing files, error output:' \
                       '\n{}'.format(e)
+
+    def _get_ip_from_url(self, url):
+        ip_regexp = '.+(\d{3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).+'
+        return re.match(ip_regexp, url).group(1)
 
     def _prepare_files(self, grouping_by):
         """

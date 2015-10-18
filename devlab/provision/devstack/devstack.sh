@@ -45,3 +45,14 @@ function gen_openrc {
 }
 gen_openrc "../openrc_admin" "admin" "admin"
 gen_openrc "../openrc_demo" "demo" "demo"
+
+#clean public and private networks and router1
+source ../openrc_admin
+neutron router-gateway-clear router1
+neutron router-port-list router1 | grep -v mac_address | grep -v  +- \
+| awk 'system("neutron router-interface-delete router1 port="$2)'
+neutron router-delete router1
+neutron net-delete private
+neutron net-delete public
+neutron-netns-cleanup
+

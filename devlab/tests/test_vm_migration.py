@@ -8,8 +8,13 @@ class VmMigration(functional_test.FunctionalTest):
 
     def setUp(self):
         src_vms = self.filter_vms()
+        if not src_vms:
+            self.skipTest("Nothing to migrate - source vm list is empty")
         self.dst_vms = self.dst_cloud.novaclient.servers.list(
             search_opts={'all_tenants': 1})
+        if not self.dst_vms:
+            self.fail("No VM's on destination. Either Migration was not "
+                      "successful for resource 'VM' or it was not initiated")
         src_vms = [vm for vm in src_vms if vm.status != 'ERROR']
         self.dst_vm_indexes = []
         for vm in src_vms:

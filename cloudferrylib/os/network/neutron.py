@@ -51,7 +51,9 @@ class NeutronNetwork(network.Network):
             "username": self.config.cloud.user,
             "password": self.config.cloud.password,
             "tenant_name": self.config.cloud.tenant,
-            "auth_url": self.config.cloud.auth_url
+            "auth_url": self.config.cloud.auth_url,
+            "ca_cert": self.config.cloud.cacert,
+            "insecure": self.config.cloud.insecure
         }
 
         if self.config.cloud.region:
@@ -1233,12 +1235,6 @@ class NeutronNetwork(network.Network):
 
                 tenant = self.identity_client.keystone_client.tenants.find(
                     name=fip['tenant_name'])
-
-                if self.filter_tenant_id and \
-                        (self.filter_tenant_id != tenant.id):
-                    LOG.info("Skipping floating IP '%s' based on filter rules",
-                             fip['floating_ip_address'])
-                    continue
 
                 new_fip = {
                     'floatingip': {

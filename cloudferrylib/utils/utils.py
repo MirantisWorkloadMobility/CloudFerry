@@ -18,6 +18,8 @@ import timeit
 import random
 import string
 import smtplib
+import os.path
+from pkg_resources import Requirement, resource_filename
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from functools import wraps
@@ -44,7 +46,12 @@ REMOTE_FILE = "remote file"
 QCOW2 = "qcow2"
 RAW = "raw"
 YES = "yes"
-LOGGING_CONFIG = 'configs/logging_config.yaml'
+# Use configs/logging_config.yaml as logging config in current folder
+# otherwise will use config from CloudFerry package.
+LOGGING_CONFIG = ('configs/logging_config.yaml'
+                  if os.path.isfile('configs/logging_config.yaml') else
+                  resource_filename(Requirement.parse("CloudFerry"),
+                                    'configs/logging_config.yaml'))
 PATH_TO_SNAPSHOTS = 'snapshots'
 AVAILABLE = 'available'
 IN_USE = 'in-use'

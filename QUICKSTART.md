@@ -1,5 +1,26 @@
 # Quick Start Guide
 
+1. Install CloudFerry by pip
+    ```
+    pip install CloudFerry
+    ```
+
+2. Initialize CloudFerry environment
+    ```
+    mkdir my_migration
+    cd my_migration
+    cloudferry init
+    ```
+
+3. Change config files according your clouds
+
+4. Migrate it
+    ```
+    cloudferry migrate configs/config.ini
+    ```
+
+# Developer Quick Start Guide
+
 1. Get CloudFerry sources
     ```
     git clone https://github.com/MirantisWorkloadMobility/CloudFerry.git

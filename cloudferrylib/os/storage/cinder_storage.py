@@ -54,7 +54,10 @@ class CinderStorage(storage.Storage):
             params.cloud.user,
             params.cloud.password,
             params.cloud.tenant,
-            params.cloud.auth_url)
+            params.cloud.auth_url,
+            cacert=self.config.cloud.cacert,
+            insecure=self.config.cloud.insecure
+        )
 
     def read_info(self, **kwargs):
         info = {utl.VOLUMES_TYPE: {}}

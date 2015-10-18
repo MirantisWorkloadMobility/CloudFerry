@@ -32,7 +32,9 @@ FAKE_CONFIG = utils.ext_dict(
                           'tenant': 'fake_tenant',
                           'auth_url': 'http://1.1.1.1:35357/v2.0/',
                           'region': None,
-                          'service_tenant': 'service'}),
+                          'service_tenant': 'service',
+                          'cacert': '',
+                          'insecure': False}),
     migrate=utils.ext_dict({'speed_limit': '10MB',
                             'retry': '7',
                             'time_wait': 5,
@@ -438,12 +440,16 @@ class KeystoneClientTestCase(test.TestCase):
         user = 'user'
         auth_url = 'auth_url'
         password = 'password'
+        insecure = False
+        cacert = ''
 
         config.cloud.user = user
         config.cloud.tenant = tenant
         config.cloud.region = region
         config.cloud.auth_url = auth_url
         config.cloud.password = password
+        config.cloud.insecure = insecure
+        config.cloud.cacert = cacert
 
         ks = keystone.KeystoneIdentity(config, cloud)
         ks.get_client()
@@ -453,7 +459,9 @@ class KeystoneClientTestCase(test.TestCase):
             tenant_name=tenant,
             password=password,
             auth_url=auth_url,
-            username=user
+            username=user,
+            cacert=cacert,
+            insecure=insecure
         )
 
     def test_does_not_add_region_if_not_set_in_config(self, ks_client):
@@ -464,12 +472,16 @@ class KeystoneClientTestCase(test.TestCase):
         user = 'user'
         auth_url = 'auth_url'
         password = 'password'
+        insecure = False
+        cacert = ''
 
         config.cloud.region = None
         config.cloud.user = user
         config.cloud.tenant = tenant
         config.cloud.auth_url = auth_url
         config.cloud.password = password
+        config.cloud.insecure = insecure
+        config.cloud.cacert = cacert
 
         ks = keystone.KeystoneIdentity(config, cloud)
         ks.get_client()
@@ -478,7 +490,9 @@ class KeystoneClientTestCase(test.TestCase):
             tenant_name=tenant,
             password=password,
             auth_url=auth_url,
-            username=user
+            username=user,
+            cacert=cacert,
+            insecure=insecure
         )
 
 

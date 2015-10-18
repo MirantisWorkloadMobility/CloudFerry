@@ -43,7 +43,7 @@ DEFAULT_FILTERS_FILES = 'configs/filters'
 
 
 @task
-def migrate(name_config=None, name_instance=None, debug=False):
+def migrate(name_config=None, debug=False):
     """
         :name_config - name of config yaml-file, example 'config.yaml'
     """

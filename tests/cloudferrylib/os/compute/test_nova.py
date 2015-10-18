@@ -32,7 +32,9 @@ FAKE_CONFIG = utils.ext_dict(
                           'password': 'fake_password',
                           'tenant': 'fake_tenant',
                           'region': None,
-                          'auth_url': 'http://1.1.1.1:35357/v2.0/'}),
+                          'auth_url': 'http://1.1.1.1:35357/v2.0/',
+                          'cacert': '',
+                          'insecure': False}),
     mysql=utils.ext_dict({'host': '1.1.1.1'}),
     migrate=utils.ext_dict({'migrate_quotas': True,
                             'speed_limit': '10MB',
@@ -79,7 +81,8 @@ class NovaComputeTestCase(test.TestCase):
 
         self.mock_client.assert_called_once_with('fake_user', 'fake_password',
                                                  'fake_tenant',
-                                                 'http://1.1.1.1:35357/v2.0/')
+                                                 'http://1.1.1.1:35357/v2.0/',
+                                                 cacert='', insecure=False)
         self.assertEqual(self.mock_client(), client)
 
     def test_create_instance(self):
@@ -453,18 +456,23 @@ class NovaClientTestCase(test.TestCase):
         user = 'user'
         auth_url = 'auth_url'
         password = 'password'
+        insecure = False
+        cacert = ''
 
         config.cloud.user = user
         config.cloud.tenant = tenant
         config.cloud.region = region
         config.cloud.auth_url = auth_url
         config.cloud.password = password
+        config.cloud.insecure = insecure
+        config.cloud.cacert = cacert
 
         n = nova_compute.NovaCompute(config, cloud)
         n.get_client()
 
         n_client.assert_called_with(user, password, tenant, auth_url,
-                                    region_name=region)
+                                    region_name=region, cacert=cacert,
+                                    insecure=insecure)
 
     def test_does_not_add_region_if_not_set_in_config(self, n_client):
         cloud = mock.MagicMock()
@@ -474,14 +482,19 @@ class NovaClientTestCase(test.TestCase):
         user = 'user'
         auth_url = 'auth_url'
         password = 'password'
+        insecure = False
+        cacert = ''
 
         config.cloud.region = None
         config.cloud.user = user
         config.cloud.tenant = tenant
         config.cloud.auth_url = auth_url
         config.cloud.password = password
+        config.cloud.insecure = insecure
+        config.cloud.cacert = cacert
 
         n = nova_compute.NovaCompute(config, cloud)
         n.get_client()
 
-        n_client.assert_called_with(user, password, tenant, auth_url)
+        n_client.assert_called_with(user, password, tenant, auth_url,
+                                    cacert=cacert, insecure=insecure)
