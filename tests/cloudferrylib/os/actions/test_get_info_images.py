@@ -17,6 +17,7 @@
 import mock
 
 from cloudferrylib.os.actions import get_info_images
+from cloudferrylib.utils import utils
 from tests import test
 
 
@@ -30,7 +31,8 @@ class GetInfoImagesTestCase(test.TestCase):
         self.fake_image.read_info.return_value = self.fake_info
         self.fake_src_cloud = mock.Mock()
         self.fake_dst_cloud = mock.Mock()
-        self.fake_config = {}
+        self.fake_config = utils.ext_dict(migrate=utils.ext_dict(
+            {'ignore_empty_images': False}))
         self.fake_src_cloud.resources = {'image': self.fake_image}
 
         self.fake_init = {
