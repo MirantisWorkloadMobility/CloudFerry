@@ -408,6 +408,7 @@ class NeutronNetwork(network.Network):
             'tenant_name': get_tenant_name(floating['tenant_id']),
             'fixed_ip_address': floating['fixed_ip_address'],
             'floating_ip_address': floating['floating_ip_address'],
+            'port_id': floating['port_id'],
             'meta': {},
         }
 

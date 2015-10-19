@@ -42,9 +42,11 @@ class CheckNetworksTestCase(test.TestCase):
 
     def test_all_empty(self):
         src_net_info = {'networks': [],
-                        'subnets': []}
+                        'subnets': [],
+                        'floating_ips': []}
         dst_net_info = {'networks': [],
-                        'subnets': []}
+                        'subnets': [],
+                        'floating_ips': []}
         self.get_action(src_net_info, dst_net_info).run()
 
     def test_empty_dst(self):
@@ -56,9 +58,11 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
-                                     'id': 'sub1'}]}
+                                     'id': 'sub1'}],
+                        'floating_ips': []}
         dst_net_info = {'networks': [],
-                        'subnets': []}
+                        'subnets': [],
+                        'floating_ips': []}
         self.get_action(src_net_info, dst_net_info).run()
 
     def test_equals_networks(self):
@@ -70,7 +74,8 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
-                                     'id': 'sub1'}]}
+                                     'id': 'sub1'}],
+                        'floating_ips': []}
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
                                       "provider:physical_network": None,
@@ -79,7 +84,8 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id2',
-                                     'id': 'sub2'}]}
+                                     'id': 'sub2'}],
+                        'floating_ips': []}
         self.get_action(src_net_info, dst_net_info).run()
 
     def test_equals_and_new_networks(self):
@@ -95,7 +101,8 @@ class CheckNetworksTestCase(test.TestCase):
                                     {'cidr': '11.0.0.0/24',
                                      'res_hash': 5,
                                      'network_id': 'id1',
-                                     'id': 'sub2'}]}
+                                     'id': 'sub2'}],
+                        'floating_ips': []}
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
                                       "provider:physical_network": None,
@@ -104,7 +111,8 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id2',
-                                     'id': 'sub2'}]}
+                                     'id': 'sub2'}],
+                        'floating_ips': []}
         self.get_action(src_net_info, dst_net_info).run()
 
     def test_diff(self):
@@ -116,7 +124,8 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
-                                     'id': 'sub1'}]}
+                                     'id': 'sub1'}],
+                        'floating_ips': []}
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
                                       "provider:physical_network": None,
@@ -125,7 +134,8 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 3,
                                      'network_id': 'id2',
-                                     'id': 'sub2'}]}
+                                     'id': 'sub2'}],
+                        'floating_ips': []}
         action = self.get_action(src_net_info, dst_net_info)
         self.assertRaises(exception.AbortMigrationError, action.run)
 
@@ -138,7 +148,8 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [{'cidr': '10.0.0.0/28',
                                      'res_hash': 2,
                                      'network_id': 'id1',
-                                     'id': 'sub1'}]}
+                                     'id': 'sub1'}],
+                        'floating_ips': []}
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
                                       "provider:physical_network": None,
@@ -147,7 +158,8 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 3,
                                      'network_id': 'id2',
-                                     'id': 'sub2'}]}
+                                     'id': 'sub2'}],
+                        'floating_ips': []}
         action = self.get_action(src_net_info, dst_net_info)
         self.assertRaises(exception.AbortMigrationError, action.run)
 
@@ -157,10 +169,12 @@ class CheckNetworksTestCase(test.TestCase):
                                       "provider:physical_network": None,
                                       'provider:network_type': 'gre',
                                       'provider:segmentation_id': 200}],
-                        'subnets': []}
+                        'subnets': [],
+                        'floating_ips': []}
 
         dst_net_info = {'networks': [],
-                        'subnets': []}
+                        'subnets': [],
+                        'floating_ips': []}
 
         self.get_action(src_net_info, dst_net_info).run()
 
@@ -170,14 +184,16 @@ class CheckNetworksTestCase(test.TestCase):
                                       "provider:physical_network": None,
                                       'provider:network_type': 'gre',
                                       'provider:segmentation_id': 200}],
-                        'subnets': []}
+                        'subnets': [],
+                        'floating_ips': []}
 
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'gre',
                                       'provider:segmentation_id': 200}],
-                        'subnets': []}
+                        'subnets': [],
+                        'floating_ips': []}
 
         self.get_action(src_net_info, dst_net_info).run()
 
@@ -187,14 +203,104 @@ class CheckNetworksTestCase(test.TestCase):
                                       "provider:physical_network": None,
                                       'provider:network_type': 'gre',
                                       'provider:segmentation_id': 200}],
-                        'subnets': []}
+                        'subnets': [],
+                        'floating_ips': []}
 
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 2,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'gre',
                                       'provider:segmentation_id': 200}],
-                        'subnets': []}
+                        'subnets': [],
+                        'floating_ips': []}
 
         action = self.get_action(src_net_info, dst_net_info)
         self.assertRaises(exception.AbortMigrationError, action.run)
+
+    def test_floating_ip_overlap_clean_dst(self):
+        src_net_info = {'networks': [],
+                        'subnets': [],
+                        'floating_ips': [{'floating_ip_address': '1.1.1.1',
+                                          'tenant_name': 'test_tenant',
+                                          'network_name': 'test_net',
+                                          'ext_net_tenant_name': 'test_tenant',
+                                          'port_id': 'test_port'}]}
+        dst_net_info = {'networks': [],
+                        'subnets': [],
+                        'floating_ips': []}
+
+        self.get_action(src_net_info, dst_net_info).run()
+
+    def test_floating_ip_overlap_same_floating_ip(self):
+        src_net_info = {'networks': [],
+                        'subnets': [],
+                        'floating_ips': [{'floating_ip_address': '1.1.1.1',
+                                          'tenant_name': 'test_tenant',
+                                          'network_name': 'test_net',
+                                          'ext_net_tenant_name': 'test_tenant',
+                                          'port_id': None}]}
+        dst_net_info = {'networks': [],
+                        'subnets': [],
+                        'floating_ips': [{'floating_ip_address': '1.1.1.1',
+                                          'tenant_name': 'test_tenant',
+                                          'network_name': 'test_net',
+                                          'ext_net_tenant_name': 'test_tenant',
+                                          'port_id': None}]}
+
+        self.get_action(src_net_info, dst_net_info).run()
+
+    def test_floating_ip_overlap_same_floating_ip_diff_parameter(self):
+        src_net_info = {'networks': [],
+                        'subnets': [],
+                        'floating_ips': [{'floating_ip_address': '1.1.1.1',
+                                          'tenant_name': 'test_tenant',
+                                          'network_name': 'test_net',
+                                          'ext_net_tenant_name': 'test_tenant',
+                                          'port_id': None}]}
+        dst_net_info = {'networks': [],
+                        'subnets': [],
+                        'floating_ips': [{'floating_ip_address': '1.1.1.1',
+                                          'tenant_name': 'new_tenant',
+                                          'network_name': 'test_net',
+                                          'ext_net_tenant_name': 'test_tenant',
+                                          'port_id': None}]}
+
+        action = self.get_action(src_net_info, dst_net_info)
+        self.assertRaises(exception.AbortMigrationError, action.run)
+
+    def test_floating_ip_overlap_same_floating_ip_associated_to_both_vms(self):
+        src_net_info = {'networks': [],
+                        'subnets': [],
+                        'floating_ips': [{'floating_ip_address': '1.1.1.1',
+                                          'tenant_name': 'test_tenant',
+                                          'network_name': 'test_net',
+                                          'ext_net_tenant_name': 'test_tenant',
+                                          'port_id': 'test_port'}]}
+        dst_net_info = {'networks': [],
+                        'subnets': [],
+                        'floating_ips': [{'floating_ip_address': '1.1.1.1',
+                                          'tenant_name': 'test_tenant',
+                                          'network_name': 'test_net',
+                                          'ext_net_tenant_name': 'test_tenant',
+                                          'port_id': 'test_port'}]}
+
+        action = self.get_action(src_net_info, dst_net_info)
+        self.assertRaises(exception.AbortMigrationError, action.run)
+
+    def test_floating_ip_overlap_same_floating_ip_associated_to_one_vm(self):
+        src_net_info = {'networks': [],
+                        'subnets': [],
+                        'floating_ips': [{'floating_ip_address': '1.1.1.1',
+                                          'tenant_name': 'test_tenant',
+                                          'network_name': 'test_net',
+                                          'ext_net_tenant_name': 'test_tenant',
+                                          'port_id': None}]}
+        dst_net_info = {'networks': [],
+                        'subnets': [],
+                        'floating_ips': [{'floating_ip_address': '1.1.1.1',
+                                          'tenant_name': 'test_tenant',
+                                          'network_name': 'test_net',
+                                          'ext_net_tenant_name': 'test_tenant',
+                                          'port_id': 'test_port'}]}
+
+        self.get_action(src_net_info, dst_net_info).run()

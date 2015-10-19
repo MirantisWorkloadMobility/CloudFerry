@@ -27,7 +27,7 @@ LOG = utils.get_log(__name__)
 
 class CheckNetworks(action.Action):
     """
-    Check networks segmentation ID and subnets overlapping.
+    Check networks segmentation ID, subnets and floating IPs overlapping.
 
     Raise exception (AbortMigrationError) if overlapping has been found.
     It must be done before actual migration in the 'preparation' section.
@@ -41,7 +41,7 @@ class CheckNetworks(action.Action):
         dst_net = self.dst_cloud.resources[utils.NETWORK_RESOURCE]
         search_opts = kwargs.get('search_opts_tenant', {})
         src_info = NetworkInfo(src_net.read_info(**search_opts))
-        dst_info = NetworkInfo(dst_net.read_info(**search_opts))
+        dst_info = NetworkInfo(dst_net.read_info())
         dst_seg_ids = dst_info.get_segmentation_ids()
 
         for network in src_info.get_networks():
@@ -59,11 +59,25 @@ class CheckNetworks(action.Action):
                           network.id)
                 network.check_segmentation_id_overlapping(dst_seg_ids)
 
+        # Check floating IPs overlap
+        LOG.debug("Check floating IPs for overlapping")
+        for floating_ip in src_info.floating_ips.values():
+            dst_floating_ip = dst_info.floating_ips.get(floating_ip.address)
+            if not dst_floating_ip:
+                LOG.debug("There is no such Floating IP on DST: '%s'. "
+                          "Continue...", floating_ip.address)
+                continue
+
+            LOG.debug('Floating IP `%s` has been found on DST. Checking for '
+                      'overlap...', floating_ip.address)
+            floating_ip.check_floating_ips_overlapping(dst_floating_ip)
+
 
 class NetworkInfo(object):
     def __init__(self, info):
         self.by_id = {}
         self.by_hash = collections.defaultdict()
+        self.floating_ips = {}
         for net_map in info['networks']:
             network = Network(net_map)
             self.by_id[network.id] = network
@@ -71,6 +85,9 @@ class NetworkInfo(object):
         for subnet in info['subnets']:
             network = self.by_id[subnet['network_id']]
             network.add_subnet(subnet)
+        for floating_ip_map in info['floating_ips']:
+            floating_ip = FloatingIp(floating_ip_map)
+            self.floating_ips[floating_ip.address] = floating_ip
 
     def get_networks(self):
         return self.by_hash.values()
@@ -164,5 +181,48 @@ class Network(object):
             message = ("Segmentation ID '%s' (network type = '%s', "
                        "network ID = '%s') is already busy on the destination "
                        "cloud.") % (self.seg_id, self.network_type, self.id)
+            LOG.error(message)
+            raise exception.AbortMigrationError(message)
+
+
+class FloatingIp(object):
+    def __init__(self, info):
+        self.address = info['floating_ip_address']
+        self.tenant = info['tenant_name']
+        self.network = info['network_name']
+        self.net_tenant = info['ext_net_tenant_name']
+        self.port_id = info['port_id']
+
+    def __eq__(self, other):
+        if not isinstance(other, FloatingIp):
+            return False
+
+        return (self.address == other.address and
+                self.tenant == other.tenant and
+                self.network == other.network and
+                self.net_tenant == other.net_tenant)
+
+    def check_floating_ips_overlapping(self, dst_floating_ip):
+        """
+        Check if Floating IP overlaps with DST.
+
+        Parameters to compare:
+        - same floating ip address;
+        - same tenant;
+        - same network;
+        - same network's tenant.
+
+        Also check if this Floating IP is not busy (i.e. is not associated to
+        VM on SRC and DST at the same time) on both environments.
+
+        :raise AbortMigrationError: If FloatingIp overlaps with the DST.
+        """
+
+        # Check association to VMs on SRC and DST aa the same time
+        ports_overlap = self.port_id and dst_floating_ip.port_id
+
+        if not self == dst_floating_ip or ports_overlap:
+            message = ("Floating IP '%s' overlaps with the same IP on DST. "
+                       "Aborting..." % self.address)
             LOG.error(message)
             raise exception.AbortMigrationError(message)

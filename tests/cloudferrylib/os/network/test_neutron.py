@@ -281,6 +281,7 @@ class NeutronTestCase(test.TestCase):
                              'tenant_name': 'fake_tenant_name_1',
                              'fixed_ip_address': None,
                              'floating_ip_address': 'fake_floatingip_1',
+                             'port_id': None,
                              'meta': {}}]
 
         floatings_info_result = self.neutron_network_client.get_floatingips()
