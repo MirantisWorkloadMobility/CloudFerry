@@ -114,14 +114,14 @@ class GlanceImage(image.Image):
 
     def __init__(self, config, cloud):
         self.config = config
-        self.host = config.cloud.host
+        self.ssh_host = config.cloud.ssh_host
         self.cloud = cloud
         self.identity_client = cloud.resources['identity']
         self.filter_tenant_id = None
         self.filter_image = []
         # get mysql settings
         self.mysql_connector = cloud.mysql_connector('glance')
-        self.runner = remote_runner.RemoteRunner(self.host,
+        self.runner = remote_runner.RemoteRunner(self.ssh_host,
                                                  self.config.cloud.ssh_user)
         self._image_filter = None
         super(GlanceImage, self).__init__(config)
@@ -592,7 +592,7 @@ class GlanceImage(image.Image):
 
         if backend_storage == 'ceph':
             image_from_glance = self.get_image_by_id(image_id)
-            with settings(host_string=self.cloud.getIpSsh(),
+            with settings(host_string=self.ssh_host,
                           connection_attempts=ssh_attempts):
                 out = json.loads(
                     run("rbd -p images info %s --format json" % image_id))

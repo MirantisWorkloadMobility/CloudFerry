@@ -29,14 +29,15 @@ class LoadComputeImageToFile(action.Action):
             base_file = "/tmp/%s" % ("temp%s_base" % instance_id)
             diff_file = "/tmp/%s" % ("temp%s" % instance_id)
 
-            with settings(host_string=cfg.host,
+            with settings(host_string=cfg.ssh_host,
                           connection_attempts=ssh_attempts):
                 with forward_agent(env.key_filename):
                     cmd = image.glance_image_download_cmd(cfg, image_id,
                                                           base_file)
                     run(cmd)
             instance[DIFF][PATH_DST] = diff_file
-            instance[DIFF][HOST_DST] = self.dst_cloud.getIpSsh()
+            instance[DIFF][HOST_DST] = \
+                self.dst_cloud.cloud_config.cloud.ssh_host
         return {
             'info': info
         }

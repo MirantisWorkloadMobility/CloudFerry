@@ -94,7 +94,7 @@ class NovaNetwork(network.Network):
         libvirt_name = getattr(instance, 'OS-EXT-SRV-ATTR:instance_name')
         ssh_attempts = self.config.migrate.ssh_connection_attempts
 
-        with settings(host_string=self.config['host'],
+        with settings(host_string=self.config.ssh_host,
                       connection_attempts=ssh_attempts):
             with forward_agent(env.key_filename):
                 cmd = "virsh dumpxml %s | grep 'mac address' | " \

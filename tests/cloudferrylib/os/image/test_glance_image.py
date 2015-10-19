@@ -28,6 +28,7 @@ FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
                                                    'tenant': 'fake_tenant',
                                                    'region': None,
                                                    'host': '1.1.1.1',
+                                                   'ssh_host': '1.1.1.10',
                                                    'ssh_user': 'fake_user',
                                                    'cacert': '',
                                                    'insecure': False

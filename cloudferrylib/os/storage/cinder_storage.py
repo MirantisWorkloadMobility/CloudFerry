@@ -73,9 +73,9 @@ class CinderStorage(storage.Storage):
 
     def __init__(self, config, cloud):
         super(CinderStorage, self).__init__(config)
-        self.host = config.cloud.host
+        self.ssh_host = config.cloud.ssh_host
         self.mysql_host = config.mysql.db_host \
-            if config.mysql.db_host else self.host
+            if config.mysql.db_host else self.ssh_host
         self.cloud = cloud
         self.identity_client = cloud.resources[utl.IDENTITY_RESOURCE]
         self.mysql_connector = cloud.mysql_connector('cinder')
@@ -298,7 +298,7 @@ class CinderStorage(storage.Storage):
                 cfg.storage.rbd_pool, cfg.storage.volume_name_template, vol.id)
             volume['host'] = (cfg.storage.host
                               if cfg.storage.host
-                              else cfg.cloud.host)
+                              else cfg.cloud.ssh_host)
         elif vol.attachments and (cfg.storage.backend == utl.ISCSI):
             instance = compute.read_info(
                 search_opts={'id': vol.attachments[0]['server_id']})
@@ -307,7 +307,7 @@ class CinderStorage(storage.Storage):
             volume['host'] = instance_info['host']
             list_disk = utl.get_libvirt_block_info(
                 instance_info['instance_name'],
-                cloud.getIpSsh(),
+                cfg.cloud.ssh_host,
                 instance_info['host'],
                 cfg.cloud.ssh_user,
                 cfg.cloud.ssh_sudo_password)
@@ -335,7 +335,7 @@ class CinderStorage(storage.Storage):
                                           snapshot['name'])
             snapshot['host'] = (cfg.storage.host
                                 if cfg.storage.host
-                                else cfg.cloud.host)
+                                else cfg.cloud.ssh_host)
 
         return snapshot
 

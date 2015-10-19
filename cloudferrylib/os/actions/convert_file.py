@@ -20,7 +20,7 @@ class ConvertFile(action.Action):
             disk_format = image[utl.IMAGE_BODY]['disk_format']
             base_file = "%s/%s" % (cfg.temp, "temp%s_base" % instance_id)
             if disk_format.lower() != utl.RAW:
-                self.convert_file_to_raw(cfg.host, disk_format, base_file)
+                self.convert_file_to_raw(cfg.ssh_host, disk_format, base_file)
         return {}
 
     @staticmethod

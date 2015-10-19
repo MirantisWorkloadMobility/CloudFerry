@@ -39,6 +39,7 @@ FAKE_CONFIG = utils.ext_dict(
                           'password': 'fake_password',
                           'tenant': 'fake_tenant',
                           'host': '1.1.1.1',
+                          'ssh_host': '1.1.1.2',
                           'auth_url': 'http://1.1.1.1:35357/v2.0/',
                           'cacert': '',
                           'insecure': False}),

@@ -9,11 +9,10 @@ class MergeBaseDiff(action.Action):
     def run(self, info=None, **kwargs):
         cfg = self.cloud.cloud_config.cloud
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
-            host = cfg.host
             base_file = "%s/%s" % (cfg.temp, "temp%s_base" % instance_id)
             diff_file = "%s/%s" % (cfg.temp, "temp%s" % instance_id)
-            self.rebase_diff_file(host, base_file, diff_file)
-            self.commit_diff_file(host, diff_file)
+            self.rebase_diff_file(cfg.ssh_host, base_file, diff_file)
+            self.commit_diff_file(cfg.ssh_host, diff_file)
 
     @staticmethod
     def rebase_diff_file(host, base_file, diff_file):
