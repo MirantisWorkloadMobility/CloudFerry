@@ -67,7 +67,7 @@ db_password = <src_mysql_password>
 
 [src_storage]
 service = cinder
-backend = ceph
+backend = <src_storage_backend>
 db_host = <src_ip>
 db_port = 3306
 db_connection = mysql+mysqlconnector
@@ -139,7 +139,7 @@ hosts = <dst_ip>:5672
 
 [dst_storage]
 service = cinder
-backend = ceph
+backend = <dst_storage_backend>
 db_host = <dst_ip>
 db_port = 3306
 protocol_transfer = <dst_storage_protocol_transfer>
