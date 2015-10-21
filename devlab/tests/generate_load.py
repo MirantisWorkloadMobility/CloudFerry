@@ -955,17 +955,33 @@ class CleanEnv(BasePrerequisites):
         for network in self.neutronclient.list_networks()['networks']:
             if network['name'] not in nets_names:
                 continue
-            self.neutronclient.delete_network(self.get_net_id(network['name']))
+            net_id = self.get_net_id(network['name'])
+            self.clean_network_ports(net_id)
+            self.neutronclient.delete_network(net_id)
             print('Network "%s" has been deleted' % network['name'])
 
+    def delete_port(self, port):
+        port_owner = port['device_owner']
+        if port_owner == 'network:router_gateway':
+            self.neutronclient.remove_gateway_router(port['device_id'])
+        elif port_owner == 'network:router_interface':
+            self.neutronclient.remove_interface_router(
+                port['device_id'], {'port_id': port['id']})
+        elif port_owner == 'network:dhcp' or not port_owner:
+            self.neutronclient.delete_port(port['id'])
+        else:
+            msg = 'Unknown port owner %s'
+            raise RuntimeError(msg % port['device_owner'])
+
+    def clean_network_ports(self, net_id):
+        ports = self.neutronclient.list_ports(network_id=net_id)['ports']
+        for port in ports:
+            self.delete_port(port)
+
     def clean_router_ports(self, router_id):
-        subnets = self.neutronclient.list_subnets()
-        for subnet in subnets['subnets']:
-            try:
-                self.neutronclient.remove_interface_router(
-                    router_id, {'subnet_id': subnet['id']})
-            except nt_exceptions.NeutronClientException:
-                pass
+        ports = self.neutronclient.list_ports(device_id=router_id)['ports']
+        for port in ports:
+            self.delete_port(port)
 
     def clean_routers(self):
         router_names = [router['router']['name']
