@@ -617,9 +617,15 @@ class KeystoneIdentity(identity.Identity):
                 continue
 
             roles_ids = ast.literal_eval(roles_field)['roles']
+            db_version = self.get_db_version()
+            if 29 <= db_version <= 38:
+                _roles_ids = map(lambda role_id: role_id.get('id'), roles_ids)
+            else:
+                _roles_ids = roles_ids
+
             user_tenants_roles[user_ids[user_id]][tenant_ids[tenant_id]] = \
                 [{'role': {'name': roles[r].name, 'id': r}}
-                 for r in roles_ids]
+                 for r in _roles_ids]
         return user_tenants_roles
 
     def _get_user_tenants_roles_by_api(self, tenant_list, user_list):
@@ -700,6 +706,13 @@ class KeystoneIdentity(identity.Identity):
                 pika.ConnectionParameters(host=host.strip(),
                                           port=int(port),
                                           credentials=credentials))
+
+    def get_db_version(self):
+        res = self.mysql_connector.execute(
+            "SELECT version FROM migrate_version"
+        )
+        for raw in res:
+            return raw['version']
 
 
 def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
