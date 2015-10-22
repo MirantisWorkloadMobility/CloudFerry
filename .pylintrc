@@ -1,0 +1,29 @@
+[MESSAGES CONTROL]
+# The format of this file isn't really documented; just use --generate-rcfile
+# C0111: Don't require docstrings on every method
+# W0511: TODOs in code comments are fine.
+# W0142: *args and **kwargs are fine.
+# W0622: Redefining id is fine.
+disable=C0111,W0511,W0142,W0622
+
+[BASIC]
+# Variable names can be 1 to 31 characters long, with lowercase and underscores
+variable-rgx=[a-z_][a-z0-9_]{0,30}$
+
+# Argument names can be 2 to 31 characters long, with lowercase and underscores
+argument-rgx=[a-z_][a-z0-9_]{1,30}$
+
+# Method names should be at least 3 characters long
+# and be lowecased with underscores
+method-rgx=([a-z_][a-z0-9_]{2,50}|setUp|tearDown)$
+
+# Module names matching ironic-* are ok (files in bin/)bin
+module-rgx=([a-z_][a-z0-9_]*)|([A-Z][a-zA-Z0-9]+)$
+
+# Don't require docstrings on tests.tests
+no-docstring-rgx=((__.*__)|([tT]est.*)|setUp|tearDown)$
+
+[DESIGN]
+max-public-methods=100
+min-public-methods=3
+max-args=6
