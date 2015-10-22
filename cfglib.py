@@ -171,6 +171,9 @@ migrate_opts = [
     cfg.IntOpt('ssh_connection_attempts', default=3,
                help='Number of times CloudFerry will attempt to connect when '
                     'connecting to a new server via SSH.'),
+    cfg.BoolOpt('ignore_empty_images',
+                help='Ignore images with size 0 and exclude them from '
+                     'migration process', default=False),
 ]
 
 mail = cfg.OptGroup(name='mail',
