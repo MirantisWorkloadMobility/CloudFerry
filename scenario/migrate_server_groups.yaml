@@ -1,0 +1,48 @@
+# associations migration only.  VM affinity, anti-affinity, host aggregations
+# These are resources associated with objects of a migration that may
+# not exist in the destination cloud until after the migration has been completed.
+# Use path to this file in the configuration.ini in block [migrate].
+
+namespace:
+  info_result:
+      instances: {}
+
+preparation:
+  - pre_migration_test:
+      - act_get_filter: True
+      - act_check_filter: True
+      - src_test:
+          - act_check_image_api_src: True
+          - act_check_compute_api_src: False
+          - act_check_storage_api_src: False
+          - act_check_neutron_api_src: False
+          - check_src_ssh_access: False
+          - act_check_bandwidth_src: False
+          - check_src_sql: False
+          - check_src_rabbit: False
+          - act_get_info_objects_src: False
+      - dst_test:
+          - act_check_image_api_dst: True
+          - act_check_compute_api_dst: False
+          - act_check_storage_api_dst: False
+          - act_check_neutron_api_dst: False
+          - check_dst_ssh_access: False
+          - act_check_bandwidth_dst: False
+          - check_dst_sql: False
+          - check_dst_rabbit: False
+          - act_get_info_objects_dst: False
+  - create_snapshot: True
+  - create_vm_snapshot_src: True
+  - create_vm_snapshot_dst: True
+  - create_image_snapshot_dst: True
+
+rollback:
+  - restore_from_vm_snapshot_dst: True
+  - restore_from_vm_snapshot_src: True
+  - image_rollback_dst: True
+  - restore_from_snapshot: True
+
+
+process:
+  - task_associations_transporting:
+      - act_server_group_trans: True
