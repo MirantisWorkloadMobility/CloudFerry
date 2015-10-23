@@ -22,7 +22,7 @@ from fabric.api import run
 from fabric.api import settings
 
 from glanceclient import client as glance_client
-from glanceclient import exc
+from glanceclient import exc as glance_exceptions
 from glanceclient.v1.images import CREATE_PARAMS
 
 from keystoneclient import exceptions as keystone_exceptions
@@ -154,14 +154,13 @@ class GlanceImage(image.Image):
     def get_ref_image(self, image_id):
         try:
             return self.glance_client.images.data(image_id)._resp
-        except exc.HTTPInternalServerError:
+        except glance_exceptions.HTTPInternalServerError:
             raise exception.ImageDownloadError
 
     def get_image_checksum(self, image_id):
         return self.get_image_by_id(image_id).checksum
 
-    @staticmethod
-    def convert(glance_image, cloud):
+    def convert(self, glance_image, cloud):
         """Convert OpenStack Glance image object to CloudFerry object.
 
         :param glance_image:    Direct OS Glance image object to convert,
@@ -181,6 +180,9 @@ class GlanceImage(image.Image):
         gl_image.update(
             {'owner_name': keystone.try_get_tenant_name_by_id(
                 glance_image.owner, default=cloud.cloud_config.cloud.tenant)})
+        gl_image.update({
+            "members": self.get_members({gl_image['id']: {'image': gl_image}})
+        })
 
         if resource.is_snapshot(glance_image):
             # for snapshots we need to write snapshot username to namespace
@@ -202,15 +204,15 @@ class GlanceImage(image.Image):
         # members structure {image_id: {tenant_name: can_share}}
         result = {}
         for img in images:
+            if images[img]['image']['is_public']:
+                # public images cannot have members
+                continue
             for entry in self.glance_client.image_members.list(image=img):
                 if img not in result:
                     result[img] = {}
 
-                # change tenant_id to tenant_name
                 tenant_name = self.identity_client.try_get_tenant_name_by_id(
-                    entry.member_id,
-                    default=self.config.cloud.tenant)
-
+                    entry.member_id, default=self.config.cloud.tenant)
                 result[img][tenant_name] = entry.can_share
         return result
 
@@ -300,26 +302,30 @@ class GlanceImage(image.Image):
         LOG.info("Glance images deployment started...")
         info = copy.deepcopy(info)
         new_info = {'images': {}}
-        migrate_images_list = []
+        created_images = []
         delete_container_format, delete_disk_format = [], []
         empty_image_list = {}
 
         # List for obsolete/broken images IDs, that will not be migrated
         obsolete_images_ids_list = []
+        dst_img_checksums = {x.checksum: x for x in self.get_image_list()}
+        dst_img_names = [x.name for x in self.get_image_list()]
 
         for image_id_src, gl_image in info['images'].iteritems():
             img = gl_image['image']
             if img and img['resource']:
-                dst_img_checksums = {x.checksum: x for x in
-                                     self.get_image_list()}
-                dst_img_names = [x.name for x in self.get_image_list()]
                 checksum_current = img['checksum']
                 name_current = img['name']
                 meta = gl_image['meta']
-                if checksum_current in dst_img_checksums and (
-                        name_current) in dst_img_names:
-                    migrate_images_list.append(
+                same_image_on_destination = (
+                    checksum_current in dst_img_checksums and
+                    name_current in dst_img_names)
+
+                if same_image_on_destination:
+                    created_images.append(
                         (dst_img_checksums[checksum_current], meta))
+                    LOG.info("Image '%s' is already present on destination, "
+                             "skipping", img['name'])
                     continue
 
                 LOG.debug("Updating owner '{owner}' of image '{image}'".format(
@@ -365,7 +371,7 @@ class GlanceImage(image.Image):
                         recreated_image = utl.ext_dict(
                             name=img["name"]
                         )
-                        migrate_images_list.append(
+                        created_images.append(
                             (recreated_image, gl_image['meta'])
                         )
                     else:
@@ -385,21 +391,29 @@ class GlanceImage(image.Image):
                 # and then - delete from database
 
                 try:
-                    migrate_image = self.create_image(
+                    data_proxy = file_like_proxy.FileLikeProxy(
+                        img, self.config['migrate']['speed_limit'])
+
+                    created_image = self.create_image(
                         name=img['name'],
-                        container_format=(img['container_format']
-                                          or "bare"),
-                        disk_format=(img['disk_format'] or
-                                     "qcow2"),
+                        container_format=(img['container_format'] or "bare"),
+                        disk_format=(img['disk_format'] or "qcow2"),
                         is_public=img['is_public'],
                         protected=img['protected'],
                         owner=img['owner'],
                         size=img['size'],
                         properties=img['properties'],
-                        data=file_like_proxy.FileLikeProxy(
-                            img,
-                            self.config['migrate']['speed_limit']))
-                    LOG.debug("new image ID {}".format(migrate_image.id))
+                        data=data_proxy)
+
+                    image_members = img['members'].get(img['id'], {})
+                    for tenant_name, can_share in image_members.iteritems():
+                        LOG.debug("deploying image member for image '%s' "
+                                  "tenant '%s'", img['id'], img['owner'])
+                        self.create_member(
+                            created_image.id, tenant_name, can_share)
+
+                    LOG.debug("new image ID {}".format(created_image.id))
+                    created_images.append((created_image, meta))
                 except exception.ImageDownloadError:
                     LOG.warning("Unable to reach image's data due to "
                                 "Glance HTTPInternalServerError. Skipping "
@@ -407,49 +421,27 @@ class GlanceImage(image.Image):
                     obsolete_images_ids_list.append(img["id"])
                     continue
 
-                migrate_images_list.append((migrate_image, meta))
                 if not img["container_format"]:
-                    delete_container_format.append(migrate_image.id)
+                    delete_container_format.append(created_image.id)
                 if not img["disk_format"]:
-                    delete_disk_format.append(migrate_image.id)
+                    delete_disk_format.append(created_image.id)
             elif img['resource'] is None:
                 recreated_image = utl.ext_dict(name=img["name"])
-                migrate_images_list.append((recreated_image, gl_image['meta']))
+                created_images.append((recreated_image, gl_image['meta']))
             elif not img:
                 empty_image_list[image_id_src] = gl_image
 
         # Remove obsolete/broken images from info
-        [info['images'].pop(img_id) for img_id in obsolete_images_ids_list]
+        for img_id in obsolete_images_ids_list:
+            info['images'].pop(img_id)
 
-        if migrate_images_list:
+        if created_images:
             im_name_list = [(im.name, tmp_meta) for (im, tmp_meta) in
-                            migrate_images_list]
+                            created_images]
             LOG.debug("images on destination: {}".format(
                 [im for (im, tmp_meta) in im_name_list]))
             new_info = self._convert_images_with_metadata(im_name_list)
         new_info['images'].update(empty_image_list)
-        # on this step we need to create map between source ids and dst ones
-        LOG.debug("creating map between source and destination image ids")
-        image_ids_map = {}
-        dst_img_name_checksums = {(x.name,
-                                   x.checksum): x.id
-                                  for x in self.get_image_list()}
-        for image_id_src, gl_image in info['images'].iteritems():
-            cur_image = gl_image['image']
-            image_ids_map[cur_image["id"]] = \
-                dst_img_name_checksums[(cur_image["name"],
-                                        cur_image["checksum"])]
-        LOG.debug("deploying image members")
-        for image_id, data in info.get("members", {}).items():
-            for tenant_name, can_share in data.items():
-                LOG.debug("deploying image member for image {image}"
-                          " tenant {tenant}".format(
-                              image=image_id,
-                              tenant=tenant_name))
-                self.create_member(
-                    image_ids_map[image_id],
-                    tenant_name,
-                    can_share)
         self.delete_fields('disk_format', delete_disk_format)
         self.delete_fields('container_format', delete_container_format)
         LOG.info("Glance images deployment finished.")
