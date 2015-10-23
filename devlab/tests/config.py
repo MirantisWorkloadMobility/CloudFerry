@@ -39,6 +39,13 @@ tenants = [
                'injected_files': '', 'injected_file_content_bytes': '',
                'injected_file_path_bytes': '', 'key_pairs': '5',
                'security_groups': '9', 'security_group_rules': ''},
+     'quota_network': {
+         'floatingip': 60,
+         'network': 12,
+         'port': 90,
+         'router': 14,
+         'subnet': 55
+     },
      'vms': [
          {'name': 'tn1server1', 'image': 'image1', 'flavor': 'flavorname2',
           'key_name': 'key1'},
@@ -80,6 +87,13 @@ tenants = [
      ]
      },
     {'name': 'tenant2', 'description': 'Bljakslhf ajsdfh', 'enabled': True,
+     'quota_network': {
+         'floatingip': 90,
+         'network': 12,
+         'port': 90,
+         'router': 14,
+         'subnet': 60
+     },
      'vms': [
          {'name': 'tn2server1', 'image': 'image1', 'flavor': 'flavorname2',
           'key_name': 'key2'},

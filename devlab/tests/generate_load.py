@@ -722,6 +722,17 @@ class Prerequisites(BasePrerequisites):
         except Exception as e:
             print "Flavor %s failed to delete: %s" % (flavor, repr(e))
 
+    def update_network_quotas(self):
+        tenants = {ten.name: ten.id
+                   for ten in self.keystoneclient.tenants.list()}
+        for tenant in self.config.tenants:
+            if "quota_network" not in tenant:
+                continue
+            ten_id = tenants[tenant["name"]]
+            quota_net = tenant["quota_network"]
+            self.neutronclient.update_quota(ten_id,
+                                            {"quota": quota_net})
+
     def modify_admin_tenant_quotas(self):
         for tenant in self.config.tenants:
             if 'quota' in tenant:
@@ -843,6 +854,8 @@ class Prerequisites(BasePrerequisites):
         self.delete_flavor()
         print('>>> Modifying admin tenant quotas:')
         self.modify_admin_tenant_quotas()
+        print('>>> Update network quotas:')
+        self.update_network_quotas()
         print('>>> Delete users which should be deleted:')
         self.delete_users()
         print('>>> Delete tenants which should be deleted:')

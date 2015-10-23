@@ -1,5 +1,6 @@
 paths: ['cloudferrylib.base.action', 'cloudferrylib.os.actions']
 tasks:
+   check_config_quota_neutron: ['CheckConfigQuotaNeutron']
    act_copy_g2g_vols: ['CopyFromGlanceToGlance']
    act_convert_c_to_v: ['ConvertComputeToVolume', 'src_cloud']
    act_convert_v_to_i: ['ConvertVolumeToImage', 'src_cloud']
