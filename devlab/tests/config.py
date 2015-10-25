@@ -39,6 +39,13 @@ tenants = [
                'injected_files': '', 'injected_file_content_bytes': '',
                'injected_file_path_bytes': '', 'key_pairs': '5',
                'security_groups': '9', 'security_group_rules': ''},
+     'quota_network': {
+         'floatingip': 60,
+         'network': 12,
+         'port': 90,
+         'router': 14,
+         'subnet': 55
+     },
      'vms': [
          {'name': 'tn1server1', 'image': 'image1', 'flavor': 'flavorname2',
           'key_name': 'key1'},
@@ -80,6 +87,13 @@ tenants = [
      ]
      },
     {'name': 'tenant2', 'description': 'Bljakslhf ajsdfh', 'enabled': True,
+     'quota_network': {
+         'floatingip': 90,
+         'network': 12,
+         'port': 90,
+         'router': 14,
+         'subnet': 60
+     },
      'vms': [
          {'name': 'tn2server1', 'image': 'image1', 'flavor': 'flavorname2',
           'key_name': 'key2'},
@@ -156,14 +170,6 @@ networks = [
          {'cidr': '192.168.1.0/24', 'ip_version': 4, 'name': 'external_subnet',
           'routers_to_connect': ['ext_router'], 'allocation_pools': [
               {'start': '192.168.1.100', 'end': '192.168.1.254'}]
-          }]
-     },
-    {'name': 'second_shared_net', 'admin_state_up': True, 'shared': True,
-     'router:external': True,
-     'subnets': [
-         {'cidr': '192.168.7.0/24', 'ip_version': 4, 'name': 'shared_subnet',
-          'routers_to_connect': [], 'allocation_pools': [
-              {'start': '192.168.7.10', 'end': '192.168.7.192'}]
           }]
      }
 ]

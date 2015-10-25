@@ -363,6 +363,9 @@ class KeystoneIdentity(identity.Identity):
 
         return self.keystone_client.roles.create(role_name)
 
+    def delete_tenant(self, tenant):
+        return self.keystone_client.tenants.delete(tenant)
+
     def create_tenant(self, tenant_name, description=None, enabled=True):
         """ Create new tenant in keystone. """
 

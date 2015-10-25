@@ -37,7 +37,10 @@ FAKE_CONFIG = utils.ext_dict(
     migrate=utils.ext_dict({'ext_net_map': 'fake_ext_net_map.yaml',
                             'speed_limit': '10MB',
                             'retry': '7',
-                            'time_wait': 5}))
+                            'time_wait': 5}),
+    network=utils.ext_dict({
+        'get_all_quota': True
+    }))
 
 
 class NeutronTestCase(test.TestCase):
@@ -152,6 +155,50 @@ class NeutronTestCase(test.TestCase):
             insecure=False
         )
         self.assertEqual(self.neutron_mock_client(), client)
+
+    def test_upload_quotas(self):
+        quota = {
+            'fake_tenant_name_1': {
+                'subnet': 12
+            }
+        }
+        self.neutron_network_client.upload_quota(quota)
+        self.neutron_mock_client().update_quota\
+            .assert_called_once_with("fake_tenant_id_1",
+                                     quota['fake_tenant_name_1'])
+
+    def test_get_quotas(self):
+        ten1 = mock.Mock()
+        ten1.id = "1"
+        ten1.name = "ten1"
+        self.identity_mock.get_tenants_list.return_value = \
+            [ten1]
+        self.identity_mock.try_get_tenant_name_by_id.return_value = "ten1"
+        self.neutron_mock_client().show_quota.return_value = \
+            {'subnet': 12}
+        self.neutron_mock_client().list_quotas.return_value = {
+            'quotas': [{'subnet': 12, 'tenant_id': "1"}]
+        }
+        expected_data = {
+            'ten1': {'subnet': 12}
+        }
+        res1 = self.neutron_network_client.get_quota("")
+        self.assertDictEqual(res1, expected_data)
+        res2 = self.neutron_network_client.get_quota("1")
+        self.assertDictEqual(res2, expected_data)
+        FAKE_CONFIG.network.get_all_quota = False
+        res3 = self.neutron_network_client.get_quota("")
+        self.assertDictEqual(res3, expected_data)
+        self.neutron_mock_client().list_quotas.return_value = {
+            'quotas': [{'subnet': 12, 'tenant_id': "1"}]
+        }
+        res4 = self.neutron_network_client.get_quota("1")
+        self.assertDictEqual(res4, expected_data)
+        self.neutron_mock_client().list_quotas.return_value = {
+            'quotas': [{'subnet': 12, 'tenant_id': "1"}]
+        }
+        res5 = self.neutron_network_client.get_quota("2")
+        self.assertDictEqual(res5, {})
 
     def test_get_networks(self):
 
@@ -281,6 +328,7 @@ class NeutronTestCase(test.TestCase):
                              'tenant_name': 'fake_tenant_name_1',
                              'fixed_ip_address': None,
                              'floating_ip_address': 'fake_floatingip_1',
+                             'port_id': None,
                              'meta': {}}]
 
         floatings_info_result = self.neutron_network_client.get_floatingips()

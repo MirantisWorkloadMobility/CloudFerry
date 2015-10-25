@@ -17,6 +17,7 @@
 import mock
 
 from cloudferrylib.os.actions import copy_g2g
+from cloudferrylib.utils import utils
 from tests import test
 
 
@@ -34,7 +35,8 @@ class CopyFromGlanceToGlanceTestCase(test.TestCase):
         self.dst_cloud = mock.Mock()
         self.dst_cloud.resources = {'image': self.fake_image}
 
-        self.fake_config = {}
+        self.fake_config = utils.ext_dict(migrate=utils.ext_dict(
+            {'ignore_empty_images': False}))
         self.src_cloud.resources = {'image': self.fake_image}
 
         self.fake_init = {

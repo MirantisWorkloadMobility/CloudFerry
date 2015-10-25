@@ -34,7 +34,8 @@ def suppress_dependency_logging():
                        'keystoneclient.session',
                        'neutronclient.client',
                        'requests.packages.urllib3.connectionpool',
-                       'glanceclient.common.http']
+                       'glanceclient.common.http',
+                       'paramiko.transport']
 
     for l in suppressed_logs:
         logging.getLogger(l).setLevel(logging.WARNING)

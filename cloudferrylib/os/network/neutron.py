@@ -100,6 +100,7 @@ class NeutronNetwork(network.Network):
                 'routers': self.get_routers(tenant_id),
                 'floating_ips': self.get_floatingips(tenant_id),
                 'security_groups': self.get_sec_gr_and_rules(tenant_id),
+                'quota': self.get_quota(tenant_id),
                 'meta': {}}
         if self.config.migrate.keep_lbaas:
             info['lbaas'] = dict()
@@ -108,6 +109,45 @@ class NeutronNetwork(network.Network):
             info['lb_members'] = self.get_lb_members()
             info['lb_vips'] = self.get_lb_vips()
         return info
+
+    def show_quota(self, tenant_id=''):
+        return self.neutron_client.show_quota(tenant_id)
+
+    def list_quotas(self):
+        return self.neutron_client.list_quotas()['quotas']
+
+    def get_quota(self, tenant_id):
+        # return structure {'name_tenant': {'subnet': 10, ...}, ...}
+        tenants = {}
+        if not tenant_id:
+            tenants_obj = self.identity_client.get_tenants_list()
+            tenants = {t.id: t.name for t in tenants_obj}
+        else:
+            tenants[tenant_id] = self.identity_client.\
+                try_get_tenant_name_by_id(tenant_id)
+        data = {
+        }
+        if self.config.network.get_all_quota:
+            for t_id, t_val in tenants.iteritems():
+                data[t_val] = self.neutron_client.show_quota(t_id)
+        else:
+            for t in self.neutron_client.list_quotas()['quotas']:
+                if (not tenant_id) or (tenant_id == t['tenant_id']):
+                    tenant_name = self.identity_client.\
+                        try_get_tenant_name_by_id(t['tenant_id'])
+                    data[tenant_name] = {k: v
+                                         for k, v in t.iteritems()
+                                         if k != 'tenant_id'}
+        return data
+
+    def upload_quota(self, quota):
+        identity = self.identity_client
+        for q_name, q_val in quota.iteritems():
+            tenant_id = identity.get_tenant_id_by_name(q_name)
+            self.neutron_client.update_quota(tenant_id, q_val)
+
+    def create_quota(self, tenant_id, quota):
+        return self.neutron_client.update_quota(tenant_id, quota)
 
     def deploy(self, info):
         """
@@ -137,6 +177,7 @@ class NeutronNetwork(network.Network):
             dst router external ip 123.0.0.6 and FloatingIP 123.0.0.4
         """
         deploy_info = info
+        self.upload_quota(deploy_info['quota'])
         self.upload_networks(deploy_info['networks'])
         self.upload_subnets(deploy_info['networks'],
                             deploy_info['subnets'])
@@ -408,6 +449,7 @@ class NeutronNetwork(network.Network):
             'tenant_name': get_tenant_name(floating['tenant_id']),
             'fixed_ip_address': floating['fixed_ip_address'],
             'floating_ip_address': floating['floating_ip_address'],
+            'port_id': floating['port_id'],
             'meta': {},
         }
 
