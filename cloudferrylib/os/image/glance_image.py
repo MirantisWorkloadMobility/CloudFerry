@@ -95,6 +95,14 @@ class GlanceImage(image.Image):
             endpoint=endpoint_glance,
             token=self.identity_client.get_auth_token_from_user())
 
+    def required_tenants(self):
+        image_owners = set()
+
+        for i in self.get_image_list():
+            image_owners.add(i.owner)
+
+        return list(image_owners)
+
     def get_image_list(self):
         images = self.glance_client.images.list(filters={"is_public": None})
 

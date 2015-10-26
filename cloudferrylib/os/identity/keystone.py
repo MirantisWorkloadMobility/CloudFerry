@@ -22,6 +22,7 @@ from keystoneclient.v2_0 import client as keystone_client
 
 import cfglib
 from cloudferrylib.base import identity
+from cloudferrylib.utils.cache import Cached
 from cloudferrylib.utils import GeneratorPassword
 from cloudferrylib.utils import Postman
 from cloudferrylib.utils import Templater
@@ -86,6 +87,7 @@ class AddAdminUserToNonAdminTenant(object):
                                                  tenant=self.tenant)
 
 
+@Cached(getter='get_tenants_list', modifier='create_tenant')
 class KeystoneIdentity(identity.Identity):
     """The main class for working with OpenStack Keystone Identity Service."""
 
@@ -274,10 +276,19 @@ class KeystoneIdentity(identity.Identity):
             if tenant.name == tenant_name:
                 return tenant
 
-    def get_tenant_by_id(self, tenant_id):
-        """ Getting tenant by id from keystone. """
+    def try_get_tenant_by_id(self, tenant_id, default=None):
+        """Returns `keystoneclient.tenants.Tenant` object based on tenant ID
+        provided. If not found - returns :arg default: tenant. If
+        :arg default: is not specified - returns `config.cloud.tenant`"""
 
-        return self.keystone_client.tenants.get(tenant_id)
+        tenants = self.keystone_client.tenants
+        try:
+            return tenants.get(tenant_id)
+        except ks_exceptions.NotFound:
+            if default is None:
+                return tenants.find(name=self.config.cloud.tenant)
+            else:
+                return tenants.find(id=default)
 
     def try_get_tenant_name_by_id(self, tenant_id, default=None):
         """ Same as `get_tenant_by_id` but returns `default` in case tenant
@@ -298,19 +309,29 @@ class KeystoneIdentity(identity.Identity):
         """ Getting list of tenants from keystone. """
         result = []
         ks_tenants = self.keystone_client.tenants
-        if self.filter_tenant_id:
+        filtering_enabled = (self.filter_tenant_id and
+                             self.cloud.position == 'src')
+        if filtering_enabled:
             result.append(ks_tenants.find(id=self.filter_tenant_id))
 
-            # public image owners must also be migrated
-            image_owners = set()
-            glance = self.cloud.resources[utl.IMAGE_RESOURCE]
-            for image in glance.get_image_list():
-                image_owners.add(image.owner)
-            image_owners -= {self.filter_tenant_id}
-            for owner in image_owners:
-                result.append(ks_tenants.find(id=owner))
+            resources_with_public_objects = [
+                self.cloud.resources[utl.IMAGE_RESOURCE],
+                self.cloud.resources[utl.NETWORK_RESOURCE]
+            ]
+
+            tenants_required_by_resource = set()
+            for r in resources_with_public_objects:
+                for t in r.required_tenants():
+                    tenants_required_by_resource.add(t)
+            for tenant_id in tenants_required_by_resource:
+                tenant = self.try_get_tenant_by_id(tenant_id)
+
+                # try_get_tenant_by_id may return config.cloud.tenant value
+                if tenant.id not in result:
+                    result.append(tenant)
         else:
             result = ks_tenants.list()
+        LOG.info("List of tenants: %s", ", ".join([t.name for t in result]))
         return result
 
     def get_users_list(self):
