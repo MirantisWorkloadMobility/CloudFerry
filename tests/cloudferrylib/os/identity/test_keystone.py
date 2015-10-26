@@ -132,13 +132,6 @@ class KeystoneIdentityTestCase(test.TestCase):
 
         self.assertIsNone(tenant)
 
-    def test_get_tenant_by_id(self):
-        self.mock_client().tenants.get.return_value = self.fake_tenant_0
-
-        tenant = self.keystone_client.get_tenant_by_id('tenant_id_0')
-
-        self.assertEqual(self.fake_tenant_0, tenant)
-
     def test_get_users_list(self):
         fake_users_list = [self.fake_user_0, self.fake_user_1]
         self.mock_client().users.list.return_value = fake_users_list

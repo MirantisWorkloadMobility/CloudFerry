@@ -41,6 +41,11 @@ class Resource(object):
     def restore(self):
         pass
 
+    def required_tenants(self):
+        """Returns list of tenants required by resource. Important for the
+        filtering feature."""
+        return []
+
     def wait_for_status(self, res_id, get_status, wait_status, timeout=60):
         delay = 1
         while delay < timeout:
