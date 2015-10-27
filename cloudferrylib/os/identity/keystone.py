@@ -108,7 +108,7 @@ class KeystoneIdentity(identity.Identity):
 
     @property
     def keystone_client(self):
-        return self.proxy(self._get_client_by_creds(), self.config)
+        return self.proxy(self.get_client(), self.config)
 
     @staticmethod
     def convert(identity_obj, cfg):
@@ -214,7 +214,12 @@ class KeystoneIdentity(identity.Identity):
         :return: OpenStack Keystone Client instance
         """
 
-        return self.keystone_client
+        auth_ref = self._get_client_by_creds().auth_ref
+
+        return keystone_client.Client(auth_ref=auth_ref,
+                                      endpoint=self.config.cloud.auth_url,
+                                      cacert=self.config.cloud.cacert,
+                                      insecure=self.config.cloud.insecure)
 
     def _get_client_by_creds(self):
         """Authenticating with a user name and password.
