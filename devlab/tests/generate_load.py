@@ -53,7 +53,7 @@ def clean_if_exists(func):
 def retry_until_resources_created(resource_name):
     def actual_decorator(func):
         def wrapper(_list):
-            for i in range(TIMEOUT):
+            for _ in range(TIMEOUT):
                 _list = func(_list)
                 if _list:
                     time.sleep(1)
@@ -326,9 +326,14 @@ class Prerequisites(BasePrerequisites):
             for user, roles in user_roles.iteritems():
                 user = self.get_user_id(user)
                 for role in roles:
-                    self.keystoneclient.roles.add_user_role(
-                        user=user, role=self.get_role_id(role['role']),
-                        tenant=self.get_tenant_id(role['tenant']))
+                    try:
+                        self.keystoneclient.roles.add_user_role(
+                            user=user, role=self.get_role_id(role['role']),
+                            tenant=self.get_tenant_id(role['tenant']))
+                    except ks_exceptions.Conflict as e:
+                        print "There was an error during role creating: {}"\
+                            .format(e)
+                        continue
 
     @clean_if_exists
     def create_tenants(self, tenants=None):
@@ -487,7 +492,7 @@ class Prerequisites(BasePrerequisites):
                 This request was rate-limited. (HTTP 413)'. To handle this we
                 set limit for vm spawning.
             """
-            for i in range(TIMEOUT):
+            for _ in range(TIMEOUT):
                 all_vms = self.novaclient.servers.list(
                     search_opts={'all_tenants': 1})
                 spawning_vms = [vm.id for vm in all_vms
@@ -642,7 +647,7 @@ class Prerequisites(BasePrerequisites):
                 self.create_networks(tenant['networks'])
             if not tenant.get('unassociated_fip'):
                 continue
-            for i in range(tenant['unassociated_fip']):
+            for _ in range(tenant['unassociated_fip']):
                 self.neutronclient.create_floatingip(
                     {"floatingip": {"floating_network_id": self.ext_net_id}})
         self.switch_user(user=self.username, password=self.password,
@@ -768,7 +773,7 @@ class Prerequisites(BasePrerequisites):
     def generate_vm_state_list(self):
         data = {}
         for vm in self.novaclient.servers.list(search_opts={'all_tenants': 1}):
-            for i in range(TIMEOUT):
+            for _ in range(TIMEOUT):
                 _vm = self.novaclient.servers.get(vm.id)
                 if _vm.status != u'RESIZE':
                     break
@@ -788,7 +793,7 @@ class Prerequisites(BasePrerequisites):
         try:
             self.novaclient.flavors.delete(
                 self.get_flavor_id(flavor))
-        except Exception as e:
+        except nv_exceptions.ClientException as e:
             print "Flavor %s failed to delete: %s" % (flavor, repr(e))
 
     def update_network_quotas(self):
@@ -808,6 +813,15 @@ class Prerequisites(BasePrerequisites):
                 self.novaclient.quotas.update(tenant_id=self.get_tenant_id(
                     'admin'), **tenant['quota'])
                 break
+
+    def change_admin_role_in_tenants(self):
+        for tenant in self.config.tenants:
+            self.keystoneclient.roles.remove_user_role(
+                self.get_user_id(self.username),
+                self.get_role_id('admin'),
+                self.get_tenant_id(tenant['name']))
+            self.switch_user(self.username, self.password, self.tenant)
+        self.create_user_tenant_roles()
 
     def delete_users(self):
         for user in self.config.users:
@@ -925,6 +939,8 @@ class Prerequisites(BasePrerequisites):
         self.modify_admin_tenant_quotas()
         print('>>> Update network quotas:')
         self.update_network_quotas()
+        print('>>> Change admin role in tenants:')
+        self.change_admin_role_in_tenants()
         print('>>> Delete users which should be deleted:')
         self.delete_users()
         print('>>> Delete tenants which should be deleted:')
@@ -940,7 +956,7 @@ class CleanEnv(BasePrerequisites):
     def clean_vms(self):
         def wait_until_vms_all_deleted():
             timeout = 120
-            for i in range(timeout):
+            for _ in range(timeout):
                 servers = self.novaclient.servers.list(
                     search_opts={'all_tenants': 1})
                 for server in servers:
@@ -950,8 +966,6 @@ class CleanEnv(BasePrerequisites):
                         self.novaclient.servers.delete(server.id)
                     except nv_exceptions.NotFound:
                         pass
-                else:
-                    break
             else:
                 raise RuntimeError('Next vms were not deleted')
 
@@ -1068,7 +1082,7 @@ class CleanEnv(BasePrerequisites):
         for ip in floatingips:
             try:
                 self.neutronclient.delete_floatingip(ip['id'])
-            except Exception as e:
+            except nt_exceptions.NeutronClientException as e:
                 print "Ip %s failed to delete: %s" % (
                     ip['floating_ip_address'], repr(e))
 
