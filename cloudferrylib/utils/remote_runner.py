@@ -39,10 +39,13 @@ class RemoteRunner(object):
         self.key = key
         self.ignore_errors = ignore_errors
 
-    def run(self, cmd):
+    def run(self, cmd, **kwargs):
         abort_exception = None
         if not self.ignore_errors:
             abort_exception = RemoteExecutionError
+
+        if kwargs:
+            cmd = cmd.format(**kwargs)
 
         ssh_attempts = cfglib.CONF.migrate.ssh_connection_attempts
 
@@ -62,10 +65,10 @@ class RemoteRunner(object):
                 else:
                     return run(cmd)
 
-    def run_ignoring_errors(self, cmd):
+    def run_ignoring_errors(self, cmd, **kwargs):
         ignore_errors_original = self.ignore_errors
         try:
             self.ignore_errors = True
-            self.run(cmd)
+            self.run(cmd, **kwargs)
         finally:
             self.ignore_errors = ignore_errors_original
