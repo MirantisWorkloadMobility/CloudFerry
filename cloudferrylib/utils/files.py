@@ -99,10 +99,15 @@ class RemoteTempDir(object):
 
     def __init__(self, runner):
         self.runner = runner
+        self.created_dir = None
 
     def __enter__(self):
         create_temp_dir = 'mktemp -d'
         self.created_dir = self.runner.run(create_temp_dir)
+        if self.runner.sudo and self.runner.user != 'root':
+            chown_created_dir_cmd = 'chown {user} {directory}'.format(
+                user=self.runner.user, directory=self.created_dir)
+            self.runner.run(chown_created_dir_cmd)
         return self.created_dir
 
     def __exit__(self, exc_type, exc_val, exc_tb):
