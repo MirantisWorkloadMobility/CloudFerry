@@ -703,6 +703,50 @@ class Prerequisites(BasePrerequisites):
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
+    def get_subnet_id(self, name):
+        subs = self.neutronclient.list_subnets()['subnets']
+        for sub in subs:
+            if sub['name'] == name:
+                return sub['id']
+
+    def get_pool_id(self, name):
+        pools = self.neutronclient.list_pools()['pools']
+        for pool in pools:
+            if pool['name'] == name:
+                return pool['id']
+
+    def create_pools(self, pools):
+        for pool in pools:
+            pool["tenant_id"] = self.get_tenant_id(pool["tenant_name"])
+            pool["subnet_id"] = self.get_subnet_id(pool["subnet_name"])
+            pool = {i: v for i, v in pool.iteritems()
+                    if i not in ["tenant_name", "subnet_name"]}
+            self.neutronclient.create_pool({'pool': pool})
+
+    def create_members(self, members):
+        for member in members:
+            member["pool_id"] = self.get_pool_id(member["pool_name"])
+            member["tenant_id"] = self.get_tenant_id(member["tenant_name"])
+            member = {i: v for i, v in member.iteritems()
+                      if i not in ["pool_name", "tenant_name"]}
+            self.neutronclient.create_member({"member": member})
+
+    def create_monitors(self, monitors):
+        for mon in monitors:
+            mon["tenant_id"] = self.get_tenant_id(mon["tenant_name"])
+            mon = {i: v for i, v in mon.iteritems()
+                   if i not in ["tenant_name"]}
+            self.neutronclient.create_health_monitor({"health_monitor": mon})
+
+    def create_vips(self, vips):
+        for vip in vips:
+            vip["pool_id"] = self.get_pool_id(vip["pool_name"])
+            vip["tenant_id"] = self.get_tenant_id(vip["tenant_name"])
+            vip["subnet_id"] = self.get_subnet_id(vip["subnet_name"])
+            vip = {i: v for i, v in vip.iteritems()
+                   if i not in ["tenant_name", "pool_name", "subnet_name"]}
+            self.neutronclient.create_vip({"vip": vip})
+
     @clean_if_exists
     def create_all_networking(self):
         self.create_routers()
@@ -712,11 +756,24 @@ class Prerequisites(BasePrerequisites):
         self.ext_net_id = self.get_net_id(
             [n['name'] for n in self.config.networks
              if n.get('real_network')][0])
+        self.create_pools(self.config.pools)
+        self.create_members(self.config.members_lbaas)
+        self.create_monitors(self.config.monitors)
+        self.create_vips(self.config.vips)
+
         for tenant in self.config.tenants:
             if tenant.get('networks'):
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
                 self.create_networks(tenant['networks'])
+            if tenant.get('pools'):
+                self.create_pools(tenant['pools'])
+            if tenant.get('members_lbaas'):
+                self.create_members(tenant['members_lbaas'])
+            if tenant.get('monitors'):
+                self.create_monitors(tenant['monitors'])
+            if tenant.get('vips'):
+                self.create_vips(tenant['vips'])
             if not tenant.get('unassociated_fip'):
                 continue
             for _ in range(tenant['unassociated_fip']):

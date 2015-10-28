@@ -79,6 +79,44 @@ tenants = [
          {'router': {'external_gateway_info': {}, 'name': 'tn1_router',
                      'admin_state_up': True}}
      ],
+     'pools': [
+         {
+             'name': "pool2",
+             'tenant_name': "tenant1",
+             'subnet_name': "t1_s1",
+             'protocol': "HTTPS",
+             'lb_method': "SOURCE_IP"}
+     ],
+     'monitors': [
+         {
+             'tenant_name': "tenant1",
+             'type': "PING",
+             'delay': 600,
+             'timeout': 100,
+             'max_retries': 10
+         }
+     ],
+     'members_lbaas': [
+         {
+             'protocol_port': "83",
+             'address': "10.5.2.1",
+             'pool_name': "pool2",
+             'tenant_name': "tenant1"
+         }
+     ],
+     'vips': [
+         {
+             'name': "vip2",
+             'description': "111",
+             'address': "10.5.2.5",
+             'protocol': "HTTPS",
+             'protocol_port': "83",
+             'connection_limit': 100,
+             'pool_name': "pool2",
+             'tenant_name': "tenant1",
+             'subnet_name': "t1_s1"
+         }
+     ],
      'security_groups': [
          {'name': 'sg11', 'description': 'Blah blah group', 'rules': [
              {'ip_protocol': 'icmp',
@@ -159,6 +197,44 @@ tenants = [
      'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': True}],
      'flavors': [
          {'name': 'tn3fl1', 'disk': '1', 'ram': '64', 'vcpus': '1'}
+     ],
+     'pools': [
+         {
+             'name': "pool3",
+             'tenant_name': "tenant3",
+             'subnet_name': "subnet_1",
+             'protocol': "HTTPS",
+             'lb_method': "SOURCE_IP"}
+     ],
+     'monitors': [
+         {
+             'tenant_name': "tenant3",
+             'type': "PING",
+             'delay': 600,
+             'timeout': 100,
+             'max_retries': 10
+         }
+     ],
+     'members_lbaas': [
+         {
+             'protocol_port': "83",
+             'address': "10.4.2.8",
+             'pool_name': "pool3",
+             'tenant_name': "tenant3"
+         }
+     ],
+     'vips': [
+         {
+             'name': "vip3",
+             'description': "111",
+             'address': "10.4.2.9",
+             'protocol': "HTTPS",
+             'protocol_port': "83",
+             'connection_limit': 100,
+             'pool_name': "pool3",
+             'tenant_name': "tenant3",
+             'subnet_name': "subnet_1"
+         }
      ]
      },
     {'name': 'tenant4', 'description': 'None', 'enabled': True,
@@ -256,6 +332,42 @@ networks = [
           }]
      }
 ]
+pools = [
+    {
+        'name': "pool1",
+        'tenant_name': "admin",
+        'subnet_name': "subnet_1",
+        'protocol': "HTTPS",
+        'lb_method': "SOURCE_IP"
+    }]
+members_lbaas = [
+    {
+        'protocol_port': "83",
+        'address': "10.4.2.1",
+        'pool_name': "pool1",
+        'tenant_name': 'admin'
+    }
+]
+monitors = [
+    {
+        'tenant_name': "admin",
+        'type': "PING",
+        'delay': 600,
+        'timeout': 100,
+        'max_retries': 10
+    }]
+vips = [
+    {
+        'name': "vip1",
+        'description': "111",
+        'address': "10.4.2.5",
+        'protocol': "HTTPS",
+        'protocol_port': "83",
+        'connection_limit': 100,
+        'pool_name': "pool1",
+        'tenant_name': "admin",
+        'subnet_name': "subnet_1"
+    }]
 
 # VM's to create/delete
 vms = [

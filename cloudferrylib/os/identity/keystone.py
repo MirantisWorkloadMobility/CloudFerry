@@ -30,6 +30,7 @@ from cloudferrylib.utils import utils as utl
 from sqlalchemy.exc import ProgrammingError
 
 LOG = utl.get_log(__name__)
+NO_TENANT = ''
 
 
 class AddAdminUserToNonAdminTenant(object):
@@ -156,7 +157,6 @@ class KeystoneIdentity(identity.Identity):
         info = {'tenants': [],
                 'users': [],
                 'roles': []}
-
         if kwargs.get('tenant_id'):
             self.filter_tenant_id = kwargs['tenant_id'][0]
 
@@ -258,12 +258,14 @@ class KeystoneIdentity(identity.Identity):
 
         return self.keystone_client.service_catalog.url_for(**kwargs)
 
-    def get_tenants_func(self):
+    def get_tenants_func(self, return_default_tenant=True):
+        default_tenant = self.config.cloud.tenant \
+            if return_default_tenant else NO_TENANT
         tenants = {tenant.id: tenant.name for tenant in
                    self.get_tenants_list()}
 
         def func(tenant_id):
-            return tenants.get(tenant_id, 'admin')
+            return tenants.get(tenant_id, default_tenant)
 
         return func
 
