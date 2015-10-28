@@ -663,7 +663,8 @@ class NeutronNetwork(network.Network):
 
         for net in networks:
             cf_net = self.convert_networks(net, self.cloud)
-            LOG.debug("Adding network: %s", pprint.pformat(cf_net))
+            LOG.debug("Getting info about network '%s' (%s):\n%s",
+                      cf_net['name'], cf_net['id'], pprint.pformat(cf_net))
             networks_info.append(cf_net)
 
         LOG.info("Done.")
@@ -724,14 +725,11 @@ class NeutronNetwork(network.Network):
         return floatingips_info
 
     def get_security_groups(self, tenant_id=''):
-        LOG.info("Get security groups...")
-        sec_grs = self.neutron_client.list_security_groups(
+        return self.neutron_client.list_security_groups(
             tenant_id=tenant_id)['security_groups']
-        LOG.info("Done")
-        return sec_grs
 
     def get_sec_gr_and_rules(self, tenant_id=''):
-        LOG.info("Getting security groups and rules")
+        LOG.info("Getting security groups and rules...")
         service_tenant_name = self.config.cloud.service_tenant
         service_tenant_id = \
             self.identity_client.get_tenant_id_by_name(service_tenant_name)
