@@ -76,7 +76,7 @@ class GlanceImageTestCase(test.TestCase):
 
         self.glance_image = GlanceImage(FAKE_CONFIG, self.fake_cloud)
 
-        self.fake_image_1 = mock.Mock()
+        self.fake_image_1 = mock.MagicMock()
 
         values_dict = {
             'id': 'fake_image_id_1',
@@ -113,6 +113,7 @@ class GlanceImageTestCase(test.TestCase):
                                               'protected': False,
                                               'size': 1024,
                                               'resource': self.image_mock,
+                                              'members': {},
                                               'properties': {
                                                   'user_name': 'fake_user_name'
                                               }},

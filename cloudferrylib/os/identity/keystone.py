@@ -395,9 +395,12 @@ class KeystoneIdentity(identity.Identity):
     def create_tenant(self, tenant_name, description=None, enabled=True):
         """ Create new tenant in keystone. """
 
-        return self.keystone_client.tenants.create(tenant_name=tenant_name,
-                                                   description=description,
-                                                   enabled=enabled)
+        try:
+            return self.keystone_client.tenants.create(tenant_name=tenant_name,
+                                                       description=description,
+                                                       enabled=enabled)
+        except ks_exceptions.Conflict:
+            return self.keystone_client.tenants.find(name=tenant_name)
 
     def create_user(self, name, password=None, email=None, tenant_id=None,
                     enabled=True):
