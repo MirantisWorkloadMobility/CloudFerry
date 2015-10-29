@@ -248,13 +248,17 @@ class BasePrerequisites(object):
         srv = self.novaclient.servers.get(srv)
         return srv.status == 'ACTIVE'
 
-    def tenant_exists(self, tenant_name):
+    def tenant_exists(self, tenant_name=None, tenant_id=None):
         self.switch_user(self.username, self.password, self.tenant)
         try:
-            self.get_tenant_id(tenant_name)
-            return True
-        except NotFound:
+            if tenant_name is not None:
+                self.keystoneclient.tenants.find(name=tenant_name)
+            else:
+                self.keystoneclient.tenants.find(id=tenant_id)
+        except ks_exceptions.NotFound:
             return False
+        else:
+            return True
 
     def switch_user(self, user, password, tenant):
         self.keystoneclient = keystone.Client(auth_url=self.auth_url,
