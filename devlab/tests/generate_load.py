@@ -345,10 +345,18 @@ class Prerequisites(BasePrerequisites):
                 self.get_tenant_id(tenant['name']))
 
     def create_keypairs(self):
-        for user, keypair in zip(self.config.users, self.config.keypairs):
+        for keypair in self.config.keypairs:
+            for _user in self.config.users:
+                if _user['name'] == keypair['user']:
+                    user = _user
+                    break
+            else:
+                msg = 'User for keypair %s was not found'
+                raise RuntimeError(msg % keypair['name'])
             self.switch_user(user=user['name'], password=user['password'],
                              tenant=user['tenant'])
-            self.novaclient.keypairs.create(**keypair)
+            self.novaclient.keypairs.create(name=keypair['name'],
+                                            public_key=keypair['public_key'])
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
@@ -514,12 +522,38 @@ class Prerequisites(BasePrerequisites):
             return vm_list
 
         vms = create_vms(self.config.vms)
-        for tenant, user in zip(self.config.tenants, self.config.users):
+        for tenant in self.config.tenants:
             if not tenant.get('vms'):
                 continue
+
+            # To create vm with proper keypair, need to switch to right user
+            keypairs = set([vm['key_name'] for vm in tenant['vms']
+                            if vm.get('key_name')])
+            # Split all vms on with and without keypair
+            keypairs_vms = {keypair: [] for keypair in keypairs}
+            vms_wo_keypairs = []
+            for vm in tenant['vms']:
+                if vm.get('key_name'):
+                    keypairs_vms[vm['key_name']].append(vm)
+                else:
+                    vms_wo_keypairs.append(vm)
+            for keypair in keypairs_vms:
+                username = [kp['user'] for kp in self.config.keypairs
+                            if kp['name'] == keypair][0]
+                user = [user for user in self.config.users
+                        if user['name'] == username][0]
+                if user['tenant'] != tenant['name']:
+                    msg = 'Keypair "{0}" not accessible from tenant "{1}"'
+                    raise RuntimeError(msg.format(keypair[0], tenant['name']))
+                self.switch_user(user=user['name'], password=user['password'],
+                                 tenant=tenant['name'])
+                vms.extend(create_vms(keypairs_vms[keypair]))
+            # Create vms without keypair
+            user = [u for u in self.config.users
+                    if u.get('tenant') == tenant['name']][0]
             self.switch_user(user=user['name'], password=user['password'],
                              tenant=tenant['name'])
-            vms.extend(create_vms(tenant['vms']))
+            vms.extend(create_vms(vms_wo_keypairs))
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
