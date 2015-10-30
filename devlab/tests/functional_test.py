@@ -17,7 +17,7 @@ import logging
 import sys
 import os
 import unittest
-from generate_load import Prerequisites, NotFound
+from generate_load import Prerequisites
 from filtering_utils import FilteringUtils
 
 

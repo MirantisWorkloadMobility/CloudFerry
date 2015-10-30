@@ -1,7 +1,7 @@
 from fabric.api import run, settings, env
 from cloudferrylib.base import image
 from cloudferrylib.base.action import action
-from cloudferrylib.utils import forward_agent
+from cloudferrylib.utils.utils import forward_agent
 
 
 class ConvertImageToFile(action.Action):

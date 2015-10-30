@@ -23,9 +23,9 @@ from keystoneclient.v2_0 import client as keystone_client
 import cfglib
 from cloudferrylib.base import identity
 from cloudferrylib.utils.cache import Cached
-from cloudferrylib.utils import GeneratorPassword
-from cloudferrylib.utils import Postman
-from cloudferrylib.utils import Templater
+from cloudferrylib.utils.utils import GeneratorPassword
+from cloudferrylib.utils.utils import Postman
+from cloudferrylib.utils.utils import Templater
 from cloudferrylib.utils import utils as utl
 from sqlalchemy.exc import ProgrammingError
 
