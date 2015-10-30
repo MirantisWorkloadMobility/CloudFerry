@@ -23,12 +23,12 @@ from cloudferrylib.base.action import action
 from cloudferrylib.os.actions import convert_file_to_image
 from cloudferrylib.os.actions import convert_image_to_file
 from cloudferrylib.os.actions import task_transfer
-from cloudferrylib.utils import utils as utl, forward_agent
-
+from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
 from cloudferrylib.utils.drivers import ssh_ceph_to_file
 from cloudferrylib.utils.drivers import ssh_file_to_file
 from cloudferrylib.utils.drivers import ssh_file_to_ceph
+from cloudferrylib.utils.utils import forward_agent
 
 
 CLOUD = 'cloud'

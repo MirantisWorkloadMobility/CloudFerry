@@ -22,7 +22,7 @@ from oslotest import mockpatch
 
 from cloud import cloud
 from cloud import grouping
-from cloudferrylib import utils
+from cloudferrylib.utils import utils
 from tests import test
 
 

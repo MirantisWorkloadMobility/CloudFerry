@@ -83,7 +83,7 @@ class GlanceImage(image.Image):
 
         # we can figure out what version of client to use from url
         # check if we have "v1" or "v2" in the end of url
-        m = re.search("(.*)/v(\d)", endpoint_glance)
+        m = re.search(r"(.*)/v(\d)", endpoint_glance)
         if m:
             endpoint_glance = m.group(1)
             # for now we always use 1 version of client
