@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from fabric.api import task, env
+import warnings
 
 import cfglib
 from cloudferrylib.scheduler.namespace import Namespace
@@ -49,9 +50,7 @@ def migrate(name_config=None, debug=False):
     """
     if debug:
         utils.configure_logging("DEBUG")
-    cfglib.collector_configs_plugins()
-    cfglib.init_config(name_config)
-    utils.init_singletones(cfglib.CONF)
+    load_config(name_config)
     env.key_filename = cfglib.CONF.migrate.key_filename
     env.connection_attempts = cfglib.CONF.migrate.ssh_connection_attempts
     cloud = cloud_ferry.CloudFerry(cfglib.CONF)
@@ -84,9 +83,7 @@ def evacuate(name_config=None, debug=False, iteration=False):
         LOG.error("Invalid value provided as 'iteration' argument, it must be "
                   "integer")
         return
-    cfglib.collector_configs_plugins()
-    cfglib.init_config(name_config)
-    utils.init_singletones(cfglib.CONF)
+    load_config(name_config)
     env.key_filename = cfglib.CONF.migrate.key_filename
     cloud = cloud_ferry.CloudFerry(cfglib.CONF)
     LOG.info("running evacuation")
@@ -120,8 +117,7 @@ def get_groups(name_config=None, group_file=None, cloud_id='src',
     if debug:
         utils.configure_logging("DEBUG")
 
-    cfglib.collector_configs_plugins()
-    cfglib.init_config(name_config)
+    load_config(name_config)
     group = grouping.Grouping(cfglib.CONF, group_file, cloud_id)
     group.group(validate_users_group)
 
@@ -150,8 +146,7 @@ def condense(config=None, vm_grouping_config=None, debug=False):
     """
     if debug:
         utils.configure_logging("DEBUG")
-    cfglib.collector_configs_plugins()
-    cfglib.init_config(config)
+    load_config(config)
     data_storage.check_redis_config()
 
     LOG.info("Retrieving flavors, VMs and nodes from SRC cloud")
@@ -187,8 +182,7 @@ def condense(config=None, vm_grouping_config=None, debug=False):
 
 @task
 def get_condensation_info(name_config=None):
-    cfglib.collector_configs_plugins()
-    cfglib.init_config(name_config)
+    load_config(name_config)
     nova_collector.run_it(cfglib.CONF)
 
 
@@ -197,9 +191,16 @@ def create_filters(name_config=None, filter_folder=DEFAULT_FILTERS_FILES,
                    images_date='2000-01-01'):
     """Generates filter files for CloudFerry based on the schedule prepared by
     condensation/grouping."""
+    load_config(name_config)
+    make_filters.make(filter_folder, images_date)
+
+
+def load_config(name_config):
     cfglib.collector_configs_plugins()
     cfglib.init_config(name_config)
-    make_filters.make(filter_folder, images_date)
+    utils.init_singletones(cfglib.CONF)
+    if cfglib.CONF.migrate.hide_ssl_warnings:
+        warnings.simplefilter("ignore")
 
 
 if __name__ == '__main__':
