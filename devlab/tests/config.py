@@ -243,14 +243,14 @@ CINDER_CLIENT_VERSION = '1'
 # Keypairs to create/delete
 # Connected to user's list
 keypairs = [
-    {'name': 'key1', 'public_key':
+    {'name': 'key1', 'user': 'user1', 'public_key':
         'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCn4vaa1MvLLIQM9G2i9eo2OWoW66i7'
         '/tz+F+sSBxjiscmXMGSUxZN1a0yK4TO2l71/MenfAsHCSgu75vyno62JTOLo+QKG07ly'
         '8vx9RF+mp+bP/6g0nhcgndOD30NPLEv3vtZbZRDiYeb3inc/ZmAy8kLoRPXE3sW4v+xq'
         '+PB2nqu38DUemKU9WlZ9F5Fbhz7aVFDhBjvFNDw7w5nO7zeAFz2RbajJksQlHP62VmkW'
         'mTgu/otEuhM8GcjZIXlfHJtv0utMNfqQsNQ8qzt38OKXn/k2czmZX59DXomwdo3DUSmk'
         'SHym3kZtZPSTgT6GIGoWA1+QHlhx5kiMVEN+YRZF vagrant'},
-    {'name': 'key2', 'public_key':
+    {'name': 'key2', 'user': 'user2', 'public_key':
         'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDtvUaRYdwzIBL+CpSayYfbeTtnZNps'
         'e/Fx1FAMX7DQBBD7aghNkbQMjVrdGpI7hOSJsU11Gmhl4/B3LFTu8oTUZNfz8nM+g0fT'
         'iZVICtvQUnB89xnH3RNYDBGFQKS3gOUtjvOb0oP9RVNELHftrGMnjJOQCLF+R0eG+Byc'

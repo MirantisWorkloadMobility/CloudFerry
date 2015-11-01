@@ -21,7 +21,7 @@ from fabric.api import settings
 
 from cloudferrylib.base.action import action
 from cloudferrylib.os.actions import task_transfer
-from cloudferrylib.utils import forward_agent
+from cloudferrylib.utils.utils import forward_agent
 from cloudferrylib.utils import utils as utl
 
 

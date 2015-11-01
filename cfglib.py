@@ -174,6 +174,8 @@ migrate_opts = [
     cfg.BoolOpt('ignore_empty_images',
                 help='Ignore images with size 0 and exclude them from '
                      'migration process', default=False),
+    cfg.BoolOpt('hide_ssl_warnings', default=False,
+                help="Don't show ssl warnings"),
 ]
 
 mail = cfg.OptGroup(name='mail',

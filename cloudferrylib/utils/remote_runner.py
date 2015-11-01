@@ -17,7 +17,7 @@ from fabric.api import run
 from fabric.api import settings
 
 import cfglib
-from cloudferrylib.utils import forward_agent
+from cloudferrylib.utils.utils import forward_agent
 from cloudferrylib.utils import utils
 
 LOG = utils.get_log(__name__)

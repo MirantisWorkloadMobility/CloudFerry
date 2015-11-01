@@ -16,11 +16,8 @@
 import argparse
 import shutil
 from pkg_resources import Requirement, resource_filename
-import warnings
 
 import fabfile
-
-warnings.simplefilter("ignore")
 
 
 def migrate_run(args):

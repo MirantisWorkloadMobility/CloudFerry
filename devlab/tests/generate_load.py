@@ -208,11 +208,44 @@ class BasePrerequisites(object):
         return [i['id'] for i in sec_group_list['security_groups']
                 if i['tenant_id'] == tenant_id]
 
+    def get_users_keypairs(self):
+        self.switch_user(self.username, self.password, self.tenant)
+        user_names = [u['name'] for u in self.config.users]
+        keypairs = []
+        for user in self.config.users:
+            if user['name'] not in user_names:
+                continue
+            if not user.get('enabled') or user.get('deleted'):
+                continue
+            if not self.tenant_exists(user['tenant']) or \
+                    not self.user_has_not_primary_tenants(user['name']):
+                continue
+            try:
+                self.switch_user(user['name'], user['password'],
+                                 user['tenant'])
+            except ks_exceptions.Unauthorized:
+                self.keystoneclient.users.update(
+                    self.get_user_id(user['name']), password=user['password'],
+                    tenant=user['tenant'])
+                self.switch_user(user['name'], user['password'],
+                                 user['tenant'])
+            keypairs.extend(self.novaclient.keypairs.list())
+        return keypairs
+
+    def user_has_not_primary_tenants(self, user_name):
+        user_id = self.get_user_id(user_name)
+        for tenant in self.keystoneclient.tenants.list():
+            if self.keystoneclient.roles.roles_for_user(user=user_id,
+                                                        tenant=tenant.id):
+                return True
+        return False
+
     def check_vm_state(self, srv):
         srv = self.novaclient.servers.get(srv)
         return srv.status == 'ACTIVE'
 
     def tenant_exists(self, tenant_name):
+        self.switch_user(self.username, self.password, self.tenant)
         try:
             self.get_tenant_id(tenant_name)
             return True
@@ -312,10 +345,18 @@ class Prerequisites(BasePrerequisites):
                 self.get_tenant_id(tenant['name']))
 
     def create_keypairs(self):
-        for user, keypair in zip(self.config.users, self.config.keypairs):
+        for keypair in self.config.keypairs:
+            for _user in self.config.users:
+                if _user['name'] == keypair['user']:
+                    user = _user
+                    break
+            else:
+                msg = 'User for keypair %s was not found'
+                raise RuntimeError(msg % keypair['name'])
             self.switch_user(user=user['name'], password=user['password'],
                              tenant=user['tenant'])
-            self.novaclient.keypairs.create(**keypair)
+            self.novaclient.keypairs.create(name=keypair['name'],
+                                            public_key=keypair['public_key'])
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
@@ -481,12 +522,38 @@ class Prerequisites(BasePrerequisites):
             return vm_list
 
         vms = create_vms(self.config.vms)
-        for tenant, user in zip(self.config.tenants, self.config.users):
+        for tenant in self.config.tenants:
             if not tenant.get('vms'):
                 continue
+
+            # To create vm with proper keypair, need to switch to right user
+            keypairs = set([vm['key_name'] for vm in tenant['vms']
+                            if vm.get('key_name')])
+            # Split all vms on with and without keypair
+            keypairs_vms = {keypair: [] for keypair in keypairs}
+            vms_wo_keypairs = []
+            for vm in tenant['vms']:
+                if vm.get('key_name'):
+                    keypairs_vms[vm['key_name']].append(vm)
+                else:
+                    vms_wo_keypairs.append(vm)
+            for keypair in keypairs_vms:
+                username = [kp['user'] for kp in self.config.keypairs
+                            if kp['name'] == keypair][0]
+                user = [user for user in self.config.users
+                        if user['name'] == username][0]
+                if user['tenant'] != tenant['name']:
+                    msg = 'Keypair "{0}" not accessible from tenant "{1}"'
+                    raise RuntimeError(msg.format(keypair[0], tenant['name']))
+                self.switch_user(user=user['name'], password=user['password'],
+                                 tenant=tenant['name'])
+                vms.extend(create_vms(keypairs_vms[keypair]))
+            # Create vms without keypair
+            user = [u for u in self.config.users
+                    if u.get('tenant') == tenant['name']][0]
             self.switch_user(user=user['name'], password=user['password'],
                              tenant=tenant['name'])
-            vms.extend(create_vms(tenant['vms']))
+            vms.extend(create_vms(vms_wo_keypairs))
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
@@ -955,17 +1022,33 @@ class CleanEnv(BasePrerequisites):
         for network in self.neutronclient.list_networks()['networks']:
             if network['name'] not in nets_names:
                 continue
-            self.neutronclient.delete_network(self.get_net_id(network['name']))
+            net_id = self.get_net_id(network['name'])
+            self.clean_network_ports(net_id)
+            self.neutronclient.delete_network(net_id)
             print('Network "%s" has been deleted' % network['name'])
 
+    def delete_port(self, port):
+        port_owner = port['device_owner']
+        if port_owner == 'network:router_gateway':
+            self.neutronclient.remove_gateway_router(port['device_id'])
+        elif port_owner == 'network:router_interface':
+            self.neutronclient.remove_interface_router(
+                port['device_id'], {'port_id': port['id']})
+        elif port_owner == 'network:dhcp' or not port_owner:
+            self.neutronclient.delete_port(port['id'])
+        else:
+            msg = 'Unknown port owner %s'
+            raise RuntimeError(msg % port['device_owner'])
+
+    def clean_network_ports(self, net_id):
+        ports = self.neutronclient.list_ports(network_id=net_id)['ports']
+        for port in ports:
+            self.delete_port(port)
+
     def clean_router_ports(self, router_id):
-        subnets = self.neutronclient.list_subnets()
-        for subnet in subnets['subnets']:
-            try:
-                self.neutronclient.remove_interface_router(
-                    router_id, {'subnet_id': subnet['id']})
-            except nt_exceptions.NeutronClientException:
-                pass
+        ports = self.neutronclient.list_ports(device_id=router_id)['ports']
+        for port in ports:
+            self.delete_port(port)
 
     def clean_routers(self):
         router_names = [router['router']['name']

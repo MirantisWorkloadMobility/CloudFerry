@@ -23,9 +23,9 @@ from keystoneclient.v2_0 import client as keystone_client
 import cfglib
 from cloudferrylib.base import identity
 from cloudferrylib.utils.cache import Cached
-from cloudferrylib.utils import GeneratorPassword
-from cloudferrylib.utils import Postman
-from cloudferrylib.utils import Templater
+from cloudferrylib.utils.utils import GeneratorPassword
+from cloudferrylib.utils.utils import Postman
+from cloudferrylib.utils.utils import Templater
 from cloudferrylib.utils import utils as utl
 from sqlalchemy.exc import ProgrammingError
 
@@ -108,7 +108,7 @@ class KeystoneIdentity(identity.Identity):
 
     @property
     def keystone_client(self):
-        return self.proxy(self._get_client_by_creds(), self.config)
+        return self.proxy(self.get_client(), self.config)
 
     @staticmethod
     def convert(identity_obj, cfg):
@@ -214,7 +214,12 @@ class KeystoneIdentity(identity.Identity):
         :return: OpenStack Keystone Client instance
         """
 
-        return self.keystone_client
+        auth_ref = self._get_client_by_creds().auth_ref
+
+        return keystone_client.Client(auth_ref=auth_ref,
+                                      endpoint=self.config.cloud.auth_url,
+                                      cacert=self.config.cloud.cacert,
+                                      insecure=self.config.cloud.insecure)
 
     def _get_client_by_creds(self):
         """Authenticating with a user name and password.
@@ -390,9 +395,12 @@ class KeystoneIdentity(identity.Identity):
     def create_tenant(self, tenant_name, description=None, enabled=True):
         """ Create new tenant in keystone. """
 
-        return self.keystone_client.tenants.create(tenant_name=tenant_name,
-                                                   description=description,
-                                                   enabled=enabled)
+        try:
+            return self.keystone_client.tenants.create(tenant_name=tenant_name,
+                                                       description=description,
+                                                       enabled=enabled)
+        except ks_exceptions.Conflict:
+            return self.keystone_client.tenants.find(name=tenant_name)
 
     def create_user(self, name, password=None, email=None, tenant_id=None,
                     enabled=True):

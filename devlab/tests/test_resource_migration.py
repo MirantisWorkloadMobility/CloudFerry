@@ -111,7 +111,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     def test_migrate_nova_keypairs(self):
         src_keypairs = self.filter_keypairs()
-        dst_keypairs = self.dst_cloud.novaclient.keypairs.list()
+        dst_keypairs = self.dst_cloud.get_users_keypairs()
 
         self.validate_resource_parameter_in_dst(src_keypairs, dst_keypairs,
                                                 resource_name='keypair',

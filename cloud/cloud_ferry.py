@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import importlib
+
 
 class CloudFerry(object):
     def __new__(cls, config):
@@ -25,7 +27,8 @@ class CloudFerry(object):
             # And specify it there for first time? It can be directly names of
             # classes or any human readable mapping. And later some day
             # implement smth like auto discovering, if it will be needed
-            return __import__('cloud').os2os.OS2OSFerry(config)
+            os2os = importlib.import_module('cloud.os2os')
+            return os2os.OS2OSFerry(config)
 
         return super(CloudFerry, cls).__new__(cls)
 

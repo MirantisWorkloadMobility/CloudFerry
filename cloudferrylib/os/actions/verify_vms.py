@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from cloudferrylib import utils
+from cloudferrylib.utils import utils
 from cloudferrylib.base import exception
 from cloudferrylib.base.action import action
 
