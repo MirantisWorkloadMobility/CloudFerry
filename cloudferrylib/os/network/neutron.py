@@ -78,17 +78,34 @@ class NeutronNetwork(network.Network):
         if self.filter_tenant_id is not None:
             shared_nets = self.get_shared_networks_raw()
             for net in shared_nets:
-                LOG.debug("append network ID {}".format(net['id']))
-
                 # do not include the same network twice
                 if net['id'] in [n['id'] for n in nets]:
                     continue
 
+                LOG.debug("Append shared network ID %s", net['id'])
                 nets.append(self.convert_networks(net, self.cloud))
+
+                # Append subnets from the shared networks
+                for subnet in net['subnets']:
+                    # do not include the same subnets twice
+                    if subnet['id'] in [sn['id'] for sn in subnets]:
+                        continue
+
+                    LOG.debug("Append shared subnet ID %s", subnet['id'])
+                    subnets.append(self.convert_subnets(subnet, self.cloud))
+
+        routers = []
+        subnet_ids = {sn['id'] for sn in subnets}
+        for router in self.get_routers():
+            router_subnet_ids = subnet_ids & set(router['subnet_ids'])
+            if router_subnet_ids:
+                router['subnet_ids'] = list(router_subnet_ids)
+                LOG.debug('Add router: %s', router['id'])
+                routers.append(router)
 
         info = {'networks': nets,
                 'subnets': subnets,
-                'routers': self.get_routers(tenant_id),
+                'routers': routers,
                 'floating_ips': self.get_floatingips(tenant_id),
                 'security_groups': self.get_sec_gr_and_rules(tenant_id),
                 'quota': self.get_quota(tenant_id),
@@ -1186,10 +1203,23 @@ class NeutronNetwork(network.Network):
                                                new_router,
                                                subnets,
                                                existing_subnets)
+                elif existing_router['ips']:
+                    LOG.debug('Add an interface to the existing router %s',
+                              pprint.pformat(existing_router))
+                    meta_id = router['meta'].get('id')
+                    router['meta']['id'] = existing_router['id']
+                    try:
+                        self.add_router_interfaces(router,
+                                                   existing_router,
+                                                   subnets,
+                                                   existing_subnets)
+                    except neutron_exc.NeutronClientException as e:
+                        LOG.warning(e)
+                        router['meta']['id'] = meta_id
                 else:
                     LOG.info("| Dst cloud already has the same router "
-                             "with name %s in tenant %s" %
-                             (router['name'], router['tenant_name']))
+                             "with name %s in tenant %s",
+                             router['name'], router['tenant_name'])
 
     def add_router_interfaces(self, src_router, dst_router,
                               src_snets, dst_snets):
