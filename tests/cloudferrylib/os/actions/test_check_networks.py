@@ -23,7 +23,15 @@ from tests import test
 
 class CheckNetworksTestCase(test.TestCase):
     @staticmethod
-    def get_action(src_net_info, dst_net_info):
+    def get_action(src_net_info, dst_net_info=None, src_compute_info=None):
+        if not dst_net_info:
+            dst_net_info = {'networks': [],
+                            'subnets': [],
+                            'floating_ips': []}
+        if not src_compute_info:
+            src_compute_info = {'instances': {}}
+        fake_src_compute = mock.Mock()
+        fake_src_compute.read_info.return_value = src_compute_info
         fake_src_net = mock.Mock()
         fake_src_net.read_info.return_value = src_net_info
         fake_dst_net = mock.Mock()
@@ -31,7 +39,8 @@ class CheckNetworksTestCase(test.TestCase):
         fake_src_cloud = mock.Mock()
         fake_dst_cloud = mock.Mock()
         fake_config = {}
-        fake_src_cloud.resources = {'network': fake_src_net}
+        fake_src_cloud.resources = {'network': fake_src_net,
+                                    'compute': fake_src_compute}
         fake_dst_cloud.resources = {'network': fake_dst_net}
         fake_init = {
             'src_cloud': fake_src_cloud,
@@ -58,7 +67,8 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
-                                     'id': 'sub1'}],
+                                     'id': 'sub1',
+                                     'external': False}],
                         'floating_ips': []}
         dst_net_info = {'networks': [],
                         'subnets': [],
@@ -74,7 +84,8 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
-                                     'id': 'sub1'}],
+                                     'id': 'sub1',
+                                     'external': False}],
                         'floating_ips': []}
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
@@ -97,11 +108,13 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
-                                     'id': 'sub1'},
+                                     'id': 'sub1',
+                                     'external': False},
                                     {'cidr': '11.0.0.0/24',
                                      'res_hash': 5,
                                      'network_id': 'id1',
-                                     'id': 'sub2'}],
+                                     'id': 'sub2',
+                                     'external': False}],
                         'floating_ips': []}
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
@@ -124,7 +137,9 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
-                                     'id': 'sub1'}],
+                                     'id': 'sub1',
+                                     'external': False
+                                     }],
                         'floating_ips': []}
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
@@ -148,7 +163,8 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [{'cidr': '10.0.0.0/28',
                                      'res_hash': 2,
                                      'network_id': 'id1',
-                                     'id': 'sub1'}],
+                                     'id': 'sub1',
+                                     'external': False}],
                         'floating_ips': []}
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
@@ -304,3 +320,50 @@ class CheckNetworksTestCase(test.TestCase):
                                           'port_id': 'test_port'}]}
 
         self.get_action(src_net_info, dst_net_info).run()
+
+    def test_no_instance_in_external_network(self):
+        src_net_info = {'networks': [{'id': 'id1',
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None}],
+                        'subnets': [{'cidr': '10.0.0.0/24',
+                                     'res_hash': 2,
+                                     'network_id': 'id1',
+                                     'id': 'sub1',
+                                     'external': True}],
+                        'floating_ips': []}
+
+        src_cmp_info = {'instances': {
+            'fake_inst': {
+                'instance': {
+                    'id': 'fake_id',
+                    'interfaces':
+                        [{'ip': '1.1.1.13'}]}
+            }}}
+
+        self.get_action(src_net_info, src_compute_info=src_cmp_info).run()
+
+    def test_instance_in_external_network(self):
+        src_net_info = {'networks': [{'id': 'id1',
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None}],
+                        'subnets': [{'cidr': '10.0.0.0/24',
+                                     'res_hash': 2,
+                                     'network_id': 'id1',
+                                     'id': 'sub1',
+                                     'external': True}],
+                        'floating_ips': []}
+
+        src_cmp_info = {'instances': {
+            'fake_inst': {
+                'instance': {
+                    'id': 'fake_id',
+                    'interfaces':
+                        [{'ip': '10.0.0.3'}]}
+            }}}
+
+        action = self.get_action(src_net_info, src_compute_info=src_cmp_info)
+        self.assertRaises(exception.AbortMigrationError, action.run)

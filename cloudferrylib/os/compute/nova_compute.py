@@ -128,7 +128,8 @@ class NovaCompute(compute.Compute):
             client_kwargs["region_name"] = params.cloud.region
 
         client = nova_client.Client(*client_args, **client_kwargs)
-        LOG.debug("Authenticating as '%s' in tenant '%s'",
+        LOG.debug("Authenticating as '%s' in tenant '%s' for Nova client "
+                  "authorization...",
                   params.cloud.user, params.cloud.tenant)
         client.authenticate()
         return client
