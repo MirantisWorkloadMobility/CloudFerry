@@ -25,29 +25,29 @@ class Storage(resource.Resource):
         return self.config.storage.backend
 
     def attach_volume_to_instance(self, volume_info):
-        raise NotImplemented("it's base class")
+        raise NotImplementedError("it's base class")
 
     def get_volumes_list(self, detailed=True, search_opts=None):
-        raise NotImplemented("it's base class")
+        raise NotImplementedError("it's base class")
 
     def create_volume(self, size, **kwargs):
-        raise NotImplemented("it's base class")
+        raise NotImplementedError("it's base class")
 
     def delete_volume(self, volume_id):
-        raise NotImplemented("it's base class")
+        raise NotImplementedError("it's base class")
 
     def get_volume_by_id(self, volume_id):
-        raise NotImplemented("it's base class")
+        raise NotImplementedError("it's base class")
 
     def update_volume(self, volume_id, **kwargs):
-        raise NotImplemented("it's base class")
+        raise NotImplementedError("it's base class")
 
     def attach_volume(self, volume_id, instance_id, mountpoint, mode='rw'):
-        raise NotImplemented("it's base class")
+        raise NotImplementedError("it's base class")
 
     def detach_volume(self, volume_id):
-        raise NotImplemented("it's base class")
+        raise NotImplementedError("it's base class")
 
     def upload_volume_to_image(self, volume_id, force, image_name,
                                container_format, disk_format):
-        raise NotImplemented("it's base class")
+        raise NotImplementedError("it's base class")

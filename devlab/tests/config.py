@@ -162,6 +162,8 @@ networks = [
     {'name': 'mynetwork1', 'admin_state_up': True,
      'subnets': [
          {'cidr': '10.4.2.0/24', 'ip_version': 4, 'name': 'subnet_1',
+          'connect_to_ext_router': True, 'routers_to_connect': ['ext_router']},
+         {'cidr': '10.9.2.0/24', 'ip_version': 4, 'name': 'subnet_2',
           'connect_to_ext_router': True, 'routers_to_connect': ['ext_router']}]
      },
     {'name': 'shared_net', 'admin_state_up': True, 'shared': True,
