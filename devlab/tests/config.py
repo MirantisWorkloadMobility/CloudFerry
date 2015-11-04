@@ -135,6 +135,8 @@ images = [
      'container_format': 'bare'}
 ]
 
+# Create zero image, without any parameters.
+create_zero_image = True
 # Images not to be migrated:
 images_not_included_in_filter = ['image4', 'image5']
 
