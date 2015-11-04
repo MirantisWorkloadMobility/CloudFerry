@@ -13,6 +13,8 @@
 # limitations under the License.
 import time
 import inspect
+from cloudferrylib.utils import utils
+LOG = utils.get_log(__name__)
 method_wrapper = type(object().__str__)
 
 base_types = [inspect.types.BooleanType,
@@ -71,6 +73,8 @@ class Proxy:
                 result = self.client(*args, **kwargs)
                 is_retry = False
             except Exception as e:
+                LOG.warning('Error happened while calling client',
+                            exc_info=True)
                 if c < self.retry:
                     c += 1
                     self.wait()
