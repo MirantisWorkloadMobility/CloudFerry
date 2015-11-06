@@ -26,7 +26,6 @@ retry = 5
 migrate_extnets = True
 time_wait = 5
 cinder_migration_strategy = cloudferrylib.os.storage.cinder_database.CinderStorage
-skip_down_hosts = True
 migrate_user_quotas = False
 incloud_live_migration = nova
 ssh_connection_attempts = 3

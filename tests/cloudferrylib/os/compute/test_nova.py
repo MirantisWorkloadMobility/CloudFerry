@@ -18,7 +18,6 @@ import mock
 
 from novaclient.v1_1 import client as nova_client
 from oslotest import mockpatch
-import cfglib
 
 from cloudferrylib.os.compute import nova_compute
 from cloudferrylib.utils import timeout_exception
@@ -96,20 +95,6 @@ class NovaComputeTestCase(test.TestCase):
                                                        user_id='some-id')
 
         self.assertEqual('fake_instance_id', instance_id)
-
-    def test_get_instances_list(self):
-        fake_instances_list = [self.fake_instance_0, self.fake_instance_1]
-        self.mock_client().servers.list.return_value = fake_instances_list
-        test_args = {'marker': None,
-                     'detailed': True,
-                     'limit': None,
-                     'search_opts': None}
-
-        cfglib.init_config()
-        instances_list = self.nova_client.get_instances_list(**test_args)
-
-        self.mock_client().servers.list.assert_called_once_with(**test_args)
-        self.assertEqual(fake_instances_list, instances_list)
 
     def test_get_status(self):
         self.mock_client().servers.get('fake_id').status = 'start'
@@ -227,58 +212,78 @@ class NovaComputeTestCase(test.TestCase):
             user_id=None,
             instances='new_fake_value')
 
-    def test_nothing_is_filtered_if_skip_down_hosts_option_not_set(self):
-        cfglib.init_config()
-        cfglib.CONF.migrate.skip_down_hosts = False
-        self.fake_instance_0.host = 'host1'
-        self.fake_instance_1.host = 'host2'
+    @classmethod
+    def _host(cls, name, up=True, enabled=True):
+        h = mock.Mock()
+        h.host = name
+        h.state = 'up' if up else 'down'
+        h.status = 'enabled' if enabled else 'disabled'
+        return h
 
-        hosts_down = ['host1', 'host2', 'host3']
-        instances = [self.fake_instance_0, self.fake_instance_1]
+    def test_down_hosts_are_skipped(self):
+        active_host_names = ['active1', 'active2']
+        down_host_names = ['down1', 'down2']
 
-        filtered = nova_compute.filter_down_hosts(hosts_down, instances)
+        down_hosts = [self._host(name, up=False) for name in down_host_names]
+        active_hosts = [self._host(name) for name in active_host_names]
+        all_hosts = active_hosts + down_hosts
 
-        self.assertEqual(filtered, instances)
+        self.mock_client().services.list.return_value = all_hosts
 
-    def test_down_hosts_has_no_hosts_in_up_state(self):
-        def service(hostname, state):
-            s = mock.Mock()
-            s.host = hostname
-            s.state = state
-            return s
+        hosts = self.nova_client.get_compute_hosts()
 
-        num_up_services = 5
-        num_down_services = 10
-        services = [service('uphost%d' % i, 'up')
-                    for i in xrange(num_up_services)]
-        services.extend([service('downhost%d' % i, 'down')
-                         for i in xrange(num_down_services)])
-        client = mock.Mock()
-        client.services.list.return_value = services
+        self.assertIsNotNone(hosts)
+        self.assertTrue(isinstance(hosts, list))
 
-        hosts = nova_compute.down_hosts(client)
+        for active in active_host_names:
+            self.assertIn(active, hosts)
 
-        self.assertEqual(len(hosts), num_down_services)
+        for down in down_host_names:
+            self.assertNotIn(down, hosts)
 
-    def test_down_hosts_are_filtered_if_config_option_is_set(self):
-        def instance(hostname):
-            inst = mock.Mock()
-            setattr(inst, nova_compute.INSTANCE_HOST_ATTRIBUTE, hostname)
-            return inst
+    def test_disabled_hosts_are_skipped(self):
+        active_host_names = ['active1', 'active2']
+        disabled_host_names = ['disabled1', 'disabled2']
 
-        num_instances_up = 5
-        num_hosts_down = 10
-        hosts_down = ['downhost%d' % i for i in xrange(num_hosts_down)]
-        instances = [instance('host%d' % i) for i in xrange(num_instances_up)]
-        instances.extend([instance(host_down) for host_down in hosts_down])
-        cfglib.init_config()
-        cfglib.CONF.migrate.skip_down_hosts = True
+        disabled_hosts = [self._host(name, enabled=False)
+                          for name in disabled_host_names]
+        active_hosts = [self._host(name) for name in active_host_names]
+        all_hosts = active_hosts + disabled_hosts
 
-        filtered = nova_compute.filter_down_hosts(
-            hosts_down=hosts_down, elements=instances,
-            hostname_attribute=nova_compute.INSTANCE_HOST_ATTRIBUTE)
+        self.mock_client().services.list.return_value = all_hosts
 
-        self.assertEqual(len(filtered), num_instances_up)
+        hosts = self.nova_client.get_compute_hosts()
+
+        self.assertIsNotNone(hosts)
+        self.assertTrue(isinstance(hosts, list))
+
+        for active in active_host_names:
+            self.assertIn(active, hosts)
+
+        for disabled in disabled_host_names:
+            self.assertNotIn(disabled, hosts)
+
+    def test_disabled_down_hosts_are_skipped(self):
+        active_host_names = ['active1', 'active2']
+        disabled_host_names = ['disabled1', 'disabled2', 'disabled3']
+
+        disabled_hosts = [self._host(name, enabled=False, up=False)
+                          for name in disabled_host_names]
+        active_hosts = [self._host(name) for name in active_host_names]
+        all_hosts = active_hosts + disabled_hosts
+
+        self.mock_client().services.list.return_value = all_hosts
+
+        hosts = self.nova_client.get_compute_hosts()
+
+        self.assertIsNotNone(hosts)
+        self.assertTrue(isinstance(hosts, list))
+
+        for active in active_host_names:
+            self.assertIn(active, hosts)
+
+        for disabled in disabled_host_names:
+            self.assertNotIn(disabled, hosts)
 
 
 class DeployInstanceWithManualScheduling(test.TestCase):
