@@ -30,7 +30,9 @@ class Memoized(object):
         self.func = func
         self.cache = {}
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
+        if kwargs:
+            return self.func(*args, **kwargs)
         if not isinstance(args, collections.Hashable):
             # uncacheable. a list, for instance.
             # better to not cache than blow up.

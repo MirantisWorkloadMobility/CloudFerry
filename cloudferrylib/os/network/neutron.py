@@ -11,15 +11,19 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
+
+
 import pprint
 
 import ipaddr
 import netaddr
+
 from neutronclient.common import exceptions as neutron_exc
 from neutronclient.v2_0 import client as neutron_client
 
 from cloudferrylib.base import network
 from cloudferrylib.os.identity import keystone as ksresource
+from cloudferrylib.utils import cache
 from cloudferrylib.utils import utils as utl
 
 
@@ -27,6 +31,9 @@ LOG = utl.get_log(__name__)
 DEFAULT_SECGR = 'default'
 
 
+@cache.Cached(getter='get_subnets_list', modifier='create_network')
+@cache.Cached(getter='get_networks_list', modifier='create_network')
+@cache.Cached(getter='get_ports_list', modifier='create_port')
 class NeutronNetwork(network.Network):
 
     """
@@ -241,12 +248,12 @@ class NeutronNetwork(network.Network):
         return self.get_mac_by_ip
 
     def get_mac_by_ip(self, ip_address):
-        for port in self.get_list_ports():
+        for port in self.get_ports_list():
             for fixed_ip_info in port['fixed_ips']:
                 if fixed_ip_info['ip_address'] == ip_address:
                     return port["mac_address"]
 
-    def get_list_ports(self, **kwargs):
+    def get_ports_list(self, **kwargs):
         return self.neutron_client.list_ports(**kwargs)['ports']
 
     def create_port(self, net_id, mac, ip, tenant_id, keep_ip, sg_ids=None):
@@ -288,10 +295,10 @@ class NeutronNetwork(network.Network):
             raise Exception("Can't find suitable network")
 
     def check_existing_port(self, network_id, mac):
-        for port in self.get_list_ports(fields=['network_id',
+        for port in self.get_ports_list(fields=['network_id',
                                                 'mac_address', 'id']):
-            if (port['network_id'] == network_id) \
-                    and (port['mac_address'] == mac):
+            if (port['network_id'] == network_id) and (
+                    port['mac_address'] == mac):
                 return port['id']
         return None
 
@@ -361,7 +368,8 @@ class NeutronNetwork(network.Network):
         network_res = cloud.resources[utl.NETWORK_RESOURCE]
         get_tenant_name = identity_res.get_tenants_func()
 
-        net = network_res.neutron_client.show_network(snet['network_id'])
+        networks_list = network_res.get_networks_list()
+        net = get_network_from_list_by_id(snet['network_id'], networks_list)
 
         result = {
             'name': snet['name'],
@@ -371,8 +379,8 @@ class NeutronNetwork(network.Network):
             'gateway_ip': snet['gateway_ip'],
             'ip_version': snet['ip_version'],
             'cidr': snet['cidr'],
-            'network_name': net['network']['name'],
-            'external': net['network']['router:external'],
+            'network_name': net['name'],
+            'external': net['router:external'],
             'network_id': snet['network_id'],
             'tenant_name': get_tenant_name(snet['tenant_id']),
             'meta': {},
@@ -402,8 +410,10 @@ class NeutronNetwork(network.Network):
         subnet_ids = []
 
         LOG.debug("Finding all ports connected to router '%s'", router['name'])
-        ports = net_res.neutron_client.list_ports(device_id=router['id'])
-        for port in ports['ports']:
+        ports_list = net_res.get_ports_list()
+        ports = get_ports_by_device_id_from_list(router['id'], ports_list)
+
+        for port in ports:
             for ip_info in port['fixed_ips']:
                 LOG.debug("Adding IP '%s' to router '%s'",
                           ip_info['ip_address'], router['name'])
@@ -424,8 +434,9 @@ class NeutronNetwork(network.Network):
         }
 
         if router['external_gateway_info']:
+            networks_list = net_res.get_networks_list()
             ext_id = router['external_gateway_info']['network_id']
-            ext_net = net_res.neutron_client.show_network(ext_id)['network']
+            ext_net = get_network_from_list_by_id(ext_id, networks_list)
 
             result['ext_net_name'] = ext_net['name']
             result['ext_net_tenant_name'] = get_tenant_name(
@@ -449,8 +460,9 @@ class NeutronNetwork(network.Network):
 
         get_tenant_name = identity_res.get_tenants_func()
 
+        networks_list = net_res.get_networks_list()
         ext_id = floating['floating_network_id']
-        extnet = net_res.neutron_client.show_network(ext_id)['network']
+        extnet = get_network_from_list_by_id(ext_id, networks_list)
 
         result = {
             'id': floating['id'],
@@ -662,13 +674,16 @@ class NeutronNetwork(network.Network):
 
     def get_networks_raw(self, search_dict):
         """Groups networks with subnets in raw `NeutronClient` format"""
+
         neutron = self.neutron_client
         nets = neutron.list_networks(**search_dict)['networks']
+        subnets_list = self.get_subnets_list()
 
         for net in nets:
             subnets = []
             for subnet_id in net['subnets']:
-                subnets.append(neutron.show_subnet(subnet_id)['subnet'])
+                subnets.append(get_subnet_from_list_by_id(subnet_id,
+                                                          subnets_list))
             net['subnets'] = subnets
 
         return nets
@@ -1418,6 +1433,45 @@ def get_network_from_list_by_id(network_id, networks_list):
 
     LOG.warning("Cannot obtain network with id='%s' from provided networks "
                 "list", network_id)
+
+
+def get_subnet_from_list_by_id(subnet_id, subnets_list):
+    """Get Neutron subnet by id from provided subnets list.
+
+    :param subnet_id: Neutron subnet ID
+    :param subnets_list: List of Neutron subnets, where target subnet should
+                         be searched
+    """
+
+    for subnet in subnets_list:
+        if subnet['id'] == subnet_id:
+            return subnet
+
+    LOG.warning("Cannot obtain subnet with id='%s' from provided subnets "
+                "list", subnet_id)
+
+
+def get_ports_by_device_id_from_list(device_id, ports_list):
+    """Get Neutron ports by device ID from provided ports list.
+
+    :param device_id: Port device ID
+    :param ports_list: List of Neutron ports, where target ports should be
+                       searched
+
+    :result: List of ports, which are belong to specified device ID
+    """
+
+    ports = []
+
+    for port in ports_list:
+        if port['device_id'] == device_id:
+            ports.append(port)
+
+    if not ports:
+        LOG.debug("There are no ports with device_id='%s' in provided list",
+                  device_id)
+
+    return ports
 
 
 def get_network_from_list(ip, tenant_id, networks_list, subnets_list):

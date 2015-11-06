@@ -24,9 +24,6 @@ class Network(resource.Resource):
     def get_func_mac_address(self, instance):
         raise NotImplemented("it's base class")
 
-    def get_list_ports(self, **kwargs):
-        raise NotImplemented("it's base class")
-
     def create_port(self, net_id, mac, ip, tenant_id, keep_ip, sg_ids=None):
         raise NotImplemented("it's base class")
 
