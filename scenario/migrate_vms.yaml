@@ -45,6 +45,7 @@ rollback:
 
 process:
   - transport_instances_and_dependency_resources:
+      - act_identity_trans: True
       - act_get_info_inst: True
       - act_filter_similar_vms_from_dst: True
       - init_iteration_instance:

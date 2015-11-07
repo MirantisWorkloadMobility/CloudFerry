@@ -1,0 +1,13 @@
+# This stage verifies destination cloud is functional by creating
+# tenant, flavor, glance image, private tenant network and subnet,
+# cinder volume as well as spinning VM using API calls.
+# After successful testing all resources and VMs are deleted.
+
+preparation:
+  - create_snapshot: True
+
+rollback:
+  - restore_from_snapshot: True
+
+process:
+  - act_check_dst_cloud: True
