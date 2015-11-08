@@ -15,13 +15,11 @@
 
 import copy
 import random
-from operator import attrgetter
 import pprint
 
 from novaclient.v1_1 import client as nova_client
 from novaclient import exceptions as nova_exc
 
-import cfglib
 from cloudferrylib.base import compute
 from cloudferrylib.os.compute import instances
 from cloudferrylib.os.identity import keystone
@@ -183,7 +181,7 @@ class NovaCompute(compute.Compute):
 
         return project_quotas, user_quotas
 
-    def _read_info_resources(self, **kwargs):
+    def _read_info_resources(self):
         """
         Read info about compute resources except instances from the cloud.
         """
@@ -224,7 +222,7 @@ class NovaCompute(compute.Compute):
             self.filter_tenant_id = kwargs['tenant_id'][0]
 
         if target == 'resources':
-            return self._read_info_resources(**kwargs)
+            return self._read_info_resources()
 
         if target != 'instances':
             raise ValueError('Only "resources" or "instances" values allowed')
@@ -255,8 +253,8 @@ class NovaCompute(compute.Compute):
         identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
         compute_res = cloud.resources[utl.COMPUTE_RESOURCE]
 
-        instance_name = getattr(instance, "OS-EXT-SRV-ATTR:instance_name")
-        instance_host = getattr(instance, INSTANCE_HOST_ATTRIBUTE)
+        instance_name = instance_libvirt_name(instance)
+        instance_node = instance_host(instance)
 
         get_tenant_name = identity_res.get_tenants_func()
 
@@ -284,17 +282,17 @@ class NovaCompute(compute.Compute):
             ext_cidr = cfg.cloud.ext_cidr
             host = utl.get_ext_ip(ext_cidr,
                                   cloud.getIpSsh(),
-                                  instance_host,
+                                  instance_node,
                                   ssh_user)
         elif is_ceph:
             host = cfg.compute.host_eph_drv
         else:
-            host = instance_host
+            host = instance_node
 
         instance_block_info = utl.get_libvirt_block_info(
             instance_name,
             cloud.getIpSsh(),
-            instance_host,
+            instance_node,
             ssh_user,
             cfg.cloud.ssh_sudo_password)
 
@@ -489,7 +487,6 @@ class NovaCompute(compute.Compute):
             dest_flavor = self.get_flavor_from_id(flavor_id)
         except nova_exc.NotFound:
             LOG.info("Flavor %s does not exist", flavor['name'])
-            pass
         if dest_flavor is not None:
             identical = (flavor_id == dest_flavor.id and
                          flavor['name'].lower() == dest_flavor.name.lower() and
@@ -582,7 +579,7 @@ class NovaCompute(compute.Compute):
 
         for _instance in info_compute['instances'].itervalues():
             instance = _instance['instance']
-            LOG.debug("creating instance {}".format(instance['name']))
+            LOG.debug("creating instance %s", instance['name'])
             create_params = {'name': instance['name'],
                              'flavor': instance['flavor_id'],
                              'key_name': instance['key_name'],
@@ -643,23 +640,23 @@ class NovaCompute(compute.Compute):
         """
         ids = search_opts.get('id', None) if search_opts else None
         if not ids:
-            instances = self.nova_client.servers.list(
+            servers = self.nova_client.servers.list(
                 detailed=detailed, search_opts=search_opts, marker=marker,
                 limit=limit)
         else:
-            ids = ids if type(ids) is list else [ids]
-            instances = []
+            ids = ids if isinstance(ids, list) else [ids]
+            servers = []
             for i in ids:
                 try:
-                    instances.append(self.nova_client.servers.get(i))
+                    servers.append(self.nova_client.servers.get(i))
                 except nova_exc.NotFound:
-                    LOG.warning("No server with ID of '%s' exists." % i)
+                    LOG.warning("No server with ID of '%s' exists.", i)
 
-        instances = filter_down_hosts(
-            down_hosts(self.get_client()), instances,
-            hostname_attribute=INSTANCE_HOST_ATTRIBUTE)
+        active_computes = self.get_compute_hosts()
+        servers = [i for i in servers
+                   if getattr(i, INSTANCE_HOST_ATTRIBUTE) in active_computes]
 
-        return instances
+        return servers
 
     def is_nova_instance(self, object_id):
         """
@@ -767,7 +764,6 @@ class NovaCompute(compute.Compute):
             except timeout_exception.TimeoutException:
                 LOG.warning("Failed to change state from '%s' to '%s' for VM "
                             "'%s'", curr, will, instance.name)
-                pass
 
     def get_flavor_from_id(self, flavor_id, include_deleted=False):
         if include_deleted:
@@ -843,8 +839,8 @@ class NovaCompute(compute.Compute):
         return self.default_detect_mac(instance)
 
     def default_detect_mac(self, arg):
-        raise NotImplemented(
-            "Not implemented yet function for detect mac address")
+        raise NotImplementedError("Not implemented yet function for detect "
+                                  "mac address")
 
     def attach_volume_to_instance(self, instance, volume):
         self.nova_client.volumes.create_server_volume(
@@ -866,8 +862,7 @@ class NovaCompute(compute.Compute):
 
     def get_compute_hosts(self):
         computes = self.nova_client.services.list(binary='nova-compute')
-        compute_hosts = map(attrgetter('host'), computes)
-        return filter_down_hosts(down_hosts(self.get_client()), compute_hosts)
+        return [c.host for c in computes if host_available(c)]
 
     def get_free_vcpus(self):
         hypervisor_statistics = self.get_hypervisor_statistics()
@@ -916,20 +911,11 @@ class NovaCompute(compute.Compute):
         self.get_instance(vm_id).reset_state()
 
 
-def down_hosts(novaclient):
-    services = novaclient.services.list()
-    return set(map(attrgetter('host'),
-                   filter(lambda h: h.state != 'up', services)))
+def host_available(compute_host):
+    """:returns: `True` if compute host is enabled in nova, `False`
+    otherwise"""
 
-
-def filter_down_hosts(hosts_down, elements, hostname_attribute=''):
-    """Removes elements which run on hosts in down state according to nova
-    service-list"""
-    if cfglib.CONF.migrate.skip_down_hosts:
-        elements = filter(
-            lambda e: getattr(e, hostname_attribute, e) not in hosts_down,
-            elements)
-    return elements
+    return compute_host.state == 'up' and compute_host.status == 'enabled'
 
 
 # TODO: move these to a Instance class, which would represent internal instance

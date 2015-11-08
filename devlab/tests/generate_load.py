@@ -403,6 +403,8 @@ class Prerequisites(BasePrerequisites):
                         member_id = tenant['id']
                         self.glanceclient.image_members.create(image_id,
                                                                member_id)
+        if getattr(self.config, 'create_zero_image', None):
+            self.glanceclient.images.create()
 
     def update_filtering_file(self):
         src_cloud = Prerequisites(cloud_prefix='SRC', config=self.config)

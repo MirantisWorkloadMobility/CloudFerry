@@ -141,10 +141,6 @@ migrate_opts = [
                help='Size of one chunk to transfer via SSH'),
     cfg.StrOpt('group_file_path', default="vm_groups.yaml",
                help='Path to file with the groups of VMs'),
-    cfg.BoolOpt('skip_down_hosts', default=True,
-                help="If set to True, removes unreachable compute hosts from "
-                     "nova hypervisor list. Otherwise migration process fails "
-                     "with unrecoverable error if host is down."),
     cfg.StrOpt('scenario', default='scenario/migrate.yaml',
                help='Path to a scenario file, which holds the whole migration '
                     'procedure. Must be YAML format'),
@@ -668,8 +664,8 @@ def merge_fields(index_pair, fields):
             cfg_for_reg[index_pair][1].append(field)
 
 
-def merge_cfg(cfg):
-    for pair in cfg:
+def merge_cfg(conf):
+    for pair in conf:
         index_pair = find_group(pair[0])
         if index_pair == -1:
             cfg_for_reg.append(pair)

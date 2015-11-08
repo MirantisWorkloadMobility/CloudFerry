@@ -3,6 +3,9 @@ img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
 # Path to CloudFerry config relative to the root folder
 cloud_ferry_conf = 'configuration.ini'
 
+ssh_check_user = 'cirros'
+ssh_vm_shell = '/bin/sh -c'
+
 # Users to create/delete
 users = [
     {'name': 'user1', 'password': 'passwd1', 'email': 'mail@example.com',
@@ -19,7 +22,9 @@ users = [
      'tenant': 'tenant3', 'enabled': True},
     {'name': 'user6', 'password': 'passwd', 'email': 'testd@example.com',
      'tenant': 'tenant3', 'enabled': True, 'additional_tenants':
-        [{'name': 'tenant1', 'role': '_member_'}]}
+        [{'name': 'tenant1', 'role': '_member_'}]},
+    {'name': 'user7', 'password': 'passwd', 'email': 'user7@example.com',
+     'tenant': 'tenant4', 'enabled': True},
 ]
 
 user_tenant_roles = [
@@ -115,9 +120,43 @@ tenants = [
      },
     {'name': 'tenant3', 'description': 'This tenant will be deleted',
      'enabled': True, 'deleted': True,
-     'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': True}]}
+     'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': True}]
+     },
+    {'name': 'tenant4', 'description': 'None', 'enabled': True,
+     'quota': {'instances': '4', 'cores': '9', 'ram': '84399',
+               'floating_ips': '3', 'fixed_ips': '', 'metadata_items': '',
+               'injected_files': '', 'injected_file_content_bytes': '',
+               'injected_file_path_bytes': '', 'key_pairs': '3',
+               'security_groups': '5', 'security_group_rules': ''},
+     'neutron_quotas': [{'security_group_rule': 100, 'subnet': 10,
+                         'tenant_id': '', 'network': 10, 'floatingip': 3,
+                         'security_group': 10, 'router': 10, 'port': 50}],
+     'images': [{'name': 'cirros_image_for_tenant4', 'copy_from': img_url,
+                 'is_public': True}],
+     'networks': [
+         {'name': 'tenantnet4', 'admin_state_up': True,
+          'subnets': [
+              {'cidr': '33.33.33.0/24', 'ip_version': 4, 'name': 't4_s1',
+               'routers_to_connect': ['ext_router']}]}],
+     'security_groups': [
+         {'name': 'sg41', 'description': 'Tenant4 blah blah group', 'rules': [
+             {'ip_protocol': 'icmp',
+              'from_port': '0',
+              'to_port': '255',
+              'cidr': '0.0.0.0/0'},
+             {'ip_protocol': 'tcp',
+              'from_port': '80',
+              'to_port': '80',
+              'cidr': '0.0.0.0/0'}]
+          },
+         {'name': 'sg42', 'description': 'Tenant4 blah group2'}],
+     'cinder_volumes': [],
+     'cinder_snapshots': [
+         # Commented because of unimplemented error in nfs driver for grizzly.
+         # {'name': 'tn1snapsh', 'volume_id': 'tn1_volume2'}
+     ]
+     }
 ]
-
 
 # Images to create/delete
 images = [
@@ -135,6 +174,8 @@ images = [
      'container_format': 'bare'}
 ]
 
+# Create zero image, without any parameters.
+create_zero_image = True
 # Images not to be migrated:
 images_not_included_in_filter = ['image4', 'image5']
 
@@ -233,6 +274,7 @@ vm_states = [
     {'name': 'tn1server1', 'state': 'active'},
     {'name': 'tn1server2', 'state': 'active'},
     {'name': 'tn2server1', 'state': 'active'},
+    {'name': 'tn4server1', 'state': 'active'}
 ]
 
 # Client's versions
