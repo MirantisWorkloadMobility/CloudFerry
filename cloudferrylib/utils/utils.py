@@ -319,8 +319,8 @@ class forward_agent(object):
         destination clouds via ssh
     """
 
-    def __init__(self, key_file):
-        self.key_file = key_file
+    def __init__(self, key_files):
+        self.key_files = key_files
 
     def _agent_already_running(self):
         with settings(hide('warnings', 'running', 'stdout', 'stderr'),
@@ -330,19 +330,23 @@ class forward_agent(object):
 
             if res.succeeded:
                 present_keys = res.split(os.linesep)
-                for key in present_keys:
-                    # TODO: this will break for path with whitespaces
-                    key_path = key.split(' ')[2]
-                    if key_path == os.path.expanduser(self.key_file):
-                        return True
+                # TODO: this will break for path with whitespaces
+                present_keys_paths = [
+                    present_key.split(' ')[2] for present_key in present_keys
+                    ]
+                for key in self.key_files:
+                    if os.path.expanduser(key) not in present_keys_paths:
+                        return False
+                return True
 
         return False
 
     def __enter__(self):
         if self._agent_already_running():
             return
+        key_string = ' '.join(self.key_files)
         start_ssh_agent = ("eval `ssh-agent` && echo $SSH_AUTH_SOCK && "
-                           "ssh-add %s") % self.key_file
+                           "ssh-add %s") % key_string
         info_agent = local(start_ssh_agent, capture=True).split("\n")
         self.pid = info_agent[0].split(" ")[-1]
         self.ssh_auth_sock = info_agent[1]

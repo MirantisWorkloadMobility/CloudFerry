@@ -59,11 +59,12 @@ class MysqlDump(action.Action):
         self.cloud.ssh_util.execute(command, host_exec=db_host)
         # copy dump file to host with cloudferry (for now just in case)
         # in future we will store snapshot for every step of migration
+        key_string = ' -i '.join(self.cloud.config.migrate.key_filename)
         context = {
             'host_src': db_host,
             'path_src': self.cloud.cloud_config.snapshot.snapshot_path,
             'user_src': self.cloud.cloud_config.cloud.ssh_user,
-            'key': self.cloud.config.migrate.key_filename,
+            'key': key_string,
             'path_dst': self.cloud.cloud_config.snapshot.snapshot_path}
         command = (
             "scp -o StrictHostKeyChecking=no -i {key} "
