@@ -80,8 +80,8 @@ class Cloud(object):
                 k: getattr(conf_res, k, None) if getattr(conf_res, k, None)
                 else config.mysql[k]
                 for k in config.mysql.keys()}
-            db_name_use = getattr(conf_res, 'database_name')\
-                if getattr(conf_res, 'database_name', None) else db_name
+            db_name_use = getattr(conf_res, 'db_name')\
+                if getattr(conf_res, 'db_name', None) else db_name
             return mysql_connector.MysqlConnector(conf, db_name_use)
         return get_db_connection
 

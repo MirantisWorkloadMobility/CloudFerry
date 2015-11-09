@@ -29,7 +29,7 @@ class Resource(object):
         time_wait = cfg.migrate.time_wait
         return proxy_client.Proxy(client, retry, time_wait)
 
-    def read_info(self, opts={}):
+    def read_info(self, opts=None):
         pass
 
     def deploy(self, *args):

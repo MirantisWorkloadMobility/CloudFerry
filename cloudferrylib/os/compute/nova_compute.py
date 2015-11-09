@@ -22,6 +22,7 @@ from novaclient import exceptions as nova_exc
 
 from cloudferrylib.base import compute
 from cloudferrylib.os.compute import instances
+from cloudferrylib.os.compute import cold_evacuate
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import timeout_exception
@@ -39,6 +40,7 @@ DEFAULT_QUOTA_VALUE = -1
 
 INSTANCE_HOST_ATTRIBUTE = 'OS-EXT-SRV-ATTR:host'
 INSTANCE_LIBVIRT_NAME_ATTRIBUTE = 'OS-EXT-SRV-ATTR:instance_name'
+INSTANCE_AZ_ATTRIBUTE = 'OS-EXT-AZ:availability_zone'
 
 ACTIVE = 'ACTIVE'
 STOPPED = 'STOPPED'
@@ -886,9 +888,14 @@ class NovaCompute(compute.Compute):
         self.nova_client.servers.delete(vm_id)
 
     def live_migrate_vm(self, vm_id, destination_host):
-        # VM source host is taken from VM properties
-        instances.incloud_live_migrate(self.nova_client, self.config, vm_id,
-                                       destination_host)
+        migration_type = self.config.migrate.incloud_live_migration
+        if migration_type == 'cold':
+            cold_evacuate.cold_evacuate(self.config, self.nova_client, vm_id,
+                                        destination_host)
+        else:
+            # VM source host is taken from VM properties
+            instances.incloud_live_migrate(self.nova_client, self.config,
+                                           vm_id, destination_host)
 
     def get_instance_sql_id_by_uuid(self, uuid):
         sql = "select id from instances where uuid='%s'" % uuid
