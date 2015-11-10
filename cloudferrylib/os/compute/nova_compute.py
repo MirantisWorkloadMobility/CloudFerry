@@ -80,18 +80,25 @@ class RandomSchedulerVmDeployer(object):
         self.nc = nova_compute_obj
 
     def deploy(self, instance, create_params, client_conf):
-        hosts = self.nc.get_compute_hosts()
-        random.seed()
-        random.shuffle(hosts)
-        while hosts:
-            try:
-                return self.nc.deploy_instance(create_params, client_conf)
-            except timeout_exception.TimeoutException:
-                az = instance['availability_zone']
-                node = hosts.pop()
-                create_params['availability_zone'] = ':'.join([az, node])
-                LOG.debug("Failed to boot VM '%s', rescheduling on node '%s'",
-                          instance['name'], node)
+        LOG.info("Deploying instance '%s'", instance['name'])
+
+        try:
+            return self.nc.deploy_instance(create_params, client_conf)
+        except timeout_exception.TimeoutException:
+            hosts = self.nc.get_compute_hosts()
+            random.seed()
+            random.shuffle(hosts)
+
+            while hosts:
+                create_params['availability_zone'] = ':'.join([
+                    instance['availability_zone'], hosts.pop()])
+                LOG.info("Trying to deploy instance '%s' in '%s'",
+                         create_params['name'],
+                         create_params.get('availability_zone', 'UNKNOWN'))
+                try:
+                    return self.nc.deploy_instance(create_params, client_conf)
+                except timeout_exception.TimeoutException:
+                    LOG.warning("Failed to schedule VM '%s'", instance['name'])
 
         message = ("Unable to schedule VM '{vm}' on any of available compute "
                    "nodes.").format(vm=instance['name'])
@@ -571,7 +578,8 @@ class NovaCompute(compute.Compute):
                 conf.cloud.tenant):
             nclient = self.get_client(conf)
             new_id = self.create_instance(nclient, **create_params)
-            self.wait_for_status(new_id, self.get_status, 'active')
+            self.wait_for_status(new_id, self.get_status, 'active',
+                                 timeout=300)
         return new_id
 
     def _deploy_instances(self, info_compute):
@@ -618,12 +626,15 @@ class NovaCompute(compute.Compute):
 
         boot_args = {k: v for k, v in kwargs.items()
                      if k not in ignored_instance_args}
-
+        LOG.debug("Creating instance with args '%s'",
+                  pprint.pformat(boot_args))
         created_instance = nclient.servers.create(**boot_args)
 
         instances.update_user_ids_for_instance(self.mysql_connector,
                                                created_instance.id,
                                                kwargs['user_id'])
+
+        LOG.debug("Created instance '%s'", created_instance.id)
 
         return created_instance.id
 
