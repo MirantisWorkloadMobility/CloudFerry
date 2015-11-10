@@ -122,6 +122,8 @@ class GlanceImage(image.Image):
         return self.glance_client.images.create(**kwargs)
 
     def delete_image(self, image_id):
+        # Change protected property to false before delete
+        self.glance_client.images.update(image_id, protected=False)
         self.glance_client.images.delete(image_id)
 
     def get_image_by_id(self, image_id):
