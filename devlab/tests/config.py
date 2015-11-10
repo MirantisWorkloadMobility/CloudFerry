@@ -25,6 +25,8 @@ users = [
         [{'name': 'tenant1', 'role': '_member_'}]},
     {'name': 'user7', 'password': 'passwd', 'email': 'user7@example.com',
      'tenant': 'tenant4', 'enabled': True},
+    {'name': 'user8', 'password': 'passwd', 'email': 'tenant3@example.com',
+     'tenant': 'tenant3', 'enabled': True}
 ]
 
 user_tenant_roles = [
@@ -120,6 +122,18 @@ tenants = [
      },
     {'name': 'tenant3', 'description': 'This tenant will be deleted',
      'enabled': True, 'deleted': True,
+     'networks': [
+         {'name': 'tenantnet3', 'admin_state_up': True,
+          'subnets': [
+              {'cidr': '10.7.2.0/24', 'ip_version': 4, 'name': 't3_s1',
+               'routers_to_connect': ['ext_router']}]}],
+     'vms': [
+         {'name': 'tn3server1', 'image': 'image1', 'flavor': 'flavorname1',
+          'key_name': 'key4'}],
+     'cinder_volumes': [
+         {'display_name': 'tn3_volume1', 'size': 1,
+          'server_to_attach': 'tn3server1', 'device': '/dev/vdb'}],
+     'cinder_snapshots': [],
      'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': True}]
      },
     {'name': 'tenant4', 'description': 'None', 'enabled': True,
@@ -151,10 +165,7 @@ tenants = [
           },
          {'name': 'sg42', 'description': 'Tenant4 blah group2'}],
      'cinder_volumes': [],
-     'cinder_snapshots': [
-         # Commented because of unimplemented error in nfs driver for grizzly.
-         # {'name': 'tn1snapsh', 'volume_id': 'tn1_volume2'}
-     ]
+     'cinder_snapshots': []
      }
 ]
 
@@ -300,7 +311,21 @@ keypairs = [
         'iZVICtvQUnB89xnH3RNYDBGFQKS3gOUtjvOb0oP9RVNELHftrGMnjJOQCLF+R0eG+Byc'
         '9DZy3PfajJftUZsgCyzIkVT7YBZVQ7VubB3jOGZqXCpMfLFZtZad2+G+C3sYm3rMGu8l'
         'b+wS90o98IrpF4av6y13cfkqkucw3sJ18+wzPbWKQ41YW9QyZ6Er0Vu4+4pJcj+1qn+O'
-        'kINp0A7C2WbXXgiyeaxBR8nBV9A01cFm/W6Q63/r vagrant@grizzly'}]
+        'kINp0A7C2WbXXgiyeaxBR8nBV9A01cFm/W6Q63/r vagrant@grizzly'},
+    {'name': 'key3', 'user': 'user7', 'public_key':
+        'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDVIFUSSlxG8vPj11aLXZderymbR5G2e'
+        'uoxPaZSZ33DUtGurPBnBhS3ztnR3Cg4vBgpoTVyti7LYenhfBlcGyjxA+RA2iM8Q3YYrX'
+        'AL64Itad/IzPfq6+qpSErqkU/tLzoWasFJBXuex8FSWg7lYbZX4CJZkSsEGiNqSdNw4lS'
+        'pdWfvGbMh6ywyGAMxNRHi7JyaFoMATLqHYy/w+9EHkNqKaFtICw5RhNG6zEGCAnHuRz+g'
+        'nvvEOaVHY7En0PlSL2tqAmT7a8m98T8zS1w1uNeed4WXI8gWofOFlzyB5e1l5v/e4ANwg'
+        '9jlzyyPa4i+rAfBSyg1wR02cRnEgejvPzrn user7@grizzly'},
+    {'name': 'key4', 'user': 'user8', 'public_key':
+        'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDVIFUSSlxG8vPj11aLXZderymbR5G2e'
+        'uoxPaZSZ33DUtGurPBnBhS3ztnR3Cg4vBgpoTVyti7LYenhfBlcGyjxA+RA2iM8Q3YYrX'
+        'AL64Itad/IzPfq6+qpSErqkU/tLzoWasFJBXuex8FSWg7lYbZX4CJZkSsEGiNqSdNw4lS'
+        'pdWfvGbMh6ywyGAMxNRHi7JyaFoMATLqHYy/w+9EHkNqKaFtICw5RhNG6zEGCAnHuRz+g'
+        'nvvEOaVHY7En0PlSL2tqAmT7a8m98T8zS1w1uNeed4WXI8gWofOFlzyB5e1l5v/e4ANwg'
+        '9jlzyyPa4i+rAfBSyg1wR02cRnEgejvPzrn user8@grizzly'}]
 
 private_key = {
     'name': 'key2',
