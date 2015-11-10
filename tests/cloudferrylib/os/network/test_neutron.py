@@ -201,24 +201,38 @@ class NeutronTestCase(test.TestCase):
         self.assertDictEqual(res5, {})
 
     def test_get_networks(self):
-        fake_networks_list = {'networks': [{'status': 'ACTIVE',
-                                            'subnets': [mock.ANY],
-                                            'name': 'fake_network_name_1',
-                                            'provider:physical_network': None,
-                                            'admin_state_up': True,
-                                            'tenant_id': 'fake_tenant_id_1',
-                                            'provider:network_type': 'gre',
-                                            'router:external': False,
-                                            'shared': False,
-                                            'id': 'fake_network_id_1',
-                                            'provider:segmentation_id': 5}]}
+        fake_net_list = {'networks': [{'status': 'ACTIVE',
+                                       'subnets': [mock.ANY],
+                                       'name': 'fake_network_name_1',
+                                       'provider:physical_network': None,
+                                       'admin_state_up': True,
+                                       'tenant_id': 'fake_tenant_id_1',
+                                       'provider:network_type': 'gre',
+                                       'router:external': False,
+                                       'shared': False,
+                                       'id': 'fake_network_id_1',
+                                       'provider:segmentation_id': 5}]}
 
-        self.neutron_mock_client().list_networks.return_value = \
-            fake_networks_list
-        self.neutron_mock_client.show_subnet.return_value = \
-            {'subnet': {'name': 'fake_subnet_name_1'}}
-        self.network_mock.get_resource_hash = \
-            mock.Mock(return_value='fake_net_hash_1')
+        fake_subnet_list = {'subnets': [{'name': 'fake_subnet_name_1',
+                                         'enable_dhcp': True,
+                                         'network_id': 'fake_network_id_1',
+                                         'tenant_id': 'fake_tenant_id_1',
+                                         'allocation_pools': [
+                                             {'start': 'fake_start_ip_1',
+                                              'end': 'fake_end_ip_1'}
+                                         ],
+                                         'host_routes': [],
+                                         'ip_version': 4,
+                                         'gateway_ip': 'fake_gateway_ip_1',
+                                         'cidr': 'fake_cidr_1',
+                                         'id': 'fake_subnet_id_1'}]}
+
+        self.neutron_mock_client().list_networks.return_value = fake_net_list
+        self.neutron_mock_client().list_subnets.return_value = fake_subnet_list
+        self.network_mock.get_networks_list = mock.Mock(
+            return_value=fake_net_list['networks'])
+        self.network_mock.get_resource_hash = mock.Mock(
+            return_value='fake_net_hash_1')
 
         networks_info = [self.net_1_info]
         networks_info_result = self.neutron_network_client.get_networks()
@@ -226,62 +240,76 @@ class NeutronTestCase(test.TestCase):
         self.assertEquals(networks_info, networks_info_result)
 
     def test_get_subnets(self):
+        fake_net_list = {'networks': [{'status': 'ACTIVE',
+                                       'subnets': [mock.ANY],
+                                       'name': 'fake_network_name_1',
+                                       'provider:physical_network': None,
+                                       'admin_state_up': True,
+                                       'tenant_id': 'fake_tenant_id_1',
+                                       'provider:network_type': 'gre',
+                                       'router:external': False,
+                                       'shared': False,
+                                       'id': 'fake_network_id_1',
+                                       'provider:segmentation_id': 5}]}
 
-        fake_subnets_list = {
-            'subnets': [{'name': 'fake_subnet_name_1',
-                         'enable_dhcp': True,
-                         'network_id': 'fake_network_id_1',
-                         'tenant_id': 'fake_tenant_id_1',
-                         'allocation_pools': [
-                             {'start': 'fake_start_ip_1',
-                              'end': 'fake_end_ip_1'}
-                         ],
-                         'host_routes': [],
-                         'ip_version': 4,
-                         'gateway_ip': 'fake_gateway_ip_1',
-                         'cidr': 'fake_cidr_1',
-                         'id': 'fake_subnet_id_1'}]}
+        fake_subnet_list = {'subnets': [{'name': 'fake_subnet_name_1',
+                                         'enable_dhcp': True,
+                                         'network_id': 'fake_network_id_1',
+                                         'tenant_id': 'fake_tenant_id_1',
+                                         'allocation_pools': [
+                                             {'start': 'fake_start_ip_1',
+                                              'end': 'fake_end_ip_1'}
+                                         ],
+                                         'host_routes': [],
+                                         'ip_version': 4,
+                                         'gateway_ip': 'fake_gateway_ip_1',
+                                         'cidr': 'fake_cidr_1',
+                                         'id': 'fake_subnet_id_1'}]}
 
-        self.neutron_mock_client().list_subnets.return_value = \
-            fake_subnets_list
-        self.neutron_mock_client.show_network.return_value = \
-            {'network': {'name': 'fake_network_name_1',
-                         'router:external': False}}
-        self.network_mock.get_resource_hash = \
-            mock.Mock(return_value='fake_subnet_hash_1')
+        self.neutron_mock_client().list_subnets.return_value = fake_subnet_list
+        self.network_mock.get_networks_list = mock.Mock(
+            return_value=fake_net_list['networks'])
+        self.network_mock.get_resource_hash = mock.Mock(
+            return_value='fake_subnet_hash_1')
 
         subnets_info = [self.subnet_1_info]
         subnets_info_result = self.neutron_network_client.get_subnets()
         self.assertEquals(subnets_info, subnets_info_result)
 
     def test_get_routers(self):
+        fake_net_list = {'networks': [{'status': 'ACTIVE',
+                                       'subnets': [mock.ANY],
+                                       'name': 'fake_network_name_1',
+                                       'provider:physical_network': None,
+                                       'admin_state_up': True,
+                                       'tenant_id': 'fake_tenant_id_1',
+                                       'provider:network_type': 'gre',
+                                       'router:external': False,
+                                       'shared': False,
+                                       'id': 'fake_network_id_1',
+                                       'provider:segmentation_id': 5}]}
 
-        fake_routers_list = {
-            'routers': [{'status': 'ACTIVE',
-                         'external_gateway_info': {
-                             'network_id': 'fake_network_id_1',
-                             'enable_snat': True
-                         },
-                         'name': 'fake_router_name_1',
-                         'admin_state_up': True,
-                         'tenant_id': 'fake_tenant_id_1',
-                         'routes': [],
-                         'id': 'fake_router_id_1'}]}
+        fake_router_list = {'routers': [{'status': 'ACTIVE',
+                                         'external_gateway_info': {
+                                             'network_id': 'fake_network_id_1',
+                                             'enable_snat': True
+                                         },
+                                         'name': 'fake_router_name_1',
+                                         'admin_state_up': True,
+                                         'tenant_id': 'fake_tenant_id_1',
+                                         'routes': [],
+                                         'id': 'fake_router_id_1'}]}
 
-        self.neutron_mock_client().list_routers.return_value = \
-            fake_routers_list
-        self.neutron_mock_client.show_network.return_value = \
-            {'network': {'name': 'fake_network_name_1',
-                         'tenant_id': 'fake_tenant_id_1'}}
+        fake_ports_list = [{'fixed_ips': [{'subnet_id': 'fake_subnet_id_1',
+                                           'ip_address': 'fake_ipaddr_1'}],
+                            'device_id': 'fake_router_id_1'}]
 
-        fake_ports_list = {
-            'ports': [{'fixed_ips': [{'subnet_id': 'fake_subnet_id_1',
-                                      'ip_address': 'fake_ipaddr_1'}],
-                       'device_id': 'fake_router_id_1'}]}
-
-        self.neutron_mock_client.list_ports.return_value = fake_ports_list
-        self.network_mock.get_resource_hash = \
-            mock.Mock(return_value='fake_router_hash')
+        self.neutron_mock_client().list_routers.return_value = fake_router_list
+        self.network_mock.get_networks_list = mock.Mock(
+            return_value=fake_net_list['networks'])
+        self.network_mock.get_ports_list.return_value = fake_ports_list
+        self.network_mock.get_resource_hash = mock.Mock(
+            return_value='fake_router_hash')
 
         routers_info = [{'name': 'fake_router_name_1',
                          'id': 'fake_router_id_1',
@@ -304,21 +332,30 @@ class NeutronTestCase(test.TestCase):
         self.assertEquals(routers_info, routers_info_result)
 
     def test_get_floatingips(self):
+        fake_net_list = {'networks': [{'status': 'ACTIVE',
+                                       'subnets': [mock.ANY],
+                                       'name': 'fake_network_name_1',
+                                       'provider:physical_network': None,
+                                       'admin_state_up': True,
+                                       'tenant_id': 'fake_tenant_id_1',
+                                       'provider:network_type': 'gre',
+                                       'router:external': False,
+                                       'shared': False,
+                                       'id': 'fake_network_id_1',
+                                       'provider:segmentation_id': 5}]}
 
-        fake_floatingips_list = {
-            'floatingips': [{'router_id': None,
-                             'tenant_id': 'fake_tenant_id_1',
-                             'floating_network_id': 'fake_network_id_1',
-                             'fixed_ip_address': None,
-                             'floating_ip_address': 'fake_floatingip_1',
-                             'port_id': None,
-                             'id': 'fake_floating_ip_id_1'}]}
+        fake_fips = {'floatingips': [
+            {'router_id': None,
+             'tenant_id': 'fake_tenant_id_1',
+             'floating_network_id': 'fake_network_id_1',
+             'fixed_ip_address': None,
+             'floating_ip_address': 'fake_floatingip_1',
+             'port_id': None,
+             'id': 'fake_floating_ip_id_1'}]}
 
-        self.neutron_mock_client().list_floatingips.return_value = \
-            fake_floatingips_list
-        self.neutron_mock_client.show_network.return_value = \
-            {'network': {'name': 'fake_network_name_1',
-                         'tenant_id': 'fake_tenant_id_1'}}
+        self.network_mock.get_networks_list = mock.Mock(
+            return_value=fake_net_list['networks'])
+        self.neutron_mock_client().list_floatingips.return_value = fake_fips
 
         floatingips_info = [{'id': 'fake_floating_ip_id_1',
                              'tenant_id': 'fake_tenant_id_1',
