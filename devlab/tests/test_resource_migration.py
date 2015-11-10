@@ -329,31 +329,48 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         """
         Validate tenant's quotas were migrated to correct tenant
         """
-        def _delete_id_from_dict(_dict):
-            for key in _dict:
-                del _dict[key]['id']
 
-        def check_and_delete_keys(tenant):
-            return {key: dst_quotas[tenant][key] for key in dst_quotas[tenant]
-                    if key in src_quotas[tenant]}
+        def get_tenant_quotas(tenants, client):
+            """
+            Method gets nova and neutron quotas for given tenants, and saves
+            quotas, which are exist on src (on dst could exists quotas, which
+            are not exist on src).
+            """
+            qs = {}
+            for t in tenants:
+                qs[t.name] = {'nova_q': {}, 'neutron_q': {}}
+                nova_quota = client.novaclient.quotas.get(t.id)._info
+                for k, v in nova_quota.iteritems():
+                    if k in src_nova_quota_keys and k != 'id':
+                        qs[t.name]['nova_q'][k] = v
+                neutron_quota = client.neutronclient.show_quota(t.id)['quota']
+                for k, v in neutron_quota.iteritems():
+                    if k in src_neutron_quota_keys:
+                        qs[t.name]['neutron_q'][k] = v
+            return qs
 
-        src_quotas = {i.name: self.src_cloud.novaclient.quotas.get(i.id)._info
-                      for i in self.filter_tenants()}
-        dst_quotas = {i.name: self.dst_cloud.novaclient.quotas.get(i.id)._info
-                      for i in self.dst_cloud.keystoneclient.tenants.list()}
+        src_nova_quota_keys = self.src_cloud.novaclient.quotas.get(
+            self.src_cloud.keystoneclient.tenant_id)._info.keys()
+        src_neutron_quota_keys = self.src_cloud.neutronclient.show_quota(
+            self.src_cloud.keystoneclient.tenant_id)['quota'].keys()
 
-        # Delete tenant's ids
-        _delete_id_from_dict(src_quotas)
-        _delete_id_from_dict(dst_quotas)
+        src_quotas = get_tenant_quotas(self.filter_tenants(), self.src_cloud)
+        dst_quotas = get_tenant_quotas(
+            self.dst_cloud.keystoneclient.tenants.list(), self.dst_cloud)
 
         for tenant in src_quotas:
             self.assertIn(tenant, dst_quotas,
                           'Tenant %s is missing on dst' % tenant)
-            # Delete quotas which we have on dst but do not have on src
-            _dst_quotas = check_and_delete_keys(tenant)
+            # Check nova quotas
             self.assertDictEqual(
-                src_quotas[tenant], _dst_quotas,
-                'Quotas for tenant %s on src and dst are different' % tenant)
+                src_quotas[tenant]['nova_q'], dst_quotas[tenant]['nova_q'],
+                'Nova quotas for tenant %s migrated not successfully' % tenant)
+            # Check neutron quotas
+            self.assertDictEqual(
+                src_quotas[tenant]['neutron_q'],
+                dst_quotas[tenant]['neutron_q'],
+                'Neutron quotas for tenant %s migrated not successfully'
+                % tenant)
 
     def test_ssh_connectivity_by_keypair(self):
         vms = self.dst_cloud.novaclient.servers.list(
