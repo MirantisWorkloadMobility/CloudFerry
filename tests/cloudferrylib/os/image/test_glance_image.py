@@ -158,6 +158,8 @@ class GlanceImageTestCase(test.TestCase):
         fake_image_id = 'fake_image_id_1'
         self.glance_image.delete_image(fake_image_id)
 
+        self.glance_mock_client().images.update.assert_called_once_with(
+            fake_image_id, protected=False)
         self.glance_mock_client().images.delete.assert_called_once_with(
             fake_image_id)
 
