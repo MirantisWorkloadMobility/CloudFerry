@@ -303,11 +303,11 @@ class DeployInstanceWithManualScheduling(test.TestCase):
         self.assertRaises(
             nova_compute.DestinationCloudNotOperational,
             deployer.deploy, instance, create_params, client_conf)
-        self.assertEqual(nc.deploy_instance.call_count, num_computes)
+        self.assertEqual(nc.deploy_instance.call_count, num_computes + 1)
 
     def test_runs_only_one_boot_if_node_is_good(self):
         compute_hosts = ['host1', 'host2', 'host3']
-        instance = {'availability_zone': 'somezone'}
+        instance = {'availability_zone': 'somezone', 'name': 'vm1'}
         create_params = {'name': 'vm1'}
         client_conf = mock.Mock()
 

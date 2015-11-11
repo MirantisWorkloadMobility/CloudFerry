@@ -22,6 +22,7 @@ from novaclient import exceptions as nova_exc
 
 from cloudferrylib.base import compute
 from cloudferrylib.os.compute import instances
+from cloudferrylib.os.compute import cold_evacuate
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import timeout_exception
@@ -39,6 +40,7 @@ DEFAULT_QUOTA_VALUE = -1
 
 INSTANCE_HOST_ATTRIBUTE = 'OS-EXT-SRV-ATTR:host'
 INSTANCE_LIBVIRT_NAME_ATTRIBUTE = 'OS-EXT-SRV-ATTR:instance_name'
+INSTANCE_AZ_ATTRIBUTE = 'OS-EXT-AZ:availability_zone'
 
 ACTIVE = 'ACTIVE'
 STOPPED = 'STOPPED'
@@ -78,18 +80,25 @@ class RandomSchedulerVmDeployer(object):
         self.nc = nova_compute_obj
 
     def deploy(self, instance, create_params, client_conf):
-        hosts = self.nc.get_compute_hosts()
-        random.seed()
-        random.shuffle(hosts)
-        while hosts:
-            try:
-                return self.nc.deploy_instance(create_params, client_conf)
-            except timeout_exception.TimeoutException:
-                az = instance['availability_zone']
-                node = hosts.pop()
-                create_params['availability_zone'] = ':'.join([az, node])
-                LOG.debug("Failed to boot VM '%s', rescheduling on node '%s'",
-                          instance['name'], node)
+        LOG.info("Deploying instance '%s'", instance['name'])
+
+        try:
+            return self.nc.deploy_instance(create_params, client_conf)
+        except timeout_exception.TimeoutException:
+            hosts = self.nc.get_compute_hosts()
+            random.seed()
+            random.shuffle(hosts)
+
+            while hosts:
+                create_params['availability_zone'] = ':'.join([
+                    instance['availability_zone'], hosts.pop()])
+                LOG.info("Trying to deploy instance '%s' in '%s'",
+                         create_params['name'],
+                         create_params.get('availability_zone', 'UNKNOWN'))
+                try:
+                    return self.nc.deploy_instance(create_params, client_conf)
+                except timeout_exception.TimeoutException:
+                    LOG.warning("Failed to schedule VM '%s'", instance['name'])
 
         message = ("Unable to schedule VM '{vm}' on any of available compute "
                    "nodes.").format(vm=instance['name'])
@@ -569,7 +578,8 @@ class NovaCompute(compute.Compute):
                 conf.cloud.tenant):
             nclient = self.get_client(conf)
             new_id = self.create_instance(nclient, **create_params)
-            self.wait_for_status(new_id, self.get_status, 'active')
+            self.wait_for_status(new_id, self.get_status, 'active',
+                                 timeout=300)
         return new_id
 
     def _deploy_instances(self, info_compute):
@@ -616,12 +626,15 @@ class NovaCompute(compute.Compute):
 
         boot_args = {k: v for k, v in kwargs.items()
                      if k not in ignored_instance_args}
-
+        LOG.debug("Creating instance with args '%s'",
+                  pprint.pformat(boot_args))
         created_instance = nclient.servers.create(**boot_args)
 
         instances.update_user_ids_for_instance(self.mysql_connector,
                                                created_instance.id,
                                                kwargs['user_id'])
+
+        LOG.debug("Created instance '%s'", created_instance.id)
 
         return created_instance.id
 
@@ -886,9 +899,14 @@ class NovaCompute(compute.Compute):
         self.nova_client.servers.delete(vm_id)
 
     def live_migrate_vm(self, vm_id, destination_host):
-        # VM source host is taken from VM properties
-        instances.incloud_live_migrate(self.nova_client, self.config, vm_id,
-                                       destination_host)
+        migration_type = self.config.migrate.incloud_live_migration
+        if migration_type == 'cold':
+            cold_evacuate.cold_evacuate(self.config, self.nova_client, vm_id,
+                                        destination_host)
+        else:
+            # VM source host is taken from VM properties
+            instances.incloud_live_migrate(self.nova_client, self.config,
+                                           vm_id, destination_host)
 
     def get_instance_sql_id_by_uuid(self, uuid):
         sql = "select id from instances where uuid='%s'" % uuid

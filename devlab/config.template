@@ -97,6 +97,7 @@ db_password = <src_mysql_password>
 db_host = <src_ip>
 db_connection = mysql+mysqlconnector
 db_name = quantum
+get_all_quota = False
 
 [src_objstorage]
 service =
@@ -168,6 +169,7 @@ db_password = <dst_mysql_password>
 db_host = <dst_ip>
 db_connection = mysql+mysqlconnector
 db_name = neutron
+get_all_quota = False
 
 [import_rules]
 key = {name:dest-key-1}

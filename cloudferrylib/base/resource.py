@@ -29,7 +29,7 @@ class Resource(object):
         time_wait = cfg.migrate.time_wait
         return proxy_client.Proxy(client, retry, time_wait)
 
-    def read_info(self, opts={}):
+    def read_info(self, opts=None):
         pass
 
     def deploy(self, *args):
@@ -47,16 +47,25 @@ class Resource(object):
         return []
 
     def wait_for_status(self, res_id, get_status, wait_status, timeout=60):
+        LOG.debug("Waiting for status change")
         delay = 1
         while delay < timeout:
-            if get_status(res_id).lower() == wait_status.lower():
+            actual_status = get_status(res_id).lower()
+            LOG.debug("Expected status is '%s', actual - '%s'",
+                      wait_status, actual_status)
+            if actual_status == wait_status.lower():
+                LOG.debug("Expected status reached, exit")
                 break
+
+            LOG.debug("Expected status NOT reached, waiting")
+
             time.sleep(delay)
             delay *= 2
         else:
+            LOG.debug("Timed out waiting for state change")
             raise timeout_exception.TimeoutException(
                 get_status(res_id).lower(),
-                wait_status, "Timeout exp")
+                wait_status, "Timed out waiting for state change")
 
     def try_wait_for_status(self, res_id, get_status, wait_status, timeout=60):
         try:

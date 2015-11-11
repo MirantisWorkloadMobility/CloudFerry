@@ -254,8 +254,10 @@ src_storage_opts = [
                help='name service for storage'),
     cfg.StrOpt('backend', default='iscsi',
                help='backend for storage'),
-    cfg.StrOpt('db_host', default=None,
+    cfg.StrOpt('host', default=None,
                help='storage node ip address'),
+    cfg.StrOpt('db_host', default=None,
+               help='storage service db ip address'),
     cfg.IntOpt('db_port', default=None,
                help='port for mysql connection'),
     cfg.StrOpt('db_user', default=None,
@@ -432,8 +434,10 @@ dst_storage_opts = [
                help='name service for storage'),
     cfg.StrOpt('backend', default='iscsi',
                help='backend for storage'),
-    cfg.StrOpt('db_host', default=None,
+    cfg.StrOpt('host', default=None,
                help='storage node ip address'),
+    cfg.StrOpt('db_host', default=None,
+               help='storage service db ip address'),
     cfg.IntOpt('db_port', default=None,
                help='port for mysql connection'),
     cfg.StrOpt('db_user', default=None,
@@ -588,6 +592,23 @@ database_opts = [
     cfg.IntOpt("port", default=6379)]
 
 
+evacuation = cfg.OptGroup(name='evacuation',
+                          title='Evacuation related settings')
+
+evacuation_opts = [
+    cfg.StrOpt('nova_home_path', default='/var/lib/nova',
+               help='Home directory of user under which nova services are '
+                    'running'),
+    cfg.StrOpt('nova_user', default='nova',
+               help='Name of user under which nova services are running'),
+    cfg.IntOpt('state_change_timeout', default=120,
+               help='For how much seconds to wait for VM state change '
+                    'during evacuation'),
+    cfg.IntOpt('migration_timeout', default=600,
+               help='For how much seconds to wait for VM to migrate '
+                    'during evacuation'),
+]
+
 cfg_for_reg = [
     (src, src_opts),
     (dst, dst_opts),
@@ -614,7 +635,8 @@ cfg_for_reg = [
     (initial_check, initial_check_opts),
     (condense, condense_opts),
     (database, database_opts),
-    (import_rules, import_rules_opts)
+    (import_rules, import_rules_opts),
+    (evacuation, evacuation_opts),
 ]
 
 CONF = cfg.CONF
