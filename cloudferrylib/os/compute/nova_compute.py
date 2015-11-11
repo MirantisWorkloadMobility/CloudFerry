@@ -251,9 +251,10 @@ class NovaCompute(compute.Compute):
                             self.filter_tenant_id == instance.tenant_id) or
                         (self.cloud.position == 'src' and
                             self.filter_tenant_id is None)):
-                    info['instances'][instance.id] = self.convert(instance,
-                                                                  self.config,
-                                                                  self.cloud)
+                    converted = self.convert(instance, self.config, self.cloud)
+                    if converted is None:
+                        continue
+                    info['instances'][instance.id] = converted
 
         return info
 
@@ -297,6 +298,15 @@ class NovaCompute(compute.Compute):
             host = cfg.compute.host_eph_drv
         else:
             host = instance_node
+
+        if not utl.libvirt_instance_exists(instance_name,
+                                           cloud.getIpSsh(),
+                                           instance_node,
+                                           ssh_user,
+                                           cfg.cloud.ssh_sudo_password):
+            LOG.warning('Instance %s (%s) not found on %s, skipping migration',
+                        instance_name, instance.id, instance_node)
+            return None
 
         instance_block_info = utl.get_libvirt_block_info(
             instance_name,

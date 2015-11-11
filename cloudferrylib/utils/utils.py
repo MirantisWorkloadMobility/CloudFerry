@@ -450,6 +450,19 @@ def write_info(rendered_info, info_file="source_info.html"):
         ifile.write(rendered_info)
 
 
+def libvirt_instance_exists(libvirt_name, init_host, compute_host, ssh_user,
+                            ssh_sudo_password):
+    with settings(host_string=compute_host,
+                  user=ssh_user,
+                  password=ssh_sudo_password,
+                  gateway=init_host,
+                  connection_attempts=env.connection_attempts,
+                  warn_only=True,
+                  quiet=True):
+        out = sudo('virsh domid %s' % libvirt_name)
+        return out.succeeded
+
+
 def get_libvirt_block_info(libvirt_name, init_host, compute_host, ssh_user,
                            ssh_sudo_password):
     with settings(host_string=compute_host,
