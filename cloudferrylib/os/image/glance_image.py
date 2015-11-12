@@ -156,7 +156,8 @@ class GlanceImage(image.Image):
     def get_ref_image(self, image_id):
         try:
             return self.glance_client.images.data(image_id)._resp
-        except glance_exceptions.HTTPInternalServerError:
+        except (glance_exceptions.HTTPInternalServerError,
+                glance_exceptions.HTTPNotFound):
             raise exception.ImageDownloadError
 
     def get_image_checksum(self, image_id):
