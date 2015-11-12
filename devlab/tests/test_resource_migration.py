@@ -1,4 +1,5 @@
 import config
+import exception
 import functional_test
 
 import pprint
@@ -445,3 +446,16 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                     'GW ip addresses of router "{0}" are same on src and dst:'
                     ' {1}'.format(dst_router['name'],
                                   dst_gateway['fixed_ips'][0]['ip_address']))
+
+    def test_not_valid_vms_did_not_migrate(self):
+        all_vms = self.migration_utils.get_all_vms_from_config()
+        vms = [vm['name'] for vm in all_vms if vm.get('broken')]
+        migrated_vms = []
+        for vm in vms:
+            try:
+                self.dst_cloud.get_vm_id(vm)
+                migrated_vms.append(vm)
+            except exception.NotFound:
+                pass
+        if migrated_vms:
+            self.fail('Not valid vms %s migrated')

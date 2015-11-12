@@ -18,7 +18,7 @@ import sys
 import os
 import unittest
 from generate_load import Prerequisites
-from filtering_utils import FilteringUtils
+import utils
 
 
 def get_cf_root_folder():
@@ -47,7 +47,8 @@ class FunctionalTest(unittest.TestCase):
         suppress_dependency_logging()
         self.src_cloud = Prerequisites(cloud_prefix='SRC', config=config)
         self.dst_cloud = Prerequisites(cloud_prefix='DST', config=config)
-        self.filtering_utils = FilteringUtils()
+        self.filtering_utils = utils.FilteringUtils()
+        self.migration_utils = utils.MigrationUtils(config)
 
     def filter_networks(self):
         networks = [i['name'] for i in config.networks]
@@ -129,10 +130,8 @@ class FunctionalTest(unittest.TestCase):
         return self._get_keystone_resources('roles', roles)
 
     def filter_vms(self):
-        vms = config.vms
-        [vms.extend(i['vms']) for i in config.tenants if 'vms' in i]
-        vms.extend(config.vms_from_volumes)
-        vms_names = [vm['name'] for vm in vms]
+        vms = self.migration_utils.get_all_vms_from_config()
+        vms_names = [vm['name'] for vm in vms if not vm.get('broken')]
         opts = {'search_opts': {'all_tenants': 1}}
         return [i for i in self.src_cloud.novaclient.servers.list(**opts)
                 if i.name in vms_names]

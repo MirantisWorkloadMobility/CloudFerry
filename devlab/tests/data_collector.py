@@ -17,7 +17,7 @@ import yaml
 import config as cfg
 
 from generate_load import Prerequisites
-from filtering_utils import FilteringUtils
+from utils import FilteringUtils
 
 
 class DataCollector(object):
