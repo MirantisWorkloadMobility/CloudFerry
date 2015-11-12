@@ -1,3 +1,8 @@
+# This scenario is the same as cold_migrate.yaml plus
+# includes autorollback functionality at the end.
+# This scenario can be used for testing purposes and will leave
+# destination cloud at the same stage as it was before migration.
+
 namespace:
   info_result:
       instances: {}
@@ -105,3 +110,8 @@ process:
       - rename_info_iter: True
   - verify:
       - verify_vms: True
+  -auto_rollback:
+      - restore_from_vm_snapshot_dst: True
+      - restore_from_vm_snapshot_src: True
+      - image_rollback_dst: True
+      - restore_from_snapshot: True

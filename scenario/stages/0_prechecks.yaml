@@ -3,12 +3,14 @@
 # DB access, RabbitMQ connectivity, required bandwidth verification,
 # Opentack API functionality on source  and destination clouds.
 # As well as network verification such as segmentation IDs, subnets and
-# floating IP overlap checks. And no VMs spawned directly in external network.
+# floating IP overlap checks. And no VMs spawned directly in ext. network.
+# In case CF filter is used, it verifies if the IDs are correct in it.
 
 preparation:
   - pre_migration_test:
       - act_get_filter: True
       - act_check_filter: True
+      - check_config_quota_neutron: True
       - src_test:
           - act_check_image_api_src: True
           - act_check_compute_api_src: True
@@ -28,3 +30,4 @@ preparation:
           - check_dst_sql: True
           - check_dst_rabbit: True
       - check_networks: True
+  - check_users_availability: True

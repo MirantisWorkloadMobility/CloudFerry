@@ -1,0 +1,13 @@
+# Stage to migrate identity resources such as tenants, roles
+# and user tenant roles to destination cloud.
+
+preparation:
+  - create_snapshot: True
+
+rollback:
+  - restore_from_snapshot: True
+
+process:
+  - act_get_filter: True
+  - act_check_filter: True
+  - act_identity_trans: True
