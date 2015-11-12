@@ -28,7 +28,8 @@ users = [
 ]
 
 user_tenant_roles = [
-    {'user1': [{'tenant': 'tenant1', 'role': 'SomeRole'}]}
+    {'user1': [{'tenant': 'tenant1', 'role': 'SomeRole'}]},
+    {'admin': [{'tenant': 'tenant4', 'role': 'admin'}]}
 ]
 
 # Roles to create/delete
