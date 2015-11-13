@@ -26,11 +26,10 @@ nodes = {
     "role" => "openstack"
   },
   "juno" => {
-    "box" => "openstack-user/juno",
+    "box" => "openstack-user/trusty-juno",
     "ip" => "#{options['juno_ip']}",
     "memory" => 4096,
-    "role" => "devstack",
-    "branch" => 'stable/juno'
+    "role" => "openstack"
   },
   "nfs" => {
     "box" => "openstack-user/nfs-server",
@@ -64,14 +63,6 @@ Vagrant.configure(2) do |config|
             thisnode.vm.provision "shell", path: "./provision/cleanup_nova_instances.sh"
           end
           thisnode.vm.provision "shell", path: "./provision/libvirt.sh"
-        when "devstack"
-          thisnode.vm.provision "file",
-            source: "./provision/devstack/local_juno.conf",
-            destination: "/tmp/local.conf"
-          thisnode.vm.provision "shell",
-            privileged: false,
-            path: "./provision/devstack/devstack.sh",
-            args: [ "--branch", "#{nodedata['branch']}" ]        
       end
 
       thisnode.vm.network "private_network", ip: nodedata['ip']
