@@ -794,8 +794,8 @@ class NovaCompute(compute.Compute):
         else:
             return self.nova_client.flavors.find(id=flavor_id)
 
-    def get_flavor_list(self, **kwargs):
-        return self.nova_client.flavors.list(**kwargs)
+    def get_flavor_list(self, is_public=None, **kwargs):
+        return self.nova_client.flavors.list(is_public=is_public, **kwargs)
 
     def create_flavor(self, **kwargs):
         return self.nova_client.flavors.create(**kwargs)
