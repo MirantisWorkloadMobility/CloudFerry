@@ -31,6 +31,12 @@ nodes = {
     "memory" => 4096,
     "role" => "openstack"
   },
+  "cloudferry" => {
+    "box" => "hashicorp/precise64",
+    "ip" => "#{options['cloudferry_ip']}",
+    "memory" => 2048,
+    "role" => "lab"
+  },
   "nfs" => {
     "box" => "openstack-user/nfs-server",
     "ip" => "#{options['nfs_ip']}",
@@ -63,6 +69,14 @@ Vagrant.configure(2) do |config|
             thisnode.vm.provision "shell", path: "./provision/cleanup_nova_instances.sh"
           end
           thisnode.vm.provision "shell", path: "./provision/libvirt.sh"
+        when "lab"
+          thisnode.vm.provision "shell",
+            path: "./provision/cloudferry.sh"
+          if File.exist?(File.join(Dir.home, ".ssh/id_rsa")) then
+            thisnode.vm.provision "file",
+              source: "~/.ssh/id_rsa",
+              destination: "/home/vagrant/.ssh/id_rsa"
+          end
       end
 
       thisnode.vm.network "private_network", ip: nodedata['ip']
