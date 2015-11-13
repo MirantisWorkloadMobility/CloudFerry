@@ -525,8 +525,9 @@ def get_ext_ip(ext_cidr, init_host, compute_host, ssh_user):
     list_ips = get_ips(init_host, compute_host, ssh_user)
     for ip_str in list_ips:
         ip_addr = ipaddr.IPAddress(ip_str)
-        if ipaddr.IPNetwork(ext_cidr).Contains(ip_addr):
-            return ip_str
+        for cidr in ext_cidr:
+            if ipaddr.IPNetwork(cidr.strip()).Contains(ip_addr):
+                return ip_str
     return None
 
 
