@@ -1,5 +1,7 @@
-# Resource migration only: identity, images, volumes, networks, keypairs, flavors.
-# Use path to this file in the configuration.ini in block [migrate].
+# This scenario is the same as migrate_resources.yaml plus
+# includes autorollback functionality at the end.
+# This scenario can be used for testing purposes and will leave
+# destination cloud at the same stage as it was before migration.
 
 namespace:
   info_result:
@@ -39,7 +41,6 @@ rollback:
   - image_rollback_dst: True
   - restore_from_snapshot: True
 
-
 process:
   - task_resources_transporting:
       - act_identity_trans: True
@@ -51,3 +52,6 @@ process:
       - get_volumes_db_data: True
       - write_volumes_db_data: True
       - transport_key_pairs: True
+  - auto_rollback:
+      - image_rollback_dst: True
+      - restore_from_snapshot: True

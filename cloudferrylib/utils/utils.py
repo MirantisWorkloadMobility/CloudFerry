@@ -450,6 +450,19 @@ def write_info(rendered_info, info_file="source_info.html"):
         ifile.write(rendered_info)
 
 
+def libvirt_instance_exists(libvirt_name, init_host, compute_host, ssh_user,
+                            ssh_sudo_password):
+    with settings(host_string=compute_host,
+                  user=ssh_user,
+                  password=ssh_sudo_password,
+                  gateway=init_host,
+                  connection_attempts=env.connection_attempts,
+                  warn_only=True,
+                  quiet=True):
+        out = sudo('virsh domid %s' % libvirt_name)
+        return out.succeeded
+
+
 def get_libvirt_block_info(libvirt_name, init_host, compute_host, ssh_user,
                            ssh_sudo_password):
     with settings(host_string=compute_host,
@@ -512,8 +525,9 @@ def get_ext_ip(ext_cidr, init_host, compute_host, ssh_user):
     list_ips = get_ips(init_host, compute_host, ssh_user)
     for ip_str in list_ips:
         ip_addr = ipaddr.IPAddress(ip_str)
-        if ipaddr.IPNetwork(ext_cidr).Contains(ip_addr):
-            return ip_str
+        for cidr in ext_cidr:
+            if ipaddr.IPNetwork(cidr.strip()).Contains(ip_addr):
+                return ip_str
     return None
 
 
