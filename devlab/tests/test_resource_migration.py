@@ -459,3 +459,16 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 pass
         if migrated_vms:
             self.fail('Not valid vms %s migrated')
+
+    def test_not_valid_images_did_not_migrate(self):
+        all_images = self.migration_utils.get_all_images_from_config()
+        images = [image['name'] for image in all_images if image.get('broken')]
+        migrated_images = []
+        for image in images:
+            try:
+                self.dst_cloud.get_image_id(image)
+                migrated_images.append(image)
+            except exception.NotFound:
+                pass
+        if migrated_images:
+            self.fail('Not valid images %s migrated')

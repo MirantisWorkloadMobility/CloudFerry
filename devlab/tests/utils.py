@@ -117,3 +117,12 @@ class MigrationUtils(object):
                     vms.append(vm)
         vms.extend(self.config.vms_from_volumes)
         return vms
+
+    def get_all_images_from_config(self):
+        images = self.config.images
+        for tenant in self.config.tenants:
+            if not tenant.get('images'):
+                continue
+            for image in tenant['images']:
+                images.append(image)
+        return images

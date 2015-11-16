@@ -149,11 +149,8 @@ class FunctionalTest(unittest.TestCase):
         return self._get_neutron_resources('security_groups', sgs)
 
     def filter_images(self):
-        images = [i['name'] for i in config.images]
-        for tenant in config.tenants:
-            if not tenant.get('images'):
-                continue
-            [images.append(i['name']) for i in tenant['images']]
+        all_images = self.migration_utils.get_all_images_from_config()
+        images = [i['name'] for i in all_images if not i.get('broken')]
         return [i for i in self.src_cloud.glanceclient.images.list()
                 if i.name in images]
 

@@ -382,6 +382,13 @@ class Prerequisites(BasePrerequisites):
                     image_ids.remove(img_id)
             return image_ids
 
+        def _get_body_for_image_creating(_image):
+            # Possible parameters for image creating
+            params = ['name', 'location', 'disk_format', 'container_format',
+                      'is_public', 'copy_from']
+            return {param: _image[param] for param in params
+                    if param in _image}
+
         img_ids = []
         for tenant in self.config.tenants:
             if not tenant.get('images'):
@@ -389,12 +396,14 @@ class Prerequisites(BasePrerequisites):
             for image in tenant['images']:
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
-                img = self.glanceclient.images.create(**image)
+                img = self.glanceclient.images.create(
+                    **_get_body_for_image_creating(image))
                 img_ids.append(img.id)
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
         for image in self.config.images:
-            img = self.glanceclient.images.create(**image)
+            img = self.glanceclient.images.create(
+                **_get_body_for_image_creating(image))
             img_ids.append(img.id)
         wait_until_images_created(img_ids)
         src_cloud = Prerequisites(cloud_prefix='SRC', config=self.config)
@@ -918,6 +927,16 @@ class Prerequisites(BasePrerequisites):
             self.migration_utils.execute_command_on_vm(
                 self.get_vagrant_vm_ip(), cmd, username='root', password='')
 
+    def break_image(self):
+        all_images = self.migration_utils.get_all_images_from_config()
+        images_to_break = [image for image in all_images
+                           if image.get('broken')]
+        for image in images_to_break:
+            image_id = self.get_image_id(image['name'])
+            cmd = 'rm -rf /var/lib/glance/images/%s' % image_id
+            self.migration_utils.execute_command_on_vm(
+                self.get_vagrant_vm_ip(), cmd, username='root', password='')
+
     def run_preparation_scenario(self):
         print('>>> Creating tenants:')
         self.create_tenants()
@@ -946,6 +965,8 @@ class Prerequisites(BasePrerequisites):
             self.boot_vms_from_volumes()
         print('>>> Breaking VMs:')
         self.break_vm()
+        print('>>> Breaking Images:')
+        self.break_image()
         print('>>> Updating filtering:')
         self.update_filtering_file()
         print('>>> Creating vm snapshots:')
@@ -1036,11 +1057,8 @@ class CleanEnv(BasePrerequisites):
             print('Flavor "%s" has been deleted' % flavor.name)
 
     def clean_images(self):
-        images = self.config.images
-        images += itertools.chain(*[tenant['images'] for tenant
-                                  in self.config.tenants
-                                  if tenant.get('images')])
-        images_names = [image['name'] for image in images]
+        all_images = self.migration_utils.get_all_images_from_config()
+        images_names = [image['name'] for image in all_images]
         for image in self.glanceclient.images.list():
             if image.name not in images_names:
                 continue

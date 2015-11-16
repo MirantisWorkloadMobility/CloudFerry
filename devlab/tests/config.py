@@ -178,7 +178,10 @@ images = [
      'disk_format': 'qcow2', 'is_public': False},
     # When location field is specified, glance creates images without checksum
     {'name': 'without_checksum', 'location': img_url, 'disk_format': 'qcow2',
-     'container_format': 'bare'}
+     'container_format': 'bare'},
+    # Image, deleted from back-end
+    {'name': 'broken_image', 'copy_from': img_url, 'disk_format': 'qcow2',
+     'container_format': 'bare', 'broken': True}
 ]
 
 # Create zero image, without any parameters.
@@ -234,7 +237,8 @@ vms = [
     {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'server7', 'image': 'image1', 'flavor': 'flavorname1',
-     'broken': True}
+     'broken': True},
+    {'name': 'server8', 'image': 'broken_image', 'flavor': 'flavorname1'}
 ]
 
 vms_from_volumes = [
@@ -282,6 +286,8 @@ vm_states = [
     {'name': 'server4', 'state': 'pause'},
     {'name': 'server5', 'state': 'resize'},
     {'name': 'server6', 'state': 'active'},
+    {'name': 'server7', 'state': 'shutoff'},
+    {'name': 'server8', 'state': 'active'},
     {'name': 'tn1server1', 'state': 'active'},
     {'name': 'tn1server2', 'state': 'active'},
     {'name': 'tn2server1', 'state': 'active'},
