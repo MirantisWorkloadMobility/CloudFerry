@@ -88,18 +88,15 @@ class NeutronNetwork(network.Network):
                 # do not include the same network twice
                 if net['id'] in [n['id'] for n in nets]:
                     continue
-
-                LOG.debug("Append shared network ID %s", net['id'])
                 nets.append(self.convert_networks(net, self.cloud))
-
+                LOG.debug("Got shared network ID %s", net['id'])
                 # Append subnets from the shared networks
                 for subnet in net['subnets']:
                     # do not include the same subnets twice
                     if subnet['id'] in [sn['id'] for sn in subnets]:
                         continue
-
-                    LOG.debug("Append shared subnet ID %s", subnet['id'])
                     subnets.append(self.convert_subnets(subnet, self.cloud))
+                    LOG.debug("Got shared subnet ID %s", subnet['id'])
 
         routers = []
         subnet_ids = {sn['id'] for sn in subnets}
@@ -107,8 +104,8 @@ class NeutronNetwork(network.Network):
             router_subnet_ids = subnet_ids & set(router['subnet_ids'])
             if router_subnet_ids:
                 router['subnet_ids'] = list(router_subnet_ids)
-                LOG.debug('Add router: %s', router['id'])
                 routers.append(router)
+                LOG.debug('Got router: %s', router['id'])
 
         info = {'networks': nets,
                 'subnets': subnets,
