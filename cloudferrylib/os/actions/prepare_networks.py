@@ -65,7 +65,8 @@ class PrepareNetworks(action.Action):
                 dst_net = network_resource.get_network(src_net, tenant_id,
                                                        keep_ip)
                 port_id = network_resource.check_existing_port(dst_net['id'],
-                                                               src_net['mac'])
+                                                               src_net['mac'],
+                                                               src_net['ip'])
                 if port_id:
                     network_resource.delete_port(port_id)
                 sg_ids = []

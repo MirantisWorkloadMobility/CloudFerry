@@ -30,7 +30,7 @@ class Network(resource.Resource):
     def delete_port(self, port_id):
         raise NotImplemented("it's base class")
 
-    def check_existing_port(self, network_id, mac):
+    def check_existing_port(self, network_id, mac, ip_address):
         raise NotImplemented("it's base class")
 
     def get_security_groups(self):

@@ -21,6 +21,7 @@ import netaddr
 from neutronclient.common import exceptions as neutron_exc
 from neutronclient.v2_0 import client as neutron_client
 
+from cloudferrylib.base import exception
 from cloudferrylib.base import network
 from cloudferrylib.os.identity import keystone as ksresource
 from cloudferrylib.utils import cache
@@ -283,20 +284,29 @@ class NeutronNetwork(network.Network):
                         return self.neutron_client.\
                             list_networks(id=snet['network_id'])['networks'][0]
         if 'id' in network_info:
-            return self.neutron_client.\
-                list_networks(id=network_info['id'])['networks'][0]
+            networks = self.neutron_client.list_networks(
+                id=network_info['id'])['networks']
+            if len(networks) > 0:
+                return networks[0]
         if 'name' in network_info:
-            return self.neutron_client.\
-                list_networks(name=network_info['name'])['networks'][0]
-        else:
-            raise Exception("Can't find suitable network")
+            networks = self.neutron_client.list_networks(
+                name=network_info['name'])['networks']
+            if len(networks) > 0:
+                return networks[0]
+        LOG.error('Failed to find network %s in tenant %s; keep_ip = %s',
+                  repr(network_info), tenant_id, keep_ip)
+        raise exception.AbortMigrationError("Can't find suitable network")
 
-    def check_existing_port(self, network_id, mac):
-        for port in self.get_ports_list(fields=['network_id',
-                                                'mac_address', 'id']):
-            if (port['network_id'] == network_id) and (
-                    port['mac_address'] == mac):
+    def check_existing_port(self, network_id, mac, ip_address):
+        for port in self.get_ports_list(fields=['network_id', 'mac_address',
+                                                'id', 'fixed_ips']):
+            if port['network_id'] != network_id:
+                continue
+            if port['mac_address'] == mac:
                 return port['id']
+            for fixed_ip in port['fixed_ips']:
+                if fixed_ip['ip_address'] == ip_address:
+                    return port['id']
         return None
 
     @staticmethod
