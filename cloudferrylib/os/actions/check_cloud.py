@@ -12,10 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
+import time
+
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
+from cloudferrylib.os.identity.keystone import KeystoneIdentity
+from cloudferrylib.os.compute.nova_compute import NovaCompute
+from cloudferrylib.os.network.neutron import NeutronNetwork
+from cloudferrylib.os.image.glance_image import GlanceImage
+from cloudferrylib.os.storage.cinder_storage import CinderStorage
 from keystoneclient.openstack.common.apiclient import exceptions as ks_exc
 from novaclient import exceptions as nova_exc
+from glanceclient import exc as glance_exc
+from neutronclient.common import exceptions as neutron_exc
+from cinderclient import exceptions as cinder_exc
 from cloudferrylib.base import exception
 
 LOG = utl.get_log(__name__)
@@ -25,147 +36,205 @@ class CheckCloud(action.Action):
     def __init__(self, init, cloud=None):
         super(CheckCloud, self).__init__(init, cloud)
 
+    @contextlib.contextmanager
+    def create_tenant(self, ks_client, tenant_name):
+        LOG.debug("Creating %s tenant.", tenant_name)
+        tenant_id = ks_client.create_tenant(tenant_name)
+        try:
+            yield tenant_id
+        finally:
+            LOG.debug("Deleting previously created tenant.")
+            ks_client.delete_tenant(tenant_id)
+
+    @contextlib.contextmanager
+    def create_flavor(self, nv_client, flavor):
+        LOG.debug("Creating %s flavor.", flavor['name'])
+        flavor_id = nv_client.create_flavor(**flavor)
+        try:
+            yield flavor_id
+        finally:
+            LOG.debug("Deleting previously created flavor.")
+            nv_client.delete_flavor(flavor_id)
+
+    @contextlib.contextmanager
+    def create_network(self, nt_client, network):
+        LOG.debug("Creating %s network.", network['network']['name'])
+        net_id = \
+            nt_client.neutron_client.create_network(network)['network']['id']
+        try:
+            yield net_id
+        finally:
+            LOG.debug("Deleting %s network.", network['network']['name'])
+            nt_client.neutron_client.delete_network(net_id)
+
+    @contextlib.contextmanager
+    def create_subnet(self, nt_client, subnet_info):
+        LOG.debug("Creating %s subnet.", subnet_info['subnet']['name'])
+        subnet_id = \
+            nt_client.neutron_client.create_subnet(subnet_info)['subnet']['id']
+        try:
+            yield
+        finally:
+            LOG.debug("Deleting %s subnet", subnet_info['subnet']['name'])
+            nt_client.neutron_client.delete_subnet(subnet_id)
+
+    @contextlib.contextmanager
+    def create_image(self, gl_client, image_info):
+        LOG.debug("Creating %s image.", image_info['name'])
+        image = gl_client.create_image(**image_info)
+        try:
+            yield image
+        finally:
+            LOG.debug("Deleting %s image.", image_info['name'])
+            gl_client.delete_image(image.id)
+
+    @contextlib.contextmanager
+    def create_volume(self, cn_client, volume_info):
+        LOG.debug("Creating %s volume.", volume_info['display_name'])
+        volume = cn_client.create_volume(**volume_info)
+        try:
+            yield
+        finally:
+            LOG.debug("Deleting %s volume.", volume_info['display_name'])
+            cn_client.delete_volume(volume.id)
+
+    @contextlib.contextmanager
+    def create_instance(self, nv_client, instance_info):
+        LOG.debug("Creating instance.")
+        instance_id = nv_client.nova_client.servers.create(**instance_info)
+        nv_client.wait_for_status(instance_id, nv_client.get_status, 'active',
+                                  timeout=300)
+        try:
+            yield
+        finally:
+            LOG.debug("Deleting instance.")
+            nv_client.nova_client.servers.delete(instance_id)
+            self.wait_for_instance_to_be_deleted(nv_client=nv_client,
+                                                 instance_id=instance_id,
+                                                 timeout=300)
+
+    @classmethod
+    def wait_for_instance_to_be_deleted(cls, nv_client, instance_id,
+                                        timeout=60):
+        try:
+            delay = 1
+            while timeout > delay:
+                nv_client.nova_client.servers.get(instance_id)
+                LOG.debug("Instance still exist, waiting %s sec", delay)
+                time.sleep(delay)
+                delay *= 2
+        except nova_exc.NotFound:
+            LOG.debug("Instance successfuly deleted.")
+
     def run(self, **kwargs):
         """Check write access to cloud."""
-        ident_resource = self.dst_cloud.resources[utl.IDENTITY_RESOURCE]
-        image_res = self.cloud.resources[utl.IMAGE_RESOURCE]
-        compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
-        volume_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
-        net_resource = self.cloud.resources[utl.NETWORK_RESOURCE]
-        adm_tenant_name = self.cloud.cloud_config.cloud.tenant
-        adm_tenant_id = ident_resource.get_tenant_id_by_name(adm_tenant_name)
-        tenant_name = 'test_name'
-        flavor_id = 'c0c0c0c0'
-        err_message = 'Failed to create object in the cloud'
-        tenant = [{
-            'meta': {},
-            'tenant': {
-                'name': tenant_name,
-                'description': None
-            }
-        }]
-        flavor = {
-            flavor_id: {
-                'flavor': {
-                    'name': 'test_flavor',
-                    'is_public': True,
-                    'ram': '1',
-                    'vcpus': '1',
-                    'disk': '1',
-                    'ephemeral': '1',
-                    'swap': '1',
-                    'rxtx_factor': '1'
-                },
-                'meta': {
-                    'id': flavor_id
-                }
-            }
-        }
-        try:
-            ident_resource._deploy_tenants(tenant)
-            tenant_id = ident_resource.get_tenant_id_by_name(tenant_name)
-            compute_resource._deploy_flavors(flavor, None)
-        except (ks_exc.ClientException, nova_exc.ClientException):
-            LOG.error(err_message)
-            raise exception.AbortMigrationError(err_message)
-        migrate_image = image_res.create_image(
-            name='test_image',
-            container_format='bare',
-            disk_format='qcow2',
-            is_public=True,
-            protected=False,
-            owner=adm_tenant_id,
-            size=4,
-            properties={'user_name': 'test_user_name'},
-            data='test'
-        )
 
-        # Creating private network
+        ks_client = KeystoneIdentity(config=self.cloud.cloud_config,
+                                     cloud=self.dst_cloud)
+        nv_client = NovaCompute(config=self.cloud.cloud_config,
+                                cloud=self.dst_cloud)
+        nt_client = NeutronNetwork(config=self.cloud.cloud_config,
+                                   cloud=self.dst_cloud)
+        gl_client = GlanceImage(config=self.cloud.cloud_config,
+                                cloud=self.dst_cloud)
+        cn_client = CinderStorage(config=self.cloud.cloud_config,
+                                  cloud=self.dst_cloud)
+
+        adm_tenant_name = self.cloud.cloud_config.cloud.tenant
+        adm_tenant_id = ks_client.get_tenant_id_by_name(adm_tenant_name)
+
+        err_message = 'Failed to create object in the cloud'
+        unique = str(int(time.time()))
+        tenant_name = 'tenant_%s' % unique
+        flavor = {
+            'name': 'flavor_%s' % unique,
+            'is_public': True,
+            'ram': '1',
+            'vcpus': '1',
+            'disk': '1',
+            'ephemeral': '1',
+            'swap': '1',
+            'rxtx_factor': '1'
+        }
+
+        image_info = {
+            'name': 'image_%s' % unique,
+            'container_format': 'bare',
+            'disk_format': 'qcow2',
+            'is_public': True,
+            'protected': False,
+            'owner': adm_tenant_id,
+            'size': 4,
+            'properties': {'user_name': 'test_user_name'},
+            'data': 'test'
+        }
+
         private_network_info = {
             'network': {
-                'tenant_id': tenant_id,
+                'tenant_id': '',
                 'admin_state_up': False,
                 'shared': False,
-                'name': 'private_test_net',
+                'name': 'private_net_%s' % unique,
                 'router:external': False
             }
         }
-        private_network_id = net_resource.neutron_client.create_network(
-            private_network_info)['network']['id']
 
-        # Creating subnet for private network
-        subnet_info = {
-            'subnet':
-            {
-                'name': 'test_subnet',
-                'network_id': private_network_id,
-                'cidr': '192.168.1.0/24',
-                'ip_version': 4,
-                'tenant_id': tenant_id,
-            }
-        }
-
-        net_resource.neutron_client.create_subnet(subnet_info)
-
-        nics = [{'net-id': private_network_id}]
-
-        info = {
-            'instances': {
-                'a0a0a0a': {
-                    'instance': {
-                        'id': 'a0a0a0a0',
-                        'name': 'test_vm',
-                        'image_id': migrate_image.id,
-                        'flavor_id': flavor_id,
-                        'key_name': '1',
-                        'nics': nics,
-                        'user_id': '1',
-                        'boot_mode': utl.BOOT_FROM_IMAGE,
-                        'availability_zone': 'nova',
-                        'tenant_name': adm_tenant_name
-                    }
-                }
-            },
-            'volumes': {
-                'd0d0d0d0': {
-                    'volume': {
-                        'availability_zone': 'nova',
-                        'display_description': None,
-                        'id': 'd0d0d0d0',
-                        'size': 1,
-                        'display_name': 'test_volume',
-                        'bootable': False,
-                        'volume_type': None
-                    },
-                    'meta': {},
-                }
-            }
-        }
-        vol_new_ids = volume_resource.deploy_volumes(info)
-        volume_resource.cinder_client.volumes.delete(vol_new_ids.keys()[0])
-        network_info = {
+        shared_network_info = {
             'network': {
                 'tenant_id': adm_tenant_id,
                 'admin_state_up': True,
                 'shared': True,
-                'name': 'test_net',
+                'name': 'shared_net_%s' % unique,
                 'router:external': True
             }
         }
-        new_net_id = net_resource.neutron_client.create_network(
-            network_info)['network']['id']
-        net_resource.neutron_client.delete_network(new_net_id)
-        vm_new_ids = compute_resource._deploy_instances(info)
-        if (not vm_new_ids or
-                not vol_new_ids or
-                not migrate_image or
-                not new_net_id):
+
+        subnet_info = {
+            'subnet': {
+                'name': 'subnet_%s' % unique,
+                'network_id': '',
+                'cidr': '192.168.1.0/24',
+                'ip_version': 4,
+                'tenant_id': '',
+            }
+        }
+
+        volume_info = {
+            'availability_zone': 'nova',
+            'display_description': None,
+            'size': 1,
+            'display_name': 'volume_%s' % unique,
+            'volume_type': None
+        }
+
+        try:
+            with self.create_tenant(ks_client, tenant_name) as tenant_id, \
+                    self.create_flavor(nv_client, flavor) as flavor_id, \
+                    self.create_image(gl_client, image_info) as image:
+
+                private_network_info['tenant_id'] = tenant_id
+                subnet_info['subnet']['tenant_id'] = tenant_id
+
+                with self.create_network(nt_client, private_network_info) as\
+                        private_network_id, \
+                        self.create_network(nt_client, shared_network_info):
+
+                    subnet_info['subnet']['network_id'] = private_network_id
+                    nics = [{'net-id': private_network_id}]
+
+                    with self.create_subnet(nt_client, subnet_info), \
+                            self.create_volume(cn_client, volume_info):
+                        instance_info = {
+                            'name': 'test_vm_%s' % unique,
+                            'image': image.id,
+                            'flavor': flavor_id,
+                            'nics': nics
+                        }
+                        with self.create_instance(nv_client, instance_info):
+                            pass
+
+        except (ks_exc.ClientException, nova_exc.ClientException,
+                cinder_exc.ClientException, glance_exc.ClientException,
+                neutron_exc.NeutronClientException):
             LOG.error(err_message)
             raise exception.AbortMigrationError(err_message)
-        compute_resource.nova_client.servers.delete(vm_new_ids.keys()[0])
-        image_res.glance_client.images.delete(migrate_image.id)
-        compute_resource.nova_client.flavors.delete(flavor_id)
-        ident_resource.keystone_client.tenants.delete(tenant_id)
-
-        # delete private network and subnet
-        net_resource.neutron_client.delete_network(private_network_id)

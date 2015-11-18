@@ -35,6 +35,8 @@ preparation:
   - create_vm_snapshot_src: True
   - create_vm_snapshot_dst: True
   - create_image_snapshot_dst: True
+  - task_check_write_access:
+      - act_check_dst_cloud: True
 
 rollback:
   - restore_from_vm_snapshot_dst: True
@@ -43,8 +45,6 @@ rollback:
   - restore_from_snapshot: True
 
 process:
-  - task_check_write_access:
-      - act_check_dst_cloud: True
   - task_resources_transporting:
       - act_identity_trans: True
       - task_images_trans:
