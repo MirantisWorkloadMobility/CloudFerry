@@ -16,7 +16,7 @@ nodes = {
   "grizzly" => {
     "box" => "openstack-user/precise-grizzly",
     "ip" => "#{options['grizzly_ip']}",
-    "memory" => 2560,
+    "memory" => 4096,
     "role" => "openstack"
   },
   "icehouse" => {
