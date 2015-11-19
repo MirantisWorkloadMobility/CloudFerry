@@ -58,43 +58,38 @@ def _image_filtering_disabled(filtered_images):
     return not _image_filtering_enabled(filtered_images)
 
 
+def public_filter():
+    return lambda i: i.is_public
+
+
 def tenant_filter(filtered_tenant_id):
     """Filters images not specified in tenant_id section of filters file"""
-    return lambda i: (i.is_public or
-                      _tenant_filtering_disabled(filtered_tenant_id) or
-                      (_tenant_filtering_enabled(filtered_tenant_id) and
-                          i.owner == filtered_tenant_id))
+    return lambda i: (_tenant_filtering_disabled(filtered_tenant_id) or
+                      i.owner == filtered_tenant_id)
 
 
 def image_id_filter(filtered_images):
     """Filters images not specified in image_ids section of filters file"""
-    return lambda i: (i.is_public or
-                      _image_filtering_disabled(filtered_images) or
-                      (_image_filtering_enabled(filtered_images) and
-                          i.id in filtered_images))
+    return lambda i: (_image_filtering_disabled(filtered_images) or
+                      i.id in filtered_images)
 
 
 def member_filter(glance_client, filtered_tenant_id):
     """Filters images which are shared between multiple tenants using image
     membership feature (see `glance help member-list`)"""
-    members_present = len(glance_client.image_members.list(
-        member=filtered_tenant_id)) > 0
-    return lambda i: (
-        i.is_public or
-        _tenant_filtering_disabled(filtered_tenant_id) or
-        not members_present or
-        _tenant_filtering_enabled(filtered_tenant_id) and
-        i.owner in glance_client.image_members.list(image=i,
-                                                    member=filtered_tenant_id))
+    members_present = glance_client.image_members.list(
+        member=filtered_tenant_id)
+    ids = [member.image_id for member in members_present]
+    return lambda i: i.id in ids
 
 
-def datetime_filter(filtered_tenant_id, date):
+def extract_date(i):
+    return datetime.datetime.strptime(i.updated_at, "%Y-%m-%dT%H:%M:%S")
+
+
+def datetime_filter(date):
     """Filters images not older than :arg date:"""
-    return lambda i: (
-        i.is_public or
-        i.is_snapshot or
-        _tenant_filtering_disabled(filtered_tenant_id) and
-        date <= datetime.datetime.strptime(i.updated_at, "%Y-%m-%dT%H:%M:%S"))
+    return lambda i: date is None or date <= extract_date(i)
 
 
 class GlanceFilters(filters.CFFilters):
@@ -105,15 +100,13 @@ class GlanceFilters(filters.CFFilters):
         self.glance_client = glance_client
 
     def get_filters(self):
-        if self.filter_yaml.get_image_date() is not None:
-            return [
-                datetime_filter(self.filter_yaml.get_tenant(),
-                                self.filter_yaml.get_image_date())
-            ]
+        is_public = public_filter()
+        is_datetime = datetime_filter(self.filter_yaml.get_image_date())
+        is_tenant = tenant_filter(self.filter_yaml.get_tenant())
+        is_image_id = image_id_filter(self.filter_yaml.get_image_ids())
+        is_member = member_filter(self.glance_client,
+                                  self.filter_yaml.get_tenant())
 
-        return [
-            member_filter(self.glance_client,
-                          self.filter_yaml.get_tenant()),
-            tenant_filter(self.filter_yaml.get_tenant()),
-            image_id_filter(self.filter_yaml.get_image_ids())
-        ]
+        return [lambda i: (is_public(i) or
+                           is_member(i) or
+                           is_tenant(i) and is_image_id(i) and is_datetime(i))]
