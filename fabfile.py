@@ -19,6 +19,7 @@ import cfglib
 from cloudferrylib.scheduler.namespace import Namespace
 from cloudferrylib.scheduler.scheduler import Scheduler
 from cloudferrylib.utils import utils
+from cloudferrylib.utils.errorcodes import ERROR_INVALID_CONFIGURATION
 from cloudferrylib.scheduler.scenario import Scenario
 
 from cloud import cloud_ferry
@@ -33,7 +34,9 @@ import data_storage
 from dry_run import chain
 from evacuation import evacuation_chain
 from make_filters import make_filters
-
+import sys
+import oslo.config.cfg
+import traceback
 
 env.forward_agent = True
 env.user = 'root'
@@ -50,12 +53,18 @@ def migrate(name_config=None, debug=False):
     """
     if debug:
         utils.configure_logging("DEBUG")
-    load_config(name_config)
-    env.key_filename = cfglib.CONF.migrate.key_filename
-    env.connection_attempts = cfglib.CONF.migrate.ssh_connection_attempts
-    cloud = cloud_ferry.CloudFerry(cfglib.CONF)
-    cloud.migrate(Scenario(path_scenario=cfglib.CONF.migrate.scenario,
-                           path_tasks=cfglib.CONF.migrate.tasks_mapping))
+    try:
+        load_config(name_config)
+        env.key_filename = cfglib.CONF.migrate.key_filename
+        env.connection_attempts = cfglib.CONF.migrate.ssh_connection_attempts
+        cloud = cloud_ferry.CloudFerry(cfglib.CONF)
+        status_error = cloud.migrate(Scenario(
+            path_scenario=cfglib.CONF.migrate.scenario,
+            path_tasks=cfglib.CONF.migrate.tasks_mapping))
+    except oslo.config.cfg.Error:
+        traceback.print_exc()
+        sys.exit(ERROR_INVALID_CONFIGURATION)
+    sys.exit(status_error)
 
 
 @task

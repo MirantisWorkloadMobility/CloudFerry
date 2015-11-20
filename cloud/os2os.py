@@ -130,6 +130,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler,
                                              **process_migration)
         scheduler_migr.start()
+        return scheduler_migr.status_error
 
     def process_migrate(self):
         check_environment = self.check_environment()
