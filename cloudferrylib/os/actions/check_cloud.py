@@ -38,76 +38,76 @@ class CheckCloud(action.Action):
 
     @contextlib.contextmanager
     def create_tenant(self, ks_client, tenant_name):
-        LOG.debug("Creating %s tenant.", tenant_name)
+        LOG.info("Creating %s tenant.", tenant_name)
         tenant_id = ks_client.create_tenant(tenant_name)
         try:
             yield tenant_id
         finally:
-            LOG.debug("Deleting previously created tenant.")
+            LOG.info("Deleting previously created tenant.")
             ks_client.delete_tenant(tenant_id)
 
     @contextlib.contextmanager
     def create_flavor(self, nv_client, flavor):
-        LOG.debug("Creating %s flavor.", flavor['name'])
+        LOG.info("Creating %s flavor.", flavor['name'])
         flavor_id = nv_client.create_flavor(**flavor)
         try:
             yield flavor_id
         finally:
-            LOG.debug("Deleting previously created flavor.")
+            LOG.info("Deleting previously created flavor.")
             nv_client.delete_flavor(flavor_id)
 
     @contextlib.contextmanager
     def create_network(self, nt_client, network):
-        LOG.debug("Creating %s network.", network['network']['name'])
+        LOG.info("Creating %s network.", network['network']['name'])
         net_id = \
             nt_client.neutron_client.create_network(network)['network']['id']
         try:
             yield net_id
         finally:
-            LOG.debug("Deleting %s network.", network['network']['name'])
+            LOG.info("Deleting %s network.", network['network']['name'])
             nt_client.neutron_client.delete_network(net_id)
 
     @contextlib.contextmanager
     def create_subnet(self, nt_client, subnet_info):
-        LOG.debug("Creating %s subnet.", subnet_info['subnet']['name'])
+        LOG.info("Creating %s subnet.", subnet_info['subnet']['name'])
         subnet_id = \
             nt_client.neutron_client.create_subnet(subnet_info)['subnet']['id']
         try:
             yield
         finally:
-            LOG.debug("Deleting %s subnet", subnet_info['subnet']['name'])
+            LOG.info("Deleting %s subnet", subnet_info['subnet']['name'])
             nt_client.neutron_client.delete_subnet(subnet_id)
 
     @contextlib.contextmanager
     def create_image(self, gl_client, image_info):
-        LOG.debug("Creating %s image.", image_info['name'])
+        LOG.info("Creating %s image.", image_info['name'])
         image = gl_client.create_image(**image_info)
         try:
             yield image
         finally:
-            LOG.debug("Deleting %s image.", image_info['name'])
+            LOG.info("Deleting %s image.", image_info['name'])
             gl_client.delete_image(image.id)
 
     @contextlib.contextmanager
     def create_volume(self, cn_client, volume_info):
-        LOG.debug("Creating %s volume.", volume_info['display_name'])
+        LOG.info("Creating %s volume.", volume_info['display_name'])
         volume = cn_client.create_volume(**volume_info)
         try:
             yield
         finally:
-            LOG.debug("Deleting %s volume.", volume_info['display_name'])
+            LOG.info("Deleting %s volume.", volume_info['display_name'])
             cn_client.delete_volume(volume.id)
 
     @contextlib.contextmanager
     def create_instance(self, nv_client, instance_info):
-        LOG.debug("Creating instance.")
+        LOG.info("Creating %s instance.", instance_info['name'])
         instance_id = nv_client.nova_client.servers.create(**instance_info)
         nv_client.wait_for_status(instance_id, nv_client.get_status, 'active',
                                   timeout=300)
         try:
             yield
         finally:
-            LOG.debug("Deleting instance.")
+            LOG.info("Deleting instance.")
             nv_client.nova_client.servers.delete(instance_id)
             self.wait_for_instance_to_be_deleted(nv_client=nv_client,
                                                  instance_id=instance_id,
@@ -120,11 +120,11 @@ class CheckCloud(action.Action):
             delay = 1
             while timeout > delay:
                 nv_client.nova_client.servers.get(instance_id)
-                LOG.debug("Instance still exist, waiting %s sec", delay)
+                LOG.info("Instance still exist, waiting %s sec", delay)
                 time.sleep(delay)
                 delay *= 2
         except nova_exc.NotFound:
-            LOG.debug("Instance successfuly deleted.")
+            LOG.info("Instance successfuly deleted.")
 
     def run(self, **kwargs):
         """Check write access to cloud."""
