@@ -17,6 +17,8 @@ import jsondate
 from cinderclient.v1 import client as cinder_client
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.storage import cinder_storage
+from cloudferrylib.os.storage import filters as cinder_filters
+from cloudferrylib.utils import filters
 
 CINDER_VOLUME = "cinder-volume"
 LOG = utl.get_log(__name__)
@@ -27,13 +29,18 @@ USER_ID = 'user_id'
 DELETED = 'deleted'
 HOST = 'host'
 IGNORED_TBL_LIST = ('quota_usages')
+QUOTA_TABLES = (
+    'quotas',
+    'quota_classes',
+    'quota_usages',
+)
 
 
 class CinderStorage(cinder_storage.CinderStorage):
 
     """Migration strategy used with NFS backend
 
-    coppies data directly from database to database, avoiding creation of
+    copies data directly from database to database, avoiding creation of
     new volumes
 
     to use this strategy - specify cinder_migration_strategy in config as
@@ -44,7 +51,10 @@ class CinderStorage(cinder_storage.CinderStorage):
     def __init__(self, config, cloud):
         self.config = config
         self.cloud = cloud
-        self.filter_tenant_id = None
+        self._volume_filter = None
+        self.table = None
+        self.hosts = None
+        self.host_counter = 0
         self.identity_client = cloud.resources['identity']
         # FIXME This class holds logic for all these tables. These must be
         # split into separate classes
@@ -54,10 +64,21 @@ class CinderStorage(cinder_storage.CinderStorage):
             'quota_classes',
             'quota_usages',
             'reservations',
-            'snapshots',
-            'snapshot_metadata',
-            'volume_types']
+            'volume_types',
+            'volume_type_extra_specs',
+        ]
         super(CinderStorage, self).__init__(config, cloud)
+
+    def _get_volume_filter(self):
+        if self._volume_filter is None:
+            with open(self.config.migrate.filter_path, 'r') as f:
+                filter_yaml = filters.FilterYaml(f)
+                filter_yaml.read()
+
+            self._volume_filter = cinder_filters.CinderFilters(
+                self.cinder_client, filter_yaml)
+
+        return self._volume_filter
 
     def get_client(self, params=None):
 
@@ -72,8 +93,6 @@ class CinderStorage(cinder_storage.CinderStorage):
 
     def _check_update_tenant_names(self, entry, tenant_id_key):
         tenant_id = entry[tenant_id_key]
-        if self.filter_tenant_id and (tenant_id != self.filter_tenant_id):
-            return False
         tenant_name = self.identity_client.try_get_tenant_name_by_id(
             tenant_id, self.config.cloud.tenant)
         if self.table in IGNORED_TBL_LIST:
@@ -85,8 +104,39 @@ class CinderStorage(cinder_storage.CinderStorage):
             entry[tenant_id_key] = tenant_name
             return True
         else:
-            LOG.debug('Ignored missed tenant {}'.format(tenant_id))
+            LOG.debug('Ignored missed tenant %s', tenant_id)
             return False
+
+    def _filter_volumes_list(self, volumes):
+        filtering_enabled = self.cloud.position == 'src'
+
+        if filtering_enabled:
+            flts = self._get_volume_filter().get_filters()
+            for f in flts:
+                volumes = [v for v in volumes if f(v)]
+
+            if flts:
+                LOG.info("Filtered volumes: %s",
+                         ", ".join((v['display_name'] for v in volumes)))
+        return volumes
+
+    def _filter_quotas_list(self, table_name, quotas):
+        filtering_enabled = self.cloud.position == 'src'
+
+        if filtering_enabled:
+            fltr = self._get_volume_filter().get_tenant_filter()
+            quotas = [q for q in quotas if fltr(q)]
+            if fltr:
+                LOG.info("Filtered %s: %s", table_name,
+                         ", ".join((str(v) for v in quotas)))
+        return quotas
+
+    def _filter(self, table, result):
+        if table == 'volumes':
+            result = self._filter_volumes_list(result)
+        if table in QUOTA_TABLES:
+            result = self._filter_quotas_list(table, result)
+        return result
 
     def list_of_dicts_for_table(self, table):
         """ Performs SQL query and returns rows as dict """
@@ -98,38 +148,37 @@ class CinderStorage(cinder_storage.CinderStorage):
         self.table = table
         # check if result has "deleted" column
         if DELETED in column_names:
-            result = filter(lambda a: a.get(DELETED) == 0, result)
+            result = [a for a in result if a.get(DELETED) == 0]
+
+        result = self._filter(table, result)
+
         if PROJECT_ID in column_names:
-            result = \
-                filter(lambda e: self._check_update_tenant_names(
-                    e, PROJECT_ID), result)
+            result = [e for e in result
+                      if self._check_update_tenant_names(e, PROJECT_ID)]
         if TENANT_ID in column_names:
-            result = \
-                filter(lambda e: self._check_update_tenant_names(
-                    e, TENANT_ID), result)
+            result = [e for e in result
+                      if self._check_update_tenant_names(e, TENANT_ID)]
         if STATUS in column_names:
-            result = filter(lambda e: 'error' not in e[STATUS], result)
+            result = [e for e in result if 'error' not in e[STATUS]]
         if USER_ID in column_names:
             for entry in result:
                 entry[USER_ID] = self.identity_client.try_get_username_by_id(
                     entry[USER_ID], default=self.config.cloud.user)
         return result
 
-    def read_db_info(self, **kwargs):
+    def read_db_info(self, **_):
         """ Returns serialized data from database """
-        if kwargs.get('tenant_id'):
-            self.filter_tenant_id = kwargs['tenant_id'][0]
 
         return jsondate.dumps(
             {i: self.list_of_dicts_for_table(i) for i in self.list_of_tables})
 
     def get_volume_host(self):
         # cached property
-        if not hasattr(self, 'hosts'):
+        if self.hosts is None:
             self.hosts = [i.host for i in self.cinder_client.services.list(
-                binary=CINDER_VOLUME)]
+                binary=CINDER_VOLUME) if i.state == 'up']
         # return host by "round-robin" rule
-        if not hasattr(self, "host_counter"):
+        if self.host_counter:
             self.host_counter = 0
         self.host_counter += 1
         # counter modulo length of hosts will give
@@ -170,10 +219,8 @@ class CinderStorage(cinder_storage.CinderStorage):
                     if ({i: candidate[i] for i in candidate if i in x_ion} ==
                             {i: ex_hash[i] for i in ex_hash if i in x_ion}):
                         # if dicts are comlpletely same - drop that dict
-                        LOG.debug(
-                            "duplicate in table {table} for pk {pk}".format(
-                                pk=key,
-                                table=table_name))
+                        LOG.debug("duplicate in table %s for pk %s",
+                                  table_name, key)
                     elif auto_increment:
                         # add entry to database without primary_key
                         # primary key will be generated automaticaly
@@ -198,7 +245,7 @@ class CinderStorage(cinder_storage.CinderStorage):
             cursor.executemany(query, [i.values() for i in entries])
 
         # create raw connection to db driver to get the most awesome features
-        self.fix_entries(table_list_of_dicts, table_name)
+        self.fix_entries(table_list_of_dicts)
         sql_engine = self.mysql_connector.get_engine()
         connection = sql_engine.raw_connection()
         cursor = connection.cursor(dictionary=True)
@@ -215,7 +262,7 @@ class CinderStorage(cinder_storage.CinderStorage):
         connection.commit()
         connection.close()
 
-    def fix_entries(self, table_list_of_dicts, table_name):
+    def fix_entries(self, table_list_of_dicts):
         """ Fix entries for Cinder Database.
 
         This method corrects entries to be injected to the database because we
@@ -241,8 +288,6 @@ class CinderStorage(cinder_storage.CinderStorage):
                     username=entry[USER_ID],
                     default=self.config.cloud.user)
                 entry[USER_ID] = user.id
-            if HOST in entry:
-                entry[HOST] = self.get_volume_host()
 
     def deploy(self, data):
         """ Reads serialized data and writes it to database """

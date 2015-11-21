@@ -20,6 +20,7 @@ class GetFilter(action.Action):
 
     def run(self, **kwargs):
         search_opts, search_opts_img, search_opts_tenant = None, {}, {}
+        search_opts_vol = {}
         filter_path = self.cfg.migrate.filter_path
         if utl.read_yaml_file(filter_path):
             filter_config = utl.read_yaml_file(filter_path)
@@ -27,10 +28,13 @@ class GetFilter(action.Action):
                 search_opts = filter_config[utl.INSTANCES_TYPE]
             if utl.IMAGES_TYPE in filter_config:
                 search_opts_img = filter_config[utl.IMAGES_TYPE]
+            if utl.VOLUMES_TYPE in filter_config:
+                search_opts_vol = filter_config[utl.VOLUMES_TYPE]
             if utl.TENANTS_TYPE in filter_config:
                 search_opts_tenant = filter_config[utl.TENANTS_TYPE]
         return {
             'search_opts': search_opts,
             'search_opts_img': search_opts_img,
+            'search_opts_vol': search_opts_vol,
             'search_opts_tenant': search_opts_tenant
         }

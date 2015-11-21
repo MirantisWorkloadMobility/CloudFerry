@@ -84,8 +84,10 @@ tenants = [
          {'name': 'sg12', 'description': 'Blah blah group2'}],
      'cinder_volumes': [
          {'display_name': 'tn1_volume1', 'size': 1,
+          'volume_type': 'nfs1',
           'server_to_attach': 'tn1server1', 'device': '/dev/vdb'},
-         {'display_name': 'tn1_volume2', 'size': 1}
+         {'display_name': 'tn1_volume2', 'size': 1,
+          'volume_type': 'nfs2'}
      ],
      'cinder_snapshots': [
          # Commented because of unimplemented error in nfs driver for grizzly.
@@ -115,6 +117,7 @@ tenants = [
      ],
      'cinder_volumes': [
          {'display_name': 'tn_volume1', 'size': 1,
+          'volume_type': 'nfs1',
           'server_to_attach': 'tn2server1', 'device': '/dev/vdb'}
      ],
      'unassociated_fip': 1
@@ -247,15 +250,17 @@ snapshots = [
 
 # Cinder images to create/delete
 cinder_volumes = [
-    {'display_name': 'cinder_volume1', 'size': 1},
+    {'display_name': 'cinder_volume1', 'size': 1, 'volume_type': 'nfs1'},
     {'display_name': 'cinder_volume2', 'size': 1,
+     'volume_type': 'nfs2',
      'server_to_attach': 'server2', 'device': '/dev/vdb'},
     {'display_name': 'cinder_volume3', 'size': 1,
      'user': 'test_volume_migration'}
 ]
 
 cinder_volumes_from_images = [
-    {'display_name': 'volume_from_image', 'size': 1, 'image': 'image1'}
+    {'display_name': 'volume_from_image', 'size': 1, 'image': 'image1',
+     'volume_type': 'nfs1'}
 ]
 
 # Cinder snapshots to create/delete

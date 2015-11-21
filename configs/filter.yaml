@@ -10,3 +10,8 @@
 #    images_list:
 #        - <image_id1>
 #        - <image_id2>
+#volumes:
+#    volumes_list:
+#        - <volume_id1>
+#        - <volume_id2>
+#    date: "%Y-%m-%d %H:%M:%S"

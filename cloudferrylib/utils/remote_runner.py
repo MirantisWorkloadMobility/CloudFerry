@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from fabric.api import sudo
+from fabric.api import sudo as fab_sudo
 from fabric.api import run
 from fabric.api import settings
 
@@ -61,7 +61,7 @@ class RemoteRunner(object):
                 LOG.debug("running '%s' on '%s' host as user '%s'",
                           cmd, self.host, self.user)
                 if self.sudo and self.user != 'root':
-                    return sudo(cmd)
+                    return fab_sudo(cmd)
                 else:
                     return run(cmd)
 
@@ -72,3 +72,16 @@ class RemoteRunner(object):
             self.run(cmd, **kwargs)
         finally:
             self.ignore_errors = ignore_errors_original
+
+    def run_repeat_on_errors(self, cmd):
+        done = False
+        attempts = 0
+
+        while not done:
+            try:
+                attempts += 1
+                self.run(cmd)
+                done = True
+            except RemoteExecutionError as e:
+                if attempts >= cfglib.CONF.migrate.ssh_connection_attempts:
+                    raise e

@@ -16,6 +16,7 @@
 import copy
 
 from cloudferrylib.base.action import action
+from cloudferrylib.base import exception
 from cloudferrylib.utils import utils as utl
 
 
@@ -58,8 +59,6 @@ class ConvertComputeToImage(action.Action):
                 image_id = _instance['image_id']
             # TODO: Case when image is None
             if image_id:
-                img = image_resource.get_image_by_id_converted(image_id)
-                img = img[utl.IMAGES_TYPE]
                 if image_id in images_body:
                     images_body[image_id][utl.META_INFO][
                         utl.INSTANCE_BODY].append(instance)
@@ -67,6 +66,13 @@ class ConvertComputeToImage(action.Action):
                     images_body[image_id] = {utl.IMAGE_BODY: {},
                                              utl.META_INFO: {
                                              utl.INSTANCE_BODY: [instance]}}
+                    try:
+                        image_resource.get_ref_image(image_id)
+                    except exception.ImageDownloadError:
+                        missing_images[instance_id] = image_id
+                        continue
+                    img = image_resource.get_image_by_id_converted(image_id)
+                    img = img[utl.IMAGES_TYPE]
                     if img:
                         images_body.update(img)
                         images_body[image_id][utl.META_INFO][

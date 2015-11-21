@@ -19,7 +19,11 @@ from cinderclient import exceptions as cinder_exc
 from cloudferrylib.base import storage
 from cloudferrylib.utils import utils as utl
 
+import re
+
 LOG = utl.get_log(__name__)
+
+RE_EXTRACT_HOST = re.compile(r'//([^:^/]*)')
 
 AVAILABLE = 'available'
 IN_USE = "in-use"
@@ -147,7 +151,7 @@ class CinderStorage(storage.Storage):
             )
         except cinder_exc.BadRequest:
             LOG.info("Can't update bootable flag of volume with id = %s "
-                     "using API, trying to use DB..." %
+                     "using API, trying to use DB...",
                      vol[utl.VOLUME_BODY]['id'])
             self.__patch_option_bootable_of_volume(
                 vol[utl.VOLUME_BODY]['id'],

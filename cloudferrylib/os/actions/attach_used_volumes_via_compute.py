@@ -17,6 +17,11 @@ import copy
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
 
+from cinderclient.exceptions import NotFound
+
+
+LOG = utl.get_log(__name__)
+
 
 class AttachVolumesCompute(action.Action):
 
@@ -28,8 +33,13 @@ class AttachVolumesCompute(action.Action):
             if not instance[utl.META_INFO].get(utl.VOLUME_BODY):
                 continue
             for vol in instance[utl.META_INFO][utl.VOLUME_BODY]:
-                if storage_res.get_status(
-                        vol['volume']['id']) != 'in-use':
+                try:
+                    status = storage_res.get_status(vol['volume']['id'])
+                except NotFound:
+                    LOG.error("Skipped volume %s: not found and not attached",
+                              vol['volume']['id'])
+                    continue
+                if status != 'in-use':
                     compute_res.attach_volume_to_instance(instance, vol)
                     storage_res.wait_for_status(vol['volume']['id'],
                                                 storage_res.get_status,
