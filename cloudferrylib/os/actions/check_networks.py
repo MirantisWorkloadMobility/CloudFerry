@@ -50,7 +50,8 @@ class CheckNetworks(action.Action):
         search_opts.update({'search_opts': kwargs.get('search_opts', {})})
 
         LOG.debug("Retrieving Network information from Source cloud...")
-        src_net_info = NetworkInfo(src_net.read_info(**search_opts))
+        ports = src_net.get_ports_list()
+        src_net_info = NetworkInfo(src_net.read_info(**search_opts), ports)
         LOG.debug("Retrieving Network information from Destination cloud...")
         dst_net_info = NetworkInfo(dst_net.read_info())
         LOG.debug("Retrieving Compute information from Source cloud...")
@@ -76,8 +77,8 @@ class CheckNetworks(action.Action):
 
         # Check VMs spawned directly in external network
         LOG.info("Check VMs spawned directly in external networks...")
-        ext_nets = src_net_info.get_external_networks()
-        vms_list = src_compute_info.list_vms_in_external_network(ext_nets)
+        devices = src_net_info.get_devices_from_external_networks()
+        vms_list = src_compute_info.list_vms_in_external_network(devices)
         if vms_list:
             overlapped_resources.update({'vms_in_external_network': vms_list})
 
@@ -92,59 +93,27 @@ class CheckNetworks(action.Action):
 
 class ComputeInfo(object):
     def __init__(self, info):
-        self.instances = {}
-        for instance_id, instance_map in info['instances'].iteritems():
-            instance = Compute(instance_map)
-            self.instances[instance_id] = instance
+        self.instance_ids = info['instances'].keys()
 
-    def list_vms_in_external_network(self, external_networks):
+    def list_vms_in_external_network(self, devices):
         """
         Get list of VMs IDs, that are spawned in external network directly.
 
-        :param external_networks: List of ipaddr.IPNetwork instances of ext net
+        :param external_networks: List of ids of instances which are connected
+                                  to the external networks.
         :return list:
         """
-        if not external_networks:
+        if not devices:
             LOG.debug('There are no external networks on the SRC cloud. '
                       'Finishing check.')
-            return
+            return []
 
-        result_instances = []
-        for instance in self.instances.values():
-            if instance.is_instance_in_external_network(external_networks):
-                result_instances.append(instance.id)
-
-        # remove duplicates, cause 1 VM can be spawned in several external nets
-        result_instances = list(set(result_instances))
-
-        return result_instances
-
-
-class Compute(object):
-    def __init__(self, info):
-        self.interfaces = info['instance']['interfaces']
-        self.id = info['instance']['id']
-
-    def is_instance_in_external_network(self, external_networks):
-        """
-        Check if Nova VM spawned in external network directly.
-
-        :param external_networks: List of ipaddr.IPNetwork instances of ext net
-        :return bool:
-        """
-
-        for interface in self.interfaces:
-            ip = ipaddr.IPAddress(interface['ip'])
-            for network in external_networks:
-                if network.Contains(ip):
-                    LOG.error("Instance %s has been spawned in external "
-                              "network directly.", self.id)
-                    return True
-        return False
+        return list({instance_id for instance_id in self.instance_ids
+                     if instance_id in devices})
 
 
 class NetworkInfo(object):
-    def __init__(self, info):
+    def __init__(self, info, ports=None):
         self.by_id = {}
         self.by_hash = collections.defaultdict()
         self.subnets = info['subnets']
@@ -159,6 +128,7 @@ class NetworkInfo(object):
         for floating_ip_map in info['floating_ips']:
             floating_ip = FloatingIp(floating_ip_map)
             self.floating_ips[floating_ip.address] = floating_ip
+        self.ports = ports
 
     def get_networks(self):
         return self.by_id.values()
@@ -211,18 +181,17 @@ class NetworkInfo(object):
 
         return used_seg_ids
 
-    def get_external_networks(self):
+    def get_devices_from_external_networks(self):
         """
-        Get list of external networks.
+        Get list of devices which are connected to the external networks.
 
-        :return list: List of ipaddr.IPNetwork instances of external networks
+        :return list: List of ids of instances
         """
 
-        external_networks = []
-        for subnet in self.subnets:
-            if subnet['external']:
-                external_networks.append(ipaddr.IPNetwork(subnet['cidr']))
-        return external_networks
+        networks_ids = {subnet['network_id'] for subnet in self.subnets
+                        if subnet['external']}
+        return {port['device_id'] for port in self.ports
+                if port['network_id'] in networks_ids}
 
     def list_overlapped_floating_ips(self, dst_info):
         """
@@ -270,8 +239,8 @@ class NetworkInfo(object):
             if dst_net:
                 # Current network matches with network on DST
                 # Have the same networks on SRC and DST
-                LOG.debug("SRC network: '%s', DST network: '%s'" %
-                          (network.id, dst_net.id))
+                LOG.debug("SRC network: '%s', DST network: '%s'",
+                          network.id, dst_net.id)
                 try:
                     network.check_network_overlapping(dst_net)
                 except exception.AbortMigrationError:
@@ -313,7 +282,7 @@ class Network(object):
 
     def check_network_overlapping(self, network):
         for subnet in network.subnets:
-            LOG.debug("Work with SRC subnet: '%s'" % subnet['id'])
+            LOG.debug("Work with SRC subnet: '%s'", subnet['id'])
             if self.is_subnet_eq(subnet):
                 LOG.debug("We have the same subnet on DST by hash")
                 continue
