@@ -1,3 +1,4 @@
+"""CheckFilter action."""
 # Copyright (c) 2015 Mirantis Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the License);
@@ -14,69 +15,124 @@
 
 
 from glanceclient import exc as glance_exc
+from cinderclient import exceptions as cinder_exc
 from keystoneclient import exceptions as keystone_exc
 from novaclient import exceptions as nova_exc
 from cloudferrylib.base.action import action
+from cloudferrylib.os.storage import filters as cinder_filters
 from cloudferrylib.utils import utils as utl
+
+import datetime
 
 LOG = utl.get_log(__name__)
 
 
 class CheckFilter(action.Action):
+
+    """CheckFilter class."""
+
     def run(self, **kwargs):
-        """Check filter file and make sure all entries are present in source
-        cloud.
+        """
+        Check filter file.
+
+        Check and make sure all entries are present in source cloud.
+
         """
         search_opts = kwargs.get('search_opts', {})
-        search_opts_img = kwargs.get('search_opts_img', {})
-        search_opts_tenant = kwargs.get('search_opts_tenant', {})
-        image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
-        if search_opts_img and search_opts_img.get('images_list'):
-            images_list = search_opts_img['images_list']
-            for img_id in images_list:
-                LOG.debug('Filtered image id: {}'.format(img_id))
-                try:
-                    img = image_resource.glance_client.images.get(img_id)
-                    if img:
-                        LOG.debug('Filter config check: Image ID {} is OK'
-                                  .format(img_id))
-                except glance_exc.HTTPNotFound as e:
-                    LOG.error('Filter config check: Image ID {} '
-                              'is not present in source cloud, '
-                              'please update your filter config. Aborting.'
-                              .format(img_id))
-                    raise e
-        ident_resource = self.cloud.resources[utl.IDENTITY_RESOURCE]
-        if search_opts_tenant and search_opts_tenant.get('tenant_id'):
-            tenants = search_opts_tenant['tenant_id']
-            for tenant_id in tenants:
-                LOG.debug('Filtered tenant id: {}'.format(tenant_id))
-                try:
-                    tenant = ident_resource.keystone_client.tenants.find(
-                        id=tenant_id)
-                    if tenant:
-                        LOG.debug('Filter config check: Tenant ID {} is OK'
-                                  .format(tenant_id))
-                except keystone_exc.NotFound as e:
-                    LOG.error('Filter config check: Tenant ID {} '
-                              'is not present in source cloud, '
-                              'please update your filter config. Aborting.'
-                              .format(tenant_id))
-                    raise e
+        self._check_opts_img(kwargs.get('search_opts_img', {}))
+        self._check_opts_vol(kwargs.get('search_opts_vol', {}))
+        self._check_opts_vol_date(kwargs.get('search_opts_vol', {}))
+        self._check_opts_tenant(kwargs.get('search_opts_tenant', {}))
+
         compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
         if search_opts and search_opts.get('id'):
             instances = search_opts['id']
             for instance_id in instances:
-                LOG.debug('Filtered instance id: {}'.format(instance_id))
+                LOG.debug('Filtered instance id: %s', instance_id)
                 try:
                     instance = \
                         compute_resource.nova_client.servers.get(instance_id)
                     if instance:
-                        LOG.debug('Filter config check: Instance ID {} is OK'
-                                  .format(instance_id))
+                        LOG.debug('Filter config check: Instance ID %s is OK',
+                                  instance_id)
                 except nova_exc.NotFound as e:
-                    LOG.error('Filter config check: Instance ID {} '
+                    LOG.error('Filter config check: Instance ID %s '
                               'is not present in source cloud, '
-                              'please update your filter config. Aborting.'
-                              .format(instance_id))
+                              'please update your filter config. Aborting.',
+                              instance_id)
+                    raise e
+
+    def _check_opts_vol(self, opts):
+        if not opts:
+            return
+        cinder_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
+        if opts.get('volumes_list'):
+            volumes_list = opts['volumes_list']
+            for vol_id in volumes_list:
+                LOG.debug('Filtered volume id: %s', vol_id)
+                try:
+                    vol = cinder_resource.cinder_client.volumes.get(vol_id)
+                    if vol:
+                        LOG.debug('Filter config check: Volume ID %s is OK',
+                                  vol_id)
+                except cinder_exc.NotFound as e:
+                    LOG.error('Filter config check: Volume ID %s '
+                              'is not present in source cloud, '
+                              'please update your filter config. Aborting.',
+                              vol_id)
+                    raise e
+
+    @staticmethod
+    def _check_opts_vol_date(opts):
+        if opts.get('date'):
+            volumes_date = opts['date']
+            if isinstance(volumes_date, datetime.datetime):
+                LOG.debug('Filtered datetime volume date: %s',
+                          str(volumes_date))
+            else:
+                try:
+                    volumes_date = datetime.datetime.strptime(
+                        volumes_date, cinder_filters.DATETIME_FMT)
+                    LOG.debug('Filtered str volume date: %s',
+                              str(volumes_date))
+                except ValueError, e:
+                    LOG.error('Filter config check: '
+                              'invalid volume date format')
+                    raise e
+
+    def _check_opts_img(self, opts):
+        image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
+        if opts and opts.get('images_list'):
+            images_list = opts['images_list']
+            for img_id in images_list:
+                LOG.debug('Filtered image id: %s', img_id)
+                try:
+                    img = image_resource.glance_client.images.get(img_id)
+                    if img:
+                        LOG.debug('Filter config check: Image ID %s is OK',
+                                  img_id)
+                except glance_exc.HTTPNotFound as e:
+                    LOG.error('Filter config check: Image ID %s '
+                              'is not present in source cloud, '
+                              'please update your filter config. Aborting.',
+                              img_id)
+                    raise e
+
+    def _check_opts_tenant(self, opts):
+        ident_resource = self.cloud.resources[utl.IDENTITY_RESOURCE]
+        if opts and opts.get('tenant_id'):
+            tenants = opts['tenant_id']
+            for tenant_id in tenants:
+                LOG.debug('Filtered tenant id: %s', tenant_id)
+                try:
+                    tenant = ident_resource.keystone_client.tenants.find(
+                        id=tenant_id)
+                    if tenant:
+                        LOG.debug('Filter config check: Tenant ID %s is OK',
+                                  tenant_id)
+                except keystone_exc.NotFound as e:
+                    LOG.error('Filter config check: Tenant ID %s '
+                              'is not present in source cloud, '
+                              'please update your filter config. Aborting.',
+                              tenant_id)
                     raise e

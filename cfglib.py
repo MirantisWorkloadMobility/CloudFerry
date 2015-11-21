@@ -277,7 +277,9 @@ src_storage_opts = [
                help='name of pool for volumes in Ceph RBD storage'),
     cfg.StrOpt('snapshot_name_template', default='snapshot-',
                help='template for creating names of snapshots '
-                    'on storage backend')
+                    'on storage backend'),
+    cfg.StrOpt('conf', default='/etc/cinder/cinder.conf',
+               help="Path to cinder config file"),
 ]
 
 src_image = cfg.OptGroup(name='src_image',
@@ -457,7 +459,9 @@ dst_storage_opts = [
                help='name of pool for volumes in Ceph RBD storage'),
     cfg.StrOpt('snapshot_name_template', default='snapshot-',
                help='template for creating names of snapshots '
-                    'on storage backend')
+                    'on storage backend'),
+    cfg.StrOpt('conf', default='/etc/cinder/cinder.conf',
+               help="Path to cinder config file"),
 ]
 
 dst_image = cfg.OptGroup(name='dst_image',

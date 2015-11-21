@@ -43,9 +43,9 @@ def clean_if_exists(func):
                   % func.__name__)
             clean_method = getattr(self.clean_tools,
                                    CREATE_CLEAN_METHODS_MAP[func.__name__])
-            print('Run cleanup method "%s"' % clean_method.__name__)
+            print 'Run cleanup method "%s"' % clean_method.__name__
             clean_method()
-            print('Run method "%s" one more time' % func.__name__)
+            print 'Run method "%s" one more time' % func.__name__
             func(self, *args, **kwargs)
     return wrapper
 
@@ -68,6 +68,7 @@ def retry_until_resources_created(resource_name):
 
 
 class NotFound(Exception):
+
     """Raise this exception in case when resource was not found
     """
 
@@ -701,6 +702,11 @@ class Prerequisites(BasePrerequisites):
 
         def get_params_for_volume_creating(_volume):
             params = ['display_name', 'size', 'imageRef']
+            vt_exists = 'volume_type' in _volume and \
+                [vt for vt in self.cinderclient.volume_types.list()
+                 if vt.name == _volume['volume_type']]
+            if vt_exists:
+                params.append('volume_type')
             if 'image' in _volume:
                 _volume['imageRef'] = self.get_image_id(_volume['image'])
             return {param: _volume[param] for param in params
@@ -873,8 +879,8 @@ class Prerequisites(BasePrerequisites):
                 tenants_names.append(role['tenant'])
 
         tenants_to_create = [t for t in self.config.tenants
-                             if t['name'] in tenants_names
-                             and not self.dst_cloud.tenant_exists(t['name'])]
+                             if t['name'] in tenants_names and
+                             not self.dst_cloud.tenant_exists(t['name'])]
         self.dst_cloud.create_tenants(tenants_to_create)
         self.dst_cloud.create_users([user])
         self.dst_cloud.create_user_tenant_roles([user_tenant_role])
@@ -959,6 +965,8 @@ class CleanEnv(BasePrerequisites):
             for _ in range(timeout):
                 servers = self.novaclient.servers.list(
                     search_opts={'all_tenants': 1})
+                if not servers:
+                    break
                 for server in servers:
                     if server.status != 'DELETED':
                         time.sleep(1)
@@ -972,7 +980,8 @@ class CleanEnv(BasePrerequisites):
         vms = self.config.vms
         vms += itertools.chain(*[tenant['vms'] for tenant
                                  in self.config.tenants if tenant.get('vms')])
-        [vms.append(vm) for vm in self.config.vms_from_volumes]
+        for vm in self.config.vms_from_volumes:
+            vms.append(vm)
         vms_names = [vm['name'] for vm in vms]
         vms = self.novaclient.servers.list(search_opts={'all_tenants': 1})
         for vm in vms:
@@ -1117,7 +1126,8 @@ class CleanEnv(BasePrerequisites):
 
             keypairs = [k.id for k in self.novaclient.keypairs.list()]
             if keypairs:
-                map(self.novaclient.keypairs.delete, keypairs)
+                for key_pair in keypairs:
+                    self.novaclient.keypairs.delete(key_pair)
             self.switch_user(user=self.username, password=self.password,
                              tenant=self.tenant)
 
@@ -1183,9 +1193,9 @@ if __name__ == '__main__':
                                         'self.config.ini', action='store_true')
     parser.add_argument('--env', default='SRC',
                         help='choose cloud: SRC or DST')
-    args = parser.parse_args()
-    preqs = Prerequisites(config=conf, cloud_prefix=args.env)
-    if args.clean:
+    _args = parser.parse_args()
+    preqs = Prerequisites(config=conf, cloud_prefix=_args.env)
+    if _args.clean:
         preqs.clean_tools.clean_objects()
     else:
         preqs.run_preparation_scenario()
