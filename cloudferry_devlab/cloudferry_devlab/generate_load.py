@@ -300,26 +300,27 @@ class Prerequisites(base.BasePrerequisites):
                 yaml.dump(filter_dict, f, default_flow_style=False)
 
     @clean_if_exists
-    def create_flavors(self):
-        for flavor in self.config.flavors:
-            if flavor.get('is_deleted'):
-                flavor.pop('is_deleted')
-                fl = self.novaclient.flavors.create(**flavor)
-                self.novaclient.flavors.delete(fl.id)
-            else:
-                fl = self.novaclient.flavors.create(**flavor)
-            if not self.is_flavor_public(flavor):
-                self.novaclient.flavor_access.add_tenant_access(
-                    flavor=fl.id,
-                    tenant=self.get_tenant_id(self.tenant))
+    def create_flavors(self, flavor_list=None):
+        def create_flvrs(flavors, ten_id):
+            for flavor in flavors:
+                if flavor.get('is_deleted'):
+                    flavor.pop('is_deleted')
+                    fl = self.novaclient.flavors.create(**flavor)
+                    self.novaclient.flavors.delete(fl.id)
+                else:
+                    fl = self.novaclient.flavors.create(**flavor)
+                if not self.is_flavor_public(flavor):
+                    self.novaclient.flavor_access.add_tenant_access(
+                        flavor=fl.id, tenant=ten_id)
+
+        if flavor_list is not None:
+            create_flvrs(flavor_list, self.get_tenant_id(self.tenant))
+            return
+        create_flvrs(self.config.flavors, self.get_tenant_id(self.tenant))
         for tenant in self.config.tenants:
             if tenant.get('flavors'):
-                for flavor in tenant['flavors']:
-                    fl = self.novaclient.flavors.create(**flavor)
-                    if not self.is_flavor_public(flavor):
-                        self.novaclient.flavor_access.add_tenant_access(
-                            flavor=fl.id,
-                            tenant=self.get_tenant_id(tenant['name']))
+                tenant_id = self.get_tenant_id(tenant['name'])
+                create_flvrs(tenant['flavors'], tenant_id)
 
     def _get_parameters_for_vm_creating(self, vm):
         def get_vm_nics(_vm):
@@ -356,7 +357,7 @@ class Prerequisites(base.BasePrerequisites):
             _create_groups(tenant['server_groups'])
         self.switch_user(self.username, self.password, self.tenant)
 
-    def create_vms(self):
+    def create_vms(self, vm_list):
 
         def wait_for_vm_creating():
             """ When limit for creating vms in nova is reached, we receive
@@ -379,24 +380,23 @@ class Prerequisites(base.BasePrerequisites):
                     'VMs with ids {0} were in "BUILD" state more than {1} '
                     'seconds'.format(spawning_vms, conf.TIMEOUT))
 
-        def create_vms(vm_list):
-            vm_ids = []
-            for vm in vm_list:
-                wait_for_vm_creating()
-                _vm = self.novaclient.servers.create(
-                    **self._get_parameters_for_vm_creating(vm))
-                vm_ids.append(_vm.id)
-                if not vm.get('fip'):
-                    continue
-                self.wait_until_objects_created([_vm.id], self.check_vm_state,
-                                                conf.TIMEOUT)
-                fip = self.neutronclient.create_floatingip(
-                    {"floatingip": {"floating_network_id": self.ext_net_id}})
-                _vm.add_floating_ip(fip['floatingip']['floating_ip_address'])
-            return vm_ids
+        vm_ids = []
+        for vm in vm_list:
+            wait_for_vm_creating()
+            new_vm = self.novaclient.servers.create(
+                **self._get_parameters_for_vm_creating(vm))
+            vm_ids.append(new_vm.id)
+            if not vm.get('fip'):
+                continue
+            self.wait_until_objects_created([new_vm.id], self.check_vm_state,
+                                            conf.TIMEOUT)
+            fip = self.neutronclient.create_floatingip(
+                {"floatingip": {"floating_network_id": self.ext_net_id}})
+            new_vm.add_floating_ip(fip['floatingip']['floating_ip_address'])
+        return vm_ids
 
-        vms = create_vms(self.config.vms)
-
+    def create_all_vms(self):
+        vms = self.create_vms(self.config.vms)
         for tenant in self.config.tenants:
             if not tenant.get('vms'):
                 continue
@@ -421,13 +421,13 @@ class Prerequisites(base.BasePrerequisites):
                     raise RuntimeError(msg.format(keypair[0], tenant['name']))
                 self.switch_user(user=user['name'], password=user['password'],
                                  tenant=tenant['name'])
-                vms.extend(create_vms(keypairs_vms[keypair]))
+                vms.extend(self.create_vms(keypairs_vms[keypair]))
             # Create vms without keypair
             user = [u for u in self.config.users
                     if u.get('tenant') == tenant['name']][0]
             self.switch_user(user=user['name'], password=user['password'],
                              tenant=tenant['name'])
-            vms.extend(create_vms(vms_wo_keypairs))
+            vms.extend(self.create_vms(vms_wo_keypairs))
 
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
@@ -452,13 +452,13 @@ class Prerequisites(base.BasePrerequisites):
             # Possible parameters for network creating
             params = ['name', 'admin_state_up', 'shared', 'router:external',
                       'provider:network_type', 'provider:segmentation_id',
-                      'provider:physical_network']
+                      'provider:physical_network', 'tenant_id']
             return {param: _net[param] for param in params if param in _net}
 
         def get_body_for_subnet_creating(_subnet):
             # Possible parameters for subnet creating
             params = ['name', 'cidr', 'allocation_pools', 'dns_nameservers',
-                      'host_routes', 'ip_version', 'network_id']
+                      'host_routes', 'ip_version', 'network_id', 'tenant_id']
             return {param: _subnet[param] for param in params
                     if param in _subnet}
 
@@ -995,6 +995,40 @@ class Prerequisites(base.BasePrerequisites):
                 self.create_unassociated_fips(self.dst_cloud.neutronclient,
                                               self.config.dst_unassociated_fip,
                                               ext_net_id)
+        dst_tenants = [t for t in self.config.tenants
+                       if t.get('exists_on_dst')]
+        for tenant in dst_tenants:
+            tenant_id = self.dst_cloud.get_tenant_id(tenant['name'])
+            for net in tenant['networks']:
+                net['tenant_id'] = tenant_id
+                for subnet in net['subnets']:
+                    subnet['tenant_id'] = tenant_id
+            self.dst_cloud.create_networks(tenant['networks'])
+
+    def create_vms_on_dst(self):
+        def get_user_for_tenant(tenant_name):
+            for user in self.config.users:
+                if user.get('tenant') == tenant_name:
+                    return user
+            raise RuntimeError(
+                'User for tenant %s was not found' % tenant_name)
+
+        tenants = {}
+        for vm in self.config.dst_vms:
+            if vm['tenant'] in tenants:
+                tenants[vm['tenant']].append(vm)
+            else:
+                tenants[vm['tenant']] = [vm]
+
+        flv_names = {vm['flavor'] for vm in self.config.dst_vms}
+        flavors = [f for f in self.config.flavors if f['name'] in flv_names]
+        self.dst_cloud.create_flavors(flavors)
+
+        for tenant_name, vms in tenants.iteritems():
+            user = get_user_for_tenant(tenant_name)
+            self.dst_cloud.switch_user(
+                user['name'], user['password'], user['tenant'])
+            self.dst_cloud.create_vms(vms)
 
     def create_ext_net_map_yaml(self):
         src_ext_nets = [net['name'] for net in self.config.networks
@@ -1037,7 +1071,7 @@ class Prerequisites(base.BasePrerequisites):
             self.log.info('Boot vm from volume')
             self.boot_vms_from_volumes()
         self.log.info('Creating vms')
-        self.create_vms()
+        self.create_all_vms()
         self.log.info('Breaking VMs')
         self.break_vm()
         self.log.info('Breaking Images')
@@ -1084,3 +1118,5 @@ class Prerequisites(base.BasePrerequisites):
         self.create_dst_networking()
         self.log.info('Creating networks map')
         self.create_ext_net_map_yaml()
+        self.log.info('Creating vms on dst')
+        self.create_vms_on_dst()
