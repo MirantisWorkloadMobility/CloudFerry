@@ -72,8 +72,8 @@ migrate_opts = [
     cfg.BoolOpt('keep_user_passwords', default=True,
                 help='True - keep user passwords, '
                      'False - not keep user passwords'),
-    cfg.StrOpt('key_filename', default='id_rsa',
-               help='name pub key'),
+    cfg.ListOpt('key_filename', default=['id_rsa'],
+                help='private key(s) for interaction with clouds via ssh'),
     cfg.BoolOpt('keep_ip', default=False,
                 help='yes - keep ip, no - not keep ip'),
     cfg.BoolOpt('migrate_extnets', default=False,
