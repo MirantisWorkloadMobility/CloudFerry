@@ -180,10 +180,14 @@ class WriteVolumesDbTest(test.TestCase):
         expected = {
             "volumes": [
                 {
+                    "status": "available",
                     "volume_type_id": None,
+                    "attach_status": "detached",
+                    "provider_location": "/var/exports/dst0a",
                     "host": "dst_cinder",
+                    "instance_uuid": None,
+                    "mountpoint": None,
                     "id": "vol-1",
-                    "provider_location": "/var/exports/dst0a"
                 }
             ]
         }
@@ -265,14 +269,26 @@ class WriteVolumesDbTest(test.TestCase):
                 {"volume_type_id": "nfs1_dst_id",
                  "host": "dst_cinder@nfs1",
                  "id": "vol-nfs1",
+                 "status": "available",
+                 "attach_status": "detached",
+                 "instance_uuid": None,
+                 "mountpoint": None,
                  "provider_location": "/var/exports/dst1a"},
                 {"volume_type_id": None,
                  "host": "dst_cinder",
                  "id": "vol-nfs2",
+                 "status": "available",
+                 "attach_status": "detached",
+                 "instance_uuid": None,
+                 "mountpoint": None,
                  "provider_location": "/var/exports/dst2a"},
                 {"volume_type_id": "nfs3_dst_id",
                  "host": "dst_cinder@nfs3",
                  "id": "vol-nfs3",
+                 "status": "available",
+                 "attach_status": "detached",
+                 "instance_uuid": None,
+                 "mountpoint": None,
                  "provider_location": "/var/exports/dst3a"},
             ]
         }
@@ -314,6 +330,10 @@ class WriteVolumesDbTest(test.TestCase):
                 {"volume_type_id": None,
                  "host": "dst_cinder",
                  "id": "vol",
+                 "status": "available",
+                 "attach_status": "detached",
+                 "instance_uuid": None,
+                 "mountpoint": None,
                  "provider_location": "/var/exports/dst2a"
                  }
             ]
