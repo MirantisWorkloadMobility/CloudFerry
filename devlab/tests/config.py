@@ -36,8 +36,7 @@ users = [
 ]
 
 user_tenant_roles = [
-    {'user1': [{'tenant': 'tenant1', 'role': 'SomeRole'}]},
-    {'admin': [{'tenant': 'tenant4', 'role': 'admin'}]}
+    {'user1': [{'tenant': 'tenant1', 'role': 'SomeRole'}]}
 ]
 
 # Roles to create/delete
@@ -207,7 +206,7 @@ images_not_included_in_filter = ['image5']
 vms_not_in_filter = ['not_in_filter']
 
 # Images that should have few specific members:
-members = ['tenant1', 'admin']
+members = ['tenant1']
 img_to_add_members = ['image3', 'image4']
 
 # Flavors to create/delete

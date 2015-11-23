@@ -16,3 +16,9 @@
 class NotFound(Exception):
     """Raise this exception in case when resource was not found
     """
+
+
+class ConfFileError(RuntimeError):
+    """Raise this exception in case when config file parameter
+       missed or config file format is incorrect
+    """

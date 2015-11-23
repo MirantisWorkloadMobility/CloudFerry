@@ -1,21 +1,22 @@
 import argparse
 import itertools
-import os
 import time
 import json
 import yaml
 import config as conf
-
 import utils
 
-from cinderclient import client as cinder
-from glanceclient import Client as glance
+import ConfigParser
+
+from glanceclient.v1 import Client as glance
 from keystoneclient import exceptions as ks_exceptions
 from keystoneclient.v2_0 import client as keystone
 from neutronclient.common import exceptions as nt_exceptions
-from neutronclient.neutron import client as neutron
-from novaclient import client as nova
+
 from novaclient import exceptions as nv_exceptions
+from novaclient.v1_1 import client as nova
+from neutronclient.v2_0 import client as neutron
+from cinderclient.v1 import client as cinder
 
 from test_exceptions import NotFound
 
@@ -68,43 +69,61 @@ def retry_until_resources_created(resource_name):
     return actual_decorator
 
 
+def get_dict_from_config_file(config_file):
+    conf_dict = {}
+    for section in config_file.sections():
+        conf_dict[section] = {}
+        for option in config_file.options(section):
+            conf_dict[section][option] = config_file.get(section, option)
+    return conf_dict
+
+
 class BasePrerequisites(object):
 
-    def __init__(self, config, cloud_prefix='SRC'):
+    def __init__(self, config,
+                 configuration_ini,
+                 cloud_prefix='SRC'):
         self.filtering_utils = utils.FilteringUtils()
         self.migration_utils = utils.MigrationUtils(config)
+
         self.config = config
-        self.username = os.environ['%s_OS_USERNAME' % cloud_prefix]
-        self.password = os.environ['%s_OS_PASSWORD' % cloud_prefix]
-        self.tenant = os.environ['%s_OS_TENANT_NAME' % cloud_prefix]
-        self.auth_url = os.environ['%s_OS_AUTH_URL' % cloud_prefix]
-        self.image_endpoint = os.environ['%s_OS_IMAGE_ENDPOINT' % cloud_prefix]
-        self.neutron_endpoint = os.environ['%s_OS_NEUTRON_ENDPOINT'
-                                           % cloud_prefix]
+
+        self.cloud_prefix = cloud_prefix.lower()
+
+        self.configuration_ini = configuration_ini
+
+        self.username = self.configuration_ini[self.cloud_prefix]['user']
+        self.password = self.configuration_ini[self.cloud_prefix]['password']
+        self.tenant = self.configuration_ini[self.cloud_prefix]['tenant']
+        self.auth_url = self.configuration_ini[self.cloud_prefix]['auth_url']
 
         self.keystoneclient = keystone.Client(auth_url=self.auth_url,
                                               username=self.username,
                                               password=self.password,
                                               tenant_name=self.tenant)
         self.keystoneclient.authenticate()
-        self.token = self.keystoneclient.auth_token
 
-        self.novaclient = nova.Client(self.config.NOVA_CLIENT_VERSION,
-                                      username=self.username,
+        self.novaclient = nova.Client(username=self.username,
                                       api_key=self.password,
                                       project_id=self.tenant,
                                       auth_url=self.auth_url)
 
-        self.glanceclient = glance(self.config.GLANCE_CLIENT_VERSION,
-                                   endpoint=self.image_endpoint,
+        self.token = self.keystoneclient.auth_token
+
+        self.image_endpoint = \
+            self.keystoneclient.service_catalog.get_endpoints(
+                service_type='image',
+                endpoint_type='publicURL')['image'][0]['publicURL']
+
+        self.glanceclient = glance(endpoint=self.image_endpoint,
                                    token=self.token)
 
-        self.neutronclient = neutron.Client(self.config.NEUTRON_CLIENT_VERSION,
-                                            endpoint_url=self.neutron_endpoint,
-                                            token=self.token)
+        self.neutronclient = neutron.Client(username=self.username,
+                                            password=self.password,
+                                            tenant_name=self.tenant,
+                                            auth_url=self.auth_url)
 
-        self.cinderclient = cinder.Client(self.config.CINDER_CLIENT_VERSION,
-                                          self.username, self.password,
+        self.cinderclient = cinder.Client(self.username, self.password,
                                           self.tenant, self.auth_url)
         self.openstack_release = self._get_openstack_release()
 
@@ -261,31 +280,34 @@ class BasePrerequisites(object):
                                               tenant_name=tenant)
         self.keystoneclient.authenticate()
         self.token = self.keystoneclient.auth_token
-        self.novaclient = nova.Client(self.config.NOVA_CLIENT_VERSION,
-                                      username=user,
-                                      api_key=password, project_id=tenant,
+        self.novaclient = nova.Client(username=user,
+                                      api_key=password,
+                                      project_id=tenant,
                                       auth_url=self.auth_url)
-        self.glanceclient = glance(self.config.GLANCE_CLIENT_VERSION,
-                                   endpoint=self.image_endpoint,
+
+        self.glanceclient = glance(endpoint=self.image_endpoint,
                                    token=self.token)
-        self.neutronclient = neutron.Client(
-            self.config.NEUTRON_CLIENT_VERSION,
-            endpoint_url=self.neutron_endpoint,
-            token=self.token)
-        self.cinderclient = cinder.Client(self.config.CINDER_CLIENT_VERSION,
-                                          user, password, tenant,
+
+        self.neutronclient = neutron.Client(username=user,
+                                            password=password,
+                                            tenant_name=tenant,
+                                            auth_url=self.auth_url)
+
+        self.cinderclient = cinder.Client(user, password, tenant,
                                           self.auth_url)
 
 
 class Prerequisites(BasePrerequisites):
 
-    def __init__(self, config, cloud_prefix='SRC'):
-        super(Prerequisites, self).__init__(config, cloud_prefix)
+    def __init__(self, config, configuration_ini, cloud_prefix='SRC'):
+        super(Prerequisites, self).__init__(config,
+                                            configuration_ini,
+                                            cloud_prefix)
         # will be filled during create all networking step
         self.ext_net_id = None
         # object of Prerequisites for dst cloud
         self.dst_cloud = None
-        self.clean_tools = CleanEnv(config, cloud_prefix)
+        self.clean_tools = CleanEnv(config, configuration_ini, cloud_prefix)
 
     @clean_if_exists
     def create_users(self, users=None):
@@ -394,19 +416,25 @@ class Prerequisites(BasePrerequisites):
             if not tenant.get('images'):
                 continue
             for image in tenant['images']:
+
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
+
                 img = self.glanceclient.images.create(
                     **_get_body_for_image_creating(image))
+
                 img_ids.append(img.id)
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
+
         for image in self.config.images:
             img = self.glanceclient.images.create(
                 **_get_body_for_image_creating(image))
             img_ids.append(img.id)
         wait_until_images_created(img_ids)
-        src_cloud = Prerequisites(cloud_prefix='SRC', config=self.config)
+        src_cloud = Prerequisites(cloud_prefix='SRC',
+                                  configuration_ini=self.configuration_ini,
+                                  config=self.config)
         src_img = [x.__dict__ for x in
                    src_cloud.glanceclient.images.list()]
         for image in src_img:
@@ -423,7 +451,9 @@ class Prerequisites(BasePrerequisites):
             self.glanceclient.images.create()
 
     def update_filtering_file(self):
-        src_cloud = Prerequisites(cloud_prefix='SRC', config=self.config)
+        src_cloud = Prerequisites(cloud_prefix='SRC',
+                                  configuration_ini=self.configuration_ini,
+                                  config=self.config)
         src_img = [x.__dict__ for x in
                    src_cloud.glanceclient.images.list()]
         src_vms = [x.__dict__ for x in
@@ -468,7 +498,7 @@ class Prerequisites(BasePrerequisites):
                 for vm in vm_id_list:
                     if vm != self.get_vm_id('not_in_filter'):
                         filter_dict[key]['id'].append(str(vm))
-        for tenant in self.config.tenants + [{'name': 'admin'}]:
+        for tenant in self.config.tenants + [{'name': self.tenant}]:
             if tenant.get('deleted'):
                 continue
             filter_dict['tenants']['tenant_id'] = [str(
@@ -500,8 +530,7 @@ class Prerequisites(BasePrerequisites):
                 'flavor': self.get_flavor_id(vm['flavor']),
                 'nics': get_vm_nics(vm),
                 'name': vm['name'],
-                'key_name': vm.get('key_name')
-                }
+                'key_name': vm.get('key_name')}
 
     def create_vms(self):
 
@@ -835,7 +864,7 @@ class Prerequisites(BasePrerequisites):
         for tenant in self.config.tenants:
             if 'quota' in tenant:
                 self.novaclient.quotas.update(tenant_id=self.get_tenant_id(
-                    'admin'), **tenant['quota'])
+                    self.tenant), **tenant['quota'])
                 break
 
     def change_admin_role_in_tenants(self):
@@ -864,7 +893,10 @@ class Prerequisites(BasePrerequisites):
         security group, even default, while on src this tenant has security
         group.
         """
-        self.dst_cloud = Prerequisites(cloud_prefix='DST', config=self.config)
+        self.dst_cloud = Prerequisites(
+            cloud_prefix='DST',
+            configuration_ini=self.configuration_ini,
+            config=self.config)
         for t in self.config.tenants:
             if not t.get('deleted') and t['enabled']:
                 try:
@@ -1069,6 +1101,7 @@ class CleanEnv(BasePrerequisites):
     def clean_images(self):
         all_images = self.migration_utils.get_all_images_from_config()
         images_names = [image['name'] for image in all_images]
+
         for image in self.glanceclient.images.list():
             if image.name not in images_names:
                 continue
@@ -1147,7 +1180,7 @@ class CleanEnv(BasePrerequisites):
         for sg in sgs:
             try:
                 self.neutronclient.delete_security_group(self.get_sg_id(
-                                                         sg['name']))
+                    sg['name']))
             except (nt_exceptions.NeutronClientException,
                     NotFound) as e:
                 print "Security group %s failed to delete: %s" % (sg['name'],
@@ -1240,8 +1273,17 @@ if __name__ == '__main__':
                                         'self.config.ini', action='store_true')
     parser.add_argument('--env', default='SRC',
                         help='choose cloud: SRC or DST')
+    parser.add_argument('cloudsconf',
+                        help='Please point configuration.ini file location')
+
     _args = parser.parse_args()
-    preqs = Prerequisites(config=conf, cloud_prefix=_args.env)
+
+    confparser = ConfigParser.ConfigParser()
+    confparser.read(_args.cloudsconf)
+    cloudsconf = get_dict_from_config_file(confparser)
+
+    preqs = Prerequisites(config=conf, configuration_ini=cloudsconf,
+                          cloud_prefix=_args.env)
     if _args.clean:
         preqs.clean_tools.clean_objects()
     else:
