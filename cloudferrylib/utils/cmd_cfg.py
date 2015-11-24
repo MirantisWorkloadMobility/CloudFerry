@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from console_cmd import BC
+from cloudferrylib.utils.console_cmd import BC
 
 
 cd_cmd = BC("cd %s")
@@ -21,7 +21,6 @@ qemu_img_cmd = BC("qemu-img %s")
 mkdir_cmd = BC("mkdir -p %s")
 move_cmd = BC("mv -f %s %s")
 move_with_cd_cmd = cd_cmd & move_cmd
-grep_cmd = BC("grep %s")
 rbd_cmd = BC("rbd %s")
 base_ssh_cmd = BC("ssh %s")
 ssh_cmd = base_ssh_cmd("-oStrictHostKeyChecking=no %s '%s'")

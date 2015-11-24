@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-__author__ = 'mirrorcoder'
+import json
 
-import cmd_cfg
-import ssh_util
-
+from cloudferrylib.utils import cmd_cfg
+from cloudferrylib.utils import ssh_util
 from cloudferrylib.utils import utils
 
 LOG = utils.get_log(__name__)
@@ -27,8 +26,6 @@ class QemuImg(ssh_util.SshUtil):
     commit_cd_cmd = cmd_cfg.cd_cmd & commit_cmd
     convert_cmd = cmd_cfg.qemu_img_cmd("convert %s")
     convert_full_image_cmd = cmd_cfg.cd_cmd & convert_cmd("-f %s -O %s %s %s")
-    backing_file_cmd = \
-        cmd_cfg.qemu_img_cmd("info %s") >> cmd_cfg.grep_cmd("\"backing file\"")
     rebase_cmd = cmd_cfg.qemu_img_cmd("rebase -u -b %s %s")
     convert_cmd = convert_cmd("-O %s %s %s")
 
@@ -55,19 +52,16 @@ class QemuImg(ssh_util.SshUtil):
             self.execute(cmd1, host_compute), self.execute(cmd2, host_compute)
 
     def detect_backing_file(self, dest_disk_ephemeral, host_instance):
-        cmd = self.backing_file_cmd(dest_disk_ephemeral)
-        return self.parsing_output_backing(
-            self.execute(cmd=cmd, host_exec=host_instance, ignore_errors=True))
-
-    @staticmethod
-    def parsing_output_backing(output):
-        out = output.split('\n')
-        backing_file = None
-        for i in out:
-            line_out = i.split(":")
-            if line_out[0] == "backing file":
-                backing_file = line_out[1].replace(" ", "")
-        return backing_file
+        cmd = "qemu-img info --output=json {ephemeral}".format(
+            ephemeral=dest_disk_ephemeral)
+        qemu_img_json = self.execute(cmd=cmd,
+                                     host_exec=host_instance,
+                                     ignore_errors=True)
+        try:
+            return json.loads(qemu_img_json)['backing-filename']
+        except (TypeError, ValueError, KeyError) as e:
+            LOG.warning("Unable to read qemu image file for '%s', error: '%s'",
+                        dest_disk_ephemeral, e)
 
     def diff_rebase(self, baseimage, disk, host_compute=None):
         cmd = self.rebase_cmd(baseimage, disk)
