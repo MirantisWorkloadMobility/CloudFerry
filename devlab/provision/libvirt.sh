@@ -15,5 +15,5 @@ echo "Updating libvirt-bin default config"
 sed -i 's/^.*libvirtd_opts.*=.*$/libvirtd_opts="-d -l"/' /etc/default/libvirt-bin
 
 echo "Restarting libvirt services"
-stop libvirt-bin
-start libvirt-bin
+service libvirt-bin restart
+service nova-compute restart
