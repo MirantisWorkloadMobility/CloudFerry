@@ -32,8 +32,7 @@ FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
                                                    'cacert': '',
                                                    'insecure': False
                                                    }),
-                             migrate=utils.ext_dict({'speed_limit': '10MB',
-                                                     'retry': '7',
+                             migrate=utils.ext_dict({'retry': '7',
                                                      'time_wait': 5}))
 
 

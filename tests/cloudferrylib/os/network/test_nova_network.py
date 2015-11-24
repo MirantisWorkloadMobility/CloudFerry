@@ -29,8 +29,7 @@ FAKE_CONFIG = utils.ext_dict(
                           'tenant': 'fake_tenant',
                           'region': None,
                           'auth_url': 'http://1.1.1.1:35357/v2.0/'}),
-    migrate=utils.ext_dict({'speed_limit': '10MB',
-                            'retry': '7',
+    migrate=utils.ext_dict({'retry': '7',
                             'time_wait': 5}))
 
 
