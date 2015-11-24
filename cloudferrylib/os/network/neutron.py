@@ -1228,16 +1228,11 @@ class NeutronNetwork(network.Network):
                 elif existing_router['ips']:
                     LOG.debug('Add an interface to the existing router %s',
                               pprint.pformat(existing_router))
-                    meta_id = router['meta'].get('id')
                     router['meta']['id'] = existing_router['id']
-                    try:
-                        self.add_router_interfaces(router,
-                                                   existing_router,
-                                                   subnets,
-                                                   existing_subnets)
-                    except neutron_exc.NeutronClientException as e:
-                        LOG.warning(e)
-                        router['meta']['id'] = meta_id
+                    self.add_router_interfaces(router,
+                                               existing_router,
+                                               subnets,
+                                               existing_subnets)
                 else:
                     LOG.info("| Dst cloud already has the same router "
                              "with name %s in tenant %s",
@@ -1257,9 +1252,13 @@ class NeutronNetwork(network.Network):
                 continue
             LOG.debug("Adding subnet '%s' to router '%s'", snet_id,
                       dst_router['name'])
-            self.neutron_client.add_interface_router(
-                dst_router['id'],
-                {"subnet_id": ex_snet['id']})
+            try:
+                self.neutron_client.add_interface_router(
+                    dst_router['id'],
+                    {"subnet_id": ex_snet['id']})
+            except neutron_exc.NeutronClientException:
+                LOG.warning("Couldn't add interface to subnet %s to router %s",
+                            ex_snet['id'], dst_router['id'], exc_info=True)
 
     def upload_floatingips(self, networks, src_floats):
         """Creates floating IPs on destination
@@ -1482,22 +1481,22 @@ def get_ports_by_device_id_from_list(device_id, ports_list):
 
 
 def get_network_from_list(ip, tenant_id, networks_list, subnets_list):
-        """Get Neutron network by parameters from provided list.
+    """Get Neutron network by parameters from provided list.
 
-        :param ip: IP address of VM from this network
-        :param tenant_id: Tenant Id of VM in this network
-        :param networks_list: List of Neutron networks, where target network
-                              should be searched
-        :param subnets_list: List of Neutron subnets, where target network
-                             should be searched
-        """
+    :param ip: IP address of VM from this network
+    :param tenant_id: Tenant Id of VM in this network
+    :param networks_list: List of Neutron networks, where target network
+                          should be searched
+    :param subnets_list: List of Neutron subnets, where target network
+                         should be searched
+    """
 
-        instance_ip = ipaddr.IPAddress(ip)
+    instance_ip = ipaddr.IPAddress(ip)
 
-        for subnet in subnets_list:
-            network_id = subnet['network_id']
-            net = get_network_from_list_by_id(network_id, networks_list)
-            if subnet['tenant_id'] == tenant_id or net['shared']:
-                if ipaddr.IPNetwork(subnet['cidr']).Contains(instance_ip):
-                    return get_network_from_list_by_id(network_id,
-                                                       networks_list)
+    for subnet in subnets_list:
+        network_id = subnet['network_id']
+        net = get_network_from_list_by_id(network_id, networks_list)
+        if subnet['tenant_id'] == tenant_id or net['shared']:
+            if ipaddr.IPNetwork(subnet['cidr']).Contains(instance_ip):
+                return get_network_from_list_by_id(network_id,
+                                                   networks_list)
