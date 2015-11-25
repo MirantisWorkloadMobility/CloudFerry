@@ -243,10 +243,11 @@ class NeutronNetwork(network.Network):
         return result
 
     def get_func_mac_address(self, instance):
-        return self.get_mac_by_ip
+        instance_id = instance.id
+        return lambda x: self.get_mac_by_ip(x, instance_id)
 
-    def get_mac_by_ip(self, ip_address):
-        for port in self.get_ports_list():
+    def get_mac_by_ip(self, ip_address, instance_id):
+        for port in self.get_ports_list(device_id=instance_id):
             for fixed_ip_info in port['fixed_ips']:
                 if fixed_ip_info['ip_address'] == ip_address:
                     return port["mac_address"]
