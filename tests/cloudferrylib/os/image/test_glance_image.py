@@ -113,9 +113,7 @@ class GlanceImageTestCase(test.TestCase):
                                               'size': 1024,
                                               'resource': self.image_mock,
                                               'members': {},
-                                              'properties': {
-                                                  'user_name': 'fake_user_name'
-                                              }},
+                                              'properties': {}},
                                     'meta': {'img_loc': None}}},
             'tags': {},
             'members': {}
