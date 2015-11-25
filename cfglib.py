@@ -106,7 +106,7 @@ migrate_opts = [
     cfg.BoolOpt('keep_volume_storage', default=False,
                 help='True - keep volume_storage, '
                      'False - not keep volume_storage'),
-    cfg.StrOpt('speed_limit', default='10MB',
+    cfg.StrOpt('speed_limit', default='off',
                help='speed limit for glance to glance'),
     cfg.StrOpt('file_compression', default='dd',
                help='gzip - use GZIP when file transferring via ssh, '

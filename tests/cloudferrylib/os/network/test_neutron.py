@@ -35,7 +35,6 @@ FAKE_CONFIG = utils.ext_dict(
                           'cacert': '',
                           'insecure': False}),
     migrate=utils.ext_dict({'ext_net_map': 'fake_ext_net_map.yaml',
-                            'speed_limit': '10MB',
                             'retry': '7',
                             'time_wait': 5}),
     network=utils.ext_dict({

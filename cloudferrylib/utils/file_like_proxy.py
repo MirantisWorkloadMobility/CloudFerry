@@ -26,9 +26,7 @@ CHUNK_SIZE = 512 * 1024  # B
 
 
 class FileLikeProxy:
-    def __init__(self, transfer_object, callback, speed_limit='1mb'):
-        self.__callback = callback if callback \
-            else lambda size, length, obj_id, name: True
+    def __init__(self, transfer_object, speed_limit='off'):
         self.resp = transfer_object['resource'].get_ref_image(
             transfer_object['id'])
         self.length = (
@@ -54,15 +52,23 @@ class FileLikeProxy:
             ]
         ).start()
 
-    def _parse_speed_limit(self, speed_limit):
-        if speed_limit is '-':
+    @staticmethod
+    def _parse_speed_limit(speed_limit):
+        if speed_limit == 'off':
             return 0
         array = filter(None, re.split(r'(\d+)', speed_limit))
-        mult = {
-            'b': 1,
-            'kb': 1024,
-            'mb': 1024 * 1024,
-        }[array[1].lower()]
+        try:
+            mult = {
+                'b': 1,
+                'kb': 1024,
+                'mb': 1024 * 1024,
+                'gb': 1024 * 1024 * 1024
+            }[array[1].lower()]
+        except (IndexError, KeyError):
+            LOG.warning("Bad value for 'speed_limit' option of 'migrate' "
+                        "config section: '%s'. Disabling speed limit...",
+                        speed_limit)
+            return 0
         return int(array[0]) * mult
 
     def read(self, *args, **kwargs):
