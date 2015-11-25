@@ -72,14 +72,14 @@ class Proxy:
             try:
                 result = self.client(*args, **kwargs)
                 is_retry = False
-            except Exception as e:
+            except Exception:  # pylint: disable=broad-except
                 LOG.warning('Error happened while calling client',
                             exc_info=True)
                 if c < self.retry:
                     c += 1
                     self.wait()
                 else:
-                    raise e
+                    raise
         return result
 
     def __getattr__(self, name):

@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
+from itertools import ifilter
 import mock
+
 from cloudferrylib.os.image import filters
 
 from tests import test
@@ -21,84 +24,104 @@ from tests import test
 DONT_CARE = mock.Mock()
 
 
-def _image(uuid=DONT_CARE, tenant=DONT_CARE, is_public=True):
+def _image(uuid=DONT_CARE, tenant=DONT_CARE, is_public=True, update_time=None):
     image = mock.Mock()
     image.is_public = is_public
     image.id = uuid
     image.owner = tenant
+    image.updated_at = update_time
     return image
 
 
 class GlanceImageFilterTestCase(test.TestCase):
-    def test_public_images_are_always_kept(self):
-        num_public = 10
-        num_private = 5
-
-        images = (_image(is_public=i < num_public)
-                  for i in xrange(num_public + num_private))
-
+    def apply_filter(self, images, expected_ids, tenant, image_ids, date=None,
+                     glance_client=mock.MagicMock()):
         filter_yaml = mock.Mock()
-        filter_yaml.get_tenant.return_value = "some-other-tenant"
-        filter_yaml.get_image_ids.return_value = []
-        filter_yaml.get_image_date.return_value = None
+        filter_yaml.get_tenant.return_value = tenant
+        filter_yaml.get_image_ids.return_value = image_ids
+        filter_yaml.get_image_date.return_value = date
 
-        glance_filters = filters.GlanceFilters(glance_client=mock.MagicMock(),
+        glance_filters = filters.GlanceFilters(glance_client=glance_client,
                                                filter_yaml=filter_yaml)
 
-        fs = glance_filters.get_filters()
+        for f in glance_filters.get_filters():
+            images = ifilter(f, images)
 
-        for f in fs:
-            images = filter(f, images)
+        self.assertEqual(set(expected_ids),
+                         set([i.id for i in images]))
 
-        self.assertEqual(len(images), num_public)
+    def test_public_images_are_always_kept(self):
+        images = [_image('private', 'Foo', False),
+                  _image('pub', 'Bar', True)]
+
+        expected_ids = ['pub']
+
+        self.apply_filter(images, expected_ids, 'Some_tenant', [])
 
     def test_keeps_private_image_if_filtered_image_ids_not_set(self):
-        num_private = 5
-        num_public = 10
-        total = num_private + num_public
-        expected_ids = (i for i in xrange(num_private))
-        images = [_image(is_public=False, uuid=i) for i in expected_ids]
-        images.extend([_image(is_public=True, uuid=i)
-                       for i in xrange(num_private, total)])
+        images = [_image('private', 'Foo', False),
+                  _image('private_bad', 'Bar', False),
+                  _image('pub', 'Bar', True)]
 
-        filter_yaml = mock.Mock()
-        filter_yaml.get_tenant.return_value = None
-        filter_yaml.get_image_ids.return_value = []
-        filter_yaml.get_image_date.return_value = None
+        expected_ids = ['pub', 'private']
 
-        glance_filters = filters.GlanceFilters(glance_client=mock.MagicMock(),
-                                               filter_yaml=filter_yaml)
-
-        fs = glance_filters.get_filters()
-
-        for f in fs:
-            images = filter(f, images)
-
-        self.assertEqual(len(images), total)
-        self.assertTrue([i.id in expected_ids for i in images])
+        self.apply_filter(images, expected_ids, 'Foo', [])
 
     def test_image_not_filtered_if_not_belongs_to_filtered_tenant(self):
-        t1_image_id = 't1_image_id'
-        t2_image_id = 't2_image_id'
+        images = [_image('private', 'Foo', False),
+                  _image('private_bad', 'Bar', False),
+                  _image('pub', 'Bar', True)]
 
-        t1_image = _image(tenant="t1", uuid=t1_image_id, is_public=False)
-        t2_image = _image(tenant="t2", uuid=t2_image_id, is_public=False)
+        expected_ids = ['pub', 'private']
+        ids_filter = ['private', 'private_bad']
 
-        filter_yaml = mock.Mock()
-        filter_yaml.get_tenant.return_value = "some other tenant"
-        filter_yaml.get_image_ids.return_value = []
-        filter_yaml.get_image_date.return_value = None
+        self.apply_filter(images, expected_ids, 'Foo', ids_filter)
 
-        images = [t1_image, t2_image]
+    def test_keep_all_for_empty_filter(self):
+        images = [_image('private', 'Foo', False),
+                  _image('private2', 'Bar', False),
+                  _image('pub', 'Bar', True)]
 
-        glance_filters = filters.GlanceFilters(glance_client=mock.MagicMock(),
-                                               filter_yaml=filter_yaml)
-        fs = glance_filters.get_filters()
+        expected_ids = ['pub', 'private', 'private2']
 
-        for f in fs:
-            images = filter(f, images)
+        self.apply_filter(images, expected_ids, None, [])
 
-        image_ids = [i.id for i in images]
+    def test_date(self):
+        images = [_image('private', 'Foo', False, '2000-01-06T00:00:00'),
+                  _image('private_old', 'Foo', False, '2000-01-01T00:00:00'),
+                  _image('private2', 'Bar', False, '2000-01-06T00:00:00'),
+                  _image('pub', 'Bar', True, '2000-01-01T00:00:00')]
 
-        self.assertNotIn(t1_image_id, image_ids)
-        self.assertNotIn(t2_image_id, image_ids)
+        expected_ids = ['pub', 'private', 'private2']
+        filter_date = datetime.datetime.strptime('2000-01-05T00:00:00',
+                                                 "%Y-%m-%dT%H:%M:%S")
+        self.apply_filter(images, expected_ids, None, [], filter_date)
+
+    def test_date_with_tenant(self):
+        images = [_image('private', 'Foo', False, '2000-01-06T00:00:00'),
+                  _image('private_old', 'Foo', False, '2000-01-01T00:00:00'),
+                  _image('private2', 'Bar', False, '2000-01-06T00:00:00'),
+                  _image('pub', 'Bar', True, '2000-01-01T00:00:00')]
+
+        expected_ids = ['pub', 'private']
+        filter_date = datetime.datetime.strptime('2000-01-05T00:00:00',
+                                                 "%Y-%m-%dT%H:%M:%S")
+        self.apply_filter(images, expected_ids, 'Foo', [], filter_date)
+
+    def test_members(self):
+        images = [_image('private', 'Foo', False),
+                  _image('private_bad', 'Bar', False),
+                  _image('shared', 'Bar', False),
+                  _image('pub', 'Bar', True)]
+
+        expected_ids = ['pub', 'private', 'shared']
+
+        glance_client = mock.Mock()
+        image_members = mock.Mock()
+        image_member = mock.Mock()
+        image_member.image_id = 'shared'
+        image_members.list.return_value = [image_member]
+        glance_client.image_members = image_members
+
+        self.apply_filter(images, expected_ids, 'Foo', [],
+                          glance_client=glance_client)

@@ -36,7 +36,6 @@ FAKE_CONFIG = utils.ext_dict(
                           'insecure': False}),
     mysql=utils.ext_dict({'host': '1.1.1.1'}),
     migrate=utils.ext_dict({'migrate_quotas': True,
-                            'speed_limit': '10MB',
                             'retry': '7',
                             'time_wait': 5}))
 

@@ -72,8 +72,8 @@ migrate_opts = [
     cfg.BoolOpt('keep_user_passwords', default=True,
                 help='True - keep user passwords, '
                      'False - not keep user passwords'),
-    cfg.StrOpt('key_filename', default='id_rsa',
-               help='name pub key'),
+    cfg.ListOpt('key_filename', default=['id_rsa'],
+                help='private key(s) for interaction with clouds via ssh'),
     cfg.BoolOpt('keep_ip', default=False,
                 help='yes - keep ip, no - not keep ip'),
     cfg.BoolOpt('migrate_extnets', default=False,
@@ -106,7 +106,7 @@ migrate_opts = [
     cfg.BoolOpt('keep_volume_storage', default=False,
                 help='True - keep volume_storage, '
                      'False - not keep volume_storage'),
-    cfg.StrOpt('speed_limit', default='10MB',
+    cfg.StrOpt('speed_limit', default='off',
                help='speed limit for glance to glance'),
     cfg.StrOpt('file_compression', default='dd',
                help='gzip - use GZIP when file transferring via ssh, '

@@ -187,12 +187,12 @@ class GlanceImage(image.Image):
             "members": self.get_members({gl_image['id']: {'image': gl_image}})
         })
 
-        if resource.is_snapshot(glance_image):
-            # for snapshots we need to write snapshot username to namespace
-            # to map it later to new user id
-            user_id = gl_image["properties"].get("user_id")
-            usr = keystone.try_get_user_by_id(user_id=user_id)
-            gl_image["properties"]["user_name"] = usr.name
+        if self.is_snapshot(glance_image):
+            # for snapshots we need to keep only image_type
+            # because other properties related to src cloud and cause
+            # Can not find requested image (HTTP 400) error
+            gl_image["properties"] = {'image_type': 'snapshot'}
+
         return gl_image
 
     def is_snapshot(self, img):
