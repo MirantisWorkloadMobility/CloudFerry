@@ -28,6 +28,7 @@ LOG = utils.get_log(__name__)
 
 NAMESPACE_CINDER_CONST = "cinder_database"
 
+AVAILABLE = 'available'
 CINDER_VOLUME = "cinder-volume"
 HOST = 'host'
 BY_VTID = 'by_vtid'
@@ -87,7 +88,7 @@ def _volume_types(data):
 
 def _modify_data(data):
     for volume in data['volumes']:
-        if volume.get('status', '') == 'in-use':
+        if volume.get('status', '') != AVAILABLE:
             volume['mountpoint'] = None
             volume['status'] = 'available'
             volume['instance_uuid'] = None

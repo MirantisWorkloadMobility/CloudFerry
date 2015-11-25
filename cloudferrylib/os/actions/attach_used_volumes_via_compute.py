@@ -39,9 +39,9 @@ class AttachVolumesCompute(action.Action):
                     LOG.error("Skipped volume %s: not found and not attached",
                               vol['volume']['id'])
                     continue
-                if status != 'in-use':
+                if status == 'available':
                     compute_res.attach_volume_to_instance(instance, vol)
-                    storage_res.wait_for_status(vol['volume']['id'],
-                                                storage_res.get_status,
-                                                'in-use')
+                    storage_res.try_wait_for_status(vol['volume']['id'],
+                                                    storage_res.get_status,
+                                                    'in-use')
         return {}
