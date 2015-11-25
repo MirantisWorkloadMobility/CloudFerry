@@ -348,7 +348,7 @@ class GlanceImage(image.Image):
                                   "'owner_id' for image {image}".format(
                                       image=img["id"]))
                         metadata["owner_id"] = img["owner"]
-                    if "user_id" in metadata:
+                    if "user_name" in metadata:
                         # update user id by specified name
                         LOG.debug("updating snapshot metadata for field "
                                   "'user_id' for image {image}".format(
