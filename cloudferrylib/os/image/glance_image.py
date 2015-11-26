@@ -308,36 +308,41 @@ class GlanceImage(image.Image):
         created_images = []
         delete_container_format, delete_disk_format = [], []
         empty_image_list = {}
+        keystone = self.cloud.resources["identity"]
 
         # List for obsolete/broken images IDs, that will not be migrated
         obsolete_images_ids_list = []
-        dst_img_checksums = {x.checksum: x for x in self.get_image_list()}
-        dst_img_names = [x.name for x in self.get_image_list()]
+        dst_images = {}
+        for dst_image in self.get_image_list():
+            tenant_name = keystone.try_get_tenant_name_by_id(
+                dst_image.owner, default=self.cloud.cloud_config.cloud.tenant)
+            image_key = (dst_image.name, tenant_name, dst_image.checksum,
+                         dst_image.is_public)
+            dst_images[image_key] = dst_image
 
         for image_id_src, gl_image in info['images'].iteritems():
             img = gl_image['image']
             if img and img['resource']:
                 checksum_current = img['checksum']
                 name_current = img['name']
+                tenant_name = img['owner_name']
                 meta = gl_image['meta']
-                same_image_on_destination = (
-                    checksum_current in dst_img_checksums and
-                    name_current in dst_img_names)
+                image_key = (name_current, tenant_name, checksum_current,
+                             img['is_public'])
 
-                if same_image_on_destination:
-                    created_images.append(
-                        (dst_img_checksums[checksum_current], meta))
+                if image_key in dst_images:
+                    existing_image = dst_images[image_key]
+                    created_images.append((existing_image, meta))
+                    image_members = img['members'].get(img['id'], {})
+                    self.update_membership(existing_image.id, image_members)
                     LOG.info("Image '%s' is already present on destination, "
                              "skipping", img['name'])
                     continue
 
-                LOG.debug("Updating owner '{owner}' of image '{image}'".format(
-                    owner=img["owner_name"],
-                    image=img["name"]))
+                LOG.debug("Updating owner '%s' of image '%s'",
+                          tenant_name, img["name"])
                 img["owner"] = \
-                    self.identity_client.get_tenant_id_by_name(
-                    img["owner_name"])
-                del img["owner_name"]
+                    self.identity_client.get_tenant_id_by_name(tenant_name)
 
                 if img["properties"]:
                     # update snapshot metadata
@@ -409,13 +414,8 @@ class GlanceImage(image.Image):
                         data=data_proxy)
 
                     image_members = img['members'].get(img['id'], {})
-                    for tenant_name, can_share in image_members.iteritems():
-                        LOG.debug("deploying image member for image '%s' "
-                                  "tenant '%s'", img['id'], img['owner'])
-                        self.create_member(
-                            created_image.id, tenant_name, can_share)
-
                     LOG.debug("new image ID {}".format(created_image.id))
+                    self.update_membership(created_image.id, image_members)
                     created_images.append((created_image, meta))
                 except exception.ImageDownloadError:
                     LOG.warning("Unable to reach image's data due to "
@@ -449,6 +449,21 @@ class GlanceImage(image.Image):
         self.delete_fields('container_format', delete_container_format)
         LOG.info("Glance images deployment finished.")
         return new_info
+
+    def update_membership(self, image_id, image_members):
+        client = self.glance_client
+        existing_members = {m.member_id: m
+                            for m in client.image_members.list(image=image_id)}
+        for tenant_name, can_share in image_members.iteritems():
+            tenant_id = self.identity_client.get_tenant_id_by_name(tenant_name)
+            LOG.debug("Deploying image member for image '%s' "
+                      "tenant '%s'", image_id, tenant_name)
+            if (tenant_id in existing_members and
+                    existing_members[tenant_id].can_share != can_share):
+                client.image_members.delete(image_id, tenant_id)
+                client.image_members.create(image_id, tenant_id, can_share)
+            if tenant_id not in existing_members:
+                client.image_members.create(image_id, tenant_id, can_share)
 
     def delete_fields(self, field, list_of_ids):
         if not list_of_ids:
