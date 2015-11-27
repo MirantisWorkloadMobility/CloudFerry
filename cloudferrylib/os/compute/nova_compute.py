@@ -203,6 +203,8 @@ class NovaCompute(compute.Compute):
         for flavor in self.get_flavor_list(is_public=None):
             try:
                 internal_flavor = self.convert(flavor, cloud=self.cloud)
+                if internal_flavor is None:
+                    continue
                 info['flavors'][flavor.id] = internal_flavor
                 LOG.info("Got flavor '%s'", flavor.name)
                 LOG.debug("%s", pprint.pformat(internal_flavor))
@@ -395,8 +397,9 @@ class NovaCompute(compute.Compute):
                 tenants = [flv_acc.tenant_id for flv_acc in flavor_access_list]
 
                 filter_enabled = compute_res.filter_tenant_id is not None
-                if filter_enabled and compute_res.filter_tenant_id in tenants:
-                    tenants = [compute_res.filter_tenant_id]
+                if (filter_enabled and
+                        compute_res.filter_tenant_id not in tenants):
+                    return None
 
             return {'flavor': {'name': compute_obj.name,
                                'ram': compute_obj.ram,
