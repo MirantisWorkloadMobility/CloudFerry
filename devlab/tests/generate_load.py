@@ -1010,25 +1010,6 @@ class Prerequisites(BasePrerequisites):
 class CleanEnv(BasePrerequisites):
 
     def clean_vms(self):
-        def wait_until_vms_all_deleted(vm_list):
-            timeout = 120
-            for _ in range(timeout):
-                servers = self.novaclient.servers.list(
-                    search_opts={'all_tenants': 1})
-                servers = [serv for serv in servers if serv.id in vm_list]
-                if not servers:
-                    break
-                for server in servers:
-                    if server.id in vm_list and server.status != 'DELETED':
-                        try:
-                            self.novaclient.servers.delete(server.id)
-                        except nv_exceptions.NotFound:
-                            pass
-                time.sleep(1)
-            else:
-                servers = self.novaclient.servers.list(
-                    search_opts={'all_tenants': 1})
-                raise RuntimeError('Next vms were not deleted %s' % servers)
         vms = self.migration_utils.get_all_vms_from_config()
         vms_names = [vm['name'] for vm in vms]
         vms = self.novaclient.servers.list(search_opts={'all_tenants': 1})
@@ -1039,7 +1020,27 @@ class CleanEnv(BasePrerequisites):
             vms_ids.append(vm.id)
             self.novaclient.servers.delete(vm.id)
             print('VM "%s" has been deleted' % vm.name)
-        wait_until_vms_all_deleted(vms_ids)
+        self.wait_vms_deleted(all_tenants=True)
+
+    def wait_vms_deleted(self, all_tenants=False):
+        search_opts = {}
+        if all_tenants:
+            search_opts.update({'all_tenants': 1})
+        timeout = 120
+        for _ in range(timeout):
+            servers = self.novaclient.servers.list(
+                search_opts=search_opts)
+            if not servers:
+                break
+            for server in servers:
+                if server.status != 'DELETED':
+                    time.sleep(1)
+                try:
+                    self.novaclient.servers.delete(server.id)
+                except nv_exceptions.NotFound:
+                    pass
+        else:
+            raise RuntimeError('Next vms were not deleted')
 
     def clean_volumes(self):
         volumes = self.config.cinder_volumes
