@@ -23,7 +23,7 @@ import os
 import random
 import yaml
 
-from filtering_utils import FilteringUtils
+from utils import FilteringUtils
 
 
 class RollbackScenarioGeneration(object):

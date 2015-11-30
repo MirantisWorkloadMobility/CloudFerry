@@ -15,6 +15,9 @@
 import os
 import yaml
 
+from fabric.api import run, settings, sudo, hide
+from fabric.network import NetworkError
+
 
 class FilteringUtils(object):
 
@@ -77,3 +80,49 @@ class FilteringUtils(object):
                     return addr['addr']
         raise RuntimeError('VM with name {} and id {} doesnt have fip'.format(
             vm.name, vm.id))
+
+
+class MigrationUtils(object):
+
+    def __init__(self, config):
+        self.config = config
+
+    def execute_command_on_vm(self, ip_addr, cmd, username=None,
+                              warn_only=False, password=None, key=None,
+                              use_sudo=True):
+
+        if username is None:
+            username = self.config.username_for_ssh
+        if password is None and key is None:
+            password = self.config.password_for_ssh
+        with hide('everything'), settings(
+                host_string=ip_addr, user=username, password=password, key=key,
+                abort_on_prompts=True, connection_attempts=3,
+                disable_known_hosts=True, no_agent=True, warn_only=warn_only):
+            try:
+                if use_sudo:
+                    return sudo(cmd, shell=False)
+                else:
+                    return run(cmd, shell=False)
+            except NetworkError:
+                raise RuntimeError('VM with name ip: %s is not accessible'
+                                   % ip_addr)
+
+    def get_all_vms_from_config(self):
+        vms = self.config.vms
+        for tenant in self.config.tenants:
+            if not tenant.get('vms'):
+                continue
+            for vm in tenant['vms']:
+                    vms.append(vm)
+        vms.extend(self.config.vms_from_volumes)
+        return vms
+
+    def get_all_images_from_config(self):
+        images = self.config.images
+        for tenant in self.config.tenants:
+            if not tenant.get('images'):
+                continue
+            for image in tenant['images']:
+                images.append(image)
+        return images

@@ -6,7 +6,7 @@ import json
 import yaml
 import config as conf
 
-from filtering_utils import FilteringUtils
+import utils
 
 from cinderclient import client as cinder
 from glanceclient import Client as glance
@@ -17,6 +17,7 @@ from neutronclient.neutron import client as neutron
 from novaclient import client as nova
 from novaclient import exceptions as nv_exceptions
 
+from exception import NotFound
 
 TIMEOUT = 600
 VM_SPAWNING_LIMIT = 5
@@ -67,16 +68,11 @@ def retry_until_resources_created(resource_name):
     return actual_decorator
 
 
-class NotFound(Exception):
-
-    """Raise this exception in case when resource was not found
-    """
-
-
 class BasePrerequisites(object):
 
     def __init__(self, config, cloud_prefix='SRC'):
-        self.filtering_utils = FilteringUtils()
+        self.filtering_utils = utils.FilteringUtils()
+        self.migration_utils = utils.MigrationUtils(config)
         self.config = config
         self.username = os.environ['%s_OS_USERNAME' % cloud_prefix]
         self.password = os.environ['%s_OS_PASSWORD' % cloud_prefix]
@@ -117,6 +113,11 @@ class BasePrerequisites(object):
             if release in self.auth_url:
                 return OPENSTACK_RELEASES[release]
         raise RuntimeError('Unknown OpenStack release')
+
+    def get_vagrant_vm_ip(self):
+        for release in OPENSTACK_RELEASES:
+            if release in self.auth_url:
+                return release
 
     def get_tenant_id(self, tenant_name):
         for tenant in self.keystoneclient.tenants.list():
@@ -381,6 +382,13 @@ class Prerequisites(BasePrerequisites):
                     image_ids.remove(img_id)
             return image_ids
 
+        def _get_body_for_image_creating(_image):
+            # Possible parameters for image creating
+            params = ['name', 'location', 'disk_format', 'container_format',
+                      'is_public', 'copy_from']
+            return {param: _image[param] for param in params
+                    if param in _image}
+
         img_ids = []
         for tenant in self.config.tenants:
             if not tenant.get('images'):
@@ -388,12 +396,14 @@ class Prerequisites(BasePrerequisites):
             for image in tenant['images']:
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
-                img = self.glanceclient.images.create(**image)
+                img = self.glanceclient.images.create(
+                    **_get_body_for_image_creating(image))
                 img_ids.append(img.id)
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
         for image in self.config.images:
-            img = self.glanceclient.images.create(**image)
+            img = self.glanceclient.images.create(
+                **_get_body_for_image_creating(image))
             img_ids.append(img.id)
         wait_until_images_created(img_ids)
         src_cloud = Prerequisites(cloud_prefix='SRC', config=self.config)
@@ -901,6 +911,32 @@ class Prerequisites(BasePrerequisites):
             )
             self.novaclient.servers.create(**params)
 
+    def break_vm(self):
+        """ Method delete vm via virsh to emulate situation, when vm is valid
+        and active in nova db, but in fact does not exist
+        """
+        vms_to_break = []
+        for vm in self.migration_utils.get_all_vms_from_config():
+            if vm.get('broken'):
+                vms_to_break.append(self.get_vm_id(vm['name']))
+
+        for vm in vms_to_break:
+            inst_name = getattr(self.novaclient.servers.get(vm),
+                                'OS-EXT-SRV-ATTR:instance_name')
+            cmd = 'virsh destroy {0} && virsh undefine {0}'.format(inst_name)
+            self.migration_utils.execute_command_on_vm(
+                self.get_vagrant_vm_ip(), cmd, username='root', password='')
+
+    def break_image(self):
+        all_images = self.migration_utils.get_all_images_from_config()
+        images_to_break = [image for image in all_images
+                           if image.get('broken')]
+        for image in images_to_break:
+            image_id = self.get_image_id(image['name'])
+            cmd = 'rm -rf /var/lib/glance/images/%s' % image_id
+            self.migration_utils.execute_command_on_vm(
+                self.get_vagrant_vm_ip(), cmd, username='root', password='')
+
     def run_preparation_scenario(self):
         print('>>> Creating tenants:')
         self.create_tenants()
@@ -927,6 +963,10 @@ class Prerequisites(BasePrerequisites):
             self.create_volumes_from_images()
             print('>>> Boot vm from volume')
             self.boot_vms_from_volumes()
+        print('>>> Breaking VMs:')
+        self.break_vm()
+        print('>>> Breaking Images:')
+        self.break_image()
         print('>>> Updating filtering:')
         self.update_filtering_file()
         print('>>> Creating vm snapshots:')
@@ -960,36 +1000,36 @@ class Prerequisites(BasePrerequisites):
 class CleanEnv(BasePrerequisites):
 
     def clean_vms(self):
-        def wait_until_vms_all_deleted():
+        def wait_until_vms_all_deleted(vm_list):
             timeout = 120
             for _ in range(timeout):
                 servers = self.novaclient.servers.list(
                     search_opts={'all_tenants': 1})
+                servers = [serv for serv in servers if serv.id in vm_list]
                 if not servers:
                     break
                 for server in servers:
-                    if server.status != 'DELETED':
-                        time.sleep(1)
-                    try:
-                        self.novaclient.servers.delete(server.id)
-                    except nv_exceptions.NotFound:
-                        pass
+                    if server.id in vm_list and server.status != 'DELETED':
+                        try:
+                            self.novaclient.servers.delete(server.id)
+                        except nv_exceptions.NotFound:
+                            pass
+                time.sleep(1)
             else:
-                raise RuntimeError('Next vms were not deleted')
-
-        vms = self.config.vms
-        vms += itertools.chain(*[tenant['vms'] for tenant
-                                 in self.config.tenants if tenant.get('vms')])
-        for vm in self.config.vms_from_volumes:
-            vms.append(vm)
+                servers = self.novaclient.servers.list(
+                    search_opts={'all_tenants': 1})
+                raise RuntimeError('Next vms were not deleted %s' % servers)
+        vms = self.migration_utils.get_all_vms_from_config()
         vms_names = [vm['name'] for vm in vms]
         vms = self.novaclient.servers.list(search_opts={'all_tenants': 1})
+        vms_ids = []
         for vm in vms:
             if vm.name not in vms_names:
                 continue
-            self.novaclient.servers.delete(self.get_vm_id(vm.name))
+            vms_ids.append(vm.id)
+            self.novaclient.servers.delete(vm.id)
             print('VM "%s" has been deleted' % vm.name)
-        wait_until_vms_all_deleted()
+        wait_until_vms_all_deleted(vms_ids)
 
     def clean_volumes(self):
         volumes = self.config.cinder_volumes
@@ -1017,11 +1057,8 @@ class CleanEnv(BasePrerequisites):
             print('Flavor "%s" has been deleted' % flavor.name)
 
     def clean_images(self):
-        images = self.config.images
-        images += itertools.chain(*[tenant['images'] for tenant
-                                  in self.config.tenants
-                                  if tenant.get('images')])
-        images_names = [image['name'] for image in images]
+        all_images = self.migration_utils.get_all_images_from_config()
+        images_names = [image['name'] for image in all_images]
         for image in self.glanceclient.images.list():
             if image.name not in images_names:
                 continue
