@@ -15,10 +15,37 @@
 import json
 
 from cloudferrylib.utils import cmd_cfg
+from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import ssh_util
 from cloudferrylib.utils import utils
 
 LOG = utils.get_log(__name__)
+
+
+class QemuImgInfoParser(object):
+    """Parses `qemu-img info` command human-readable output.
+
+    Tested on qemu-img v1.0 and v2.0.0.
+
+    More recent versions of qemu-img support JSON output, but many real-world
+    systems with old openstack releases still come with qemu-img v1.0 which
+    does not support JSON"""
+
+    def __init__(self, img_info_output):
+        self.img_info_output = img_info_output
+
+    def backing_file(self):
+        """Returns backing file based on human-readable output from
+        `qemu-img info`
+
+        Known problem: breaks if path contains opening parenthesis `(` or
+        colon `:`"""
+        for l in self.img_info_output.split('\n'):
+            if "backing file:" in l:
+                file_end = l.find('(')
+                if file_end == -1:
+                    file_end = len(l)
+                return l[l.find(':')+1:file_end].strip()
 
 
 class QemuImg(ssh_util.SshUtil):
@@ -52,16 +79,27 @@ class QemuImg(ssh_util.SshUtil):
             self.execute(cmd1, host_compute), self.execute(cmd2, host_compute)
 
     def detect_backing_file(self, dest_disk_ephemeral, host_instance):
-        cmd = "qemu-img info --output=json {ephemeral}".format(
-            ephemeral=dest_disk_ephemeral)
-        qemu_img_json = self.execute(cmd=cmd,
-                                     host_exec=host_instance,
-                                     ignore_errors=True)
         try:
-            return json.loads(qemu_img_json)['backing-filename']
-        except (TypeError, ValueError, KeyError) as e:
-            LOG.warning("Unable to read qemu image file for '%s', error: '%s'",
-                        dest_disk_ephemeral, e)
+            # try to use JSON first, cause it's more reliable
+            cmd = "qemu-img info --output=json {ephemeral}".format(
+                ephemeral=dest_disk_ephemeral)
+            qemu_img_json = self.execute(cmd=cmd,
+                                         host_exec=host_instance,
+                                         ignore_errors=False)
+            try:
+                return json.loads(qemu_img_json)['backing-filename']
+            except (TypeError, ValueError, KeyError) as e:
+                LOG.warning("Unable to read qemu image file for '%s', "
+                            "error: '%s'", dest_disk_ephemeral, e)
+        except remote_runner.RemoteExecutionError:
+            # old qemu version not supporting JSON, fallback to human-readable
+            # qemu-img output parser
+            cmd = "qemu-img info {ephemeral}".format(
+                ephemeral=dest_disk_ephemeral)
+            qemu_img_output = self.execute(cmd=cmd,
+                                           host_exec=host_instance,
+                                           ignore_errors=True)
+            return QemuImgInfoParser(qemu_img_output).backing_file()
 
     def diff_rebase(self, baseimage, disk, host_compute=None):
         cmd = self.rebase_cmd(baseimage, disk)
