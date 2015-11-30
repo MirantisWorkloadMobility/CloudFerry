@@ -28,6 +28,9 @@ class CheckUsersAvailabilityOnSrcAndDst(action.Action):
     """
 
     def run(self, **kwargs):
+        if self.cfg.migrate.migrate_users:
+            LOG.info("Users will be migrated. Skipping this check.")
+            return
         src_identity = self.src_cloud.resources[utils.IDENTITY_RESOURCE]
         dst_identity = self.dst_cloud.resources[utils.IDENTITY_RESOURCE]
 

@@ -26,19 +26,20 @@ class VmMigration(functional_test.FunctionalTest):
         self.filter_vms = self.filtering_utils.filter_vms(src_vms)
 
     def test_vms_not_in_filter_stay_active_on_src(self):
-        filter_results = self.filter_vms
-        vms_filtered_out = filter_results[1]
         original_states = self.before_migr_states
-        for vm in vms_filtered_out:
-            self.assertTrue(vm.status == original_states[vm.name])
+        for vm in config.vms_not_in_filter:
+            vm_list = [x for x in self.src_cloud.novaclient.servers.list(
+                search_opts={'all_tenants': 1}) if x.name == vm]
+            for filtered_vm in vm_list:
+                self.assertTrue(
+                    filtered_vm.status == original_states[filtered_vm.name],
+                    msg="Vm %s has wrong state" % filtered_vm.name)
 
     def test_vm_not_in_filter_did_not_migrate(self):
-        filter_results = self.filter_vms
-        vms_filtered_out = filter_results[1]
         dst_vms = [x.name for x in self.dst_cloud.novaclient.servers.list(
                    search_opts={'all_tenants': 1})]
-        for vm in vms_filtered_out:
-            self.assertTrue(vm.name not in dst_vms,
+        for vm in config.vms_not_in_filter:
+            self.assertTrue(vm not in dst_vms,
                             'VM migrated despite that it was not included in '
                             'filter, VM info: \n{}'.format(vm))
 

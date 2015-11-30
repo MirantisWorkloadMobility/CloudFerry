@@ -17,7 +17,7 @@ from neutronclient.neutron import client as neutron
 from novaclient import client as nova
 from novaclient import exceptions as nv_exceptions
 
-from exception import NotFound
+from test_exceptions import NotFound
 
 TIMEOUT = 600
 VM_SPAWNING_LIMIT = 5
@@ -442,15 +442,19 @@ class Prerequisites(BasePrerequisites):
         for vm in src_vms:
             vm_id = vm['id']
             vm_id_list.append(vm_id)
-        loaded_data = self.filtering_utils.load_file('configs/filter.yaml')
-        filter_dict = loaded_data[0]
-        if filter_dict is None:
-            filter_dict = {'images': {'images_list': {}},
-                           'instances': {'id': {}}}
+        filter_dict = {
+            'tenants': {
+                'tenant_id': []
+            },
+            'instances': {
+                'id': []
+            },
+            'images': {
+                'images_list': []
+            }
+        }
         all_img_ids = []
-        img_list = []
         not_incl_img = []
-        vm_list = []
         for image in src_img:
             all_img_ids.append(image['id'])
         for img in self.config.images_not_included_in_filter:
@@ -459,16 +463,20 @@ class Prerequisites(BasePrerequisites):
             if key == 'images':
                 for img_id in all_img_ids:
                     if img_id not in not_incl_img:
-                        img_list.append(img_id)
-                filter_dict[key]['images_list'] = img_list
+                        filter_dict[key]['images_list'].append(str(img_id))
             elif key == 'instances':
                 for vm in vm_id_list:
                     if vm != self.get_vm_id('not_in_filter'):
-                        vm_list.append(vm)
-                filter_dict[key]['id'] = vm_list
-        file_path = loaded_data[1]
-        with open(file_path, "w") as f:
-            yaml.dump(filter_dict, f, default_flow_style=False)
+                        filter_dict[key]['id'].append(str(vm))
+        for tenant in self.config.tenants + [{'name': 'admin'}]:
+            if tenant.get('deleted'):
+                continue
+            filter_dict['tenants']['tenant_id'] = [str(
+                self.get_tenant_id(tenant['name']))]
+            file_path = self.config.filters_file_naming_template.format(
+                tenant_name=tenant['name'])
+            with open(file_path, "w+") as f:
+                yaml.dump(filter_dict, f, default_flow_style=False)
 
     @clean_if_exists
     def create_flavors(self):
@@ -860,10 +868,12 @@ class Prerequisites(BasePrerequisites):
         self.dst_cloud = Prerequisites(cloud_prefix='DST', config=self.config)
         for t in self.config.tenants:
             if not t.get('deleted') and t['enabled']:
-                self.dst_cloud.keystoneclient.tenants.create(
-                    tenant_name=t['name'], description=t['description'],
-                    enabled=t['enabled'])
-                break
+                try:
+                    self.dst_cloud.keystoneclient.tenants.create(
+                        tenant_name=t['name'], description=t['description'],
+                        enabled=t['enabled'])
+                except ks_exceptions.Conflict:
+                    pass
 
     def create_user_on_dst(self):
         """
@@ -991,9 +1001,9 @@ class Prerequisites(BasePrerequisites):
         self.delete_users()
         print('>>> Delete tenants which should be deleted:')
         self.delete_tenants()
-        print('>>> Create tenant on dst, without security group')
+        print('>>> Create tenant on dst, without security group:')
         self.create_tenant_wo_sec_group_on_dst()
-        print('>>> Create role on dst')
+        print('>>> Create role on dst:')
         self.create_user_on_dst()
 
 

@@ -1,5 +1,5 @@
 import config
-import exception
+from test_exceptions import NotFound
 import functional_test
 
 import pprint
@@ -168,9 +168,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 _members.append({img.name: sorted(mbr_list)})
             return sorted(_members)
 
-        src_images = self.filter_images()
-        dst_images = [x for x in self.dst_cloud.glanceclient.images.list()]
-        src_images = self.filtering_utils.filter_images(src_images)[0]
+        src_images = [img for img in self.src_cloud.glanceclient.images.list()
+                      if img.name not in config.images_not_included_in_filter]
+        dst_images = [img for img in self.dst_cloud.glanceclient.images.list(
+                      is_public=None)]
 
         src_members = member_list_collector(src_images,
                                             self.src_cloud.glanceclient,
@@ -178,7 +179,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         dst_members = member_list_collector(dst_images,
                                             self.dst_cloud.glanceclient,
                                             self.dst_cloud.keystoneclient)
-        self.assertListEqual(src_members, dst_members)
+        for member in src_members:
+            self.assertTrue(member in dst_members,
+                            msg="Member: %s not in the DST list of image "
+                                "members." % member)
 
     def test_migrate_glance_images(self):
         src_images = self.filter_images()
@@ -226,13 +230,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.assertTrue(least_image_check, msg=msg)
 
     def test_glance_images_not_in_filter_did_not_migrate(self):
-        src_images = self.filter_images()
-        filtering_data = self.filtering_utils.filter_images(src_images)
         dst_images_gen = self.dst_cloud.glanceclient.images.list()
         dst_images = [x.name for x in dst_images_gen]
-        images_filtered_out = filtering_data[1]
-        for image in images_filtered_out:
-            self.assertTrue(image.name not in dst_images,
+        for image in config.images_not_included_in_filter:
+            self.assertTrue(image not in dst_images,
                             'Image migrated despite that it was not included '
                             'in filter, Image info: \n{}'.format(image))
 
@@ -455,7 +456,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             try:
                 self.dst_cloud.get_vm_id(vm)
                 migrated_vms.append(vm)
-            except exception.NotFound:
+            except NotFound:
                 pass
         if migrated_vms:
             self.fail('Not valid vms %s migrated')
@@ -468,7 +469,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             try:
                 self.dst_cloud.get_image_id(image)
                 migrated_images.append(image)
-            except exception.NotFound:
+            except NotFound:
                 pass
         if migrated_images:
             self.fail('Not valid images %s migrated')
