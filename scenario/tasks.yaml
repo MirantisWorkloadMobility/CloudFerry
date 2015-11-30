@@ -108,3 +108,4 @@ tasks:
    check_networks: ['CheckNetworks']
    verify_vms: ['VerifyVms', src_cloud]
    act_filter_similar_vms_from_dst: ['FilterSimilarVMsFromDST', 'dst_cloud']
+   act_server_group_trans: ['ServerGroupTransporter']
