@@ -51,3 +51,4 @@ process:
       - get_volumes_db_data: True
       - write_volumes_db_data: True
       - transport_key_pairs: True
+      - act_server_group_trans: False
