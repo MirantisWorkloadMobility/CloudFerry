@@ -346,6 +346,37 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             for _file in volume['write_to_file']:
                 check_file_valid(volume['mount_point'] + _file['filename'])
 
+    def test_cinder_volumes_not_in_filter_did_not_migrate(self):
+        src_volume_list = self.filter_volumes()
+        dst_volume_list = self.dst_cloud.cinderclient.volumes.list(
+            search_opts={'all_tenants': 1})
+        dst_volumes = [x.id for x in dst_volume_list]
+
+        filtering_data = self.filtering_utils.filter_volumes(src_volume_list)
+
+        volumes_filtered_out = filtering_data[1]
+        for volume in volumes_filtered_out:
+            self.assertTrue(volume.id not in dst_volumes,
+                            'Volume migrated despite that it was not included '
+                            'in filter, Volume info: \n{}'.format(volume))
+
+    def test_invalid_status_cinder_volumes_did_not_migrate(self):
+        src_volume_list = self.src_cloud.cinderclient.volumes.list(
+            search_opts={'all_tenants': 1})
+        dst_volume_list = self.dst_cloud.cinderclient.volumes.list(
+            search_opts={'all_tenants': 1})
+        dst_volumes = [x.id for x in dst_volume_list]
+
+        invalid_status_volumes = [
+            vol for vol in src_volume_list
+            if vol.status in config.INVALID_STATUSES
+        ]
+
+        for volume in invalid_status_volumes:
+            self.assertTrue(volume.id not in dst_volumes,
+                            'Volume migrated despite that it had '
+                            'invalid status, Volume info: \n{}'.format(volume))
+
     @unittest.skip("Temporarily disabled: snapshots doesn't implemented in "
                    "cinder's nfs driver")
     def test_migrate_cinder_snapshots(self):
