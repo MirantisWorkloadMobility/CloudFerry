@@ -14,6 +14,8 @@
 
 import os
 import yaml
+import config
+import ConfigParser
 
 from fabric.api import run, settings, sudo, hide
 from fabric.network import NetworkError
@@ -24,6 +26,17 @@ class FilteringUtils(object):
     def __init__(self):
         self.main_folder = os.path.dirname(os.path.dirname(
             os.path.split(__file__)[0]))
+        cf_config = ConfigParser.ConfigParser()
+        cf_config.read(os.path.join(self.main_folder,
+                                    config.cloud_ferry_conf))
+        self.filter_file_path = cf_config.get('migrate', 'filter_path')
+        self.filters_file_naming_template = config.filters_file_naming_template
+
+    def build_filter_files_list(self):
+        return [self.filters_file_naming_template.format(
+            tenant_name=tenant['name'])
+            for tenant in config.tenants
+            if 'deleted' not in tenant and not tenant['deleted']]
 
     def load_file(self, file_name):
         file_path = os.path.join(self.main_folder, file_name.lstrip('/'))
@@ -32,7 +45,7 @@ class FilteringUtils(object):
         return [filter_dict, file_path]
 
     def filter_vms(self, src_data_list):
-        loaded_data = self.load_file('configs/filter.yaml')
+        loaded_data = self.load_file(self.filter_file_path)
         filter_dict = loaded_data[0]
         popped_vm_list = []
         if 'instances' not in filter_dict:
@@ -45,7 +58,7 @@ class FilteringUtils(object):
         return [src_data_list, popped_vm_list]
 
     def filter_images(self, src_data_list):
-        loaded_data = self.load_file('configs/filter.yaml')
+        loaded_data = self.load_file(self.filter_file_path)
         filter_dict = loaded_data[0]
         popped_img_list = []
         default_img = 'Cirros 0.3.0 x86_64'
@@ -60,7 +73,7 @@ class FilteringUtils(object):
         return [src_data_list, popped_img_list]
 
     def filter_tenants(self, src_data_list):
-        loaded_data = self.load_file('configs/filter.yaml')
+        loaded_data = self.load_file(self.filter_file_path)
         filter_dict = loaded_data[0]
         popped_tenant_list = []
         if 'tenants' not in filter_dict:
@@ -114,7 +127,7 @@ class MigrationUtils(object):
             if not tenant.get('vms'):
                 continue
             for vm in tenant['vms']:
-                    vms.append(vm)
+                vms.append(vm)
         vms.extend(self.config.vms_from_volumes)
         return vms
 

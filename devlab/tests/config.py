@@ -9,6 +9,9 @@ cloud_ferry_conf = 'configuration.ini'
 ssh_check_user = 'cirros'
 ssh_vm_shell = '/bin/sh -c'
 
+# Path to store filter files
+filters_file_naming_template = 'filter_{tenant_name}.yaml'
+
 # Users to create/delete
 users = [
     {'name': 'user1', 'password': 'passwd1', 'email': 'mail@example.com',
@@ -198,7 +201,7 @@ images = [
 # Create zero image, without any parameters.
 create_zero_image = True
 # Images not to be migrated:
-images_not_included_in_filter = ['image4', 'image5']
+images_not_included_in_filter = ['image5']
 
 # Instances not to be included in filter:
 vms_not_in_filter = ['not_in_filter']
