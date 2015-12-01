@@ -170,6 +170,8 @@ migrate_opts = [
                      'migration process', default=False),
     cfg.BoolOpt('hide_ssl_warnings', default=False,
                 help="Don't show ssl warnings"),
+    cfg.BoolOpt('keep_affinity_settings', default=False,
+                help="Keep affinity/anti-affinity settings"),
 ]
 
 mail = cfg.OptGroup(name='mail',

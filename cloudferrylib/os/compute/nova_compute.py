@@ -23,6 +23,7 @@ from novaclient import exceptions as nova_exc
 from cloudferrylib.base import compute
 from cloudferrylib.os.compute import instances
 from cloudferrylib.os.compute import cold_evacuate
+from cloudferrylib.os.compute import server_groups
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import timeout_exception
@@ -262,6 +263,7 @@ class NovaCompute(compute.Compute):
     def convert_instance(instance, cfg, cloud):
         identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
         compute_res = cloud.resources[utl.COMPUTE_RESOURCE]
+        sg_res = server_groups.ServerGroupsHandler(cloud)
 
         instance_name = instance_libvirt_name(instance)
         instance_node = instance_host(instance)
@@ -347,12 +349,19 @@ class NovaCompute(compute.Compute):
                                                    include_deleted=True).name
         flav_details.update({'name': flav_name})
 
+        tenant_name = get_tenant_name(instance.tenant_id)
+
+        if cfg.migrate.keep_affinity_settings:
+            server_group = sg_res.get_server_group_id_by_vm(instance.id,
+                                                            tenant_name)
+        else:
+            server_group = None
+
         inst = {'instance': {'name': instance.name,
                              'instance_name': instance_name,
                              'id': instance.id,
                              'tenant_id': instance.tenant_id,
-                             'tenant_name': get_tenant_name(
-                                 instance.tenant_id),
+                             'tenant_name': tenant_name,
                              'status': instance.status,
                              'flavor_id': instance.flavor['id'],
                              'flav_details': flav_details,
@@ -372,7 +381,8 @@ class NovaCompute(compute.Compute):
                              'host': instance_host,
                              'is_ephemeral': is_ephemeral,
                              'volumes': volumes,
-                             'user_id': instance.user_id
+                             'user_id': instance.user_id,
+                             'server_group': server_group
                              },
                 'ephemeral': ephemeral_path,
                 'diff': diff,
@@ -617,6 +627,11 @@ class NovaCompute(compute.Compute):
                     "boot_index": 0
                 }]
                 create_params['image'] = None
+
+            if (self.config.migrate.keep_affinity_settings and
+                    instance['server_group'] is not None):
+                create_params['scheduler_hints'] = {
+                    'group': instance['server_group']}
 
             client_conf.cloud.tenant = instance['tenant_name']
 

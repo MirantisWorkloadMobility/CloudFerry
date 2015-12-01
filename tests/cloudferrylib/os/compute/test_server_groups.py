@@ -66,7 +66,7 @@ class ServerGroupTestCase(test.TestCase):
                                          compute=self.compute_mock)
         self.fake_cloud.position = 'src'
 
-        self.handler = server_groups.Handler(self.fake_cloud)
+        self.handler = server_groups.ServerGroupsHandler(self.fake_cloud)
 
     def test_get_server_groups(self):
         result = mock.Mock()

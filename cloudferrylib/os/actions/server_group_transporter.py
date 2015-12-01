@@ -11,16 +11,20 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
+
+
 """
 This module contains actions for retrieving server groups and their policies
 from a source cloud and deploying them into a destination cloud
 """
 
-from cloudferrylib.base.action import transporter
-from cloudferrylib.os.compute.server_groups import Handler
-from cloudferrylib.utils import utils as utl
 
-LOG = utl.get_log(__name__)
+from cloudferrylib.base.action import transporter
+from cloudferrylib.os.compute import server_groups
+from cloudferrylib.utils import utils
+
+
+LOG = utils.get_log(__name__)
 
 
 class ServerGroupTransporter(transporter.Transporter):
@@ -73,8 +77,8 @@ class ServerGroupTransporter(transporter.Transporter):
     """
 
     def run(self, **kwargs):
-        src_resource = Handler(self.src_cloud)
-        dst_resource = Handler(self.dst_cloud)
+        src_resource = server_groups.ServerGroupsHandler(self.src_cloud)
+        dst_resource = server_groups.ServerGroupsHandler(self.dst_cloud)
         src_server_groups = src_resource.get_server_groups()
         if len(src_server_groups) > 0:
             dst_resource.deploy_server_groups(src_server_groups)

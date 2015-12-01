@@ -1,4 +1,4 @@
-# Copyright (c) 2014 Mirantis Inc.
+# Copyright (c) 2015 Mirantis Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the License);
 # you may not use this file except in compliance with the License.
@@ -11,25 +11,30 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
+
+
 """
 This module contains the logic for collecting server group information from a
 cloud and deploying server groups on a cloud.
 
 Example:
-    src_handler = Handler(src_cloud)
-    dst_handler = Handler(dst_cloud)
+    src_handler = ServerGroupsHandler(src_cloud)
+    dst_handler = ServerGroupsHandler(dst_cloud)
     dst_handler.deploy_server_groups(src_handler.get_server_groups())
 """
 
+
+import copy
 import pprint
 
 from novaclient import exceptions as nova_exc
 
-from cloudferrylib.base.resource import Resource
-from cloudferrylib.utils import utils as utl
+from cloudferrylib.base import compute
+from cloudferrylib.os.identity import keystone
+from cloudferrylib.utils import utils
 
 
-LOG = utl.get_log(__name__)
+LOG = utils.get_log(__name__)
 
 SQL_SELECT_ALL_GROUPS = ("SELECT user_id, project_id, uuid, name, id FROM "
                          "instance_groups WHERE deleted=0;")
@@ -45,16 +50,18 @@ SQL_INSERT_POLICY = ("INSERT INTO instance_group_policy (group_id, policy, "
                      "deleted) VALUES({0}, '{1}', 0)")
 
 
-class Handler(Resource):
+class ServerGroupsHandler(compute.Compute):
     """
     Handler for Nova Server/Instance Groups on specified cloud.
     Allows for collection, creation and duplicate detection.
     """
 
     def __init__(self, cloud):
-        super(Handler, self).__init__()
+        super(ServerGroupsHandler, self).__init__()
         self.cloud = cloud
-        self.compute = self.cloud.resources[utl.COMPUTE_RESOURCE]
+        self.compute = self.cloud.resources[utils.COMPUTE_RESOURCE]
+        self.identity = self.cloud.resources[utils.IDENTITY_RESOURCE]
+        self.config = copy.deepcopy(self.identity.config)
 
     def _execute(self, sql):
         """
@@ -67,7 +74,7 @@ class Handler(Resource):
     @property
     def _nova_client(self):
         """
-        Property than returns COMPUTE_RESOURCE nova client
+        Property that returns COMPUTE_RESOURCE nova client
         """
         return self.compute.nova_client
 
@@ -93,17 +100,15 @@ class Handler(Resource):
         try:
             self._nova_client.server_groups.list()
 
-            identity_res = self.cloud.resources[utl.IDENTITY_RESOURCE]
-
             for row in self._execute(SQL_SELECT_ALL_GROUPS).fetchall():
-                print "1", row
+                LOG.debug("Resulting row: %s", row)
                 sql = SQL_SELECT_POLICY % row[4]
                 policies = []
                 for policy in self._execute(sql).fetchall():
                     policies.append(policy[0])
                 groups.append(
-                    {"user": identity_res.try_get_username_by_id(row[0]),
-                     "tenant": identity_res.try_get_tenant_name_by_id(row[1]),
+                    {"user": self.identity.try_get_username_by_id(row[0]),
+                     "tenant": self.identity.try_get_tenant_name_by_id(row[1]),
                      "uuid": row[2],
                      "name": row[3],
                      "policies": policies})
@@ -174,13 +179,23 @@ class Handler(Resource):
         LOG.info("Deploying server_group for tenant %s to destination: %s",
                  server_group['tenant'], server_group['name'])
 
-        identity_res = self.cloud.resources[utl.IDENTITY_RESOURCE]
+        try:
+            tenant_id = self.identity.get_tenant_id_by_name(
+                server_group["tenant"])
+        except keystone.ks_exceptions.NotFound:
+            LOG.info("Tenant '%s' does not exist on DST. Skipping server group"
+                     " '%s' with id='%s'...",
+                     server_group['tenant'],
+                     server_group['name'],
+                     server_group['uuid'])
+            return
 
         sql = SQL_INSERT_GROUP.format(
             server_group['uuid'],
             server_group['name'],
-            identity_res.get_tenant_id_by_name(server_group["tenant"]),
-            identity_res.try_get_user_by_name(server_group["user"]).id,
+            tenant_id,
+            self.identity.try_get_user_by_name(
+                server_group["user"], self.config.cloud.user).id,
         )
         self._execute(sql)
 
@@ -191,6 +206,33 @@ class Handler(Resource):
             self._execute(sql)
 
         return server_group
+
+    def get_server_group_id_by_vm(self, instance_id, instance_tenant):
+        """
+        Get Nova Server Group by it's member
+
+        :param instance_id: VM's ID
+        :param instance_tenant: VM's tenant name
+
+        :return str: Nova Server Group ID
+        """
+
+        client_config = copy.deepcopy(self.config)
+        client_config.cloud.tenant = instance_tenant
+
+        with keystone.AddAdminUserToNonAdminTenant(
+                self.identity.keystone_client,
+                client_config.cloud.user,
+                instance_tenant):
+            nclient = self.compute.get_client(client_config)
+            server_group_list = nclient.server_groups.list()
+
+        for server_group in server_group_list:
+            if instance_id in server_group.members:
+                return server_group.id
+
+        LOG.debug("Instance '%s' is not a member of any server group...",
+                  instance_id)
 
 
 def _compare_groups(group_a, group_b):
