@@ -235,8 +235,7 @@ class CheckNetworksTestCase(test.TestCase):
                         'subnets': [],
                         'floating_ips': []}
 
-        action = self.get_action(src_net_info, dst_net_info)
-        self.assertRaises(exception.AbortMigrationError, action.run)
+        self.get_action(src_net_info, dst_net_info)
 
     def test_floating_ip_overlap_clean_dst(self):
         src_net_info = {'networks': [],

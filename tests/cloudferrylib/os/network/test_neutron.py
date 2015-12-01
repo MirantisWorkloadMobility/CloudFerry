@@ -20,6 +20,7 @@ import mock
 from neutronclient.v2_0 import client as neutron_client
 from oslotest import mockpatch
 
+from cloudferrylib.base import exception
 from cloudferrylib.os.network import neutron
 from cloudferrylib.utils import utils
 from tests import test
@@ -81,6 +82,7 @@ class NeutronTestCase(test.TestCase):
                            'provider:network_type': 'gre',
                            'provider:segmentation_id': 5,
                            'res_hash': 'fake_net_hash_1',
+                           'subnets_hash': ['fake_subnet_hash_1'],
                            'meta': {}}
 
         self.net_2_info = {'name': 'fake_network_name_2',
@@ -91,10 +93,11 @@ class NeutronTestCase(test.TestCase):
                            'tenant_name': 'fake_tenant_name_2',
                            'subnet_names': ['fake_subnet_name_2'],
                            'router:external': False,
-                           'provider:physical_network': None,
-                           'provider:network_type': 'gre',
+                           'provider:physical_network': 'physnet',
+                           'provider:network_type': 'vlan',
                            'provider:segmentation_id': 10,
                            'res_hash': 'fake_net_hash_2',
+                           'subnets_hash': ['fake_subnet_hash_2'],
                            'meta': {}}
 
         self.subnet_1_info = {'name': 'fake_subnet_name_1',
@@ -126,6 +129,10 @@ class NeutronTestCase(test.TestCase):
                               'tenant_name': 'fake_tenant_name_2',
                               'res_hash': 'fake_subnet_hash_2',
                               'meta': {}}
+
+        self.segmentation_ids = {'gre': [2, 4, 6],
+                                 'vlan': [3, 5, 7],
+                                 'vxlan': [10, 20]}
 
     def f_mock(self, tenant_id):
         if tenant_id == 'fake_tenant_id_1':
@@ -231,7 +238,7 @@ class NeutronTestCase(test.TestCase):
         self.network_mock.get_networks_list = mock.Mock(
             return_value=fake_net_list['networks'])
         self.network_mock.get_resource_hash = mock.Mock(
-            return_value='fake_net_hash_1')
+            side_effect=['fake_subnet_hash_1', 'fake_net_hash_1'])
 
         networks_info = [self.net_1_info]
         networks_info_result = self.neutron_network_client.get_networks()
@@ -560,7 +567,8 @@ class NeutronTestCase(test.TestCase):
                         'provider:network_type': 'gre'
                         }}
 
-        self.neutron_network_client.upload_networks([self.net_1_info])
+        self.neutron_network_client.upload_networks([self.net_1_info],
+                                                    self.segmentation_ids)
 
         if network_info['network']['provider:physical_network']:
             self.neutron_mock_client().create_network.\
@@ -683,6 +691,37 @@ class NeutronTestCase(test.TestCase):
                                                 subnets_list=subnets_list)
 
         self.assertEqual(self.net_2_info, network)
+
+    def test_get_segmentation_ids_from_net_list(self):
+        networks_list = [self.net_1_info, self.net_2_info]
+        seg_ids = {'gre': [5],
+                   'vlan': [10]}
+
+        result = neutron.get_segmentation_ids_from_net_list(networks_list)
+
+        self.assertEqual(seg_ids, result)
+
+    def test_generate_new_segmentation_id(self):
+        dst_seg_ids = {'gre': [2, 4, 6, 14, 21],
+                       'vlan': [3, 5, 7, 10, 12],
+                       'vxlan': [10, 30, 40]}
+
+        seg_id = neutron.generate_new_segmentation_id(self.segmentation_ids,
+                                                      dst_seg_ids,
+                                                      'gre')
+
+        self.assertEqual(3, seg_id)
+
+    def test_generate_new_segmentation_id_vlan_limit(self):
+        dst_seg_ids = {'gre': [2, 4, 6, 14, 21],
+                       'vlan': range(2, 4096),
+                       'vxlan': [10, 30, 40]}
+
+        self.assertRaises(exception.AbortMigrationError,
+                          neutron.generate_new_segmentation_id,
+                          self.segmentation_ids,
+                          dst_seg_ids,
+                          'vlan')
 
 
 class NeutronRouterTestCase(test.TestCase):

@@ -99,6 +99,13 @@ class NeutronNetwork(network.Network):
                     subnets.append(self.convert_subnets(subnet, self.cloud))
                     LOG.debug("Got shared subnet ID %s", subnet['id'])
 
+            full_nets_list = self.get_networks()
+        else:
+            full_nets_list = nets
+
+        # Get full list off busy segmentation IDs
+        used_seg_ids = get_segmentation_ids_from_net_list(full_nets_list)
+
         routers = []
         subnet_ids = {sn['id'] for sn in subnets}
         for router in self.get_routers():
@@ -114,7 +121,9 @@ class NeutronNetwork(network.Network):
                 'floating_ips': self.get_floatingips(tenant_id),
                 'security_groups': self.get_sec_gr_and_rules(tenant_id),
                 'quota': self.get_quota(tenant_id),
-                'meta': {}}
+                'meta': {
+                    'segmentation_ids': used_seg_ids
+                }}
         if self.config.migrate.keep_lbaas:
             info['lbaas'] = dict()
             info['lb_pools'] = self.get_lb_pools()
@@ -197,7 +206,8 @@ class NeutronNetwork(network.Network):
         """
         deploy_info = info
         self.upload_quota(deploy_info['quota'])
-        self.upload_networks(deploy_info['networks'])
+        self.upload_networks(deploy_info['networks'],
+                             deploy_info['meta']['segmentation_ids'])
         dst_router_ip_ids = None
         if self.config.migrate.keep_floatingip:
             self.upload_floatingips(deploy_info['networks'],
@@ -343,9 +353,11 @@ class NeutronNetwork(network.Network):
         get_tenant_name = identity_res.get_tenants_func()
 
         subnets = []
+        subnets_hash = []
         for subnet in net['subnets']:
             snet = self.convert_subnets(subnet, cloud)
             subnets.append(snet)
+            subnets_hash.append(snet['res_hash'])
 
         result = {
             'name': net['name'],
@@ -359,6 +371,7 @@ class NeutronNetwork(network.Network):
             'provider:physical_network': net['provider:physical_network'],
             'provider:network_type': net['provider:network_type'],
             'provider:segmentation_id': net['provider:segmentation_id'],
+            'subnets_hash': subnets_hash,
             'meta': {},
         }
 
@@ -366,7 +379,11 @@ class NeutronNetwork(network.Network):
                                              'name',
                                              'shared',
                                              'tenant_name',
-                                             'router:external')
+                                             'router:external',
+                                             'admin_state_up',
+                                             'provider:physical_network',
+                                             'provider:network_type',
+                                             'subnets_hash')
         result['res_hash'] = res_hash
         return result
 
@@ -397,7 +414,7 @@ class NeutronNetwork(network.Network):
         res_hash = network_res.get_resource_hash(result,
                                                  'name',
                                                  'enable_dhcp',
-                                                 'allocation_pools',
+                                                 'ip_version',
                                                  'gateway_ip',
                                                  'cidr',
                                                  'tenant_name',
@@ -1053,27 +1070,25 @@ class NeutronNetwork(network.Network):
                     rule['meta']['id'] = new_rule['security_group_rule']['id']
         LOG.info("Done")
 
-    def upload_networks(self, networks):
+    def upload_networks(self, networks, src_seg_ids):
         LOG.info("Creating networks on destination")
+        identity = self.identity_client
+
         existing_networks = self.get_networks()
+        existing_nets_hashlist = (
+            [existing_net['res_hash'] for existing_net in existing_networks])
 
         # we need to handle duplicates in segmentation ids
-        # hash is used with structure {"gre": [1, 2, ...],
-        #                              "vlan": [1, 2, ...]}
-        # networks with "provider:physical_network" property added
-        # because only this networks seg_ids will be copied
-        used_seg_ids = {}
-        for src_net in existing_networks:
-            if src_net.get("provider:physical_network"):
-                net_type = src_net.get("provider:network_type")
-                if net_type not in used_seg_ids:
-                    used_seg_ids[net_type] = []
-                used_seg_ids[net_type].append(
-                    src_net.get("provider:segmentation_id"))
+        dst_seg_ids = get_segmentation_ids_from_net_list(existing_networks)
 
-        networks_without_seg_ids = {}
-        identity = self.identity_client
         for src_net in networks:
+            # Check network for existence on destination cloud
+            if src_net['res_hash'] in existing_nets_hashlist:
+                LOG.info("DST cloud already has the same network "
+                         "with name '%s' in tenant '%s'",
+                         src_net['name'], src_net['tenant_name'])
+                continue
+
             LOG.debug("Trying to create network '%s'", src_net['name'])
             tenant_id = identity.get_tenant_id_by_name(src_net['tenant_name'])
 
@@ -1082,6 +1097,16 @@ class NeutronNetwork(network.Network):
                             "Make sure you migrated identity (keystone) "
                             "resources! Skipping network '%s'.",
                             src_net['tenant_name'], src_net['name'])
+                continue
+
+            no_extnet_migration = (
+                src_net.get('router:external') and
+                not self.config.migrate.migrate_extnets or
+                (src_net['id'] in self.ext_net_map))
+            if no_extnet_migration:
+                LOG.debug("External network migration is disabled in config, "
+                          "skipping external network '%s (%s)'",
+                          src_net['name'], src_net['id'])
                 continue
 
             # create dict, representing basic info about network
@@ -1095,52 +1120,57 @@ class NeutronNetwork(network.Network):
                 }
             }
 
-            do_extnet_migration = (
-                src_net.get('router:external') and
-                not self.config.migrate.migrate_extnets or
-                (src_net['id'] in self.ext_net_map))
-            if do_extnet_migration:
-                LOG.debug("External network migration is disabled in config, "
-                          "skipping external network '%s (%s)'",
-                          src_net['name'], src_net['id'])
-                continue
-            phys_net = src_net.get("provider:physical_network")
+            phys_net = src_net["provider:physical_network"]
+            network_type = src_net['provider:network_type']
+            seg_id = src_net["provider:segmentation_id"]
+
             if phys_net or (src_net['provider:network_type'] in
                             ['gre', 'vxlan']):
-                # update info with additional arguments
-                # we need to check if we have parameter
-                # "provider:physical_network"
-                # if we do - we need to specify 2 more
-                # "provider:network_type" and "provider:segmentation_id"
-                # if we don't have this parameter - creation will be
-                # handled automatically (this automatic handling goes
-                # after creation of networks with provider:physical_network
-                # attribute to avoid seg_id overlap)
+                # Update network info with additional arguments.
+                # We need to check if we have parameter
+                # "provider:physical_network" or param
+                # "provider:network_type" either is 'gre' or 'vxlan'.
+                # If condition is satisfied, we need to specify 2 more params:
+                # "provider:network_type" and "provider:segmentation_id".
                 list_update_atr = ["provider:network_type"]
                 if phys_net:
                     list_update_atr.append("provider:physical_network")
                 for atr in list_update_atr:
                     network_info['network'].update({atr: src_net.get(atr)})
 
-                if src_net["provider:segmentation_id"]:
-                    network_info['network'][
-                        'provider:segmentation_id'] = src_net[
-                        'provider:segmentation_id']
-                self.create_network(src_net, network_info)
-            else:
-                # create networks later (to be sure that generated
-                # segmentation ids don't overlap segmentation ids
-                # created manually)
-                networks_without_seg_ids.update({
-                    src_net.get("id"): network_info
-                })
+                # Check segmentation ID for overlapping
+                # If it doesn't overlap with DST, save the same segmentation ID
+                # Otherwise pick free segmentation ID, which does not overlap
+                # with ANY segmentation ID on SRC
+                if seg_id is not None:
+                    # Segmentation ID exists; Check for overlapping
+                    seg_id_overlaps = (network_type in dst_seg_ids and
+                                       seg_id in dst_seg_ids[network_type])
 
-        for src_net in networks:
-            # we need second cycle to update external object "networks"
-            # with metadata
-            if src_net.get("id") in networks_without_seg_ids:
-                network_info = networks_without_seg_ids[src_net.get("id")]
-                self.create_network(src_net, network_info)
+                    if seg_id_overlaps:
+                        # Choose the lowest free segmentation ID, that also
+                        # does not overlap with SRC
+                        new_seg_id = generate_new_segmentation_id(src_seg_ids,
+                                                                  dst_seg_ids,
+                                                                  network_type)
+
+                        LOG.debug("'%s' segmentation ID '%s' overlaps with "
+                                  "DST. Generating new one: '%s'.",
+                                  network_type, seg_id, new_seg_id)
+
+                        # Use it for network
+                        network_info['network']['provider:segmentation_id'] = (
+                            new_seg_id)
+
+                        # Update DST segmentation IDs with the just created one
+                        dst_seg_ids[network_type].append(new_seg_id)
+
+                    else:
+                        # Otherwise use original segmentation ID from SRC
+                        network_info['network']['provider:segmentation_id'] = (
+                            seg_id)
+
+            self.create_network(src_net, network_info)
 
     def create_network(self, src_net, network_info):
         try:
@@ -1381,7 +1411,7 @@ class NeutronNetwork(network.Network):
                     neutron_resource[arg] = cidr
                 list_info.append(neutron_resource[arg])
             else:
-                for argitem in arg:
+                for argitem in neutron_resource[arg]:
                     if type(argitem) is str:
                         argitem = argitem.lower()
                     list_info.append(argitem)
@@ -1501,3 +1531,73 @@ def get_network_from_list(ip, tenant_id, networks_list, subnets_list):
             if ipaddr.IPNetwork(subnet['cidr']).Contains(instance_ip):
                 return get_network_from_list_by_id(network_id,
                                                    networks_list)
+
+
+def get_segmentation_ids_from_net_list(networks):
+    """Get busy segmentation IDs from provided networks list.
+
+    We need to handle duplicates in segmentation ids.
+    Neutron has different validation rules for different network types.
+
+    For 'gre' and 'vxlan' network types there is no strong requirement
+    for 'physical_network' attribute, if we want to have
+    'segmentation_id', because traffic is encapsulated in L3 packets.
+
+    For 'vlan' network type there is a strong requirement for
+    'physical_network' attribute, if we want to have 'segmentation_id'.
+
+    :result: Dictionary with busy segmentation IDs.
+             Hash is used with structure {"gre": [1, 2, ...],
+                                          "vlan": [1, 2, ...]}
+    """
+
+    used_seg_ids = {}
+
+    for net in networks:
+        network_has_segmentation_id = (
+            net["provider:physical_network"] or
+            (net["provider:network_type"] in ['gre', 'vxlan']))
+
+        if network_has_segmentation_id:
+            if net["provider:network_type"] not in used_seg_ids:
+                used_seg_ids[net['provider:network_type']] = []
+            if net["provider:segmentation_id"] is not None:
+                used_seg_ids[net["provider:network_type"]].append(
+                    net["provider:segmentation_id"])
+
+    return used_seg_ids
+
+
+def generate_new_segmentation_id(src_seg_ids, dst_seg_ids, network_type):
+    """Generate new segmentation ID based on provided info with busy ones.
+
+    Search for the lowest free segmentation ID. IDs '0' and '1' are reserved
+    in most of network types, so start searching from '2'.
+
+    For 'vlan' network type ID '4095' is the last one in available range and
+    besides also reserved. Raise AbortMigrationError if reach this ID.
+
+    :param src_seg_ids: Dictionary with busy segmentation IDs on SRC
+    :param dst_seg_ids: Dictionary with busy segmentation IDs on DST
+    :param network_type: Network type ('vlan', 'vxlan' or 'gre')
+
+    :result int: New generated free segmentation ID
+    """
+
+    src_seg_ids = set(src_seg_ids[network_type])
+    dst_seg_ids = set(dst_seg_ids[network_type])
+    busy_seg_ids = src_seg_ids | dst_seg_ids
+
+    free_seg_id = None
+    counter = 2
+
+    while free_seg_id is None:
+        if counter not in busy_seg_ids:
+            free_seg_id = counter
+        counter += 1
+
+    if free_seg_id >= 4095 and network_type == 'vlan':
+        raise exception.AbortMigrationError("Segmentation IDs limit for 'vlan'"
+                                            " network type has been exceeded")
+
+    return free_seg_id
