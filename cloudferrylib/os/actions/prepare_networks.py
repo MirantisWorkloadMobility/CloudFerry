@@ -64,28 +64,22 @@ class PrepareNetworks(action.Action):
             for src_net in networks_info:
                 dst_net = network_resource.get_network(src_net, tenant_id,
                                                        keep_ip)
-                port_id = network_resource.check_existing_port(dst_net['id'],
-                                                               src_net['mac'],
-                                                               src_net['ip'])
-                if port_id:
-                    network_resource.delete_port(port_id)
+                mac_address = src_net['mac_address']
+                ip_addresses = src_net['ip_addresses']
+                for ip_address in ip_addresses:
+                    port_dict = network_resource.check_existing_port(
+                        dst_net['id'], mac_address, ip_address)
+                    if port_dict:
+                        network_resource.delete_port(port_dict['id'])
                 sg_ids = []
                 for sg in network_resource.get_security_groups():
                     if sg['tenant_id'] == tenant_id:
                         if sg['name'] in security_groups:
                             sg_ids.append(sg['id'])
-                try:
-                    port = network_resource.create_port(dst_net['id'],
-                                                        src_net['mac'],
-                                                        src_net['ip'],
-                                                        tenant_id,
-                                                        keep_ip,
-                                                        sg_ids)
-                except neutronclient_exceptions.IpAddressInUseClient:
-                    LOG.warning("IP address '%s' on destination net '%s (%s)' "
-                                "already exists!",
-                                src_net['ip'], dst_net['name'], dst_net['id'])
-                    continue
+
+                port = network_resource.create_port(
+                    dst_net['id'], mac_address, ip_addresses, tenant_id,
+                    keep_ip, sg_ids, src_net['allowed_address_pairs'])
                 fip = None
                 src_fip = src_net['floatingip']
                 if src_fip:
@@ -118,3 +112,69 @@ class PrepareNetworks(action.Action):
         return {
             'info': info_compute
         }
+
+
+class CreatePortsForVRRP(action.Action):
+    """
+    Action lists all ports on destination and creates port for each IP listed
+    in allowed_address_pairs (so that nobody else could take this IP).
+    This task must be executed after PrepareNetworks
+
+    Use case:
+     1) Allocate IP address by creating Neutron port.
+     2) Then for each VM port add this IP address to allowed_address_pairs
+        list.
+     3) Configure VRRP on VMs (using keepalived or some other solution).
+     4) You decided to migrate it.
+    """
+
+    def run(self, info=None, **kwargs):
+        info_compute = copy.deepcopy(info)
+
+        network_resource = self.cloud.resources[utl.NETWORK_RESOURCE]
+        identity_resource = self.cloud.resources[utl.IDENTITY_RESOURCE]
+
+        instances = info_compute[utl.INSTANCES_TYPE]
+
+        # Get all tenants, participated in migration process
+        tenants = set()
+        for instance in instances.values():
+            tenants.add(instance[utl.INSTANCE_BODY]['tenant_name'])
+
+        # disable DHCP in all subnets
+        subnets = network_resource.get_subnets()
+        for snet in subnets:
+            if snet['tenant_name'] in tenants:
+                network_resource.reset_subnet_dhcp(snet['id'], False)
+
+        for (id_inst, inst) in instances.iteritems():
+            networks_info = inst[utl.INSTANCE_BODY][utl.INTERFACES]
+            tenant_name = inst[utl.INSTANCE_BODY]['tenant_name']
+            tenant_id = identity_resource.get_tenant_id_by_name(tenant_name)
+            keep_ip = self.cfg.migrate.keep_ip
+            for src_net in networks_info:
+                allowed_address_pairs = src_net['allowed_address_pairs']
+                if not allowed_address_pairs:
+                    continue
+                dst_net = network_resource.get_network(src_net, tenant_id,
+                                                       keep_ip)
+                for address_pair in allowed_address_pairs:
+                    port_dict = network_resource.check_existing_port(
+                        dst_net['id'],
+                        ip_address=address_pair.get('ip_address'))
+                    if port_dict is not None:
+                        if port_dict['device_owner'] == 'network:dhcp':
+                            network_resource.delete_port(port_dict['id'])
+                        else:
+                            continue
+                    network_resource.create_port(
+                        dst_net['id'], None, [address_pair.get('ip_address')],
+                        tenant_id, True)
+
+        # Reset DHCP to the original settings
+        for snet in subnets:
+            if snet['tenant_name'] in tenants:
+                network_resource.reset_subnet_dhcp(snet['id'],
+                                                   snet['enable_dhcp'])
+
+        return {}

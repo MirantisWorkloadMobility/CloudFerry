@@ -860,28 +860,11 @@ class NovaCompute(compute.Compute):
         return self.nova_client.servers.get(res_id).status
 
     def get_networks(self, instance):
-        networks = []
-        func_mac_address = self.get_func_mac_address(instance)
-        for network in instance.networks.items():
-            networks_info = dict(name=network[0],
-                                 ip=network[1][0],
-                                 mac=func_mac_address(network[1][0]))
-            networks_info['floatingip'] = network[1][1] if len(
-                network[1]) > 1 else None
-            networks.append(networks_info)
-        return networks
-
-    def get_func_mac_address(self, instance):
-        resources = self.cloud.resources
-        if 'network' in resources:
-            network = resources['network']
-            if 'get_func_mac_address' in dir(network):
-                return network.get_func_mac_address(instance)
-        return self.default_detect_mac(instance)
-
-    def default_detect_mac(self, arg):
-        raise NotImplementedError("Not implemented yet function for detect "
-                                  "mac address")
+        network_resource = self.cloud.resources.get('network')
+        if network_resource is not None:
+            return network_resource.get_instance_network_info(instance.id)
+        raise RuntimeError("Can't get network interface info without "
+                           "network resource")
 
     def attach_volume_to_instance(self, instance, volume):
         self.nova_client.volumes.create_server_volume(
