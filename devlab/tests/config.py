@@ -76,7 +76,6 @@ tenants = [
                'routers_to_connect': ['ext_router']}]
           }
      ],
-
      'security_groups': [
          {'name': 'sg11', 'description': 'Blah blah group', 'rules': [
              {'ip_protocol': 'icmp',
@@ -99,6 +98,9 @@ tenants = [
      'cinder_snapshots': [
          # Commented because of unimplemented error in nfs driver for grizzly.
          # {'name': 'tn1snapsh', 'volume_id': 'tn1_volume2'}
+     ],
+     'flavors': [
+         {'name': 'tn1fl1', 'disk': '1', 'ram': '64', 'vcpus': '1'}
      ]
      },
     {'name': 'tenant2', 'description': 'Bljakslhf ajsdfh', 'enabled': True,
@@ -143,7 +145,10 @@ tenants = [
          {'display_name': 'tn3_volume1', 'size': 1,
           'server_to_attach': 'tn3server1', 'device': '/dev/vdb'}],
      'cinder_snapshots': [],
-     'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': True}]
+     'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': True}],
+     'flavors': [
+         {'name': 'tn3fl1', 'disk': '1', 'ram': '64', 'vcpus': '1'}
+     ]
      },
     {'name': 'tenant4', 'description': 'None', 'enabled': True,
      'quota': {'instances': '4', 'cores': '9', 'ram': '84399',
@@ -212,9 +217,8 @@ img_to_add_members = ['image3', 'image4']
 # Flavors to create/delete
 flavors = [
     {'name': 'flavorname1', 'disk': '1', 'ram': '64', 'vcpus': '1'},
-    # Disabled for now, but in the future we need to generate non-pubic flavors
-    # {'name': 'flavorname3', 'disk': '10', 'ram': '32', 'vcpus': '1',
-    #  'is_public': False},
+    {'name': 'flavorname3', 'disk': '10', 'ram': '32', 'vcpus': '1',
+     'is_public': False},
     {'name': 'flavorname2', 'disk': '2', 'ram': '48', 'vcpus': '2'},
     {'name': 'del_flvr', 'disk': '1', 'ram': '64', 'vcpus': '1'}
 ]

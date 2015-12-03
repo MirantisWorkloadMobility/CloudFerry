@@ -149,9 +149,23 @@ class FunctionalTest(unittest.TestCase):
         return [i for i in self.src_cloud.novaclient.servers.list(**opts)
                 if i.name in vms_names]
 
-    def filter_flavors(self):
-        flavors = [i['name'] for i in config.flavors]
-        return self._get_nova_resources('flavors', flavors)
+    def filter_flavors(self, filter_only_private=False):
+        flavors = []
+        if filter_only_private:
+            nova_args = {'is_public': None}
+        else:
+            nova_args = None
+        all_flavors = config.flavors
+        for tenant in config.tenants:
+            if tenant.get('flavors'):
+                all_flavors += [flavor for flavor in tenant['flavors']]
+        for flavor in all_flavors:
+            if filter_only_private:
+                if flavor.get('is_public') == False:
+                    flavors.append(flavor['name'])
+            elif 'is_public' not in flavor or flavor.get('is_public'):
+                flavors.append(flavor['name'])
+        return self._get_nova_resources('flavors', flavors, nova_args)
 
     def filter_keypairs(self):
         return self.src_cloud.get_users_keypairs()
@@ -181,10 +195,12 @@ class FunctionalTest(unittest.TestCase):
         _list = getattr(self.src_cloud.neutronclient, 'list_' + res)()
         return {res: [i for i in _list[res] if i['name'] in names]}
 
-    def _get_nova_resources(self, res, names):
+    def _get_nova_resources(self, res, names, args=None):
         client = getattr(self.src_cloud.novaclient, res)
-        return [i for i in client.list()
-                if i.name in names]
+        if args:
+            return [i for i in client.list(**args) if i.name in names]
+        else:
+            return [i for i in client.list() if i.name in names]
 
     def _get_keystone_resources(self, res, names):
         client = getattr(self.src_cloud.keystoneclient, res)

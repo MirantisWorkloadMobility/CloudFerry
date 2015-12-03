@@ -511,7 +511,19 @@ class Prerequisites(BasePrerequisites):
     @clean_if_exists
     def create_flavors(self):
         for flavor in self.config.flavors:
-            self.novaclient.flavors.create(**flavor)
+            fl = self.novaclient.flavors.create(**flavor)
+            if flavor.get('is_public') == False:
+                self.novaclient.flavor_access.add_tenant_access(
+                    flavor=fl.id,
+                    tenant=self.get_tenant_id(self.tenant))
+        for tenant in self.config.tenants:
+            if tenant.get('flavors'):
+                for flavor in tenant['flavors']:
+                    fl = self.novaclient.flavors.create(**flavor)
+                    if flavor.get('is_public') == False:
+                        self.novaclient.flavor_access.add_tenant_access(
+                            flavor=fl.id,
+                            tenant=self.get_tenant_id(tenant['name']))
 
     def _get_parameters_for_vm_creating(self, vm):
         def get_vm_nics(_vm):
