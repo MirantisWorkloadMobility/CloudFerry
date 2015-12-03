@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import collections
 import os
 import yaml
 import config
@@ -26,15 +27,27 @@ from neutronclient.common.exceptions import NeutronClientException
 VM_ACCESSIBILITY_ATTEMPTS = 20
 
 
+def convert(data):
+    """ Method converts all unicode objects to string objects"""
+    if isinstance(data, basestring):
+        return str(data)
+    elif isinstance(data, collections.Mapping):
+        return dict(map(convert, data.iteritems()))
+    elif isinstance(data, collections.Iterable):
+        return type(data)(map(convert, data))
+    else:
+        return data
+
+
 class FilteringUtils(object):
 
     def __init__(self):
         self.main_folder = os.path.dirname(os.path.dirname(
             os.path.split(__file__)[0]))
-        cf_config = ConfigParser.ConfigParser()
-        cf_config.read(os.path.join(self.main_folder,
-                                    config.cloud_ferry_conf))
-        self.filter_file_path = cf_config.get('migrate', 'filter_path')
+        self.cf_config = ConfigParser.ConfigParser()
+        self.cf_config.read(os.path.join(self.main_folder,
+                                         config.cloud_ferry_conf))
+        self.filter_file_path = self.cf_config.get('migrate', 'filter_path')
         self.filters_file_naming_template = config.filters_file_naming_template
 
     def build_filter_files_list(self):
