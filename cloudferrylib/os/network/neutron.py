@@ -106,14 +106,11 @@ class NeutronNetwork(network.Network):
         # Get full list off busy segmentation IDs
         used_seg_ids = get_segmentation_ids_from_net_list(full_nets_list)
 
-        routers = []
+        routers = self.get_routers()
         subnet_ids = {sn['id'] for sn in subnets}
-        for router in self.get_routers():
-            router_subnet_ids = subnet_ids & set(router['subnet_ids'])
-            if router_subnet_ids:
-                router['subnet_ids'] = list(router_subnet_ids)
-                routers.append(router)
-                LOG.debug('Got router: %s', router['id'])
+        for router in routers:
+            router['subnet_ids'] = [sn_id for sn_id in router['subnet_ids']
+                                    if sn_id in subnet_ids]
 
         info = {'networks': nets,
                 'subnets': subnets,
@@ -175,7 +172,9 @@ class NeutronNetwork(network.Network):
         tenant_ids = []
         for shared_net in self.get_shared_networks_raw():
             tenant_ids.append(shared_net['tenant_id'])
-        return tenant_ids
+        for router in self.get_routers_raw():
+            tenant_ids.append(router['tenant_id'])
+        return list(set(tenant_ids))
 
     def deploy(self, info):
         """
@@ -300,7 +299,7 @@ class NeutronNetwork(network.Network):
                 self.config.cloud.user,
                 self.config.cloud.tenant):
             LOG.debug("Creating port IP '%s', MAC '%s' on net '%s'",
-                      ip, mac_address, net_id)
+                      param_create_port.get('fixed_ips'), mac_address, net_id)
             return self.neutron_client.create_port(
                 {'port': param_create_port})['port']
 
@@ -460,32 +459,15 @@ class NeutronNetwork(network.Network):
 
         get_tenant_name = identity_res.get_tenants_func()
 
-        ips = []
-        subnet_ids = []
-
-        LOG.debug("Finding all ports connected to router '%s'", router['name'])
-        ports_list = net_res.get_ports_list()
-        ports = get_ports_by_device_id_from_list(router['id'], ports_list)
-
-        for port in ports:
-            for ip_info in port['fixed_ips']:
-                LOG.debug("Adding IP '%s' to router '%s'",
-                          ip_info['ip_address'], router['name'])
-                ips.append(ip_info['ip_address'])
-                if ip_info['subnet_id'] not in subnet_ids:
-                    subnet_ids.append(ip_info['subnet_id'])
-
         result = {
             'name': router['name'],
             'id': router['id'],
             'admin_state_up': router['admin_state_up'],
-            'routes': router['routes'],
             'external_gateway_info': router['external_gateway_info'],
             'tenant_name': get_tenant_name(router['tenant_id']),
-            'ips': ips,
-            'subnet_ids': subnet_ids,
             'meta': {},
         }
+        result.update(net_res.get_ports_info(router))
 
         if router['external_gateway_info']:
             networks_list = net_res.get_networks_list()
@@ -500,7 +482,6 @@ class NeutronNetwork(network.Network):
 
         res_hash = net_res.get_resource_hash(result,
                                              'name',
-                                             'routes',
                                              'tenant_name')
 
         result['res_hash'] = res_hash
@@ -784,18 +765,38 @@ class NeutronNetwork(network.Network):
         }
         return self.neutron_client.update_subnet(subnet_id, subnet_info)
 
-    def get_routers(self, tenant_id=''):
-        LOG.info("Get routers...")
-        routers = self.neutron_client.list_routers(
-            tenant_id=tenant_id)['routers']
-        routers_info = []
+    def get_ports_info(self, router):
+        LOG.debug("Finding all ports connected to router '%s'", router['name'])
+        ports_list = self.get_ports_list()
+        ports = get_ports_by_device_id_from_list(router['id'], ports_list)
+        subnet_ids = []
+        ips = []
 
-        for router in routers:
-            rinfo = self.convert(router, self.cloud, 'router')
-            routers_info.append(rinfo)
+        for port in ports:
+            for ip_info in port['fixed_ips']:
+                ips.append(ip_info['ip_address'])
+                subnet_ids.append(ip_info['subnet_id'])
 
-        LOG.info("Done")
-        return routers_info
+        return {'ips': set(ips), 'subnet_ids': set(subnet_ids)}
+
+    def get_routers_raw(self):
+        routers = self.neutron_client.list_routers()['routers']
+        if self.filter_tenant_id:
+            subnet_ids = {
+                sn['id']
+                for sn in self.get_subnets_list(self.filter_tenant_id)}
+
+            return [r for r in routers
+                    if (r['tenant_id'] == self.filter_tenant_id or
+                        subnet_ids & self.get_ports_info(r)['subnet_ids'])]
+
+        return routers
+
+    def get_routers(self):
+        LOG.info("Get routers")
+
+        return [self.convert_routers(r, self.cloud)
+                for r in self.get_routers_raw()]
 
     def get_floatingips(self, tenant_id=''):
         LOG.info("Get floatingips...")
@@ -915,8 +916,8 @@ class NeutronNetwork(network.Network):
                     vip_info)['vip']['id']
             else:
                 LOG.info("| Dst cloud already has the same VIP "
-                         "with address %s in tenant %s" %
-                         (vip['address'], vip['tenant_name']))
+                         "with address %s in tenant %s",
+                         vip['address'], vip['tenant_name'])
         LOG.info("Done")
 
     def upload_lb_members(self, members, pools):
@@ -940,8 +941,8 @@ class NeutronNetwork(network.Network):
                     member_info)['member']['id']
             else:
                 LOG.info("| Dst cloud already has the same member "
-                         "with address %s in tenant %s" %
-                         (member['address'], member['tenant_name']))
+                         "with address %s in tenant %s",
+                         member['address'], member['tenant_name'])
         LOG.info("Done")
 
     def upload_lb_monitors(self, monitors):
@@ -971,8 +972,8 @@ class NeutronNetwork(network.Network):
                     mon_info)['health_monitor']['id']
             else:
                 LOG.info("| Dst cloud already has the same healthmonitor "
-                         "with type %s in tenant %s" %
-                         (mon['type'], mon['tenant_name']))
+                         "with type %s in tenant %s",
+                         mon['type'], mon['tenant_name'])
         LOG.info("Done")
 
     def associate_lb_monitors(self, pools, monitors):
@@ -1032,8 +1033,8 @@ class NeutronNetwork(network.Network):
                     self.neutron_client.create_pool(pool_info)['pool']['id']
             else:
                 LOG.info("| Dst cloud already has the same pool "
-                         "with name %s in tenant %s" %
-                         (pool['name'], pool['tenant_name']))
+                         "with name %s in tenant %s",
+                         pool['name'], pool['tenant_name'])
         LOG.info("Done")
 
     def upload_neutron_security_groups(self, sec_groups):
@@ -1244,67 +1245,49 @@ class NeutronNetwork(network.Network):
 
     def upload_routers(self, networks, subnets, routers):
         LOG.info("Creating routers on destination")
-        existing_nets = self.get_networks()
         existing_subnets = self.get_subnets()
         existing_routers = self.get_routers()
-        existing_routers_hashlist = \
-            [ex_router['res_hash'] for ex_router in existing_routers]
         for router in routers:
-            tname = router['tenant_name']
-            tenant_id = self.identity_client.get_tenant_id_by_name(tname)
+            tenant_id = self.identity_client.get_tenant_id_by_name(
+                router['tenant_name'])
             r_info = {'router': {'name': router['name'],
                                  'tenant_id': tenant_id}}
-            if router['external_gateway_info']:
-                ex_net_id = self.get_new_extnet_id(router['ext_net_id'],
-                                                   networks, existing_nets)
-                if not ex_net_id:
-                    LOG.debug("Skipping router '%s': no net ID",
-                              router['name'])
-                    continue
-                r_info['router']['external_gateway_info'] = \
-                    dict(network_id=ex_net_id)
-            if router['res_hash'] not in existing_routers_hashlist:
+            existing_router = self.get_res_by_hash(existing_routers,
+                                                   router['res_hash'])
+            if not existing_router:
                 LOG.debug("Creating router %s", pprint.pformat(r_info))
-                new_router = \
-                    self.neutron_client.create_router(r_info)['router']
-                router['meta']['id'] = new_router['id']
-                self.add_router_interfaces(router,
-                                           new_router,
-                                           subnets,
-                                           existing_subnets)
-            else:
-                existing_router = self.get_res_by_hash(existing_routers,
-                                                       router['res_hash'])
-                if existing_router['ips'] and not set(router['ips']).\
-                        intersection(existing_router['ips']):
-                    LOG.debug("Creating router %s", pprint.pformat(r_info))
-                    new_router = \
-                        self.neutron_client.create_router(r_info)['router']
-                    router['meta']['id'] = new_router['id']
-                    self.add_router_interfaces(router,
-                                               new_router,
-                                               subnets,
-                                               existing_subnets)
-                elif existing_router['ips']:
-                    LOG.debug('Add an interface to the existing router %s',
-                              pprint.pformat(existing_router))
-                    router['meta']['id'] = existing_router['id']
-                    self.add_router_interfaces(router,
-                                               existing_router,
-                                               subnets,
-                                               existing_subnets)
-                else:
-                    LOG.info("| Dst cloud already has the same router "
-                             "with name %s in tenant %s",
-                             router['name'], router['tenant_name'])
+                existing_router = self.convert_routers(
+                    self.neutron_client.create_router(r_info)['router'],
+                    self.cloud)
+            router['meta']['id'] = existing_router['id']
+            self.add_router_interfaces(router, existing_router, subnets,
+                                       existing_subnets)
 
-    def add_router_interfaces(self, src_router, dst_router,
-                              src_snets, dst_snets):
-        LOG.info("Adding router interfaces")
+            if router['external_gateway_info']:
+                self.add_router_gateway(existing_router, router['ext_net_id'],
+                                        networks)
+
+    def add_router_gateway(self, dst_router, ext_net_id, src_nets):
+        dst_nets = self.get_networks()
+        dst_net_id = self.get_new_extnet_id(ext_net_id, src_nets, dst_nets)
+        if dst_net_id:
+            info = {'network_id': dst_net_id}
+            LOG.debug("Setting the external network (%s) gateway for a router "
+                      "'%s' (%s)", dst_net_id, dst_router['name'],
+                      dst_router['id'])
+            self.neutron_client.add_gateway_router(dst_router['id'], info)
+        else:
+            LOG.warning('External (%s) network is not exists on destination',
+                        ext_net_id)
+
+    def add_router_interfaces(self, src_router, dst_router, src_snets,
+                              dst_snets):
         for snet_id in src_router['subnet_ids']:
             snet_hash = self.get_res_hash_by_id(src_snets, snet_id)
-            src_net = self.get_res_by_hash(src_snets, snet_hash)
             ex_snet = self.get_res_by_hash(dst_snets, snet_hash)
+            if ex_snet['id'] in dst_router['subnet_ids']:
+                continue
+            src_net = self.get_res_by_hash(src_snets, snet_hash)
             if src_net['external']:
                 LOG.debug("NOT connecting subnet '%s' to router '%s' because "
                           "it's connected to external network", snet_id,
@@ -1316,9 +1299,10 @@ class NeutronNetwork(network.Network):
                 self.neutron_client.add_interface_router(
                     dst_router['id'],
                     {"subnet_id": ex_snet['id']})
-            except neutron_exc.NeutronClientException:
-                LOG.warning("Couldn't add interface to subnet %s to router %s",
-                            ex_snet['id'], dst_router['id'], exc_info=True)
+            except neutron_exc.NeutronClientException as e:
+                LOG.debug(e, exc_info=True)
+                LOG.warning("Couldn't add interface to subnet %s to router %s:"
+                            " %s", ex_snet['id'], dst_router['id'], e)
 
     def upload_floatingips(self, networks, src_floats):
         """Creates floating IPs on destination
@@ -1434,18 +1418,19 @@ class NeutronNetwork(network.Network):
     def get_resource_hash(neutron_resource, *args):
         list_info = list()
         for arg in args:
-            if type(neutron_resource[arg]) is not list:
+            if not isinstance(neutron_resource[arg], list):
                 if arg == 'cidr':
                     cidr = str(netaddr.IPNetwork(neutron_resource[arg]).cidr)
                     neutron_resource[arg] = cidr
                 list_info.append(neutron_resource[arg])
             else:
                 for argitem in neutron_resource[arg]:
-                    if type(argitem) is str:
+                    if isinstance(argitem, basestring):
                         argitem = argitem.lower()
                     list_info.append(argitem)
         hash_list = \
-            [info.lower() if type(info) is str else info for info in list_info]
+            [info.lower() if isinstance(info, basestring) else info
+             for info in list_info]
         hash_list.sort()
         return hash(tuple(hash_list))
 
