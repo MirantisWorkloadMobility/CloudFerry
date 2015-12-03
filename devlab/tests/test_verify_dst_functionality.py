@@ -119,6 +119,7 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         for key_p in self.dst_cloud.novaclient.keypairs.list():
             key_p.delete()
 
+        self.dst_cloud.clean_tools.wait_vms_deleted()
         self.release_fips_tenant()
 
         self.update_floatip_neutron_quota(self.fip_quota_neutron,
