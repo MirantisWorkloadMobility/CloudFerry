@@ -845,7 +845,6 @@ class Prerequisites(BasePrerequisites):
                 self.get_role_id('admin'),
                 self.get_tenant_id(tenant['name']))
             self.switch_user(self.username, self.password, self.tenant)
-        self.create_user_tenant_roles()
 
     def delete_users(self):
         for user in self.config.users:
@@ -954,8 +953,6 @@ class Prerequisites(BasePrerequisites):
         self.create_users()
         print('>>> Creating roles:')
         self.create_roles()
-        print('>>> Creating user tenant roles:')
-        self.create_user_tenant_roles()
         print('>>> Creating keypairs:')
         self.create_keypairs()
         print('>>> Modifying quotas:')
@@ -997,6 +994,8 @@ class Prerequisites(BasePrerequisites):
         self.update_network_quotas()
         print('>>> Change admin role in tenants:')
         self.change_admin_role_in_tenants()
+        print('>>> Creating user tenant roles:')
+        self.create_user_tenant_roles()
         print('>>> Delete users which should be deleted:')
         self.delete_users()
         print('>>> Delete tenants which should be deleted:')
