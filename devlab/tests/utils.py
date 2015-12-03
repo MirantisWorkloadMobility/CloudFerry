@@ -124,7 +124,7 @@ class MigrationUtils(object):
     def get_all_vms_from_config(self):
         vms = self.config.vms
         for tenant in self.config.tenants:
-            if not tenant.get('vms'):
+            if not tenant.get('vms') or tenant.get('deleted'):
                 continue
             for vm in tenant['vms']:
                 vms.append(vm)

@@ -15,7 +15,9 @@ class VmMigration(functional_test.FunctionalTest):
         if not self.dst_vms:
             self.fail("No VM's on destination. Either Migration was not "
                       "successful for resource 'VM' or it was not initiated")
-        src_vms = [vm for vm in src_vms if vm.status != 'ERROR']
+        src_vms = [vm for vm in src_vms if vm.status != 'ERROR' and
+                   self.tenant_exists(self.src_cloud.keystoneclient,
+                                      vm.tenant_id)]
         self.dst_vm_indexes = []
         for vm in src_vms:
             if vm.name not in config.vms_not_in_filter:

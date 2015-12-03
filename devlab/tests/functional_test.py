@@ -19,6 +19,7 @@ import os
 import unittest
 from generate_load import Prerequisites
 import utils
+from keystoneclient import exceptions as ks_exceptions
 
 
 def get_cf_root_folder():
@@ -53,7 +54,7 @@ class FunctionalTest(unittest.TestCase):
     def filter_networks(self):
         networks = [i['name'] for i in config.networks]
         for i in config.tenants:
-            if 'networks' in i:
+            if 'networks' in i and not i.get('deleted'):
                 for j in i['networks']:
                     networks.append(j['name'])
         return self._get_neutron_resources('networks', networks)
@@ -70,7 +71,7 @@ class FunctionalTest(unittest.TestCase):
         subnets = [i for net in config.networks if net.get('subnets')
                    for i in net['subnets']]
         for tenant in config.tenants:
-            if 'networks' not in tenant:
+            if 'networks' not in tenant or tenant.get('deleted'):
                 continue
             for network in tenant['networks']:
                 if 'subnets' not in network:
@@ -157,7 +158,7 @@ class FunctionalTest(unittest.TestCase):
     def filter_volumes(self):
         volumes = config.cinder_volumes
         [volumes.extend(i['cinder_volumes']) for i in config.tenants
-         if 'cinder_volumes' in i]
+         if 'cinder_volumes' in i and not i.get('deleted')]
         volumes.extend(config.cinder_volumes_from_images)
         volumes_names = [volume['display_name'] for volume in volumes]
         opts = {'search_opts': {'all_tenants': 1}}
@@ -182,3 +183,10 @@ class FunctionalTest(unittest.TestCase):
         vms = config.vms
         [vms.extend(i['vms']) for i in config.tenants if 'vms' in i]
         return [vm['name'] for vm in vms if vm.get('fip')]
+
+    def tenant_exists(self, keystone_client, tenant_id):
+        try:
+            keystone_client.get(tenant_id)
+        except ks_exceptions.NotFound:
+            return False
+        return True

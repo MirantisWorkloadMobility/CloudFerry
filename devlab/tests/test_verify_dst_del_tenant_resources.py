@@ -1,5 +1,6 @@
 import tests.config as config
 import tests.functional_test as functional_test
+import unittest
 
 
 class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
@@ -137,6 +138,8 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
                   ' but should be deleted!'
             self.fail(msg.format(tenant_nets_ids))
 
+    @unittest.skip("Disabled: orphan VMs don't migrate because tenant is "
+                   "specified in filter.")
     def test_tenant_vm_exists_on_dst(self):
         tenants_vms = []
         for tenant_name, tenant in self.deleted_tenants:
@@ -206,6 +209,8 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
                   ' but should be!'
             self.fail(msg.format(flvlist))
 
+    @unittest.skip("Disabled: orphan subnets don't migrate because tenant is "
+                   "specified in filter.")
     def test_subnets_exist_on_dst(self):
         tenants_subnets = []
         for tenant_name, tenant in self.deleted_tenants:
