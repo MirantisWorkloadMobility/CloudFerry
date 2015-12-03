@@ -380,7 +380,7 @@ class NovaCompute(compute.Compute):
                              'boot_volume': copy.deepcopy(
                                  volumes[0]) if volumes else None,
                              'interfaces': interfaces,
-                             'host': instance_host,
+                             'host': instance_node,
                              'is_ephemeral': is_ephemeral,
                              'volumes': volumes,
                              'user_id': instance.user_id,
