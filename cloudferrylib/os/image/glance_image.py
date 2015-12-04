@@ -30,6 +30,7 @@ from keystoneclient import exceptions as keystone_exceptions
 from cloudferrylib.base import exception
 from cloudferrylib.base import image
 from cloudferrylib.utils import filters
+from cloudferrylib.utils import sizeof_format
 from cloudferrylib.os.image import filters as glance_filters
 from cloudferrylib.utils import file_like_proxy
 from cloudferrylib.utils import utils as utl
@@ -37,6 +38,65 @@ from cloudferrylib.utils import remote_runner
 
 
 LOG = utl.get_log(__name__)
+
+
+class GlanceImageProgessMigrationView(object):
+    """ View to show the progress of image migration. """
+
+    def __init__(self, images, dst_images):
+        self.num_public, self.num_private, self.num_migrated = 0, 0, 0
+        self.list_public, self.list_private, self.list_migrated = [], [], []
+        self.total_size, self.migrated_size = 0, 0
+        for image_id in images:
+            img = images[image_id]['image']
+            image_key = (img['name'], img['owner_name'], img['checksum'],
+                         img['is_public'])
+            dst_image = dst_images.get(image_key)
+            if dst_image:
+                self.num_migrated += 1
+                self.migrated_size += dst_image.size
+                self.list_migrated.append('%s (%s)' % (dst_image.name,
+                                                       dst_image.id))
+                continue
+
+            self.total_size += img['size']
+            if img['is_public']:
+                self.num_public += 1
+                self.list_public.append('%s (%s)' % (img['name'], img['id']))
+            else:
+                self.num_private += 1
+                self.list_private.append('%s (%s)' % (img['name'], img['id']))
+        self.cnt = 0
+        self.progress = 0
+
+    def show_info(self):
+        LOG.info('Total number of images to be migrated: %d, '
+                 'total size: %s\n'
+                 'Number of private images: %d\n'
+                 'Number of public images: %d\n'
+                 'Number of already migrated images: %d, total size: %s',
+                 self.num_private + self.num_public,
+                 sizeof_format.sizeof_fmt(self.total_size), self.num_private,
+                 self.num_public, self.num_migrated,
+                 sizeof_format.sizeof_fmt(self.migrated_size))
+        LOG.info('List of private images:\n%s', '\n'.join(self.list_private))
+        LOG.info('List of public images:\n%s', '\n'.join(self.list_public))
+        LOG.info('List of migrated images:\n%s', '\n'.join(self.list_migrated))
+
+    def inc_progress(self, size):
+        self.cnt += 1
+        self.progress += size
+
+    def show_progress(self, ):
+        size_percentage = (self.progress * 100 / self.total_size
+                           if self.total_size else 100)
+        LOG.info('%(num_migrated)d of %(num_total_images)d images '
+                 'migrated (%(size_percentage)d%% of %(size_total)s '
+                 'total)',
+                 {'num_migrated': self.cnt,
+                  'num_total_images': self.num_private + self.num_public,
+                  'size_percentage': size_percentage,
+                  'size_total': sizeof_format.sizeof_fmt(self.total_size)})
 
 
 class GlanceImage(image.Image):
@@ -277,8 +337,8 @@ class GlanceImage(image.Image):
                 img_loc = None
                 for row in res:
                     if img_loc is not None:
-                        LOG.warning("ignoring multi locations for image {}"
-                                    .format(glance_image.name))
+                        LOG.warning("Ignoring multi locations for image %s",
+                                    glance_image.name)
                         break
                     img_loc = row[0]
 
@@ -288,14 +348,12 @@ class GlanceImage(image.Image):
                         'img_loc': img_loc
                     },
                 }
-                LOG.debug("find image with ID {}({})"
-                          .format(glance_image.id, glance_image.name))
+                LOG.debug("Find image with ID %s(%s)",
+                          glance_image.id, glance_image.name)
             else:
-                LOG.warning("image {img} was not migrated according to "
-                            "status = {status}, (expected status "
-                            "= active)".format(
-                                img=glance_image.id,
-                                status=glance_image.status))
+                LOG.warning("Image %s was not migrated according to "
+                            "status = %s, (expected status = active)",
+                            glance_image.id, glance_image.status)
         else:
             LOG.error('Image has not been found')
 
@@ -320,13 +378,15 @@ class GlanceImage(image.Image):
                          dst_image.is_public)
             dst_images[image_key] = dst_image
 
-        for image_id_src, gl_image in info['images'].iteritems():
-            img = gl_image['image']
+        view = GlanceImageProgessMigrationView(info['images'], dst_images)
+        view.show_info()
+        for image_id_src in info['images']:
+            img = info['images'][image_id_src]['image']
+            meta = info['images'][image_id_src]['meta']
             if img and img['resource']:
                 checksum_current = img['checksum']
                 name_current = img['name']
                 tenant_name = img['owner_name']
-                meta = gl_image['meta']
                 image_key = (name_current, tenant_name, checksum_current,
                              img['is_public'])
 
@@ -339,6 +399,9 @@ class GlanceImage(image.Image):
                              "skipping", img['name'])
                     continue
 
+                view.show_progress()
+                view.inc_progress(img['size'])
+
                 LOG.debug("Updating owner '%s' of image '%s'",
                           tenant_name, img["name"])
                 img["owner"] = \
@@ -349,27 +412,24 @@ class GlanceImage(image.Image):
                     metadata = img["properties"]
                     if "owner_id" in metadata:
                         # update tenant id
-                        LOG.debug("updating snapshot metadata for field "
-                                  "'owner_id' for image {image}".format(
-                                      image=img["id"]))
+                        LOG.debug("Updating snapshot metadata for field "
+                                  "'owner_id' for image %s", img["id"])
                         metadata["owner_id"] = img["owner"]
                     if "user_name" in metadata:
                         # update user id by specified name
-                        LOG.debug("updating snapshot metadata for field "
-                                  "'user_id' for image {image}".format(
-                                      image=img["id"]))
+                        LOG.debug("Updating snapshot metadata for field "
+                                  "'user_id' for image %s", img["id"])
                         try:
                             ks_client = self.identity_client.keystone_client
                             metadata["user_id"] = ks_client.users.find(
                                 username=metadata["user_name"]).id
                             del metadata["user_name"]
                         except keystone_exceptions.NotFound:
-                            LOG.warning("Cannot update user name for image "
-                                        "{}".format(img['name']))
+                            LOG.warning("Cannot update user name for image %s",
+                                        img['name'])
                 if img["checksum"] is None:
-                    LOG.warning("re-creating image {} "
-                                "from original source URL"
-                                .format(img["id"]))
+                    LOG.warning("re-creating image %s from original source "
+                                "URL", img["id"])
                     if meta['img_loc'] is not None:
                         self.glance_img_create(
                             img['name'],
@@ -379,17 +439,13 @@ class GlanceImage(image.Image):
                         recreated_image = utl.ext_dict(
                             name=img["name"]
                         )
-                        created_images.append(
-                            (recreated_image, gl_image['meta'])
-                        )
+                        created_images.append((recreated_image, meta))
                     else:
                         raise exception.AbortMigrationError(
                             "image information has no original source URL")
                     continue
 
-                LOG.debug("Creating image '{image}' ({image_id})".format(
-                    image=img["name"],
-                    image_id=img['id']))
+                LOG.debug("Creating image '%s' (%s)", img["name"], img['id'])
                 # we can face situation when image has no
                 # disk_format and container_format properties
                 # this situation appears, when image was created
@@ -414,7 +470,7 @@ class GlanceImage(image.Image):
                         data=data_proxy)
 
                     image_members = img['members'].get(img['id'], {})
-                    LOG.debug("new image ID {}".format(created_image.id))
+                    LOG.debug("new image ID %s", created_image.id)
                     self.update_membership(created_image.id, image_members)
                     created_images.append((created_image, meta))
                 except exception.ImageDownloadError:
@@ -430,10 +486,11 @@ class GlanceImage(image.Image):
                     delete_disk_format.append(created_image.id)
             elif img['resource'] is None:
                 recreated_image = utl.ext_dict(name=img["name"])
-                created_images.append((recreated_image, gl_image['meta']))
+                created_images.append((recreated_image, meta))
             elif not img:
-                empty_image_list[image_id_src] = gl_image
+                empty_image_list[image_id_src] = info['images'][image_id_src]
 
+        view.show_progress()
         # Remove obsolete/broken images from info
         for img_id in obsolete_images_ids_list:
             info['images'].pop(img_id)
@@ -441,8 +498,8 @@ class GlanceImage(image.Image):
         if created_images:
             im_name_list = [(im.name, tmp_meta) for (im, tmp_meta) in
                             created_images]
-            LOG.debug("images on destination: {}".format(
-                [im for (im, tmp_meta) in im_name_list]))
+            LOG.debug("images on destination: %s",
+                      [im for (im, tmp_meta) in im_name_list])
             new_info = self._convert_images_with_metadata(im_name_list)
         new_info['images'].update(empty_image_list)
         self.delete_fields('disk_format', delete_disk_format)
