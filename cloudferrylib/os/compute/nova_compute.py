@@ -13,9 +13,11 @@
 # limitations under the License.
 
 
+import contextlib
 import copy
 import random
 import pprint
+import uuid
 
 from novaclient.v1_1 import client as nova_client
 from novaclient import exceptions as nova_exc
@@ -510,6 +512,18 @@ class NovaCompute(compute.Compute):
 
         return info
 
+    @staticmethod
+    def _is_flavors_identical(flavor1, flavor1_id, flavor2):
+        return (flavor1_id == flavor2.id and
+                flavor1['name'].lower() == flavor2.name.lower() and
+                flavor1['vcpus'] == flavor2.vcpus and
+                flavor1['ram'] == flavor2.ram and
+                flavor1['disk'] == flavor2.disk and
+                flavor1['ephemeral'] == flavor2.ephemeral and
+                flavor1['is_public'] == flavor2.is_public and
+                flavor1['rxtx_factor'] == flavor2.rxtx_factor and
+                flavor1['swap'] == flavor2.swap)
+
     def _add_flavor_access_for_tenants(self, flavor_id, tenant_ids):
         for t in tenant_ids:
             LOG.debug("Adding access for tenant '%s' to flavor '%s'", t,
@@ -520,71 +534,84 @@ class NovaCompute(compute.Compute):
                 LOG.debug("Tenant '%s' already has access to flavor '%s'", t,
                           flavor_id)
 
-    def _create_flavor_if_not_exists(self, flavor, flavor_id):
-        """If flavor exists on destination:
-              1. If it's the same as on source - do nothing;
-              2. If it's different - delete flavor from destination, and create
-                 new.
-        """
-        dest_flavor = None
-        try:
-            dest_flavor = self.get_flavor_from_id(flavor_id)
-        except nova_exc.NotFound:
-            LOG.info("Flavor %s does not exist", flavor['name'])
-        if dest_flavor is not None:
-            identical = (flavor_id == dest_flavor.id and
-                         flavor['name'].lower() == dest_flavor.name.lower() and
-                         flavor['vcpus'] == dest_flavor.vcpus and
-                         flavor['ram'] == dest_flavor.ram and
-                         flavor['disk'] == dest_flavor.disk and
-                         flavor['ephemeral'] == dest_flavor.ephemeral and
-                         flavor['is_public'] == dest_flavor.is_public and
-                         flavor['rxtx_factor'] == dest_flavor.rxtx_factor and
-                         flavor['swap'] == dest_flavor.swap)
-            if identical:
-                LOG.debug("Identical flavor '%s' already exists, skipping.",
-                          flavor['name'])
-                return dest_flavor
-            else:
-                LOG.info("Flavor with the same ID exists ('%s'), but it "
-                         "differs from source. Deleting flavor '%s' from "
-                         "destination.", flavor_id, flavor_id)
-                self.delete_flavor(flavor_id)
-        else:
-            dest_flavor_list = self.get_flavor_list()
-            for flv in dest_flavor_list:
-                if flavor['name'].lower() == flv.name.lower():
-                    LOG.info("Flavor with the same name exists ('%s'). "
-                             "Deleting it from destination.", flavor['name'])
-                    self.delete_flavor(flv.id)
-
-        LOG.info("Creating flavor '%s'", flavor['name'])
-        return self.create_flavor(
-            name=flavor['name'],
-            flavorid=flavor_id,
-            ram=flavor['ram'],
-            vcpus=flavor['vcpus'],
-            disk=flavor['disk'],
-            ephemeral=flavor['ephemeral'],
-            swap=int(flavor['swap']) if flavor['swap'] else 0,
-            rxtx_factor=flavor['rxtx_factor'],
-            is_public=flavor['is_public'])
-
     def _deploy_flavors(self, flavors, tenant_map):
-        dest_flavors = {flavor.name: flavor.id
-                        for flavor in self.get_flavor_list(is_public=None)}
-        for flavor_id in flavors:
-            flavor = flavors[flavor_id]['flavor']
-            dest_flavor_id = (dest_flavors.get(flavor['name']) or
-                              self._create_flavor_if_not_exists(
-                                  flavor, flavor_id).id)
-            flavors[flavor_id]['meta']['id'] = dest_flavor_id
+        LOG.info('Deploying flavors to destination cloud...')
+        dst_flavors = self.get_flavor_list(is_public=None)
+        conflicting = set()
+        missing = {}
+        for flavor_id, obj in flavors.items():
+            src_flavor = obj['flavor']
+            for dst_flavor in dst_flavors:
+                if self._is_flavors_identical(src_flavor, flavor_id,
+                                              dst_flavor):
+                    break
+                if (dst_flavor.id == flavor_id or
+                        dst_flavor.name == src_flavor['name']):
+                    LOG.debug('Flavor %s on src conflicts with flavor %s on '
+                              'dst', src_flavor['name'], dst_flavor.name)
+                    conflicting.add(dst_flavor.id)
+            else:
+                missing[flavor_id] = src_flavor
+
+        # Remove all conflicting flavors
+        for flavor_id in conflicting:
+            LOG.debug('Deleting flavor %s', flavor_id)
+            self.delete_flavor(flavor_id)
+
+        # Create all missing flavors
+        for flavor_id, flavor in missing.items():
+            LOG.debug('Creating flavor %s (name: %s)', flavor_id,
+                      flavor['name'])
+            self.create_flavor(
+                name=flavor['name'],
+                flavorid=flavor_id,
+                ram=flavor['ram'],
+                vcpus=flavor['vcpus'],
+                disk=flavor['disk'],
+                ephemeral=flavor['ephemeral'],
+                swap=int(flavor['swap']) if flavor['swap'] else 0,
+                rxtx_factor=flavor['rxtx_factor'],
+                is_public=flavor['is_public'])
+
+        for flavor_id, obj in flavors.items():
+            flavor = obj['flavor']
             if not flavor['is_public']:
                 # user can specify tenant name instead of ID, which is ignored
                 # by nova
                 tenant_ids = [tenant_map[t] for t in flavor['tenants']
                               if tenant_map.get(t)]
-                self._add_flavor_access_for_tenants(dest_flavor_id, tenant_ids)
+                self._add_flavor_access_for_tenants(flavor_id, tenant_ids)
+        LOG.info('Done deploying flavors to destination cloud...')
+
+    @contextlib.contextmanager
+    def _ensure_instance_flavor_exists(self, instance):
+        flavor_id = instance['flavor_id']
+        flavor_details = instance['flav_details']
+        new_flavor_id = None
+        try:
+            flavor = self.get_flavor_from_id(flavor_id)
+            need_new_flavor = (
+                flavor.vcpus != flavor_details['vcpus'] or
+                flavor.ram != flavor_details['memory_mb'] or
+                flavor.disk != flavor_details['root_gb'] or
+                flavor.ephemeral != flavor_details['ephemeral_gb'])
+        except nova_exc.NotFound:
+            need_new_flavor = True
+
+        if need_new_flavor:
+            new_flavor_id = str(uuid.uuid4())
+            instance['flavor_id'] = new_flavor_id
+            self.create_flavor(name='deleted_' + flavor_id,
+                               flavorid=new_flavor_id,
+                               ram=flavor_details['memory_mb'],
+                               vcpus=flavor_details['vcpus'],
+                               disk=flavor_details['root_gb'],
+                               ephemeral=flavor_details['ephemeral_gb'])
+        try:
+            yield
+        finally:
+            if new_flavor_id is not None:
+                self.delete_flavor(new_flavor_id)
 
     def _deploy_quotas(self, quotas, tenant_map, user_map=None):
         for _quota in quotas:
@@ -631,37 +658,38 @@ class NovaCompute(compute.Compute):
 
         for _instance in info_compute['instances'].itervalues():
             instance = _instance['instance']
-            LOG.debug("creating instance %s", instance['name'])
-            create_params = {'name': instance['name'],
-                             'flavor': instance['flavor_id'],
-                             'key_name': instance['key_name'],
-                             'nics': instance['nics'],
-                             'image': instance['image_id'],
-                             # user_id matches user_id on source
-                             'user_id': instance.get('user_id')}
-            if instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
-                volume_id = instance['volumes'][0]['id']
-                create_params["block_device_mapping_v2"] = [{
-                    "source_type": "volume",
-                    "uuid": volume_id,
-                    "destination_type": "volume",
-                    "delete_on_termination": True,
-                    "boot_index": 0
-                }]
-                create_params['image'] = None
+            with self._ensure_instance_flavor_exists(instance):
+                LOG.debug("creating instance %s", instance['name'])
+                create_params = {'name': instance['name'],
+                                 'flavor': instance['flavor_id'],
+                                 'key_name': instance['key_name'],
+                                 'nics': instance['nics'],
+                                 'image': instance['image_id'],
+                                 # user_id matches user_id on source
+                                 'user_id': instance.get('user_id')}
+                if instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
+                    volume_id = instance['volumes'][0]['id']
+                    create_params["block_device_mapping_v2"] = [{
+                        "source_type": "volume",
+                        "uuid": volume_id,
+                        "destination_type": "volume",
+                        "delete_on_termination": True,
+                        "boot_index": 0
+                    }]
+                    create_params['image'] = None
 
-            if (self.config.migrate.keep_affinity_settings and
-                    instance['server_group'] is not None):
-                create_params['scheduler_hints'] = {
-                    'group': instance['server_group']}
+                if (self.config.migrate.keep_affinity_settings and
+                        instance['server_group'] is not None):
+                    create_params['scheduler_hints'] = {
+                        'group': instance['server_group']}
 
-            client_conf.cloud.tenant = instance['tenant_name']
+                client_conf.cloud.tenant = instance['tenant_name']
 
-            new_id = RandomSchedulerVmDeployer(self).deploy(instance,
-                                                            create_params,
-                                                            client_conf)
+                new_id = RandomSchedulerVmDeployer(self).deploy(instance,
+                                                                create_params,
+                                                                client_conf)
 
-            new_ids[new_id] = instance['id']
+                new_ids[new_id] = instance['id']
         return new_ids
 
     def create_instance(self, nclient, **kwargs):
