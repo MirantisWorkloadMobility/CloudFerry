@@ -252,33 +252,55 @@ class NeutronNetwork(network.Network):
                                'floating_ip_address': router.ext_ip})
         return result
 
-    def get_func_mac_address(self, instance):
-        instance_id = instance.id
-        return lambda x: self.get_mac_by_ip(x, instance_id)
-
     def get_mac_by_ip(self, ip_address, instance_id):
         for port in self.get_ports_list(device_id=instance_id):
             for fixed_ip_info in port['fixed_ips']:
                 if fixed_ip_info['ip_address'] == ip_address:
                     return port["mac_address"]
 
+    def get_instance_network_info(self, instance_id):
+        ports = []
+        for port in self.get_ports_list(device_id=instance_id):
+            ports.append({
+                'ip_addresses': [x['ip_address'] for x in port['fixed_ips']],
+                'mac_address': port['mac_address'],
+                'floatingip': self.get_port_floating_ip(port['id']),
+                'allowed_address_pairs': port.get('allowed_address_pairs'),
+            })
+        return ports
+
+    def get_port_floating_ip(self, port_id):
+        floating_ips = self.neutron_client.list_floatingips(
+            port_id=port_id)['floatingips']
+        if floating_ips:
+            LOG.debug('Got %d floating IP for port %s',
+                      len(floating_ips), port_id)
+            return floating_ips[0]['floating_ip_address']
+        else:
+            return None
+
     def get_ports_list(self, **kwargs):
         return self.neutron_client.list_ports(**kwargs)['ports']
 
-    def create_port(self, net_id, mac, ip, tenant_id, keep_ip, sg_ids=None):
+    def create_port(self, net_id, mac_address, ip_addresses, tenant_id,
+                    keep_ip, sg_ids=None, allowed_address_pairs=None):
         param_create_port = {'network_id': net_id,
-                             'mac_address': mac,
                              'tenant_id': tenant_id}
+        if mac_address:
+            param_create_port['mac_address'] = mac_address
         if sg_ids:
             param_create_port['security_groups'] = sg_ids
         if keep_ip:
-            param_create_port['fixed_ips'] = [{"ip_address": ip}]
+            param_create_port['fixed_ips'] = [{"ip_address": ip}
+                                              for ip in ip_addresses]
+        if allowed_address_pairs is not None:
+            param_create_port['allowed_address_pairs'] = allowed_address_pairs
         with ksresource.AddAdminUserToNonAdminTenant(
                 self.identity_client.keystone_client,
                 self.config.cloud.user,
                 self.config.cloud.tenant):
             LOG.debug("Creating port IP '%s', MAC '%s' on net '%s'",
-                      ip, mac, net_id)
+                      ip, mac_address, net_id)
             return self.neutron_client.create_port(
                 {'port': param_create_port})['port']
 
@@ -287,13 +309,18 @@ class NeutronNetwork(network.Network):
 
     def get_network(self, network_info, tenant_id, keep_ip=False):
         if keep_ip:
-            instance_addr = ipaddr.IPAddress(network_info['ip'])
-            for snet in self.get_subnets_list():
-                network = self.get_network({"id": snet['network_id']}, None)
-                if snet['tenant_id'] == tenant_id or network['shared']:
-                    if ipaddr.IPNetwork(snet['cidr']).Contains(instance_addr):
-                        return self.neutron_client.\
-                            list_networks(id=snet['network_id'])['networks'][0]
+            addresses = [ipaddr.IPAddress(ip)
+                         for ip in network_info['ip_addresses']]
+            private = self.neutron_client.list_networks(
+                tenant_id=tenant_id)['networks']
+            shared = self.neutron_client.list_networks(shared=True)['networks']
+            for net in private + shared:
+                subnets = self.neutron_client.list_subnets(
+                    network_id=net['id'])['subnets']
+                if all(any(ipaddr.IPNetwork(subnet['cidr']).Contains(ip)
+                           for subnet in subnets)
+                       for ip in addresses):
+                    return net
         if 'id' in network_info:
             networks = self.neutron_client.list_networks(
                 id=network_info['id'])['networks']
@@ -308,16 +335,18 @@ class NeutronNetwork(network.Network):
                   repr(network_info), tenant_id, keep_ip)
         raise exception.AbortMigrationError("Can't find suitable network")
 
-    def check_existing_port(self, network_id, mac, ip_address):
+    def check_existing_port(self, network_id, mac=None, ip_address=None):
         for port in self.get_ports_list(fields=['network_id', 'mac_address',
-                                                'id', 'fixed_ips']):
+                                                'id', 'fixed_ips',
+                                                'device_owner'],
+                                        network_id=network_id):
             if port['network_id'] != network_id:
                 continue
             if port['mac_address'] == mac:
-                return port['id']
+                return port
             for fixed_ip in port['fixed_ips']:
                 if fixed_ip['ip_address'] == ip_address:
-                    return port['id']
+                    return port
         return None
 
     @staticmethod

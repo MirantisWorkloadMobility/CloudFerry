@@ -81,7 +81,8 @@ class FilterSimilarVMsFromDST(action.Action):
             ip_to_id = tenant_ip_to_instance_id[info['tenant_id']]
             instance_id = info['id']
             for interface in info['interfaces']:
-                ip_to_id[interface['ip']] = instance_id
+                for ip_address in interface['ip_addresses']:
+                    ip_to_id[ip_address] = instance_id
         return tenant_ip_to_instance_id
 
     def instance_comparison(self, src_instance_id, dst_instance_id):
