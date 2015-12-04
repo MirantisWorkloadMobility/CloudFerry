@@ -42,6 +42,7 @@ LOG = utl.get_log(__name__)
 
 
 class GlanceImageProgessMigrationView(object):
+
     """ View to show the progress of image migration. """
 
     def __init__(self, images, dst_images):
@@ -50,9 +51,18 @@ class GlanceImageProgessMigrationView(object):
         self.total_size, self.migrated_size = 0, 0
         for image_id in images:
             img = images[image_id]['image']
-            image_key = (img['name'], img['owner_name'], img['checksum'],
-                         img['is_public'])
-            dst_image = dst_images.get(image_key)
+
+            if img and img['resource']:
+                image_key = (img['name'], img['owner_name'], img['checksum'],
+                             img['is_public'])
+                dst_image = dst_images.get(image_key)
+            elif img['resource'] is None:
+                # recreated image
+                dst_image = None
+            elif not img:
+                # empty image
+                continue
+
             if dst_image:
                 self.num_migrated += 1
                 self.migrated_size += dst_image.size
@@ -60,7 +70,11 @@ class GlanceImageProgessMigrationView(object):
                                                        dst_image.id))
                 continue
 
-            self.total_size += img['size']
+            self.total_size += img.get('size', 0)
+
+            if 'is_public' not in img:
+                continue
+
             if img['is_public']:
                 self.num_public += 1
                 self.list_public.append('%s (%s)' % (img['name'], img['id']))
@@ -102,10 +116,7 @@ class GlanceImageProgessMigrationView(object):
 
 class GlanceImage(image.Image):
 
-    """
-    The main class for working with Openstack Glance Image Service.
-
-    """
+    """ The main class for working with Openstack Glance Image Service. """
 
     def __init__(self, config, cloud):
         self.config = config
@@ -137,7 +148,7 @@ class GlanceImage(image.Image):
         return self.proxy(self.get_client(), self.config)
 
     def get_client(self):
-        """ Getting glance client """
+        """ Getting glance client. """
         endpoint_glance = self.identity_client.get_endpoint_by_service_type(
             service_type='image',
             endpoint_type='publicURL')
@@ -229,6 +240,7 @@ class GlanceImage(image.Image):
 
         :param glance_image:    Direct OS Glance image object to convert,
         :param cloud:           Cloud object.
+
         """
 
         resource = cloud.resources[utl.IMAGE_RESOURCE]
@@ -237,7 +249,7 @@ class GlanceImage(image.Image):
             k: w for k, w in glance_image.to_dict().items(
             ) if k in CREATE_PARAMS}
         # we need to pass resource to destination to copy image
-        gl_image.update({'resource': resource})
+        gl_image['resource'] = resource
 
         # at this point we write name of owner of this tenant
         # to map it to different tenant id on destination
@@ -256,13 +268,11 @@ class GlanceImage(image.Image):
 
         return gl_image
 
-    def is_snapshot(self, img):
+    @staticmethod
+    def is_snapshot(img):
         # snapshots have {'image_type': 'snapshot"} in "properties" field
         return img.to_dict().get("properties", {}).get(
             'image_type') == 'snapshot'
-
-    def get_tags(self):
-        return {}
 
     def get_members(self, images):
         # members structure {image_id: {tenant_name: can_share}}
@@ -301,6 +311,7 @@ class GlanceImage(image.Image):
         """Get info about images or specified image.
 
         :returns: Dictionary containing images data
+
         """
 
         info = {'images': {}}
@@ -309,7 +320,7 @@ class GlanceImage(image.Image):
             info = self.make_image_info(glance_image, info)
 
         info.update({
-            "tags": self.get_tags(),
+            "tags": {},
             "members": self.get_members(info['images'])
         })
 
