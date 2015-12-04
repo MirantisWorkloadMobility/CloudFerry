@@ -18,22 +18,20 @@ import timeit
 import random
 import string
 import smtplib
-import os.path
-from pkg_resources import Requirement, resource_filename
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from functools import wraps
 import json
-from jinja2 import Environment, FileSystemLoader
 import os
 import inspect
 from multiprocessing import Lock
-from fabric.api import run, settings, local, env, sudo
-from fabric.context_managers import hide
-import ipaddr
-import yaml
 from logging import config
 
+from pkg_resources import Requirement, resource_filename
+from jinja2 import Environment, FileSystemLoader
+from fabric.api import run, settings, local, env, sudo
+from fabric.context_managers import hide
+import yaml
 
 ISCSI = "iscsi"
 CEPH = "ceph"
@@ -505,34 +503,6 @@ def get_disk_path(instance, blk_list, is_ceph_ephemeral=False, disk=DISK):
             if ("compute/%s%s" % (instance.id, disk)) == i:
                 disk_path = i
     return disk_path
-
-
-def get_ips(init_host, compute_host, ssh_user):
-    with settings(host_string=compute_host,
-                  user=ssh_user,
-                  gateway=init_host,
-                  connection_attempts=env.connection_attempts):
-        cmd = ("ifconfig | awk -F \"[: ]+\" \'/inet addr:/ "
-               "{ if ($4 != \"127.0.0.1\") print $4 }\'")
-        out = run(cmd)
-        list_ips = []
-        for info in out.split():
-            try:
-                ipaddr.IPAddress(info)
-            except ValueError:
-                continue
-            list_ips.append(info)
-    return list_ips
-
-
-def get_ext_ip(ext_cidr, init_host, compute_host, ssh_user):
-    list_ips = get_ips(init_host, compute_host, ssh_user)
-    for ip_str in list_ips:
-        ip_addr = ipaddr.IPAddress(ip_str)
-        for cidr in ext_cidr:
-            if ipaddr.IPNetwork(cidr.strip()).Contains(ip_addr):
-                return ip_str
-    return None
 
 
 def check_file(file_path):
