@@ -14,9 +14,10 @@
 
 
 import copy
+import httplib
+from itertools import ifilter
 import json
 import re
-from itertools import ifilter
 
 from fabric.api import run
 from fabric.api import settings
@@ -473,10 +474,13 @@ class GlanceImage(image.Image):
                     LOG.debug("new image ID %s", created_image.id)
                     self.update_membership(created_image.id, image_members)
                     created_images.append((created_image, meta))
-                except exception.ImageDownloadError:
+                except (exception.ImageDownloadError,
+                        httplib.IncompleteRead,
+                        glance_exceptions.HTTPInternalServerError) as e:
+                    LOG.debug(e, exc_info=True)
                     LOG.warning("Unable to reach image's data due to "
                                 "Glance HTTPInternalServerError. Skipping "
-                                "image: (id = %s)", img["id"])
+                                "image: %s (%s)", img['name'], img["id"])
                     obsolete_images_ids_list.append(img["id"])
                     continue
 
