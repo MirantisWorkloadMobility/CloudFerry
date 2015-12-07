@@ -49,7 +49,8 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             for j in dst_list:
                 if getattr(i, name_attr) != getattr(j, name_attr):
                     continue
-                if getattr(i, parameter) != getattr(j, parameter):
+                if getattr(i, parameter, None) and \
+                        getattr(i, parameter) != getattr(j, parameter):
                     msg = 'Parameter {param} for resource {res} with name ' \
                           '{name} are different src: {r1}, dst: {r2}'
                     self.fail(msg.format(
@@ -363,15 +364,25 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         dst_volume_list = self.dst_cloud.cinderclient.volumes.list(
             search_opts={'all_tenants': 1})
 
+        for parameter in ('display_name', 'size', 'bootable', 'metadata'):
+            self.validate_resource_parameter_in_dst(
+                src_volume_list, dst_volume_list, resource_name='volume',
+                parameter=parameter)
+
+        def ignore_image_id(volumes):
+            for vol in volumes:
+                metadata = getattr(vol, 'volume_image_metadata', None)
+                if metadata and 'image_id' in metadata:
+                    del metadata['image_id']
+                    vol.volume_image_metadata = metadata
+            return volumes
+
+        src_volume_list = ignore_image_id(src_volume_list)
+        dst_volume_list = ignore_image_id(dst_volume_list)
+
         self.validate_resource_parameter_in_dst(
             src_volume_list, dst_volume_list, resource_name='volume',
-            parameter='display_name')
-        self.validate_resource_parameter_in_dst(
-            src_volume_list, dst_volume_list, resource_name='volume',
-            parameter='size')
-        self.validate_resource_parameter_in_dst(
-            src_volume_list, dst_volume_list, resource_name='volume',
-            parameter='bootable')
+            parameter='volume_image_metadata')
 
     @attr(migrated_tenant='tenant2')
     def test_migrate_cinder_volumes_data(self):

@@ -17,6 +17,7 @@ import cloud
 import cloud_ferry
 from cloudferrylib.base.action import copy_var, rename_info, \
     merge, is_end_iter, get_info_iter
+from cloudferrylib.base import migration
 from cloudferrylib.os.actions import identity_transporter
 from cloudferrylib.scheduler import scheduler
 from cloudferrylib.scheduler import namespace
@@ -92,6 +93,16 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
                      'objstorage': swift_storage.SwiftStorage}
         self.src_cloud = cloud.Cloud(resources, cloud.SRC, config)
         self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)
+        self.src_cloud.migration = {
+            resource: migration.Migration(self.src_cloud, self.dst_cloud,
+                                          resource)
+            for resource in resources
+        }
+        self.dst_cloud.migration = {
+            resource: migration.Migration(self.src_cloud, self.dst_cloud,
+                                          resource)
+            for resource in resources
+        }
         self.init = {
             'src_cloud': self.src_cloud,
             'dst_cloud': self.dst_cloud,

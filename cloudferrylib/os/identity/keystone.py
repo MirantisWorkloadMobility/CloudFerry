@@ -90,6 +90,7 @@ class AddAdminUserToNonAdminTenant(object):
 
 @Cached(getter='get_tenants_list', modifier='create_tenant')
 class KeystoneIdentity(identity.Identity):
+
     """The main class for working with OpenStack Keystone Identity Service."""
 
     def __init__(self, config, cloud):
@@ -106,6 +107,7 @@ class KeystoneIdentity(identity.Identity):
         self.mysql_connector = cloud.mysql_connector('keystone')
         self.templater = Templater()
         self.generator = GeneratorPassword()
+        self.defaults = {}
 
     @property
     def keystone_client(self):
@@ -378,6 +380,34 @@ class KeystoneIdentity(identity.Identity):
             LOG.warning("User '%s' has not been found, returning default "
                         "value = '%s'", username, default)
             return self.keystone_client.users.find(name=default)
+
+    def get_default(self, resource_type):
+        """ Get default of `resource_type` (Tenant or User).
+
+        :return: object of `resource_type` type
+
+        """
+        if resource_type not in self.defaults:
+            if resource_type == utl.TENANTS_TYPE:
+                self.defaults[resource_type] = \
+                    self.keystone_client.tenants.find(
+                        name=self.config.cloud.tenant)
+            elif resource_type == utl.USERS_TYPE:
+                self.defaults[resource_type] = \
+                    self.keystone_client.users.find(
+                        name=self.config.cloud.user)
+            else:
+                raise NotImplementedError('Unknown resource type: %s',
+                                          resource_type)
+        return self.defaults[resource_type]
+
+    def get_default_id(self, resource_type):
+        """ Get default ID of `resource_type` (Tenant or User).
+
+        :return: default ID
+
+        """
+        return self.get_default(resource_type).id
 
     def roles_for_user(self, user_id, tenant_id):
         """ Getting list of user roles for tenant """
@@ -714,6 +744,14 @@ class KeystoneIdentity(identity.Identity):
         )
         for raw in res:
             return raw['version']
+
+    @staticmethod
+    def identical(src_tenant, dst_tenant):
+        if not src_tenant:
+            src_tenant = {'name': cfglib.CONF.src.tenant}
+        if not dst_tenant:
+            dst_tenant = {'name': cfglib.CONF.dst.tenant}
+        return src_tenant['name'] == dst_tenant['name']
 
 
 def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,

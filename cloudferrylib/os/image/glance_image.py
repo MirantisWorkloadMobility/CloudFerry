@@ -390,6 +390,15 @@ class GlanceImage(image.Image):
             dst_images[image_key] = dst_image
         return dst_images
 
+    def identical(self, src_image, dst_image):
+        """Compare images."""
+        for field in ('name', 'checksum', 'is_public'):
+            if src_image.get(field, None) != dst_image.get(field, None):
+                return False
+        migrated = self.cloud.migration[utl.IDENTITY_RESOURCE]
+        return migrated.identical(src_image['owner'], dst_image['owner'],
+                                  resource_type=utl.TENANTS_TYPE)
+
     def deploy(self, info):
         LOG.info("Glance images deployment started...")
         info = copy.deepcopy(info)
