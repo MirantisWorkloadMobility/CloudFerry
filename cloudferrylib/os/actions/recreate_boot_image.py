@@ -70,12 +70,10 @@ class ReCreateBootImage(action.Action):
                     img_src_host = \
                         gl_image['meta']['instance'][0]['diff']['host_src']
                     if img_src_host != self.src_host:
-                        LOG.warning('Different host information. ' +
-                                    'Image is located on host ' +
-                                    '{img_src_host},' +
-                                    'but host in the configuration file ' +
-                                    '{src_host}.'.format(img_src_host,
-                                                         self.src_host))
+                        LOG.warning('Different host information. Image is '
+                                    'located on host "%s", but host in the '
+                                    'configuration file "%s".', img_src_host,
+                                    self.src_host)
                         continue
                     new_img = self.process_image(img_id, diff)
                     gl_image['image']['id'] = new_img['id']
