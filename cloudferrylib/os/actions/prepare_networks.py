@@ -14,7 +14,6 @@
 
 
 import copy
-from neutronclient.common import exceptions as neutronclient_exceptions
 
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils as utl
