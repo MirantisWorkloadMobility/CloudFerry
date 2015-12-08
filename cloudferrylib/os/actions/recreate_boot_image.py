@@ -30,15 +30,9 @@ class ReCreateBootImage(action.Action):
     def __init__(self, init, cloud=None):
         super(ReCreateBootImage, self).__init__(init, cloud)
         self.src_user = self.cfg.src.ssh_user
-        src_password = self.cfg.src.ssh_sudo_password
-        self.src_host = self.cfg.src.ssh_host
         self.dst_user = self.cfg.dst.ssh_user
         dst_password = self.cfg.dst.ssh_sudo_password
         self.dst_host = self.cfg.dst.ssh_host
-        self.src_runner = remote_runner.RemoteRunner(self.src_host,
-                                                     self.src_user,
-                                                     password=src_password,
-                                                     sudo=True)
         self.dst_runner = remote_runner.RemoteRunner(self.dst_host,
                                                      self.dst_user,
                                                      password=dst_password,
@@ -62,6 +56,7 @@ class ReCreateBootImage(action.Action):
         :return: images_info and compute_ignored_images
         """
         images_info = copy.deepcopy(images_info)
+        src_password = self.cfg.src.ssh_sudo_password
         for vm_id in missing_images:
             img_id = missing_images[vm_id]
             for image_id_src, gl_image in images_info['images'].iteritems():
@@ -69,13 +64,11 @@ class ReCreateBootImage(action.Action):
                     diff = gl_image['meta']['instance'][0]['diff']['path_src']
                     img_src_host = \
                         gl_image['meta']['instance'][0]['diff']['host_src']
-                    if img_src_host != self.src_host:
-                        LOG.warning('Different host information. Image is '
-                                    'located on host "%s", but host in the '
-                                    'configuration file "%s".', img_src_host,
-                                    self.src_host)
-                        continue
-                    new_img = self.process_image(img_id, diff)
+                    src_runner = remote_runner.RemoteRunner(
+                        img_src_host, self.src_user, password=src_password,
+                        sudo=True)
+
+                    new_img = self.process_image(src_runner, img_id, diff)
                     gl_image['image']['id'] = new_img['id']
                     gl_image['image']['resource'] = None
                     gl_image['image']['checksum'] = new_img['checksum']
@@ -84,7 +77,7 @@ class ReCreateBootImage(action.Action):
             'images_info': images_info,
             'compute_ignored_images': compute_ignored_images}
 
-    def process_image(self, img_id=None, diff=None):
+    def process_image(self, src_runner, img_id=None, diff=None):
         """
         Processing image file: copy from source to destination,
          create glance image
@@ -92,21 +85,19 @@ class ReCreateBootImage(action.Action):
         :param diff: diff file of root disk for instance
         :return: new image ID if image is created
         """
-        with files.RemoteTempDir(self.src_runner) as src_tmp_dir,\
+        with files.RemoteTempDir(src_runner) as src_tmp_dir,\
                 files.RemoteTempDir(self.dst_runner) as dst_tmp_dir:
             diff_name = 'diff'
             base_name = 'base'
             diff_file = os.path.join(src_tmp_dir, diff_name)
-            self.src_runner.run('cp {} {}'.format(diff, diff_file))
+            src_runner.run('cp {} {}'.format(diff, diff_file))
             base_file = os.path.join(src_tmp_dir, base_name)
             dst_base_file = os.path.join(dst_tmp_dir, base_name)
             qemu_img_src = self.src_cloud.qemu_img
-            base = qemu_img_src.detect_backing_file(diff, self.src_host)
+            base = qemu_img_src.detect_backing_file(diff, src_runner.host)
             if base is not None:
-                self.src_runner.run('cp {} {}'.format(base, base_file))
-                qemu_img_src.diff_rebase(base_file, diff_file, self.src_host)
-                qemu_img_src.diff_commit(src_tmp_dir, diff_name, self.src_host)
-                verified_file_copy(self.src_runner,
+                src_runner.run('cp {} {}'.format(base, base_file))
+                verified_file_copy(src_runner,
                                    self.dst_runner,
                                    self.dst_user,
                                    base_file,
@@ -114,7 +105,7 @@ class ReCreateBootImage(action.Action):
                                    self.dst_host,
                                    1)
             else:
-                verified_file_copy(self.src_runner,
+                verified_file_copy(src_runner,
                                    self.dst_runner,
                                    self.dst_user,
                                    diff_file,
