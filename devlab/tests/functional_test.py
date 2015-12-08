@@ -14,12 +14,14 @@
 
 import config
 import logging
-import sys
 import os
 import unittest
 from generate_load import Prerequisites
 import utils
 from keystoneclient import exceptions as ks_exceptions
+import sys
+from test_exceptions import ConfFileError
+from testconfig import config as config_ini
 
 
 def get_cf_root_folder():
@@ -46,8 +48,18 @@ class FunctionalTest(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(FunctionalTest, self).__init__(*args, **kwargs)
         suppress_dependency_logging()
-        self.src_cloud = Prerequisites(cloud_prefix='SRC', config=config)
-        self.dst_cloud = Prerequisites(cloud_prefix='DST', config=config)
+
+        if not config_ini:
+            raise ConfFileError('Configuration file parameter'
+                                ' --tc-file is missing or '
+                                'the file has wrong format')
+
+        self.src_cloud = Prerequisites(cloud_prefix='SRC',
+                                       configuration_ini=config_ini,
+                                       config=config)
+        self.dst_cloud = Prerequisites(cloud_prefix='DST',
+                                       configuration_ini=config_ini,
+                                       config=config)
         self.filtering_utils = utils.FilteringUtils()
         self.migration_utils = utils.MigrationUtils(config)
 
