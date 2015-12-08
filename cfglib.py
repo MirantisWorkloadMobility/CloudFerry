@@ -174,6 +174,7 @@ migrate_opts = [
                 help="Keep affinity/anti-affinity settings"),
     cfg.IntOpt('boot_timeout', default=300,
                help="Timeout booting of instance"),
+    cfg.StrOpt('ssh_cipher', default=None, help='SSH cipher to use for SCP'),
 ]
 
 mail = cfg.OptGroup(name='mail',

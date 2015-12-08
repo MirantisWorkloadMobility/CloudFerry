@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-
 import os
 import subprocess
 import uuid
@@ -24,6 +23,7 @@ from cloudferrylib.utils import cmd_cfg
 from cloudferrylib.utils import files
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import utils
+from cloudferrylib.utils import ssh_util
 
 
 LOG = utils.get_log(__name__)
@@ -69,13 +69,15 @@ class CheckBandwidth(action.Action):
         remote_file_path = os.path.join(temp_dir_name,
                                         temp_file_name)
 
-        scp_upload = cmd_cfg.scp_cmd('',
+        scp_upload = cmd_cfg.scp_cmd(ssh_util.get_cipher_option(),
+                                     '',
                                      ssh_user,
                                      self.cloud.cloud_config.cloud.ssh_host,
                                      remote_file_path,
                                      temp_dir_name)
 
-        scp_download = cmd_cfg.scp_cmd(local_file_path,
+        scp_download = cmd_cfg.scp_cmd(ssh_util.get_cipher_option(),
+                                       local_file_path,
                                        ssh_user,
                                        self.cloud.cloud_config.cloud.ssh_host,
                                        temp_dir_name,
