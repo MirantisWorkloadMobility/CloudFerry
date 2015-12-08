@@ -95,7 +95,6 @@ class NeutronTestCase(test.TestCase):
                            'provider:network_type': 'gre',
                            'provider:segmentation_id': 5,
                            'res_hash': 'fake_net_hash_1',
-                           'subnets_hash': ['fake_subnet_hash_1'],
                            'meta': {}}
 
         self.net_2_info = {'name': 'fake_network_name_2',
@@ -110,7 +109,6 @@ class NeutronTestCase(test.TestCase):
                            'provider:network_type': 'vlan',
                            'provider:segmentation_id': 10,
                            'res_hash': 'fake_net_hash_2',
-                           'subnets_hash': ['fake_subnet_hash_2'],
                            'meta': {}}
 
         self.subnet_1_info = {'name': 'fake_subnet_name_1',
@@ -120,7 +118,7 @@ class NeutronTestCase(test.TestCase):
                                                     'end': 'fake_end_ip_1'}],
                               'gateway_ip': 'fake_gateway_ip_1',
                               'ip_version': 4,
-                              'cidr': 'fake_cidr_1',
+                              'cidr': '1.1.1.0/24',
                               'network_name': 'fake_network_name_1',
                               'external': False,
                               'network_id': 'fake_network_id_1',
@@ -135,7 +133,7 @@ class NeutronTestCase(test.TestCase):
                                                     'end': 'fake_end_ip_2'}],
                               'gateway_ip': 'fake_gateway_ip_2',
                               'ip_version': 4,
-                              'cidr': 'fake_cidr_2',
+                              'cidr': '2.2.2.0/25',
                               'network_name': 'fake_network_name_2',
                               'external': False,
                               'network_id': 'fake_network_id_2',
@@ -431,7 +429,7 @@ class NeutronTestCase(test.TestCase):
                                          'host_routes': [],
                                          'ip_version': 4,
                                          'gateway_ip': 'fake_gateway_ip_1',
-                                         'cidr': 'fake_cidr_1',
+                                         'cidr': '1.1.1.0/24',
                                          'id': 'fake_subnet_id_1'}]}
 
         self.neutron_mock_client().list_networks.return_value = fake_net_list
@@ -470,7 +468,7 @@ class NeutronTestCase(test.TestCase):
                                          'host_routes': [],
                                          'ip_version': 4,
                                          'gateway_ip': 'fake_gateway_ip_1',
-                                         'cidr': 'fake_cidr_1',
+                                         'cidr': '1.1.1.0/24',
                                          'id': 'fake_subnet_id_1'}]}
 
         self.neutron_mock_client().list_subnets.return_value = fake_subnet_list
@@ -864,13 +862,6 @@ class NeutronTestCase(test.TestCase):
         self.neutron_mock_client().add_interface_router.\
             assert_called_once_with('fake_router_id_2',
                                     {'subnet_id': 'fake_subnet_id_2'})
-
-    def test_hash_is_equal_for_nets_with_different_cidrs(self):
-        net1 = {'cidr': "192.168.1.11/22"}
-        net2 = {'cidr': "192.168.1.0/22"}
-        net1_hash = neutron.NeutronNetwork.get_resource_hash(net1, 'cidr')
-        net2_hash = neutron.NeutronNetwork.get_resource_hash(net2, 'cidr')
-        self.assertEqual(net1_hash, net2_hash)
 
     def test_get_network_from_list_by_id(self):
         networks_list = [self.net_1_info, self.net_2_info]
