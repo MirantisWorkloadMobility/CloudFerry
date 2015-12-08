@@ -38,6 +38,10 @@ loggers:
   CF:
     level: INFO
     handlers: [console, info, error]
+  paramiko.transport:
+    level: INFO
+    handlers: [console, info, error]
+
 root:
   level: INFO
   handlers: []
