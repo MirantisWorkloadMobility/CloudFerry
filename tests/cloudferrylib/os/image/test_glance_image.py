@@ -128,7 +128,8 @@ class GlanceImageTestCase(test.TestCase):
             fake_auth_token)
 
         gl_client = self.glance_image.get_client()
-        mock_calls = [mock.call(endpoint=fake_endpoint, token=fake_auth_token)]
+        mock_calls = [mock.call(endpoint=fake_endpoint, token=fake_auth_token,
+                                insecure=FAKE_CONFIG.cloud.insecure)]
 
         self.glance_mock_client.assert_has_calls(mock_calls)
         self.assertEqual(self.glance_mock_client(), gl_client)
