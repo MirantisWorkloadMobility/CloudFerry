@@ -62,8 +62,7 @@ tenants = [
      'vms': [
          {'name': 'tn1server1', 'image': 'image1', 'flavor': 'flavorname2',
           'key_name': 'key1'},
-         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1',
-          'fip': True},
+         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1'},
          {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr'}],
      'networks': [
          {'name': 'tenantnet1', 'admin_state_up': True,
@@ -111,7 +110,7 @@ tenants = [
      },
      'vms': [
          {'name': 'tn2server1', 'image': 'image1', 'flavor': 'flavorname2',
-          'key_name': 'key2'},
+          'fip': True, 'key_name': 'key2'},
          {'name': 'keypair_test_server', 'image': 'image1',
           'flavor': 'flavorname2', 'key_name': 'key2', 'nics': [
               {'net-id': 'tenantnet2'}], 'fip': True}],
@@ -123,9 +122,13 @@ tenants = [
           }
      ],
      'cinder_volumes': [
-         {'display_name': 'tn_volume1', 'size': 1,
-          'volume_type': 'nfs1',
-          'server_to_attach': 'tn2server1', 'device': '/dev/vdb'}
+         {'display_name': 'tn_volume1', 'size': 1, 'volume_type': 'nfs1',
+          'server_to_attach': 'tn2server1', 'device': '/dev/vdb',
+          'mount_point': '/tmp/mount_here/',
+          'write_to_file': [
+              {'filename': 'test_data.txt', 'data': 'some useless string'},
+              {'filename': 'test/dir/test_data.txt',
+               'data': 'test data string'}]}
      ],
      'unassociated_fip': 1
      },
@@ -270,7 +273,14 @@ snapshots = [
     {'server': 'server2', 'image_name': 'asdasd'}
 ]
 
-# Cinder images to create/delete
+
+'''
+Cinder images to create/delete
+To write some date, use "write_to_file" parameter. Now only string could be
+written into the file. Make sure volume is attached to the server, before write
+data. MD5 of file store in separate file in the same directory with name
+"${filename}_md5".
+'''
 cinder_volumes = [
     {'display_name': 'cinder_volume1', 'size': 1, 'volume_type': 'nfs1'},
     {'display_name': 'cinder_volume2', 'size': 1,

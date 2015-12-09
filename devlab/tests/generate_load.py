@@ -2,7 +2,9 @@ import argparse
 import itertools
 import time
 import json
+import os
 import yaml
+
 import config as conf
 import utils
 
@@ -747,6 +749,15 @@ class Prerequisites(BasePrerequisites):
                     raise RuntimeError(msg.format(volume_id))
             return volume_ids
 
+        def wait_until_vms_with_fip_accessible(_vm_id):
+            vm = self.novaclient.servers.get(_vm_id)
+            self.migration_utils.open_ssh_port_secgroup(self, vm.tenant_id)
+            try:
+                fip_addr = self.migration_utils.get_vm_fip(vm)
+            except RuntimeError:
+                return
+            self.migration_utils.wait_until_vm_accessible_via_ssh(fip_addr)
+
         def get_params_for_volume_creating(_volume):
             params = ['display_name', 'size', 'imageRef']
             vt_exists = 'volume_type' in _volume and \
@@ -777,10 +788,11 @@ class Prerequisites(BasePrerequisites):
             if 'server_to_attach' not in volume:
                 continue
             vlm_id = self.get_volume_id(volume['display_name'])
+            vm_id = self.get_vm_id(volume['server_to_attach'])
+            # To correct attaching volume, vm should be fully ready
+            wait_until_vms_with_fip_accessible(vm_id)
             self.novaclient.volumes.create_server_volume(
-                server_id=self.get_vm_id(volume['server_to_attach']),
-                volume_id=vlm_id,
-                device=volume['device'])
+                server_id=vm_id, volume_id=vlm_id, device=volume['device'])
             vlm_ids.append(vlm_id)
         wait_for_volumes(vlm_ids)
 
@@ -800,6 +812,48 @@ class Prerequisites(BasePrerequisites):
                     self.create_cinder_snapshots(tenant['cinder_snapshots'])
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
+
+    def write_data_to_volumes(self):
+        """Method creates file and md5sum of this file on volume
+        """
+        volumes = self.config.cinder_volumes
+        volumes += itertools.chain(*[tenant['cinder_volumes'] for tenant
+                                     in self.config.tenants if 'cinder_volumes'
+                                     in tenant])
+        for volume in volumes:
+            attached_volume = volume.get('server_to_attach')
+            if not volume.get('write_to_file') or not attached_volume:
+                continue
+            if not volume.get('mount_point'):
+                msg = 'Please specify mount point for volume %s'
+                raise RuntimeError(msg % volume['name'])
+
+            vm = self.novaclient.servers.get(
+                self.get_vm_id(volume['server_to_attach']))
+            vm_ip = self.migration_utils.get_vm_fip(vm)
+            # Make filesystem on volume. The OS assigns the volume to the next
+            # available device, which /dev/vda
+            cmd = '/usr/sbin/mkfs.ext2 /dev/vdb'
+            self.migration_utils.execute_command_on_vm(vm_ip, cmd)
+            # Create directory for mount point
+            cmd = 'mkdir -p %s' % volume['mount_point']
+            self.migration_utils.execute_command_on_vm(vm_ip, cmd)
+            # Mount volume
+            cmd = 'mount {0} {1}'.format(volume['device'],
+                                         volume['mount_point'])
+            self.migration_utils.execute_command_on_vm(vm_ip, cmd)
+            for _file in volume['write_to_file']:
+                _path, filename = os.path.split(_file['filename'])
+                path = '{0}/{1}'.format(volume['mount_point'], _path)
+                if _path:
+                    cmd = 'mkdir -p {path}'.format(path=path)
+                    self.migration_utils.execute_command_on_vm(vm_ip, cmd)
+                cmd = 'sh -c "echo \'{content}\' > {path}/{filename}"'
+                self.migration_utils.execute_command_on_vm(vm_ip, cmd.format(
+                    path=path, content=_file['data'], filename=filename))
+                cmd = 'sh -c "md5sum {path}/{_file} > {path}/{_file}_md5"'
+                self.migration_utils.execute_command_on_vm(vm_ip, cmd.format(
+                    path=path, _file=filename))
 
     def emulate_vm_states(self):
         for vm_state in self.config.vm_states:
@@ -1014,6 +1068,8 @@ class Prerequisites(BasePrerequisites):
         self.create_security_groups()
         print('>>> Creating cinder objects:')
         self.create_cinder_objects()
+        print('>>> Writing data into the volumes:')
+        self.write_data_to_volumes()
         print('>>> Emulating vm states:')
         self.emulate_vm_states()
         print('>>> Generating vm states list:')
@@ -1245,10 +1301,19 @@ class CleanEnv(BasePrerequisites):
                 self.get_volume_snapshot_id(snapshot.display_name))
             print('Snapshot "%s" has been deleted' % snapshot.display_name)
 
+    def clean_namespaces(self):
+        ip_addr = self.get_vagrant_vm_ip()
+        if self.openstack_release == 'grizzly':
+            cmd = 'quantum-netns-cleanup'
+        else:
+            cmd = 'neutron-netns-cleanup'
+        self.migration_utils.execute_command_on_vm(ip_addr, cmd, 'root')
+
     def clean_all_networking(self):
         self.clean_fips()
         self.clean_routers()
         self.clean_networks()
+        self.clean_namespaces()
 
     def clean_objects(self):
         self.clean_vms()

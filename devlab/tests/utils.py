@@ -16,9 +16,14 @@ import os
 import yaml
 import config
 import ConfigParser
+import time
 
 from fabric.api import run, settings, sudo, hide
 from fabric.network import NetworkError
+from neutronclient.common.exceptions import NeutronClientException
+
+
+VM_ACCESSIBILITY_ATTEMPTS = 20
 
 
 class FilteringUtils(object):
@@ -85,15 +90,6 @@ class FilteringUtils(object):
                 src_data_list.pop(index)
         return [src_data_list, popped_tenant_list]
 
-    @staticmethod
-    def get_vm_fip(vm):
-        for net in vm.addresses:
-            for addr in vm.addresses[net]:
-                if addr['OS-EXT-IPS:type'] == 'floating':
-                    return addr['addr']
-        raise RuntimeError('VM with name {} and id {} doesnt have fip'.format(
-            vm.name, vm.id))
-
 
 class MigrationUtils(object):
 
@@ -139,3 +135,35 @@ class MigrationUtils(object):
             for image in tenant['images']:
                 images.append(image)
         return images
+
+    def wait_until_vm_accessible_via_ssh(self, ip_addr):
+        for _ in range(VM_ACCESSIBILITY_ATTEMPTS):
+            try:
+                self.execute_command_on_vm(ip_addr, 'pwd')
+                break
+            except RuntimeError:
+                time.sleep(1)
+        else:
+            msg = 'VM with ip "{}" is not accessible via ssh after {} attempts'
+            raise RuntimeError(msg.format(ip_addr, VM_ACCESSIBILITY_ATTEMPTS))
+
+    @staticmethod
+    def open_ssh_port_secgroup(client, tenant_id):
+        sec_grps = client.get_sec_group_id_by_tenant_id(tenant_id)
+        for sec_gr in sec_grps:
+            try:
+                client.create_security_group_rule(
+                    sec_gr, tenant_id, protocol='tcp', port_range_max=22,
+                    port_range_min=22, direction='ingress')
+            except NeutronClientException as e:
+                if e.status_code != 409:
+                    raise e
+
+    @staticmethod
+    def get_vm_fip(vm):
+        for net in vm.addresses:
+            for addr in vm.addresses[net]:
+                if addr['OS-EXT-IPS:type'] == 'floating':
+                    return addr['addr']
+        raise RuntimeError('VM with name {} and id {} doesnt have fip'.format(
+            vm.name, vm.id))
