@@ -91,12 +91,17 @@ class TransportKeyPairs(action.Action):
         src_keystone = self.src_cloud.resources[utl.IDENTITY_RESOURCE]
         dst_keystone = self.dst_cloud.resources[utl.IDENTITY_RESOURCE]
 
+        dst_users = {}
         key_pairs = self.kp_db_broker.get_all_keypairs(self.src_cloud)
 
         for key_pair in key_pairs:
-            dst_user = keystone.get_dst_user_from_src_user_id(
-                src_keystone, dst_keystone, key_pair.user_id,
-                fallback_to_admin=True)
+            if key_pair.user_id not in dst_users:
+                dst_user = keystone.get_dst_user_from_src_user_id(
+                    src_keystone, dst_keystone, key_pair.user_id,
+                    fallback_to_admin=True)
+                dst_users[key_pair.user_id] = dst_user
+            else:
+                dst_user = dst_users[key_pair.user_id]
             if dst_user is None:
                 continue
 
