@@ -65,7 +65,9 @@ class FilterSimilarVMsFromDST(action.Action):
         self.similar_isntances = collections.defaultdict(set)
         self.conflict_instances = collections.defaultdict(set)
         for tenant_id, ip_to_id in titii_src.items():
-            tenant_new_id = self.tenant_id_to_new_id[tenant_id]
+            tenant_new_id = self.tenant_id_to_new_id.get(tenant_id, None)
+            if tenant_new_id is None:
+                continue
             dst_ip_to_id = titii_dst[tenant_new_id]
             for ip, instance_id in ip_to_id.items():
                 if ip in dst_ip_to_id:
@@ -79,7 +81,8 @@ class FilterSimilarVMsFromDST(action.Action):
             ip_to_id = tenant_ip_to_instance_id[info['tenant_id']]
             instance_id = info['id']
             for interface in info['interfaces']:
-                ip_to_id[interface['ip']] = instance_id
+                for ip_address in interface['ip_addresses']:
+                    ip_to_id[ip_address] = instance_id
         return tenant_ip_to_instance_id
 
     def instance_comparison(self, src_instance_id, dst_instance_id):

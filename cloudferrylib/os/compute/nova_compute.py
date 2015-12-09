@@ -23,6 +23,7 @@ from novaclient import exceptions as nova_exc
 from cloudferrylib.base import compute
 from cloudferrylib.os.compute import instances
 from cloudferrylib.os.compute import cold_evacuate
+from cloudferrylib.os.compute import server_groups
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import timeout_exception
@@ -203,6 +204,8 @@ class NovaCompute(compute.Compute):
         for flavor in self.get_flavor_list(is_public=None):
             try:
                 internal_flavor = self.convert(flavor, cloud=self.cloud)
+                if internal_flavor is None:
+                    continue
                 info['flavors'][flavor.id] = internal_flavor
                 LOG.info("Got flavor '%s'", flavor.name)
                 LOG.debug("%s", pprint.pformat(internal_flavor))
@@ -262,6 +265,7 @@ class NovaCompute(compute.Compute):
     def convert_instance(instance, cfg, cloud):
         identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
         compute_res = cloud.resources[utl.COMPUTE_RESOURCE]
+        sg_res = server_groups.ServerGroupsHandler(cloud)
 
         instance_name = instance_libvirt_name(instance)
         instance_node = instance_host(instance)
@@ -347,12 +351,19 @@ class NovaCompute(compute.Compute):
                                                    include_deleted=True).name
         flav_details.update({'name': flav_name})
 
+        tenant_name = get_tenant_name(instance.tenant_id)
+
+        if cfg.migrate.keep_affinity_settings:
+            server_group = sg_res.get_server_group_id_by_vm(instance.id,
+                                                            tenant_name)
+        else:
+            server_group = None
+
         inst = {'instance': {'name': instance.name,
                              'instance_name': instance_name,
                              'id': instance.id,
                              'tenant_id': instance.tenant_id,
-                             'tenant_name': get_tenant_name(
-                                 instance.tenant_id),
+                             'tenant_name': tenant_name,
                              'status': instance.status,
                              'flavor_id': instance.flavor['id'],
                              'flav_details': flav_details,
@@ -369,10 +380,11 @@ class NovaCompute(compute.Compute):
                              'boot_volume': copy.deepcopy(
                                  volumes[0]) if volumes else None,
                              'interfaces': interfaces,
-                             'host': instance_host,
+                             'host': instance_node,
                              'is_ephemeral': is_ephemeral,
                              'volumes': volumes,
-                             'user_id': instance.user_id
+                             'user_id': instance.user_id,
+                             'server_group': server_group
                              },
                 'ephemeral': ephemeral_path,
                 'diff': diff,
@@ -395,8 +407,9 @@ class NovaCompute(compute.Compute):
                 tenants = [flv_acc.tenant_id for flv_acc in flavor_access_list]
 
                 filter_enabled = compute_res.filter_tenant_id is not None
-                if filter_enabled and compute_res.filter_tenant_id in tenants:
-                    tenants = [compute_res.filter_tenant_id]
+                if (filter_enabled and
+                        compute_res.filter_tenant_id not in tenants):
+                    return None
 
             return {'flavor': {'name': compute_obj.name,
                                'ram': compute_obj.ram,
@@ -617,6 +630,11 @@ class NovaCompute(compute.Compute):
                     "boot_index": 0
                 }]
                 create_params['image'] = None
+
+            if (self.config.migrate.keep_affinity_settings and
+                    instance['server_group'] is not None):
+                create_params['scheduler_hints'] = {
+                    'group': instance['server_group']}
 
             client_conf.cloud.tenant = instance['tenant_name']
 
@@ -842,28 +860,11 @@ class NovaCompute(compute.Compute):
         return self.nova_client.servers.get(res_id).status
 
     def get_networks(self, instance):
-        networks = []
-        func_mac_address = self.get_func_mac_address(instance)
-        for network in instance.networks.items():
-            networks_info = dict(name=network[0],
-                                 ip=network[1][0],
-                                 mac=func_mac_address(network[1][0]))
-            networks_info['floatingip'] = network[1][1] if len(
-                network[1]) > 1 else None
-            networks.append(networks_info)
-        return networks
-
-    def get_func_mac_address(self, instance):
-        resources = self.cloud.resources
-        if 'network' in resources:
-            network = resources['network']
-            if 'get_func_mac_address' in dir(network):
-                return network.get_func_mac_address(instance)
-        return self.default_detect_mac(instance)
-
-    def default_detect_mac(self, arg):
-        raise NotImplementedError("Not implemented yet function for detect "
-                                  "mac address")
+        network_resource = self.cloud.resources.get('network')
+        if network_resource is not None:
+            return network_resource.get_instance_network_info(instance.id)
+        raise RuntimeError("Can't get network interface info without "
+                           "network resource")
 
     def attach_volume_to_instance(self, instance, volume):
         self.nova_client.volumes.create_server_volume(

@@ -20,6 +20,7 @@ import mock
 from neutronclient.v2_0 import client as neutron_client
 from oslotest import mockpatch
 
+from cloudferrylib.base import exception
 from cloudferrylib.os.network import neutron
 from cloudferrylib.utils import utils
 from tests import test
@@ -81,6 +82,7 @@ class NeutronTestCase(test.TestCase):
                            'provider:network_type': 'gre',
                            'provider:segmentation_id': 5,
                            'res_hash': 'fake_net_hash_1',
+                           'subnets_hash': ['fake_subnet_hash_1'],
                            'meta': {}}
 
         self.net_2_info = {'name': 'fake_network_name_2',
@@ -91,10 +93,11 @@ class NeutronTestCase(test.TestCase):
                            'tenant_name': 'fake_tenant_name_2',
                            'subnet_names': ['fake_subnet_name_2'],
                            'router:external': False,
-                           'provider:physical_network': None,
-                           'provider:network_type': 'gre',
+                           'provider:physical_network': 'physnet',
+                           'provider:network_type': 'vlan',
                            'provider:segmentation_id': 10,
                            'res_hash': 'fake_net_hash_2',
+                           'subnets_hash': ['fake_subnet_hash_2'],
                            'meta': {}}
 
         self.subnet_1_info = {'name': 'fake_subnet_name_1',
@@ -126,6 +129,10 @@ class NeutronTestCase(test.TestCase):
                               'tenant_name': 'fake_tenant_name_2',
                               'res_hash': 'fake_subnet_hash_2',
                               'meta': {}}
+
+        self.segmentation_ids = {'gre': [2, 4, 6],
+                                 'vlan': [3, 5, 7],
+                                 'vxlan': [10, 20]}
 
     def f_mock(self, tenant_id):
         if tenant_id == 'fake_tenant_id_1':
@@ -182,22 +189,22 @@ class NeutronTestCase(test.TestCase):
             'ten1': {'subnet': 12}
         }
         res1 = self.neutron_network_client.get_quota("")
-        self.assertDictEqual(res1, expected_data)
+        self.assertEqual(expected_data, res1)
         res2 = self.neutron_network_client.get_quota("1")
-        self.assertDictEqual(res2, expected_data)
+        self.assertEqual(expected_data, res2)
         FAKE_CONFIG.network.get_all_quota = False
         res3 = self.neutron_network_client.get_quota("")
-        self.assertDictEqual(res3, expected_data)
+        self.assertEqual(expected_data, res3)
         self.neutron_mock_client().list_quotas.return_value = {
             'quotas': [{'subnet': 12, 'tenant_id': "1"}]
         }
         res4 = self.neutron_network_client.get_quota("1")
-        self.assertDictEqual(res4, expected_data)
+        self.assertEqual(expected_data, res4)
         self.neutron_mock_client().list_quotas.return_value = {
             'quotas': [{'subnet': 12, 'tenant_id': "1"}]
         }
         res5 = self.neutron_network_client.get_quota("2")
-        self.assertDictEqual(res5, {})
+        self.assertEqual(res5, {})
 
     def test_get_networks(self):
         fake_net_list = {'networks': [{'status': 'ACTIVE',
@@ -231,7 +238,7 @@ class NeutronTestCase(test.TestCase):
         self.network_mock.get_networks_list = mock.Mock(
             return_value=fake_net_list['networks'])
         self.network_mock.get_resource_hash = mock.Mock(
-            return_value='fake_net_hash_1')
+            side_effect=['fake_subnet_hash_1', 'fake_net_hash_1'])
 
         networks_info = [self.net_1_info]
         networks_info_result = self.neutron_network_client.get_networks()
@@ -309,11 +316,12 @@ class NeutronTestCase(test.TestCase):
         self.network_mock.get_ports_list.return_value = fake_ports_list
         self.network_mock.get_resource_hash = mock.Mock(
             return_value='fake_router_hash')
+        self.network_mock.get_ports_info.return_value = \
+            {'subnet_ids': {'fake_subnet_id_1', }, 'ips': {'fake_ipaddr_1', }}
 
         routers_info = [{'name': 'fake_router_name_1',
                          'id': 'fake_router_id_1',
                          'admin_state_up': True,
-                         'routes': [],
                          'external_gateway_info': {
                              'network_id': 'fake_network_id_1',
                              'enable_snat': True
@@ -322,13 +330,13 @@ class NeutronTestCase(test.TestCase):
                          'ext_net_tenant_name': 'fake_tenant_name_1',
                          'ext_net_id': 'fake_network_id_1',
                          'tenant_name': 'fake_tenant_name_1',
-                         'ips': ['fake_ipaddr_1'],
-                         'subnet_ids': ['fake_subnet_id_1'],
+                         'ips': {'fake_ipaddr_1', },
+                         'subnet_ids': {'fake_subnet_id_1', },
                          'res_hash': 'fake_router_hash',
                          'meta': {}}]
 
         routers_info_result = self.neutron_network_client.get_routers()
-        self.assertEquals(routers_info, routers_info_result)
+        self.assertEqual(routers_info, routers_info_result)
 
     def test_get_floatingips(self):
         fake_net_list = {'networks': [{'status': 'ACTIVE',
@@ -560,7 +568,8 @@ class NeutronTestCase(test.TestCase):
                         'provider:network_type': 'gre'
                         }}
 
-        self.neutron_network_client.upload_networks([self.net_1_info])
+        self.neutron_network_client.upload_networks([self.net_1_info],
+                                                    self.segmentation_ids)
 
         if network_info['network']['provider:physical_network']:
             self.neutron_mock_client().create_network.\
@@ -579,8 +588,8 @@ class NeutronTestCase(test.TestCase):
             'ext_net_tenant_name': 'fake_tenant_name_1',
             'ext_net_id': 'fake_network_id_1',
             'tenant_name': 'fake_tenant_name_1',
-            'ips': ['fake_ipaddr_1'],
-            'subnet_ids': ['fake_subnet_id_1'],
+            'ips': {'fake_ipaddr_1', },
+            'subnet_ids': {'fake_subnet_id_1', },
             'res_hash': 'fake_router_hash_1',
             'meta': {}}
 
@@ -595,8 +604,8 @@ class NeutronTestCase(test.TestCase):
             'ext_net_tenant_name': 'fake_tenant_name_2',
             'ext_net_id': 'fake_network_id_2',
             'tenant_name': 'fake_tenant_name_2',
-            'ips': ['fake_ipaddr_2'],
-            'subnet_ids': ['fake_subnet_id_2'],
+            'ips': {'fake_ipaddr_2', },
+            'subnet_ids': {'fake_subnet_id_2', },
             'res_hash': 'fake_router_hash_2',
             'meta': {}}
 
@@ -616,12 +625,13 @@ class NeutronTestCase(test.TestCase):
         self.neutron_network_client.add_router_interfaces = \
             mock.Mock(return_value=None)
 
+        self.neutron_network_client.convert_routers = \
+            mock.Mock(return_value=router2_info)
+
         router_info = {
             'router': {'name': 'fake_router_name_2',
                        'tenant_id': 'fake_tenant_id_2',
-                       'external_gateway_info': {
-                           'network_id': 'fake_network_id_2'
-                       }}}
+                       }}
 
         self.neutron_network_client.upload_routers(src_nets_info,
                                                    src_subnets_info,
@@ -632,13 +642,14 @@ class NeutronTestCase(test.TestCase):
 
     def test_add_router_interfaces(self):
         src_router = {'id': 'fake_router_id_1',
-                      'subnet_ids': ['fake_subnet_id_1'],
-                      'external_gateway_info': None}
+                      'subnet_ids': {'fake_subnet_id_1', },
+                      'external_gateway_info': None,
+                      'name': 'r1'}
         src_subnets = [{'id': 'fake_subnet_id_1',
                         'external': False,
                         'res_hash': 'fake_subnet_hash'}]
         dst_router = {'id': 'fake_router_id_2',
-                      'subnet_ids': ['fake_subnet_id_2'],
+                      'subnet_ids': set(),
                       'external_gateway_info': None,
                       'name': 'r1'}
         dst_subnets = [{'id': 'fake_subnet_id_2',
@@ -683,6 +694,37 @@ class NeutronTestCase(test.TestCase):
                                                 subnets_list=subnets_list)
 
         self.assertEqual(self.net_2_info, network)
+
+    def test_get_segmentation_ids_from_net_list(self):
+        networks_list = [self.net_1_info, self.net_2_info]
+        seg_ids = {'gre': [5],
+                   'vlan': [10]}
+
+        result = neutron.get_segmentation_ids_from_net_list(networks_list)
+
+        self.assertEqual(seg_ids, result)
+
+    def test_generate_new_segmentation_id(self):
+        dst_seg_ids = {'gre': [2, 4, 6, 14, 21],
+                       'vlan': [3, 5, 7, 10, 12],
+                       'vxlan': [10, 30, 40]}
+
+        seg_id = neutron.generate_new_segmentation_id(self.segmentation_ids,
+                                                      dst_seg_ids,
+                                                      'gre')
+
+        self.assertEqual(3, seg_id)
+
+    def test_generate_new_segmentation_id_vlan_limit(self):
+        dst_seg_ids = {'gre': [2, 4, 6, 14, 21],
+                       'vlan': range(2, 4096),
+                       'vxlan': [10, 30, 40]}
+
+        self.assertRaises(exception.AbortMigrationError,
+                          neutron.generate_new_segmentation_id,
+                          self.segmentation_ids,
+                          dst_seg_ids,
+                          'vlan')
 
 
 class NeutronRouterTestCase(test.TestCase):

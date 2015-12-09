@@ -1,22 +1,26 @@
 import argparse
 import itertools
-import os
 import time
 import json
+import os
 import yaml
+
 import config as conf
+import utils
 
-from filtering_utils import FilteringUtils
+import ConfigParser
 
-from cinderclient import client as cinder
-from glanceclient import Client as glance
+from glanceclient.v1 import Client as glance
 from keystoneclient import exceptions as ks_exceptions
 from keystoneclient.v2_0 import client as keystone
 from neutronclient.common import exceptions as nt_exceptions
-from neutronclient.neutron import client as neutron
-from novaclient import client as nova
-from novaclient import exceptions as nv_exceptions
 
+from novaclient import exceptions as nv_exceptions
+from novaclient.v1_1 import client as nova
+from neutronclient.v2_0 import client as neutron
+from cinderclient.v1 import client as cinder
+
+from test_exceptions import NotFound
 
 TIMEOUT = 600
 VM_SPAWNING_LIMIT = 5
@@ -67,48 +71,61 @@ def retry_until_resources_created(resource_name):
     return actual_decorator
 
 
-class NotFound(Exception):
-
-    """Raise this exception in case when resource was not found
-    """
+def get_dict_from_config_file(config_file):
+    conf_dict = {}
+    for section in config_file.sections():
+        conf_dict[section] = {}
+        for option in config_file.options(section):
+            conf_dict[section][option] = config_file.get(section, option)
+    return conf_dict
 
 
 class BasePrerequisites(object):
 
-    def __init__(self, config, cloud_prefix='SRC'):
-        self.filtering_utils = FilteringUtils()
+    def __init__(self, config,
+                 configuration_ini,
+                 cloud_prefix='SRC'):
+        self.filtering_utils = utils.FilteringUtils()
+        self.migration_utils = utils.MigrationUtils(config)
+
         self.config = config
-        self.username = os.environ['%s_OS_USERNAME' % cloud_prefix]
-        self.password = os.environ['%s_OS_PASSWORD' % cloud_prefix]
-        self.tenant = os.environ['%s_OS_TENANT_NAME' % cloud_prefix]
-        self.auth_url = os.environ['%s_OS_AUTH_URL' % cloud_prefix]
-        self.image_endpoint = os.environ['%s_OS_IMAGE_ENDPOINT' % cloud_prefix]
-        self.neutron_endpoint = os.environ['%s_OS_NEUTRON_ENDPOINT'
-                                           % cloud_prefix]
+
+        self.cloud_prefix = cloud_prefix.lower()
+
+        self.configuration_ini = configuration_ini
+
+        self.username = self.configuration_ini[self.cloud_prefix]['user']
+        self.password = self.configuration_ini[self.cloud_prefix]['password']
+        self.tenant = self.configuration_ini[self.cloud_prefix]['tenant']
+        self.auth_url = self.configuration_ini[self.cloud_prefix]['auth_url']
 
         self.keystoneclient = keystone.Client(auth_url=self.auth_url,
                                               username=self.username,
                                               password=self.password,
                                               tenant_name=self.tenant)
         self.keystoneclient.authenticate()
-        self.token = self.keystoneclient.auth_token
 
-        self.novaclient = nova.Client(self.config.NOVA_CLIENT_VERSION,
-                                      username=self.username,
+        self.novaclient = nova.Client(username=self.username,
                                       api_key=self.password,
                                       project_id=self.tenant,
                                       auth_url=self.auth_url)
 
-        self.glanceclient = glance(self.config.GLANCE_CLIENT_VERSION,
-                                   endpoint=self.image_endpoint,
+        self.token = self.keystoneclient.auth_token
+
+        self.image_endpoint = \
+            self.keystoneclient.service_catalog.get_endpoints(
+                service_type='image',
+                endpoint_type='publicURL')['image'][0]['publicURL']
+
+        self.glanceclient = glance(endpoint=self.image_endpoint,
                                    token=self.token)
 
-        self.neutronclient = neutron.Client(self.config.NEUTRON_CLIENT_VERSION,
-                                            endpoint_url=self.neutron_endpoint,
-                                            token=self.token)
+        self.neutronclient = neutron.Client(username=self.username,
+                                            password=self.password,
+                                            tenant_name=self.tenant,
+                                            auth_url=self.auth_url)
 
-        self.cinderclient = cinder.Client(self.config.CINDER_CLIENT_VERSION,
-                                          self.username, self.password,
+        self.cinderclient = cinder.Client(self.username, self.password,
                                           self.tenant, self.auth_url)
         self.openstack_release = self._get_openstack_release()
 
@@ -117,6 +134,11 @@ class BasePrerequisites(object):
             if release in self.auth_url:
                 return OPENSTACK_RELEASES[release]
         raise RuntimeError('Unknown OpenStack release')
+
+    def get_vagrant_vm_ip(self):
+        for release in OPENSTACK_RELEASES:
+            if release in self.auth_url:
+                return release
 
     def get_tenant_id(self, tenant_name):
         for tenant in self.keystoneclient.tenants.list():
@@ -260,31 +282,34 @@ class BasePrerequisites(object):
                                               tenant_name=tenant)
         self.keystoneclient.authenticate()
         self.token = self.keystoneclient.auth_token
-        self.novaclient = nova.Client(self.config.NOVA_CLIENT_VERSION,
-                                      username=user,
-                                      api_key=password, project_id=tenant,
+        self.novaclient = nova.Client(username=user,
+                                      api_key=password,
+                                      project_id=tenant,
                                       auth_url=self.auth_url)
-        self.glanceclient = glance(self.config.GLANCE_CLIENT_VERSION,
-                                   endpoint=self.image_endpoint,
+
+        self.glanceclient = glance(endpoint=self.image_endpoint,
                                    token=self.token)
-        self.neutronclient = neutron.Client(
-            self.config.NEUTRON_CLIENT_VERSION,
-            endpoint_url=self.neutron_endpoint,
-            token=self.token)
-        self.cinderclient = cinder.Client(self.config.CINDER_CLIENT_VERSION,
-                                          user, password, tenant,
+
+        self.neutronclient = neutron.Client(username=user,
+                                            password=password,
+                                            tenant_name=tenant,
+                                            auth_url=self.auth_url)
+
+        self.cinderclient = cinder.Client(user, password, tenant,
                                           self.auth_url)
 
 
 class Prerequisites(BasePrerequisites):
 
-    def __init__(self, config, cloud_prefix='SRC'):
-        super(Prerequisites, self).__init__(config, cloud_prefix)
+    def __init__(self, config, configuration_ini, cloud_prefix='SRC'):
+        super(Prerequisites, self).__init__(config,
+                                            configuration_ini,
+                                            cloud_prefix)
         # will be filled during create all networking step
         self.ext_net_id = None
         # object of Prerequisites for dst cloud
         self.dst_cloud = None
-        self.clean_tools = CleanEnv(config, cloud_prefix)
+        self.clean_tools = CleanEnv(config, configuration_ini, cloud_prefix)
 
     @clean_if_exists
     def create_users(self, users=None):
@@ -381,22 +406,37 @@ class Prerequisites(BasePrerequisites):
                     image_ids.remove(img_id)
             return image_ids
 
+        def _get_body_for_image_creating(_image):
+            # Possible parameters for image creating
+            params = ['name', 'location', 'disk_format', 'container_format',
+                      'is_public', 'copy_from']
+            return {param: _image[param] for param in params
+                    if param in _image}
+
         img_ids = []
         for tenant in self.config.tenants:
             if not tenant.get('images'):
                 continue
             for image in tenant['images']:
+
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
-                img = self.glanceclient.images.create(**image)
+
+                img = self.glanceclient.images.create(
+                    **_get_body_for_image_creating(image))
+
                 img_ids.append(img.id)
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
+
         for image in self.config.images:
-            img = self.glanceclient.images.create(**image)
+            img = self.glanceclient.images.create(
+                **_get_body_for_image_creating(image))
             img_ids.append(img.id)
         wait_until_images_created(img_ids)
-        src_cloud = Prerequisites(cloud_prefix='SRC', config=self.config)
+        src_cloud = Prerequisites(cloud_prefix='SRC',
+                                  configuration_ini=self.configuration_ini,
+                                  config=self.config)
         src_img = [x.__dict__ for x in
                    src_cloud.glanceclient.images.list()]
         for image in src_img:
@@ -413,7 +453,9 @@ class Prerequisites(BasePrerequisites):
             self.glanceclient.images.create()
 
     def update_filtering_file(self):
-        src_cloud = Prerequisites(cloud_prefix='SRC', config=self.config)
+        src_cloud = Prerequisites(cloud_prefix='SRC',
+                                  configuration_ini=self.configuration_ini,
+                                  config=self.config)
         src_img = [x.__dict__ for x in
                    src_cloud.glanceclient.images.list()]
         src_vms = [x.__dict__ for x in
@@ -432,15 +474,19 @@ class Prerequisites(BasePrerequisites):
         for vm in src_vms:
             vm_id = vm['id']
             vm_id_list.append(vm_id)
-        loaded_data = self.filtering_utils.load_file('configs/filter.yaml')
-        filter_dict = loaded_data[0]
-        if filter_dict is None:
-            filter_dict = {'images': {'images_list': {}},
-                           'instances': {'id': {}}}
+        filter_dict = {
+            'tenants': {
+                'tenant_id': []
+            },
+            'instances': {
+                'id': []
+            },
+            'images': {
+                'images_list': []
+            }
+        }
         all_img_ids = []
-        img_list = []
         not_incl_img = []
-        vm_list = []
         for image in src_img:
             all_img_ids.append(image['id'])
         for img in self.config.images_not_included_in_filter:
@@ -449,16 +495,20 @@ class Prerequisites(BasePrerequisites):
             if key == 'images':
                 for img_id in all_img_ids:
                     if img_id not in not_incl_img:
-                        img_list.append(img_id)
-                filter_dict[key]['images_list'] = img_list
+                        filter_dict[key]['images_list'].append(str(img_id))
             elif key == 'instances':
                 for vm in vm_id_list:
                     if vm != self.get_vm_id('not_in_filter'):
-                        vm_list.append(vm)
-                filter_dict[key]['id'] = vm_list
-        file_path = loaded_data[1]
-        with open(file_path, "w") as f:
-            yaml.dump(filter_dict, f, default_flow_style=False)
+                        filter_dict[key]['id'].append(str(vm))
+        for tenant in self.config.tenants + [{'name': self.tenant}]:
+            if tenant.get('deleted'):
+                continue
+            filter_dict['tenants']['tenant_id'] = [str(
+                self.get_tenant_id(tenant['name']))]
+            file_path = self.config.filters_file_naming_template.format(
+                tenant_name=tenant['name'])
+            with open(file_path, "w+") as f:
+                yaml.dump(filter_dict, f, default_flow_style=False)
 
     @clean_if_exists
     def create_flavors(self):
@@ -482,8 +532,7 @@ class Prerequisites(BasePrerequisites):
                 'flavor': self.get_flavor_id(vm['flavor']),
                 'nics': get_vm_nics(vm),
                 'name': vm['name'],
-                'key_name': vm.get('key_name')
-                }
+                'key_name': vm.get('key_name')}
 
     def create_vms(self):
 
@@ -700,6 +749,15 @@ class Prerequisites(BasePrerequisites):
                     raise RuntimeError(msg.format(volume_id))
             return volume_ids
 
+        def wait_until_vms_with_fip_accessible(_vm_id):
+            vm = self.novaclient.servers.get(_vm_id)
+            self.migration_utils.open_ssh_port_secgroup(self, vm.tenant_id)
+            try:
+                fip_addr = self.migration_utils.get_vm_fip(vm)
+            except RuntimeError:
+                return
+            self.migration_utils.wait_until_vm_accessible_via_ssh(fip_addr)
+
         def get_params_for_volume_creating(_volume):
             params = ['display_name', 'size', 'imageRef']
             vt_exists = 'volume_type' in _volume and \
@@ -730,10 +788,11 @@ class Prerequisites(BasePrerequisites):
             if 'server_to_attach' not in volume:
                 continue
             vlm_id = self.get_volume_id(volume['display_name'])
+            vm_id = self.get_vm_id(volume['server_to_attach'])
+            # To correct attaching volume, vm should be fully ready
+            wait_until_vms_with_fip_accessible(vm_id)
             self.novaclient.volumes.create_server_volume(
-                server_id=self.get_vm_id(volume['server_to_attach']),
-                volume_id=vlm_id,
-                device=volume['device'])
+                server_id=vm_id, volume_id=vlm_id, device=volume['device'])
             vlm_ids.append(vlm_id)
         wait_for_volumes(vlm_ids)
 
@@ -753,6 +812,48 @@ class Prerequisites(BasePrerequisites):
                     self.create_cinder_snapshots(tenant['cinder_snapshots'])
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
+
+    def write_data_to_volumes(self):
+        """Method creates file and md5sum of this file on volume
+        """
+        volumes = self.config.cinder_volumes
+        volumes += itertools.chain(*[tenant['cinder_volumes'] for tenant
+                                     in self.config.tenants if 'cinder_volumes'
+                                     in tenant])
+        for volume in volumes:
+            attached_volume = volume.get('server_to_attach')
+            if not volume.get('write_to_file') or not attached_volume:
+                continue
+            if not volume.get('mount_point'):
+                msg = 'Please specify mount point for volume %s'
+                raise RuntimeError(msg % volume['name'])
+
+            vm = self.novaclient.servers.get(
+                self.get_vm_id(volume['server_to_attach']))
+            vm_ip = self.migration_utils.get_vm_fip(vm)
+            # Make filesystem on volume. The OS assigns the volume to the next
+            # available device, which /dev/vda
+            cmd = '/usr/sbin/mkfs.ext2 /dev/vdb'
+            self.migration_utils.execute_command_on_vm(vm_ip, cmd)
+            # Create directory for mount point
+            cmd = 'mkdir -p %s' % volume['mount_point']
+            self.migration_utils.execute_command_on_vm(vm_ip, cmd)
+            # Mount volume
+            cmd = 'mount {0} {1}'.format(volume['device'],
+                                         volume['mount_point'])
+            self.migration_utils.execute_command_on_vm(vm_ip, cmd)
+            for _file in volume['write_to_file']:
+                _path, filename = os.path.split(_file['filename'])
+                path = '{0}/{1}'.format(volume['mount_point'], _path)
+                if _path:
+                    cmd = 'mkdir -p {path}'.format(path=path)
+                    self.migration_utils.execute_command_on_vm(vm_ip, cmd)
+                cmd = 'sh -c "echo \'{content}\' > {path}/{filename}"'
+                self.migration_utils.execute_command_on_vm(vm_ip, cmd.format(
+                    path=path, content=_file['data'], filename=filename))
+                cmd = 'sh -c "md5sum {path}/{_file} > {path}/{_file}_md5"'
+                self.migration_utils.execute_command_on_vm(vm_ip, cmd.format(
+                    path=path, _file=filename))
 
     def emulate_vm_states(self):
         for vm_state in self.config.vm_states:
@@ -817,7 +918,7 @@ class Prerequisites(BasePrerequisites):
         for tenant in self.config.tenants:
             if 'quota' in tenant:
                 self.novaclient.quotas.update(tenant_id=self.get_tenant_id(
-                    'admin'), **tenant['quota'])
+                    self.tenant), **tenant['quota'])
                 break
 
     def change_admin_role_in_tenants(self):
@@ -827,7 +928,6 @@ class Prerequisites(BasePrerequisites):
                 self.get_role_id('admin'),
                 self.get_tenant_id(tenant['name']))
             self.switch_user(self.username, self.password, self.tenant)
-        self.create_user_tenant_roles()
 
     def delete_users(self):
         for user in self.config.users:
@@ -847,13 +947,18 @@ class Prerequisites(BasePrerequisites):
         security group, even default, while on src this tenant has security
         group.
         """
-        self.dst_cloud = Prerequisites(cloud_prefix='DST', config=self.config)
+        self.dst_cloud = Prerequisites(
+            cloud_prefix='DST',
+            configuration_ini=self.configuration_ini,
+            config=self.config)
         for t in self.config.tenants:
             if not t.get('deleted') and t['enabled']:
-                self.dst_cloud.keystoneclient.tenants.create(
-                    tenant_name=t['name'], description=t['description'],
-                    enabled=t['enabled'])
-                break
+                try:
+                    self.dst_cloud.keystoneclient.tenants.create(
+                        tenant_name=t['name'], description=t['description'],
+                        enabled=t['enabled'])
+                except ks_exceptions.Conflict:
+                    pass
 
     def create_user_on_dst(self):
         """
@@ -901,6 +1006,32 @@ class Prerequisites(BasePrerequisites):
             )
             self.novaclient.servers.create(**params)
 
+    def break_vm(self):
+        """ Method delete vm via virsh to emulate situation, when vm is valid
+        and active in nova db, but in fact does not exist
+        """
+        vms_to_break = []
+        for vm in self.migration_utils.get_all_vms_from_config():
+            if vm.get('broken'):
+                vms_to_break.append(self.get_vm_id(vm['name']))
+
+        for vm in vms_to_break:
+            inst_name = getattr(self.novaclient.servers.get(vm),
+                                'OS-EXT-SRV-ATTR:instance_name')
+            cmd = 'virsh destroy {0} && virsh undefine {0}'.format(inst_name)
+            self.migration_utils.execute_command_on_vm(
+                self.get_vagrant_vm_ip(), cmd, username='root', password='')
+
+    def break_image(self):
+        all_images = self.migration_utils.get_all_images_from_config()
+        images_to_break = [image for image in all_images
+                           if image.get('broken')]
+        for image in images_to_break:
+            image_id = self.get_image_id(image['name'])
+            cmd = 'rm -rf /var/lib/glance/images/%s' % image_id
+            self.migration_utils.execute_command_on_vm(
+                self.get_vagrant_vm_ip(), cmd, username='root', password='')
+
     def run_preparation_scenario(self):
         print('>>> Creating tenants:')
         self.create_tenants()
@@ -908,8 +1039,6 @@ class Prerequisites(BasePrerequisites):
         self.create_users()
         print('>>> Creating roles:')
         self.create_roles()
-        print('>>> Creating user tenant roles:')
-        self.create_user_tenant_roles()
         print('>>> Creating keypairs:')
         self.create_keypairs()
         print('>>> Modifying quotas:')
@@ -927,6 +1056,10 @@ class Prerequisites(BasePrerequisites):
             self.create_volumes_from_images()
             print('>>> Boot vm from volume')
             self.boot_vms_from_volumes()
+        print('>>> Breaking VMs:')
+        self.break_vm()
+        print('>>> Breaking Images:')
+        self.break_image()
         print('>>> Updating filtering:')
         self.update_filtering_file()
         print('>>> Creating vm snapshots:')
@@ -935,6 +1068,8 @@ class Prerequisites(BasePrerequisites):
         self.create_security_groups()
         print('>>> Creating cinder objects:')
         self.create_cinder_objects()
+        print('>>> Writing data into the volumes:')
+        self.write_data_to_volumes()
         print('>>> Emulating vm states:')
         self.emulate_vm_states()
         print('>>> Generating vm states list:')
@@ -947,49 +1082,52 @@ class Prerequisites(BasePrerequisites):
         self.update_network_quotas()
         print('>>> Change admin role in tenants:')
         self.change_admin_role_in_tenants()
+        print('>>> Creating user tenant roles:')
+        self.create_user_tenant_roles()
         print('>>> Delete users which should be deleted:')
         self.delete_users()
         print('>>> Delete tenants which should be deleted:')
         self.delete_tenants()
-        print('>>> Create tenant on dst, without security group')
+        print('>>> Create tenant on dst, without security group:')
         self.create_tenant_wo_sec_group_on_dst()
-        print('>>> Create role on dst')
+        print('>>> Create role on dst:')
         self.create_user_on_dst()
 
 
 class CleanEnv(BasePrerequisites):
 
     def clean_vms(self):
-        def wait_until_vms_all_deleted():
-            timeout = 120
-            for _ in range(timeout):
-                servers = self.novaclient.servers.list(
-                    search_opts={'all_tenants': 1})
-                if not servers:
-                    break
-                for server in servers:
-                    if server.status != 'DELETED':
-                        time.sleep(1)
-                    try:
-                        self.novaclient.servers.delete(server.id)
-                    except nv_exceptions.NotFound:
-                        pass
-            else:
-                raise RuntimeError('Next vms were not deleted')
-
-        vms = self.config.vms
-        vms += itertools.chain(*[tenant['vms'] for tenant
-                                 in self.config.tenants if tenant.get('vms')])
-        for vm in self.config.vms_from_volumes:
-            vms.append(vm)
+        vms = self.migration_utils.get_all_vms_from_config()
         vms_names = [vm['name'] for vm in vms]
         vms = self.novaclient.servers.list(search_opts={'all_tenants': 1})
+        vms_ids = []
         for vm in vms:
             if vm.name not in vms_names:
                 continue
-            self.novaclient.servers.delete(self.get_vm_id(vm.name))
+            vms_ids.append(vm.id)
+            self.novaclient.servers.delete(vm.id)
             print('VM "%s" has been deleted' % vm.name)
-        wait_until_vms_all_deleted()
+        self.wait_vms_deleted(all_tenants=True)
+
+    def wait_vms_deleted(self, all_tenants=False):
+        search_opts = {}
+        if all_tenants:
+            search_opts.update({'all_tenants': 1})
+        timeout = 120
+        for _ in range(timeout):
+            servers = self.novaclient.servers.list(
+                search_opts=search_opts)
+            if not servers:
+                break
+            for server in servers:
+                if server.status != 'DELETED':
+                    time.sleep(1)
+                try:
+                    self.novaclient.servers.delete(server.id)
+                except nv_exceptions.NotFound:
+                    pass
+        else:
+            raise RuntimeError('Next vms were not deleted')
 
     def clean_volumes(self):
         volumes = self.config.cinder_volumes
@@ -1017,11 +1155,9 @@ class CleanEnv(BasePrerequisites):
             print('Flavor "%s" has been deleted' % flavor.name)
 
     def clean_images(self):
-        images = self.config.images
-        images += itertools.chain(*[tenant['images'] for tenant
-                                  in self.config.tenants
-                                  if tenant.get('images')])
-        images_names = [image['name'] for image in images]
+        all_images = self.migration_utils.get_all_images_from_config()
+        images_names = [image['name'] for image in all_images]
+
         for image in self.glanceclient.images.list():
             if image.name not in images_names:
                 continue
@@ -1100,7 +1236,7 @@ class CleanEnv(BasePrerequisites):
         for sg in sgs:
             try:
                 self.neutronclient.delete_security_group(self.get_sg_id(
-                                                         sg['name']))
+                    sg['name']))
             except (nt_exceptions.NeutronClientException,
                     NotFound) as e:
                 print "Security group %s failed to delete: %s" % (sg['name'],
@@ -1165,10 +1301,19 @@ class CleanEnv(BasePrerequisites):
                 self.get_volume_snapshot_id(snapshot.display_name))
             print('Snapshot "%s" has been deleted' % snapshot.display_name)
 
+    def clean_namespaces(self):
+        ip_addr = self.get_vagrant_vm_ip()
+        if self.openstack_release == 'grizzly':
+            cmd = 'quantum-netns-cleanup'
+        else:
+            cmd = 'neutron-netns-cleanup'
+        self.migration_utils.execute_command_on_vm(ip_addr, cmd, 'root')
+
     def clean_all_networking(self):
         self.clean_fips()
         self.clean_routers()
         self.clean_networks()
+        self.clean_namespaces()
 
     def clean_objects(self):
         self.clean_vms()
@@ -1193,8 +1338,17 @@ if __name__ == '__main__':
                                         'self.config.ini', action='store_true')
     parser.add_argument('--env', default='SRC',
                         help='choose cloud: SRC or DST')
+    parser.add_argument('cloudsconf',
+                        help='Please point configuration.ini file location')
+
     _args = parser.parse_args()
-    preqs = Prerequisites(config=conf, cloud_prefix=_args.env)
+
+    confparser = ConfigParser.ConfigParser()
+    confparser.read(_args.cloudsconf)
+    cloudsconf = get_dict_from_config_file(confparser)
+
+    preqs = Prerequisites(config=conf, configuration_ini=cloudsconf,
+                          cloud_prefix=_args.env)
     if _args.clean:
         preqs.clean_tools.clean_objects()
     else:

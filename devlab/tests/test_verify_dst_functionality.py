@@ -7,7 +7,7 @@ from neutronclient.common.exceptions import NeutronClientException
 from novaclient.exceptions import Forbidden, OverLimit
 from cinderclient.exceptions import \
     ClientException as CinderClientBaseException
-
+from keystoneclient import exceptions as ks_exceptions
 
 TIMEOUT = 600
 TEST_TENANT_NAME = 'tenant4'
@@ -30,13 +30,27 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
 
     def setUp(self):
 
+        self.dst_cloud.switch_user(user=self.dst_cloud.username,
+                                   password=self.dst_cloud.password,
+                                   tenant=self.dst_cloud.tenant)
+
         # some initial variables needed for teardown
         self.keypair_list_to_delete = []
+
+        self.dst_tenant_id = self.dst_cloud.get_tenant_id(TEST_TENANT_NAME)
+
+        try:
+            # add admin role for the dst admin accout for test tenant
+            self.dst_cloud.keystoneclient.roles.add_user_role(
+                self.dst_cloud.get_user_id(self.dst_cloud.username),
+                self.dst_cloud.get_role_id('admin'),
+                self.dst_tenant_id)
+        except ks_exceptions.Conflict:
+            pass
 
         self.dst_cloud.switch_user(user=self.dst_cloud.username,
                                    password=self.dst_cloud.password,
                                    tenant=TEST_TENANT_NAME)
-        self.dst_tenant_id = self.dst_cloud.get_tenant_id(TEST_TENANT_NAME)
 
         # declare vars in case if condition below will not be satisfied
         image_name = ''
@@ -119,10 +133,20 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         for key_p in self.dst_cloud.novaclient.keypairs.list():
             key_p.delete()
 
+        self.dst_cloud.clean_tools.wait_vms_deleted()
         self.release_fips_tenant()
 
         self.update_floatip_neutron_quota(self.fip_quota_neutron,
                                           TEST_TENANT_NAME)
+
+        try:
+            # remove admin role of the dst admin account for test tenant
+            self.dst_cloud.keystoneclient.roles.remove_user_role(
+                self.dst_cloud.get_user_id(self.dst_cloud.username),
+                self.dst_cloud.get_role_id('admin'),
+                self.dst_tenant_id)
+        except ks_exceptions.Conflict:
+            pass
 
     def generate_random_name(self, input_str):
         return input_str + str(time.ctime()).replace(
@@ -207,7 +231,7 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         try:
             self.dst_cloud.switch_user(user=self.dst_cloud.username,
                                        password=self.dst_cloud.password,
-                                       tenant='admin')
+                                       tenant=self.dst_cloud.tenant)
             self.dst_cloud.neutronclient.update_quota(
                 self.dst_tenant_id, {'quota': {'floatingip': quota_value}})
         finally:

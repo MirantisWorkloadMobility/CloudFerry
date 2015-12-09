@@ -14,11 +14,14 @@
 
 import config
 import logging
-import sys
 import os
 import unittest
 from generate_load import Prerequisites
-from filtering_utils import FilteringUtils
+import utils
+from keystoneclient import exceptions as ks_exceptions
+import sys
+from test_exceptions import ConfFileError
+from testconfig import config as config_ini
 
 
 def get_cf_root_folder():
@@ -45,14 +48,25 @@ class FunctionalTest(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(FunctionalTest, self).__init__(*args, **kwargs)
         suppress_dependency_logging()
-        self.src_cloud = Prerequisites(cloud_prefix='SRC', config=config)
-        self.dst_cloud = Prerequisites(cloud_prefix='DST', config=config)
-        self.filtering_utils = FilteringUtils()
+
+        if not config_ini:
+            raise ConfFileError('Configuration file parameter'
+                                ' --tc-file is missing or '
+                                'the file has wrong format')
+
+        self.src_cloud = Prerequisites(cloud_prefix='SRC',
+                                       configuration_ini=config_ini,
+                                       config=config)
+        self.dst_cloud = Prerequisites(cloud_prefix='DST',
+                                       configuration_ini=config_ini,
+                                       config=config)
+        self.filtering_utils = utils.FilteringUtils()
+        self.migration_utils = utils.MigrationUtils(config)
 
     def filter_networks(self):
         networks = [i['name'] for i in config.networks]
         for i in config.tenants:
-            if 'networks' in i:
+            if 'networks' in i and not i.get('deleted'):
                 for j in i['networks']:
                     networks.append(j['name'])
         return self._get_neutron_resources('networks', networks)
@@ -69,7 +83,7 @@ class FunctionalTest(unittest.TestCase):
         subnets = [i for net in config.networks if net.get('subnets')
                    for i in net['subnets']]
         for tenant in config.tenants:
-            if 'networks' not in tenant:
+            if 'networks' not in tenant or tenant.get('deleted'):
                 continue
             for network in tenant['networks']:
                 if 'subnets' not in network:
@@ -129,10 +143,8 @@ class FunctionalTest(unittest.TestCase):
         return self._get_keystone_resources('roles', roles)
 
     def filter_vms(self):
-        vms = config.vms
-        [vms.extend(i['vms']) for i in config.tenants if 'vms' in i]
-        vms.extend(config.vms_from_volumes)
-        vms_names = [vm['name'] for vm in vms]
+        vms = self.migration_utils.get_all_vms_from_config()
+        vms_names = [vm['name'] for vm in vms if not vm.get('broken')]
         opts = {'search_opts': {'all_tenants': 1}}
         return [i for i in self.src_cloud.novaclient.servers.list(**opts)
                 if i.name in vms_names]
@@ -150,18 +162,15 @@ class FunctionalTest(unittest.TestCase):
         return self._get_neutron_resources('security_groups', sgs)
 
     def filter_images(self):
-        images = [i['name'] for i in config.images]
-        for tenant in config.tenants:
-            if not tenant.get('images'):
-                continue
-            [images.append(i['name']) for i in tenant['images']]
+        all_images = self.migration_utils.get_all_images_from_config()
+        images = [i['name'] for i in all_images if not i.get('broken')]
         return [i for i in self.src_cloud.glanceclient.images.list()
                 if i.name in images]
 
     def filter_volumes(self):
         volumes = config.cinder_volumes
         [volumes.extend(i['cinder_volumes']) for i in config.tenants
-         if 'cinder_volumes' in i]
+         if 'cinder_volumes' in i and not i.get('deleted')]
         volumes.extend(config.cinder_volumes_from_images)
         volumes_names = [volume['display_name'] for volume in volumes]
         opts = {'search_opts': {'all_tenants': 1}}
@@ -186,3 +195,10 @@ class FunctionalTest(unittest.TestCase):
         vms = config.vms
         [vms.extend(i['vms']) for i in config.tenants if 'vms' in i]
         return [vm['name'] for vm in vms if vm.get('fip')]
+
+    def tenant_exists(self, keystone_client, tenant_id):
+        try:
+            keystone_client.get(tenant_id)
+        except ks_exceptions.NotFound:
+            return False
+        return True

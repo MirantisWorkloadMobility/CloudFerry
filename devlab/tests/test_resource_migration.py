@@ -1,12 +1,13 @@
 import config
+from test_exceptions import NotFound
 import functional_test
+import itertools
 
 import pprint
 import unittest
 
 from fabric.api import run, settings
 from fabric.network import NetworkError
-from neutronclient.common.exceptions import NeutronClientException
 
 
 class ResourceMigrationTests(functional_test.FunctionalTest):
@@ -167,9 +168,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 _members.append({img.name: sorted(mbr_list)})
             return sorted(_members)
 
-        src_images = self.filter_images()
-        dst_images = [x for x in self.dst_cloud.glanceclient.images.list()]
-        src_images = self.filtering_utils.filter_images(src_images)[0]
+        src_images = [img for img in self.src_cloud.glanceclient.images.list()
+                      if img.name not in config.images_not_included_in_filter]
+        dst_images = [img for img in self.dst_cloud.glanceclient.images.list(
+                      is_public=None)]
 
         src_members = member_list_collector(src_images,
                                             self.src_cloud.glanceclient,
@@ -177,7 +179,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         dst_members = member_list_collector(dst_images,
                                             self.dst_cloud.glanceclient,
                                             self.dst_cloud.keystoneclient)
-        self.assertListEqual(src_members, dst_members)
+        for member in src_members:
+            self.assertTrue(member in dst_members,
+                            msg="Member: %s not in the DST list of image "
+                                "members." % member)
 
     def test_migrate_glance_images(self):
         src_images = self.filter_images()
@@ -225,13 +230,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.assertTrue(least_image_check, msg=msg)
 
     def test_glance_images_not_in_filter_did_not_migrate(self):
-        src_images = self.filter_images()
-        filtering_data = self.filtering_utils.filter_images(src_images)
         dst_images_gen = self.dst_cloud.glanceclient.images.list()
         dst_images = [x.name for x in dst_images_gen]
-        images_filtered_out = filtering_data[1]
-        for image in images_filtered_out:
-            self.assertTrue(image.name not in dst_images,
+        for image in config.images_not_included_in_filter:
+            self.assertTrue(image not in dst_images,
                             'Image migrated despite that it was not included '
                             'in filter, Image info: \n{}'.format(image))
 
@@ -311,6 +313,39 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             src_volume_list, dst_volume_list, resource_name='volume',
             parameter='bootable')
 
+    def test_migrate_cinder_volumes_data(self):
+        def check_file_valid(filename):
+            get_md5_cmd = 'md5sum %s' % filename
+            get_old_md5_cmd = 'cat %s_md5' % filename
+            md5sum = self.migration_utils.execute_command_on_vm(
+                vm_ip, get_md5_cmd).split()[0]
+            old_md5sum = self.migration_utils.execute_command_on_vm(
+                vm_ip, get_old_md5_cmd).split()[0]
+            if md5sum != old_md5sum:
+                msg = "MD5 of file %s before and after migrate is different"
+                raise RuntimeError(msg % filename)
+
+        volumes = config.cinder_volumes
+        volumes += itertools.chain(*[tenant['cinder_volumes'] for tenant
+                                     in config.tenants if 'cinder_volumes'
+                                     in tenant])
+        for volume in volumes:
+            attached_volume = volume.get('server_to_attach')
+            if not volume.get('write_to_file') or not attached_volume:
+                continue
+            vm = self.dst_cloud.novaclient.servers.get(
+                self.dst_cloud.get_vm_id(volume['server_to_attach']))
+            vm_ip = self.migration_utils.get_vm_fip(vm)
+            self.migration_utils.open_ssh_port_secgroup(self.dst_cloud,
+                                                        vm.tenant_id)
+            self.migration_utils.wait_until_vm_accessible_via_ssh(vm_ip)
+            cmd = 'mount {0} {1}'.format(volume['device'],
+                                         volume['mount_point'])
+            self.migration_utils.execute_command_on_vm(vm_ip, cmd,
+                                                       warn_only=True)
+            for _file in volume['write_to_file']:
+                check_file_valid(volume['mount_point'] + _file['filename'])
+
     @unittest.skip("Temporarily disabled: snapshots doesn't implemented in "
                    "cinder's nfs driver")
     def test_migrate_cinder_snapshots(self):
@@ -383,17 +418,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             raise RuntimeError(
                 'VM for current test was not spawned on dst. Make sure vm with'
                 'name keypair_test has been created on src')
-        ip_addr = self.filtering_utils.get_vm_fip(vm)
-
+        ip_addr = self.migration_utils.get_vm_fip(vm)
         # make sure 22 port in sec group is open
-        sec_grps = self.dst_cloud.get_sec_group_id_by_tenant_id(vm.tenant_id)
-        for sec_gr in sec_grps:
-            try:
-                self.dst_cloud.create_security_group_rule(
-                    sec_gr, vm.tenant_id, protocol='tcp', port_range_max=22,
-                    port_range_min=22, direction='ingress')
-            except NeutronClientException:
-                pass
+        self.migration_utils.open_ssh_port_secgroup(self.dst_cloud,
+                                                    vm.tenant_id)
         # try to connect to vm via key pair
         with settings(host_string=ip_addr, user="root",
                       key=config.private_key['id_rsa'],
@@ -445,3 +473,29 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                     'GW ip addresses of router "{0}" are same on src and dst:'
                     ' {1}'.format(dst_router['name'],
                                   dst_gateway['fixed_ips'][0]['ip_address']))
+
+    def test_not_valid_vms_did_not_migrate(self):
+        all_vms = self.migration_utils.get_all_vms_from_config()
+        vms = [vm['name'] for vm in all_vms if vm.get('broken')]
+        migrated_vms = []
+        for vm in vms:
+            try:
+                self.dst_cloud.get_vm_id(vm)
+                migrated_vms.append(vm)
+            except NotFound:
+                pass
+        if migrated_vms:
+            self.fail('Not valid vms %s migrated')
+
+    def test_not_valid_images_did_not_migrate(self):
+        all_images = self.migration_utils.get_all_images_from_config()
+        images = [image['name'] for image in all_images if image.get('broken')]
+        migrated_images = []
+        for image in images:
+            try:
+                self.dst_cloud.get_image_id(image)
+                migrated_images.append(image)
+            except NotFound:
+                pass
+        if migrated_images:
+            self.fail('Not valid images %s migrated')

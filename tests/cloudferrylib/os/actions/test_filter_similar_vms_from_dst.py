@@ -24,20 +24,24 @@ class FilterSimilarVMsFromDSTTestCase(test.TestCase):
     def test_make_tenant_ip_to_instance_id_dict(self):
         instances = {'id1': {'instance': {'id': 'id1',
                                           'tenant_id': 'tenant1',
-                                          'interfaces': [{'ip': '10.0.0.2'},
-                                                         {'ip': '11.0.0.1'}]
+                                          'interfaces': [
+                                              {'ip_addresses': ['10.0.0.2']},
+                                              {'ip_addresses': ['11.0.0.1']}]
                                           }},
                      'id2': {'instance': {'id': 'id2',
                                           'tenant_id': 'tenant1',
-                                          'interfaces': [{'ip': '10.0.0.5'}]
+                                          'interfaces': [
+                                              {'ip_addresses': ['10.0.0.5']}]
                                           }},
                      'id3': {'instance': {'id': 'id3',
                                           'tenant_id': 'tenant2',
-                                          'interfaces': [{'ip': '11.0.0.1'}]
+                                          'interfaces': [
+                                              {'ip_addresses': ['11.0.0.1']}]
                                           }},
                      'id4': {'instance': {'id': 'id4',
                                           'tenant_id': 'tenant2',
-                                          'interfaces': [{'ip': '10.0.0.2'}]
+                                          'interfaces': [
+                                              {'ip_addresses': ['10.0.0.2']}]
                                           }},
                      }
         result = {'tenant1': {'10.0.0.2': 'id1',
@@ -51,22 +55,25 @@ class FilterSimilarVMsFromDSTTestCase(test.TestCase):
     def test_find_similar_instances(self):
         src_inst = {'id1': {'instance': {'id': 'id1',
                                          'tenant_id': 'tenant1',
-                                         'interfaces': [{'ip': '10.0.0.2'},
-                                                        {'ip': '11.0.0.1'}],
+                                         'interfaces': [
+                                             {'ip_addresses': ['10.0.0.2']},
+                                             {'ip_addresses': ['11.0.0.1']}],
                                          'name': 'Foo',
                                          'flav_details': 'flav1',
                                          'key_name': None,
                                          'volumes': None}},
                     'id2': {'instance': {'id': 'id2',
                                          'tenant_id': 'tenant1',
-                                         'interfaces': [{'ip': '10.0.0.5'}],
+                                         'interfaces': [
+                                             {'ip_addresses': ['10.0.0.5']}],
                                          'name': 'Bar',
                                          'flav_details': 'flav1',
                                          'key_name': None,
                                          'volumes': None}},
                     'id3': {'instance': {'id': 'id3',
                                          'tenant_id': 'tenant2',
-                                         'interfaces': [{'ip': '11.0.0.1'}],
+                                         'interfaces': [
+                                             {'ip_addresses': ['11.0.0.1']}],
                                          'name': 'Foo',
                                          'flav_details': 'flav1',
                                          'key_name': None,
@@ -74,21 +81,24 @@ class FilterSimilarVMsFromDSTTestCase(test.TestCase):
                     }
         dst_inst = {'nid1': {'instance': {'id': 'nid1',
                                           'tenant_id': 'newTenant1',
-                                          'interfaces': [{'ip': '10.0.0.2'}],
+                                          'interfaces': [
+                                              {'ip_addresses': ['10.0.0.2']}],
                                           'name': 'Foo',
                                           'flav_details': 'flav1',
                                           'key_name': None,
                                           'volumes': None}},
                     'nid2': {'instance': {'id': 'nid2',
                                           'tenant_id': 'newTenant1',
-                                          'interfaces': [{'ip': '11.0.0.1'}],
+                                          'interfaces': [
+                                              {'ip_addresses': ['11.0.0.1']}],
                                           'name': 'Foo',
                                           'flav_details': 'flav1',
                                           'key_name': None,
                                           'volumes': None}},
                     'nid3': {'instance': {'id': 'nid3',
                                           'tenant_id': 'newTenant2',
-                                          'interfaces': [{'ip': '11.0.0.1'}],
+                                          'interfaces': [
+                                              {'ip_addresses': ['11.0.0.1']}],
                                           'name': 'Foo',
                                           'flav_details': 'flav1',
                                           'key_name': None,

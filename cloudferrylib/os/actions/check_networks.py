@@ -19,6 +19,7 @@ import ipaddr
 
 from cloudferrylib.base import exception
 from cloudferrylib.base.action import action
+from cloudferrylib.os.network import neutron
 from cloudferrylib.utils import utils
 
 
@@ -65,8 +66,8 @@ class CheckNetworks(action.Action):
             overlapped_resources.update(
                 {'networks_with_overlapped_subnets': nets_overlapped_subnets})
         if nets_overlapped_seg_ids:
-            overlapped_resources.update(
-                {'networks_with_overlapped_segm_ids': nets_overlapped_seg_ids})
+            LOG.warning("Networks with segmentation IDs overlapping:\n%s",
+                        nets_overlapped_seg_ids)
 
         # Check floating IPs overlap
         LOG.info("Check floating IPs overlapping...")
@@ -99,8 +100,8 @@ class ComputeInfo(object):
         """
         Get list of VMs IDs, that are spawned in external network directly.
 
-        :param external_networks: List of ids of instances which are connected
-                                  to the external networks.
+        :param devices: List of devices which are connected to the external
+                        networks
         :return list:
         """
         if not devices:
@@ -118,7 +119,8 @@ class NetworkInfo(object):
         self.by_hash = collections.defaultdict()
         self.subnets = info['subnets']
         self.floating_ips = {}
-        for net_map in info['networks']:
+        self.networks_info = info['networks']
+        for net_map in self.networks_info:
             network = Network(net_map)
             self.by_id[network.id] = network
             self.by_hash[network.hash] = network
@@ -146,40 +148,6 @@ class NetworkInfo(object):
         for net in self.get_networks():
             if net.network_type == net_type and net.seg_id == segmentation_id:
                 return net
-
-    def get_segmentation_ids(self):
-        """Get busy segmentation IDs.
-
-        We need to handle duplicates in segmentation ids.
-        Neutron has different validation rules for different network types.
-
-        For 'gre' and 'vxlan' network types there is no strong requirement
-        for 'physical_network' attribute, if we want to have
-        'segmentation_id', because traffic is encapsulated in L3 packets.
-
-        For 'vlan' and 'flat' network types there is a strong requirement for
-        'physical_network' attribute, if we want to have 'segmentation_id'.
-
-        :result: Dictionary with busy segmentation IDs.
-                 Hash is used with structure {"gre": [1, 2, ...],
-                                              "vlan": [1, 2, ...]}
-        """
-
-        used_seg_ids = {}
-        networks = self.get_networks()
-
-        for net in networks:
-            network_has_segmentation_id = (
-                net.info["provider:physical_network"] or
-                (net.network_type in ['gre', 'vxlan']))
-
-            if network_has_segmentation_id:
-                if net.network_type not in used_seg_ids:
-                    used_seg_ids[net.network_type] = []
-                if net.seg_id:
-                    used_seg_ids[net.network_type].append(net.seg_id)
-
-        return used_seg_ids
 
     def get_devices_from_external_networks(self):
         """
@@ -230,7 +198,8 @@ class NetworkInfo(object):
              2. List of networks IDs with overlapped segmentation IDs.
         """
 
-        dst_seg_ids = dst_info.get_segmentation_ids()
+        dst_net_info = dst_info.networks_info
+        dst_seg_ids = neutron.get_segmentation_ids_from_net_list(dst_net_info)
         nets_with_overlapped_subnets = []
         nets_with_overlapped_seg_ids = []
 

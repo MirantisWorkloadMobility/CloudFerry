@@ -1,10 +1,16 @@
 img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
+# username and password for ssh access for cirros image
+username_for_ssh = 'cirros'
+password_for_ssh = 'cubswin:)'
 
 # Path to CloudFerry config relative to the root folder
 cloud_ferry_conf = 'configuration.ini'
 
 ssh_check_user = 'cirros'
 ssh_vm_shell = '/bin/sh -c'
+
+# Path to store filter files
+filters_file_naming_template = 'filter_{tenant_name}.yaml'
 
 # Users to create/delete
 users = [
@@ -25,11 +31,12 @@ users = [
         [{'name': 'tenant1', 'role': '_member_'}]},
     {'name': 'user7', 'password': 'passwd', 'email': 'user7@example.com',
      'tenant': 'tenant4', 'enabled': True},
+    {'name': 'user8', 'password': 'passwd', 'email': 'tenant3@example.com',
+     'tenant': 'tenant3', 'enabled': True}
 ]
 
 user_tenant_roles = [
-    {'user1': [{'tenant': 'tenant1', 'role': 'SomeRole'}]},
-    {'admin': [{'tenant': 'tenant4', 'role': 'admin'}]}
+    {'user1': [{'tenant': 'tenant1', 'role': 'SomeRole'}]}
 ]
 
 # Roles to create/delete
@@ -55,8 +62,7 @@ tenants = [
      'vms': [
          {'name': 'tn1server1', 'image': 'image1', 'flavor': 'flavorname2',
           'key_name': 'key1'},
-         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1',
-          'fip': True},
+         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1'},
          {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr'}],
      'networks': [
          {'name': 'tenantnet1', 'admin_state_up': True,
@@ -104,7 +110,7 @@ tenants = [
      },
      'vms': [
          {'name': 'tn2server1', 'image': 'image1', 'flavor': 'flavorname2',
-          'key_name': 'key2'},
+          'fip': True, 'key_name': 'key2'},
          {'name': 'keypair_test_server', 'image': 'image1',
           'flavor': 'flavorname2', 'key_name': 'key2', 'nics': [
               {'net-id': 'tenantnet2'}], 'fip': True}],
@@ -116,14 +122,30 @@ tenants = [
           }
      ],
      'cinder_volumes': [
-         {'display_name': 'tn_volume1', 'size': 1,
-          'volume_type': 'nfs1',
-          'server_to_attach': 'tn2server1', 'device': '/dev/vdb'}
+         {'display_name': 'tn_volume1', 'size': 1, 'volume_type': 'nfs1',
+          'server_to_attach': 'tn2server1', 'device': '/dev/vdb',
+          'mount_point': '/tmp/mount_here/',
+          'write_to_file': [
+              {'filename': 'test_data.txt', 'data': 'some useless string'},
+              {'filename': 'test/dir/test_data.txt',
+               'data': 'test data string'}]}
      ],
      'unassociated_fip': 1
      },
     {'name': 'tenant3', 'description': 'This tenant will be deleted',
      'enabled': True, 'deleted': True,
+     'networks': [
+         {'name': 'tenantnet3', 'admin_state_up': True,
+          'subnets': [
+              {'cidr': '10.7.2.0/24', 'ip_version': 4, 'name': 't3_s1',
+               'routers_to_connect': ['ext_router']}]}],
+     'vms': [
+         {'name': 'tn3server1', 'image': 'image1', 'flavor': 'flavorname1',
+          'key_name': 'key4'}],
+     'cinder_volumes': [
+         {'display_name': 'tn3_volume1', 'size': 1,
+          'server_to_attach': 'tn3server1', 'device': '/dev/vdb'}],
+     'cinder_snapshots': [],
      'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': True}]
      },
     {'name': 'tenant4', 'description': 'None', 'enabled': True,
@@ -155,10 +177,7 @@ tenants = [
           },
          {'name': 'sg42', 'description': 'Tenant4 blah group2'}],
      'cinder_volumes': [],
-     'cinder_snapshots': [
-         # Commented because of unimplemented error in nfs driver for grizzly.
-         # {'name': 'tn1snapsh', 'volume_id': 'tn1_volume2'}
-     ]
+     'cinder_snapshots': []
      }
 ]
 
@@ -175,19 +194,22 @@ images = [
      'disk_format': 'qcow2', 'is_public': False},
     # When location field is specified, glance creates images without checksum
     {'name': 'without_checksum', 'location': img_url, 'disk_format': 'qcow2',
-     'container_format': 'bare'}
+     'container_format': 'bare'},
+    # Image, deleted from back-end
+    {'name': 'broken_image', 'copy_from': img_url, 'disk_format': 'qcow2',
+     'container_format': 'bare', 'broken': True}
 ]
 
 # Create zero image, without any parameters.
 create_zero_image = True
 # Images not to be migrated:
-images_not_included_in_filter = ['image4', 'image5']
+images_not_included_in_filter = ['image5']
 
 # Instances not to be included in filter:
 vms_not_in_filter = ['not_in_filter']
 
 # Images that should have few specific members:
-members = ['tenant1', 'admin']
+members = ['tenant1']
 img_to_add_members = ['image3', 'image4']
 
 # Flavors to create/delete
@@ -229,7 +251,10 @@ vms = [
      'fip': True},
     {'name': 'server4', 'image': 'image2', 'flavor': 'flavorname2'},
     {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1'},
-    {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'}
+    {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'},
+    {'name': 'server7', 'image': 'image1', 'flavor': 'flavorname1',
+     'broken': True},
+    {'name': 'server8', 'image': 'broken_image', 'flavor': 'flavorname1'}
 ]
 
 vms_from_volumes = [
@@ -248,7 +273,14 @@ snapshots = [
     {'server': 'server2', 'image_name': 'asdasd'}
 ]
 
-# Cinder images to create/delete
+
+'''
+Cinder images to create/delete
+To write some date, use "write_to_file" parameter. Now only string could be
+written into the file. Make sure volume is attached to the server, before write
+data. MD5 of file store in separate file in the same directory with name
+"${filename}_md5".
+'''
 cinder_volumes = [
     {'display_name': 'cinder_volume1', 'size': 1, 'volume_type': 'nfs1'},
     {'display_name': 'cinder_volume2', 'size': 1,
@@ -277,6 +309,8 @@ vm_states = [
     {'name': 'server4', 'state': 'pause'},
     {'name': 'server5', 'state': 'resize'},
     {'name': 'server6', 'state': 'active'},
+    {'name': 'server7', 'state': 'shutoff'},
+    {'name': 'server8', 'state': 'active'},
     {'name': 'tn1server1', 'state': 'active'},
     {'name': 'tn1server2', 'state': 'active'},
     {'name': 'tn2server1', 'state': 'active'},
@@ -306,7 +340,21 @@ keypairs = [
         'iZVICtvQUnB89xnH3RNYDBGFQKS3gOUtjvOb0oP9RVNELHftrGMnjJOQCLF+R0eG+Byc'
         '9DZy3PfajJftUZsgCyzIkVT7YBZVQ7VubB3jOGZqXCpMfLFZtZad2+G+C3sYm3rMGu8l'
         'b+wS90o98IrpF4av6y13cfkqkucw3sJ18+wzPbWKQ41YW9QyZ6Er0Vu4+4pJcj+1qn+O'
-        'kINp0A7C2WbXXgiyeaxBR8nBV9A01cFm/W6Q63/r vagrant@grizzly'}]
+        'kINp0A7C2WbXXgiyeaxBR8nBV9A01cFm/W6Q63/r vagrant@grizzly'},
+    {'name': 'key3', 'user': 'user7', 'public_key':
+        'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDVIFUSSlxG8vPj11aLXZderymbR5G2e'
+        'uoxPaZSZ33DUtGurPBnBhS3ztnR3Cg4vBgpoTVyti7LYenhfBlcGyjxA+RA2iM8Q3YYrX'
+        'AL64Itad/IzPfq6+qpSErqkU/tLzoWasFJBXuex8FSWg7lYbZX4CJZkSsEGiNqSdNw4lS'
+        'pdWfvGbMh6ywyGAMxNRHi7JyaFoMATLqHYy/w+9EHkNqKaFtICw5RhNG6zEGCAnHuRz+g'
+        'nvvEOaVHY7En0PlSL2tqAmT7a8m98T8zS1w1uNeed4WXI8gWofOFlzyB5e1l5v/e4ANwg'
+        '9jlzyyPa4i+rAfBSyg1wR02cRnEgejvPzrn user7@grizzly'},
+    {'name': 'key4', 'user': 'user8', 'public_key':
+        'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDVIFUSSlxG8vPj11aLXZderymbR5G2e'
+        'uoxPaZSZ33DUtGurPBnBhS3ztnR3Cg4vBgpoTVyti7LYenhfBlcGyjxA+RA2iM8Q3YYrX'
+        'AL64Itad/IzPfq6+qpSErqkU/tLzoWasFJBXuex8FSWg7lYbZX4CJZkSsEGiNqSdNw4lS'
+        'pdWfvGbMh6ywyGAMxNRHi7JyaFoMATLqHYy/w+9EHkNqKaFtICw5RhNG6zEGCAnHuRz+g'
+        'nvvEOaVHY7En0PlSL2tqAmT7a8m98T8zS1w1uNeed4WXI8gWofOFlzyB5e1l5v/e4ANwg'
+        '9jlzyyPa4i+rAfBSyg1wR02cRnEgejvPzrn user8@grizzly'}]
 
 private_key = {
     'name': 'key2',

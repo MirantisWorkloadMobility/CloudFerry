@@ -20,6 +20,78 @@ from cloudferrylib.utils import qemu_img
 from tests import test
 
 
+class QemuImgInfoBackingFileParserTestCase(test.TestCase):
+    def test_backing_file_without_actual_path_gets_parsed(self):
+        expected_backing_file = '/path/to/backing/file'
+
+        qemu_img_output = """
+        image: disk
+        file format: qcow2
+        virtual size: 39M (41126400 bytes)
+        disk size: 712K
+        cluster_size: 65536
+        backing file: {backing_file}
+        Format specific information:
+            compat: 1.1
+            lazy refcounts: false
+        """.format(backing_file=expected_backing_file)
+
+        actual = qemu_img.QemuImgInfoParser(qemu_img_output).backing_file()
+
+        self.assertEqual(expected_backing_file, actual)
+
+    def test_backing_file_with_actual_path_gets_parsed(self):
+        expected_backing_file = '/path/to/backing/file'
+        actual_path = '/some/other/path/to/backing/file'
+
+        qemu_img_output = """
+        image: disk
+        file format: qcow2
+        virtual size: 39M (41126400 bytes)
+        disk size: 712K
+        cluster_size: 65536
+        backing file: {backing_file} (actual path: {actual_path})
+        Format specific information:
+            compat: 1.1
+            lazy refcounts: false
+        """.format(backing_file=expected_backing_file, actual_path=actual_path)
+
+        actual = qemu_img.QemuImgInfoParser(qemu_img_output).backing_file()
+
+        self.assertEqual(expected_backing_file, actual)
+
+    def test_returns_none_in_case_of_error(self):
+        unexpected_output = """
+        some unexpected
+        items here
+        to test
+        """
+
+        actual = qemu_img.QemuImgInfoParser(unexpected_output).backing_file()
+
+        self.assertIsNone(actual)
+
+    def test_parses_path_with_whitespaces(self):
+        expected_backing_file = '/path/to/backing/file with whitespace'
+        actual_path = '/some/other/path/to/backing with whitespace/file'
+
+        qemu_img_output = """
+        image: disk
+        file format: qcow2
+        virtual size: 39M (41126400 bytes)
+        disk size: 712K
+        cluster_size: 65536
+        backing file: {backing_file} (actual path: {actual_path})
+        Format specific information:
+            compat: 1.1
+            lazy refcounts: false
+        """.format(backing_file=expected_backing_file, actual_path=actual_path)
+
+        actual = qemu_img.QemuImgInfoParser(qemu_img_output).backing_file()
+
+        self.assertEqual(expected_backing_file, actual)
+
+
 class QemuImgCommandsTestCase(test.TestCase):
     @patch("cloudferrylib.utils.remote_runner.RemoteRunner")
     def test_backing_file_returns_none_if_not_available(self, _):
