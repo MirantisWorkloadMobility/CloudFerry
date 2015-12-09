@@ -165,7 +165,9 @@ class GlanceImage(image.Image):
         return glance_client.Client(
             version,
             endpoint=endpoint_glance,
-            token=self.identity_client.get_auth_token_from_user())
+            token=self.identity_client.get_auth_token_from_user(),
+            insecure=self.config.cloud.insecure
+        )
 
     def required_tenants(self):
         image_owners = set()
