@@ -251,21 +251,15 @@ class NovaCompute(compute.Compute):
         if target != 'instances':
             raise ValueError('Only "resources" or "instances" values allowed')
 
-        search_opts = kwargs.get('search_opts')
-
-        search_opts = search_opts if search_opts else {}
+        search_opts = kwargs.get('search_opts') or {}
         search_opts.update(all_tenants=True)
 
         info = {'instances': {}}
 
         for instance in self.get_instances_list(search_opts=search_opts):
             if instance.status in ALLOWED_VM_STATUSES:
-                if (self.cloud.position == 'dst' or
-                        (self.cloud.position == 'src' and
-                            self.filter_tenant_id is not None and
-                            self.filter_tenant_id == instance.tenant_id) or
-                        (self.cloud.position == 'src' and
-                            self.filter_tenant_id is None)):
+                if (self.filter_tenant_id is None or
+                        self.filter_tenant_id == instance.tenant_id):
                     converted = self.convert(instance, self.config, self.cloud)
                     if converted is None:
                         continue

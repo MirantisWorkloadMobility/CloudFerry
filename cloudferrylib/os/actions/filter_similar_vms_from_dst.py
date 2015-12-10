@@ -34,36 +34,41 @@ class FilterSimilarVMsFromDST(action.Action):
             - GetInfoIter
 
     """
+    def __init__(self, *args, **kwargs):
+        super(FilterSimilarVMsFromDST, self).__init__(*args, **kwargs)
+        self.src_instances = None
+        self.dst_instances = {}
+        self.tenant_id_to_new_id = {}
+        self.similar_isntances = collections.defaultdict(set)
+        self.conflict_instances = collections.defaultdict(set)
+
     def run(self, **kwargs):
         self.src_instances = kwargs['src_info']['instances']
-        self.tenant_id_to_new_id = {}
         for tenant in kwargs['identity_info']['tenants']:
             self.tenant_id_to_new_id[tenant['tenant']['id']] = \
                 tenant['meta']['new_id']
         self.find_similar_instances()
         for src_instance_id, dst_ids in self.similar_isntances.items():
             LOG.warning("Instance %s already in DST cloud as instance %s. "
-                        "It will be excluded from migration." %
-                        (src_instance_id, dst_ids))
+                        "It will be excluded from migration.",
+                        src_instance_id, dst_ids)
             self.src_instances.pop(src_instance_id)
         for src_instance_id, dst_ids in self.conflict_instances.items():
             LOG.warning("Instance %s can not be migrated to DST because "
                         "instance %s already use the same IP. "
-                        "It will be excluded from migration." %
-                        (src_instance_id, dst_ids))
+                        "It will be excluded from migration.",
+                        src_instance_id, dst_ids)
             self.src_instances.pop(src_instance_id)
 
     def find_similar_instances(self):
         # titii = tenant & ip to instance id
         #         {<tenant_id>: {<ip>: <instance_id>}}
         titii_src = self.make_tenant_ip_to_instance_id_dict(self.src_instances)
-        search_opts = {'search_opts_tenant': titii_src.keys()}
         compute_resource = self.dst_cloud.resources[utils.COMPUTE_RESOURCE]
-        dst_instances = compute_resource.read_info(**search_opts)['instances']
-        self.dst_instances = dst_instances
-        titii_dst = self.make_tenant_ip_to_instance_id_dict(dst_instances)
-        self.similar_isntances = collections.defaultdict(set)
-        self.conflict_instances = collections.defaultdict(set)
+        for tenant_id in titii_src:
+            self.dst_instances.update(compute_resource.read_info(
+                tenant_id=[self.tenant_id_to_new_id[tenant_id]])['instances'])
+        titii_dst = self.make_tenant_ip_to_instance_id_dict(self.dst_instances)
         for tenant_id, ip_to_id in titii_src.items():
             tenant_new_id = self.tenant_id_to_new_id.get(tenant_id, None)
             if tenant_new_id is None:
