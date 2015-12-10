@@ -4,10 +4,8 @@ import time
 import json
 import os
 import yaml
-
 import config as conf
 import utils
-
 import ConfigParser
 
 from glanceclient.v1 import Client as glance
@@ -1058,7 +1056,12 @@ class Prerequisites(BasePrerequisites):
                 if username == user['name']][0]
         tenants_names = [user['tenant']]
         for role in roles_to_create:
-            self.dst_cloud.keystoneclient.roles.create(name=role['role'])
+            try:
+                self.dst_cloud.keystoneclient.roles.create(name=role['role'])
+            except ks_exceptions.Conflict as e:
+                print "There was an error during role creating on dst: {}"\
+                    .format(e)
+                continue
             if role['tenant'] not in tenants_names:
                 tenants_names.append(role['tenant'])
 
@@ -1110,6 +1113,18 @@ class Prerequisites(BasePrerequisites):
             cmd = 'rm -rf /var/lib/glance/images/%s' % image_id
             self.migration_utils.execute_command_on_vm(
                 self.get_vagrant_vm_ip(), cmd, username='root', password='')
+
+    def create_network_with_segm_id(self):
+        if not self.dst_cloud:
+            self.dst_cloud = Prerequisites(
+                cloud_prefix='DST',
+                configuration_ini=self.configuration_ini,
+                config=self.config)
+        self.dst_cloud.switch_user(user=self.dst_cloud.username,
+                                   password=self.dst_cloud.password,
+                                   tenant=self.dst_cloud.tenant)
+
+        self.dst_cloud.create_networks(self.config.dst_networks)
 
     def run_preparation_scenario(self):
         print('>>> Creating tenants:')
@@ -1171,6 +1186,8 @@ class Prerequisites(BasePrerequisites):
         self.create_tenant_wo_sec_group_on_dst()
         print('>>> Create role on dst:')
         self.create_user_on_dst()
+        print('>>> Creating networks on dst:')
+        self.create_network_with_segm_id()
 
 
 class CleanEnv(BasePrerequisites):
@@ -1417,8 +1434,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Script to generate load for Openstack and delete '
                     'generated objects')
-    parser.add_argument('--clean', help='clean objects described in '
-                                        'self.config.ini', action='store_true')
+    parser.add_argument('--clean', help='clean objects, described'
+                                        ' in configuration.ini file',
+                        action='store_true')
     parser.add_argument('--env', default='SRC',
                         help='choose cloud: SRC or DST')
     parser.add_argument('cloudsconf',

@@ -135,7 +135,7 @@ tenants = [
           'server_to_attach': 'tn1server1', 'device': '/dev/vdb'},
          {'display_name': 'tn1_volume2', 'size': 1,
           'volume_type': 'nfs2'}
-     ],
+         ],
      'cinder_snapshots': [
          # Commented because of unimplemented error in nfs driver for grizzly.
          # {'name': 'tn1snapsh', 'volume_id': 'tn1_volume2'}
@@ -177,7 +177,7 @@ tenants = [
               {'filename': 'test_data.txt', 'data': 'some useless string'},
               {'filename': 'test/dir/test_data.txt',
                'data': 'test data string'}]}
-     ],
+         ],
      'unassociated_fip': 1
      },
     {'name': 'tenant3', 'description': 'This tenant will be deleted',
@@ -252,7 +252,29 @@ tenants = [
          {'name': 'tenantnet4', 'admin_state_up': True,
           'subnets': [
               {'cidr': '33.33.33.0/24', 'ip_version': 4, 'name': 't4_s1',
-               'routers_to_connect': ['ext_router']}]}],
+               'routers_to_connect': ['ext_router']}]},
+         {'name': 'tenantnet4_segm_id_cidr1', 'admin_state_up': True,
+          'shared': False,
+          'router:external': False, 'real_network': False,
+          'provider:segmentation_id': 177,
+          'provider:network_type': 'gre',
+          'subnets': [
+              {'cidr': '31.31.31.0/24', 'ip_version': 4,
+               'name': 'segm_id_test_subnet_1', 'connect_to_ext_router': False,
+               }
+              ]
+          },
+         {'name': 'tenantnet4_segm_id_cidr2', 'admin_state_up': True,
+          'shared': False,
+          'router:external': False, 'real_network': False,
+          'provider:segmentation_id': 178,
+          'provider:network_type': 'gre',
+          'subnets': [
+              {'cidr': '40.40.40.0/24', 'ip_version': 4,
+               'name': 'segm_id_test_subnet_2', 'connect_to_ext_router': False,
+               }
+              ]
+          }],
      'security_groups': [
          {'name': 'sg41', 'description': 'Tenant4 blah blah group', 'rules': [
              {'ip_protocol': 'icmp',
@@ -367,7 +389,32 @@ vips = [
         'pool_name': "pool1",
         'tenant_name': "admin",
         'subnet_name': "subnet_1"
-    }]
+        },
+    ]
+
+dst_networks = [
+    {'name': 'test_segm_id_cidr1', 'admin_state_up': True,
+     'shared': False,
+     'router:external': False, 'real_network': False,
+     'provider:segmentation_id': 177,
+     'provider:network_type': 'gre',
+     'subnets': [
+         {'cidr': '31.31.31.0/24', 'ip_version': 4,
+          'name': 'segm_id_test_subnet_1', 'connect_to_ext_router': False,
+          }
+         ]
+     },
+    {'name': 'test_segm_id_cidr2', 'admin_state_up': True,
+     'shared': False,
+     'router:external': False, 'real_network': False,
+     'provider:segmentation_id': 178,
+     'provider:network_type': 'gre',
+     'subnets': [
+         {'cidr': '41.41.41.0/24', 'ip_version': 4,
+          'name': 'segm_id_test_subnet_2', 'connect_to_ext_router': False,
+          }
+         ]
+     }]
 
 # VM's to create/delete
 vms = [
@@ -398,7 +445,6 @@ routers = [
 snapshots = [
     {'server': 'server2', 'image_name': 'asdasd'}
 ]
-
 
 '''
 Cinder images to create/delete

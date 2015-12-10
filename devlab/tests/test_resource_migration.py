@@ -9,8 +9,18 @@ import unittest
 from fabric.api import run, settings
 from fabric.network import NetworkError
 
+NET_NAMES_TO_OMIT = ['tenantnet4_segm_id_cidr1',
+                     'tenantnet4_segm_id_cidr2']
+SUBNET_NAMES_TO_OMIT = ['segm_id_test_subnet_1',
+                        'segm_id_test_subnet_2']
+PARAMS_NAMES_TO_OMIT = ['cidr', 'gateway_ip', 'provider:segmentation_id']
+
 
 class ResourceMigrationTests(functional_test.FunctionalTest):
+
+    def _is_segm_id_test(self, param, name):
+        return param in PARAMS_NAMES_TO_OMIT and (
+            name in NET_NAMES_TO_OMIT or name in SUBNET_NAMES_TO_OMIT)
 
     def validate_resource_parameter_in_dst(self, src_list, dst_list,
                                            resource_name, parameter):
@@ -48,11 +58,13 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 if i['name'] != j['name']:
                     continue
                 if i[parameter] != j[parameter]:
-                    msg = 'Parameter {param} for resource {res} with name ' \
-                          '{name} are different src: {r1}, dst: {r2}'
-                    self.fail(msg.format(
-                        param=parameter, res=resource_name, name=i['name'],
-                        r1=i[parameter], r2=j[parameter]))
+                    if not self._is_segm_id_test(parameter, i['name']):
+                        msg = 'Parameter {param} for resource {res}' \
+                              ' with name {name} are different' \
+                              ' src: {r1}, dst: {r2}'
+                        self.fail(msg.format(
+                            param=parameter, res=resource_name, name=i['name'],
+                            r1=i[parameter], r2=j[parameter]))
                 break
             else:
                 msg = 'Resource {res} with name {r_name} was not found on dst'
@@ -180,7 +192,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         src_images = [img for img in self.src_cloud.glanceclient.images.list()
                       if img.name not in config.images_not_included_in_filter]
         dst_images = [img for img in self.dst_cloud.glanceclient.images.list(
-                      is_public=None)]
+            is_public=None)]
 
         src_members = member_list_collector(src_images,
                                             self.src_cloud.glanceclient,
