@@ -68,12 +68,16 @@ tenants = [
          {'name': 'tenantnet1', 'admin_state_up': True,
           'subnets': [
               {'cidr': '10.5.2.0/24', 'ip_version': 4, 'name': 't1_s1',
-               'routers_to_connect': ['ext_router']}]},
+               'routers_to_connect': ['tn1_router']}]},
          {'name': 'tenant1_net2', 'admin_state_up': True,
           'subnets': [
               {'cidr': '10.6.2.0/24', 'ip_version': 4, 'name': 't1_s2',
-               'routers_to_connect': ['ext_router']}]
+               'routers_to_connect': ['tn2_router']}]
           }
+     ],
+     'routers': [
+         {'router': {'external_gateway_info': {}, 'name': 'tn1_router',
+                     'admin_state_up': True}}
      ],
      'security_groups': [
          {'name': 'sg11', 'description': 'Blah blah group', 'rules': [
@@ -120,8 +124,12 @@ tenants = [
          {'name': 'tenantnet2', 'admin_state_up': True,
           'subnets': [
               {'cidr': '22.2.2.0/24', 'ip_version': 4, 'name': 't2_s1',
-               'routers_to_connect': ['ext_router']}]
+               'routers_to_connect': ['tn2_router']}]
           }
+     ],
+     'routers': [
+         {'router': {'external_gateway_info': {}, 'name': 'tn2_router',
+                     'admin_state_up': True}}
      ],
      'cinder_volumes': [
          {'display_name': 'tn_volume1', 'size': 1, 'volume_type': 'nfs1',
@@ -241,7 +249,9 @@ networks = [
      'router:external': True, 'real_network': True,
      'subnets': [
          {'cidr': '192.168.1.0/24', 'ip_version': 4, 'name': 'external_subnet',
-          'routers_to_connect': ['ext_router'], 'allocation_pools': [
+          'set_as_gateway_for_routers': ['ext_router', 'tn1_router',
+                                         'tn2_router'],
+          'allocation_pools': [
               {'start': '192.168.1.100', 'end': '192.168.1.254'}]
           }]
      }

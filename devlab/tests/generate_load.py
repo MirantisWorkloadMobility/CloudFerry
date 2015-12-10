@@ -42,9 +42,9 @@ def clean_if_exists(func):
             return func(self, *args, **kwargs)
         except (ks_exceptions.Conflict,
                 nv_exceptions.Conflict,
-                nt_exceptions.NeutronClientException):
-            print('Method "%s" failed, current resource already exists'
-                  % func.__name__)
+                nt_exceptions.NeutronClientException) as e:
+            print('Method "%s" failed, current resource already exists:\n%s'
+                  % (func.__name__, e))
             clean_method = getattr(self.clean_tools,
                                    CREATE_CLEAN_METHODS_MAP[func.__name__])
             print 'Run cleanup method "%s"' % clean_method.__name__
@@ -675,23 +675,33 @@ class Prerequisites(BasePrerequisites):
                     {'subnet': get_body_for_subnet_creating(subnet)})
                 self.neutronclient.create_port(
                     {"port": {"network_id": net['network']['id']}})
-                if not subnet.get('routers_to_connect'):
-                    continue
                 # If network has attribute routers_to_connect, interface to
-                # this network is crated for given router, in case when network
-                # is internal and gateway set if - external.
-                for router in subnet['routers_to_connect']:
-                    router_id = self.get_router_id(router)
-                    if network.get('router:external'):
-                        self.neutronclient.add_gateway_router(
-                            router_id, {"network_id": net['network']['id']})
-                    else:
+                # this network is created for given router.
+                # If network has attribute set_as_gateway_for_routers, it will
+                # be set as router's gateway.
+                if subnet.get('routers_to_connect') is not None:
+                    for router in subnet['routers_to_connect']:
+                        router_id = self.get_router_id(router)
                         self.neutronclient.add_interface_router(
                             router_id, {"subnet_id": _subnet['subnet']['id']})
+                if network.get('router:external') and \
+                        subnet.get('set_as_gateway_for_routers') is not None:
+                    for router in subnet['set_as_gateway_for_routers']:
+                        router_id = self.get_router_id(router)
+                        self.neutronclient.add_gateway_router(
+                            router_id, {"network_id": net['network']['id']})
 
     def create_routers(self):
         for router in self.config.routers:
             self.neutronclient.create_router(router)
+        for tenant in self.config.tenants:
+            if tenant.get('routers'):
+                self.switch_user(user=self.username, password=self.password,
+                                 tenant=tenant['name'])
+                for router in tenant['routers']:
+                    self.neutronclient.create_router(router)
+        self.switch_user(user=self.username, password=self.password,
+                         tenant=self.tenant)
 
     @clean_if_exists
     def create_all_networking(self):
@@ -1226,6 +1236,10 @@ class CleanEnv(BasePrerequisites):
     def clean_routers(self):
         router_names = [router['router']['name']
                         for router in self.config.routers]
+        for tenant in self.config.tenants:
+            if tenant.get('routers'):
+                for router in tenant['routers']:
+                    router_names += router
         for router in self.neutronclient.list_routers()['routers']:
             if router['name'] not in router_names:
                 continue

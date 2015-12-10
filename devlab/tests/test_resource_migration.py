@@ -275,6 +275,16 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.validate_neutron_resource_parameter_in_dst(
             src_routers, dst_routers, resource_name='routers')
 
+    def test_validate_router_migrated_once(self):
+        src_routers_names = [router['name'] for router
+                             in self.filter_routers()['routers']]
+        dst_routers_names = [router['name'] for router
+                             in self.dst_cloud.neutronclient.list_routers()
+                             ['routers']]
+        for router in src_routers_names:
+            self.assertTrue(dst_routers_names.count(router) == 1,
+                            msg='Router %s presents multiple times' % router)
+
     def test_migrate_vms_parameters(self):
         src_vms = self.filter_vms()
         dst_vms = self.dst_cloud.novaclient.servers.list(

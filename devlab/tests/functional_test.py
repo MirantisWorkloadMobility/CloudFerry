@@ -104,6 +104,10 @@ class FunctionalTest(unittest.TestCase):
 
     def filter_routers(self):
         routers = [i['router']['name'] for i in config.routers]
+        for tenant in config.tenants:
+            if tenant.get('routers'):
+                for router in tenant.get('routers'):
+                    routers.append(router['router']['name'])
         return self._get_neutron_resources('routers', routers)
 
     def filter_floatingips(self):
