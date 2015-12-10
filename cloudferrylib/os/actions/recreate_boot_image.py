@@ -15,7 +15,7 @@
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import files
 from cloudferrylib.utils import remote_runner
-from cloudferrylib.utils.drivers.ssh_chunks import verified_file_copy,\
+from cloudferrylib.utils.drivers.copy_engine import verified_file_copy,\
     remote_md5_sum
 from cloudferrylib.utils import utils
 import copy
