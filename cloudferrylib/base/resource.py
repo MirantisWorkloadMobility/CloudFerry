@@ -46,14 +46,22 @@ class Resource(object):
         filtering feature."""
         return []
 
-    def wait_for_status(self, res_id, get_status, wait_status, timeout=60):
+    def wait_for_status(self, res_id, get_status, wait_status, timeout=60,
+                        stop_statuses=None):
         LOG.debug("Waiting for status change")
         delay = 1
+        stop_statuses = [s.lower() for s in (stop_statuses or [])]
         while delay < timeout:
             actual_status = get_status(res_id).lower()
-            LOG.debug("Expected status is '%s', actual - '%s'",
-                      wait_status, actual_status)
-            if actual_status == wait_status.lower():
+            LOG.debug("Expected status is '%s', actual - '%s', "
+                      "stop statuses - %s",
+                      wait_status, actual_status, stop_statuses)
+            if actual_status in stop_statuses:
+                LOG.debug("Stop status reached, exit")
+                raise timeout_exception.TimeoutException(
+                    get_status(res_id).lower(),
+                    wait_status, "Timed out waiting for state change")
+            elif actual_status == wait_status.lower():
                 LOG.debug("Expected status reached, exit")
                 break
 

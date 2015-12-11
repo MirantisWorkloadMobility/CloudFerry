@@ -52,6 +52,7 @@ SUSPENDED = 'SUSPENDED'
 PAUSED = 'PAUSED'
 SHELVED = 'SHELVED'
 SHELVED_OFFLOADED = 'SHELVED_OFFLOADED'
+ERROR = 'ERROR'
 
 ALLOWED_VM_STATUSES = [ACTIVE, STOPPED, SHUTOFF, RESIZED, SUSPENDED,
                        PAUSED, SHELVED, SHELVED_OFFLOADED, VERIFY_RESIZE]
@@ -67,6 +68,9 @@ STATUSES_AFTER_MIGRATION = {ACTIVE: ACTIVE,
                             SHELVED: SHUTOFF,
                             SHELVED_OFFLOADED: SHUTOFF,
                             VERIFY_RESIZE: ACTIVE}
+
+CORRECT_STATUSES_AFTER_MIGRATION = {STATUSES_AFTER_MIGRATION[status]
+                                    for status in ALLOWED_VM_STATUSES}
 
 
 class DestinationCloudNotOperational(RuntimeError):
@@ -99,7 +103,7 @@ class RandomSchedulerVmDeployer(object):
                 try:
                     return self.nc.deploy_instance(create_params, client_conf)
                 except timeout_exception.TimeoutException:
-                    LOG.warning("Failed to schedule VM '%s'", instance['name'])
+                    pass
 
         message = ("Unable to schedule VM '{vm}' on any of available compute "
                    "nodes.").format(vm=instance['name'])
@@ -117,10 +121,18 @@ class NovaCompute(compute.Compute):
         self.filter_tenant_id = None
         self.identity = cloud.resources['identity']
         self.mysql_connector = cloud.mysql_connector('nova')
+        # List of instance IDs which failed to create
+        self._failed_instances = []
 
     @property
     def nova_client(self):
         return self.proxy(self.get_client(), self.config)
+
+    @property
+    def failed_instances(self):
+        return [vm_id for vm_id in self._failed_instances
+                if self.instance_exists(vm_id) and
+                self.get_status(vm_id) not in CORRECT_STATUSES_AFTER_MIGRATION]
 
     def get_client(self, params=None):
         """Getting nova client. """
@@ -601,8 +613,14 @@ class NovaCompute(compute.Compute):
                 conf.cloud.tenant):
             nclient = self.get_client(conf)
             new_id = self.create_instance(nclient, **create_params)
-            self.wait_for_status(new_id, self.get_status, 'active',
-                                 timeout=300)
+            try:
+                self.wait_for_status(new_id, self.get_status, 'active',
+                                     timeout=300, stop_statuses=[ERROR])
+            except timeout_exception.TimeoutException:
+                LOG.warning("Failed to create instance '%s'", new_id)
+                self._failed_instances.append(new_id)
+                raise
+
         return new_id
 
     def _deploy_instances(self, info_compute):
@@ -715,6 +733,15 @@ class NovaCompute(compute.Compute):
 
     def get_instance(self, instance_id):
         return self.get_instances_list(search_opts={'id': instance_id})[0]
+
+    def instance_exists(self, instance_id):
+        """
+        Define the instance exists.
+
+        :param instance_id: ID of instance
+        :return: True - if instance exists, False - if not
+        """
+        return bool(self.get_instances_list(search_opts={'id': instance_id}))
 
     def change_status_if_needed(self, instance):
         """
@@ -905,6 +932,15 @@ class NovaCompute(compute.Compute):
         return (hypervisor_statistics.local_gb *
                 self.config.compute.disk_allocation_ratio -
                 hypervisor_statistics.local_gb_used)
+
+    def force_delete_vm_by_id(self, vm_id):
+        """
+        Reset state of VM and delete it.
+
+        :param vm_id: ID of instance
+        """
+        self.reset_state(vm_id)
+        self.delete_vm_by_id(vm_id)
 
     def delete_vm_by_id(self, vm_id):
         self.nova_client.servers.delete(vm_id)

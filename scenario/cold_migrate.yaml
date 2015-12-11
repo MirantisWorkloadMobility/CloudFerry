@@ -107,3 +107,4 @@ process:
       - rename_info_iter: True
   - verify:
       - verify_vms: True
+      - remove_failed_instances: True
