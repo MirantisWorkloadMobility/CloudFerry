@@ -80,17 +80,14 @@ def get_dict_from_config_file(config_file):
 
 class BasePrerequisites(object):
 
-    def __init__(self, config,
-                 configuration_ini,
-                 cloud_prefix='SRC'):
-        self.filtering_utils = utils.FilteringUtils()
+    def __init__(self, config, configuration_ini, cloud_prefix='SRC'):
+        self.configuration_ini = configuration_ini
+        self.filtering_utils = utils.FilteringUtils(
+            self.configuration_ini['migrate']['filter_path'])
         self.migration_utils = utils.MigrationUtils(config)
 
         self.config = config
-
         self.cloud_prefix = cloud_prefix.lower()
-
-        self.configuration_ini = configuration_ini
 
         self.username = self.configuration_ini[self.cloud_prefix]['user']
         self.password = self.configuration_ini[self.cloud_prefix]['password']
@@ -1542,7 +1539,6 @@ if __name__ == '__main__':
                         help='Please point configuration.ini file location')
 
     _args = parser.parse_args()
-
     confparser = ConfigParser.ConfigParser()
     confparser.read(_args.cloudsconf)
     cloudsconf = get_dict_from_config_file(confparser)

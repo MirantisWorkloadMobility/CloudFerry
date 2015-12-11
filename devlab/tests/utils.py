@@ -16,7 +16,6 @@ import collections
 import os
 import yaml
 import config
-import ConfigParser
 import time
 
 from fabric.api import run, settings, sudo, hide
@@ -39,22 +38,10 @@ def convert(data):
         return data
 
 
-class FilteringUtils(object):
-
+class Utils(object):
     def __init__(self):
         self.main_folder = os.path.dirname(os.path.dirname(
             os.path.split(__file__)[0]))
-        self.cf_config = ConfigParser.ConfigParser()
-        self.cf_config.read(os.path.join(self.main_folder,
-                                         config.cloud_ferry_conf))
-        self.filter_file_path = self.cf_config.get('migrate', 'filter_path')
-        self.filters_file_naming_template = config.filters_file_naming_template
-
-    def build_filter_files_list(self):
-        return [self.filters_file_naming_template.format(
-            tenant_name=tenant['name'])
-            for tenant in config.tenants
-            if 'deleted' not in tenant and not tenant['deleted']]
 
     def load_file(self, file_name):
         file_path = os.path.join(self.main_folder, file_name.lstrip('/'))
@@ -63,6 +50,19 @@ class FilteringUtils(object):
             if filter_dict is None:
                 filter_dict = {}
         return [filter_dict, file_path]
+
+
+class FilteringUtils(Utils):
+    def __init__(self, path_to_filter):
+        super(FilteringUtils, self).__init__()
+        self.filter_file_path = path_to_filter
+        self.filters_file_naming_template = config.filters_file_naming_template
+
+    def build_filter_files_list(self):
+        return [self.filters_file_naming_template.format(
+            tenant_name=tenant['name'])
+            for tenant in config.tenants
+            if 'deleted' not in tenant and not tenant['deleted']]
 
     def filter_vms(self, src_data_list):
         loaded_data = self.load_file(self.filter_file_path)

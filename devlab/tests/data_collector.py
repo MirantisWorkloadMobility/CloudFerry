@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import ConfigParser
 import os
 import yaml
 import config as cfg
@@ -43,10 +44,11 @@ class DataCollector(object):
     """
     def __init__(self, config):
         self.cloud_info = None
-        self.filtering_utils = utils.FilteringUtils()
-        self.main_folder = self.filtering_utils.main_folder
-        self.config_ini = generate_load.get_dict_from_config_file(
-            self.filtering_utils.cf_config)
+        self.utils = utils.Utils()
+        confparser = ConfigParser.ConfigParser()
+        confparser.read(os.path.join(self.utils.main_folder,
+                                     config.cloud_ferry_conf))
+        self.config_ini = generate_load.get_dict_from_config_file(confparser)
         self.config = config
 
     def chose_destination_cloud(self, destination):
@@ -234,7 +236,7 @@ class DataCollector(object):
     def dump_data(self):
         file_name = self.config.rollback_params['data_file_names']['PRE']
         path = 'devlab/tests'
-        pre_file_path = os.path.join(self.main_folder, path, file_name)
+        pre_file_path = os.path.join(self.utils.main_folder, path, file_name)
         data = self.data_collector()
         with open(pre_file_path, "w") as f:
             yaml.dump(utils.convert(data), f, default_flow_style=False)
