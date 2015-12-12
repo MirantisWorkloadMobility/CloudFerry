@@ -615,7 +615,8 @@ class NovaCompute(compute.Compute):
             new_id = self.create_instance(nclient, **create_params)
             try:
                 self.wait_for_status(new_id, self.get_status, 'active',
-                                     timeout=300, stop_statuses=[ERROR])
+                                     timeout=conf.migrate.boot_timeout,
+                                     stop_statuses=[ERROR])
             except timeout_exception.TimeoutException:
                 LOG.warning("Failed to create instance '%s'", new_id)
                 self._failed_instances.append(new_id)
