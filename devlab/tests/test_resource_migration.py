@@ -58,6 +58,25 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 msg = 'Resource {res} with name {r_name} was not found on dst'
                 self.fail(msg.format(res=resource_name, r_name=i['name']))
 
+    def validate_flavor_parameters(self, src_flavors, dst_flavors):
+        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
+                                                resource_name='flavor',
+                                                parameter='name')
+        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
+                                                resource_name='flavor',
+                                                parameter='ram')
+        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
+                                                resource_name='flavor',
+                                                parameter='vcpus')
+        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
+                                                resource_name='flavor',
+                                                parameter='disk')
+        # Id can be changed, but for now in CloudFerry we moving flavor with
+        # its id.
+        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
+                                                resource_name='flavor',
+                                                parameter='id')
+
     def test_migrate_keystone_users(self):
         src_users = self.filter_users()
         dst_users = self.dst_cloud.keystoneclient.users.list()
@@ -121,27 +140,17 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 resource_name='keypair',
                                                 parameter='fingerprint')
 
-    def test_migrate_nova_flavors(self):
+    def test_migrate_nova_public_flavors(self):
         src_flavors = self.filter_flavors()
         dst_flavors = self.dst_cloud.novaclient.flavors.list()
 
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='name')
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='ram')
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='vcpus')
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='disk')
-        # Id can be changed, but for now in CloudFerry we moving flavor with
-        # its id.
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='id')
+        self.validate_flavor_parameters(src_flavors, dst_flavors)
+
+    def test_migrate_nova_private_flavors(self):
+        src_flavors = self.filter_flavors(filter_only_private=True)
+        dst_flavors = self.dst_cloud.novaclient.flavors.list(is_public=False)
+
+        self.validate_flavor_parameters(src_flavors, dst_flavors)
 
     def test_migrate_nova_security_groups(self):
         src_sec_gr = self.filter_security_groups()
