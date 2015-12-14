@@ -41,6 +41,9 @@ loggers:
   paramiko.transport:
     level: INFO
     handlers: [console, info, error]
+  glanceclient.common.http:
+    level: INFO
+    handlers: [console, info, error]
 
 root:
   level: INFO
