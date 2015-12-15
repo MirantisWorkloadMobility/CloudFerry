@@ -85,7 +85,8 @@ class QemuImg(ssh_util.SshUtil):
                 ephemeral=dest_disk_ephemeral)
             qemu_img_json = self.execute(cmd=cmd,
                                          host_exec=host_instance,
-                                         ignore_errors=False)
+                                         ignore_errors=False,
+                                         sudo=True)
             try:
                 return json.loads(qemu_img_json)['backing-filename']
             except (TypeError, ValueError, KeyError) as e:
@@ -98,12 +99,13 @@ class QemuImg(ssh_util.SshUtil):
                 ephemeral=dest_disk_ephemeral)
             qemu_img_output = self.execute(cmd=cmd,
                                            host_exec=host_instance,
-                                           ignore_errors=True)
+                                           ignore_errors=True,
+                                           sudo=True)
             return QemuImgInfoParser(qemu_img_output).backing_file()
 
     def diff_rebase(self, baseimage, disk, host_compute=None):
         cmd = self.rebase_cmd(baseimage, disk)
-        return self.execute(cmd, host_compute)
+        return self.execute(cmd, host_compute, sudo=True)
 
     # example source_path = rbd:compute/QWEQWE-QWE231-QWEWQ
     def convert(self, format_to, source_path, dest_path, host_compute=None):

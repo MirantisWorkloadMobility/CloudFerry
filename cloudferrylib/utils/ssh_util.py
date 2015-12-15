@@ -25,13 +25,13 @@ class SshUtil(object):
         self.config_migrate = config_migrate
 
     def execute(self, cmd, internal_host=None, host_exec=None,
-                ignore_errors=False):
+                ignore_errors=False, sudo=False):
         host = host_exec if host_exec else self.host
         runner = \
             remote_runner.RemoteRunner(host,
                                        self.cloud.ssh_user,
                                        password=self.cloud.ssh_sudo_password,
-                                       sudo=False,
+                                       sudo=sudo,
                                        ignore_errors=ignore_errors)
         if internal_host:
             return self.execute_on_inthost(runner, str(cmd), internal_host)
