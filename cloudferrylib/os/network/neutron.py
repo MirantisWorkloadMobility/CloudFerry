@@ -546,12 +546,8 @@ class NeutronNetwork(network.Network):
         identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
         net_res = cloud.resources[utl.NETWORK_RESOURCE]
 
-        get_tenant_name = identity_res.get_tenants_func()
-
-        security_group_rules = []
-        for rule in sec_gr['security_group_rules']:
-            rule_info = NeutronNetwork.convert(rule, cloud, 'rule')
-            security_group_rules.append(rule_info)
+        get_tenant_name = identity_res.get_tenants_func(
+            return_default_tenant=False)
 
         result = {
             'name': sec_gr['name'],
@@ -559,7 +555,8 @@ class NeutronNetwork(network.Network):
             'tenant_id': sec_gr['tenant_id'],
             'tenant_name': get_tenant_name(sec_gr['tenant_id']),
             'description': sec_gr['description'],
-            'security_group_rules': security_group_rules,
+            'security_group_rules': [NeutronNetwork.convert(gr, cloud, 'rule')
+                                     for gr in sec_gr['security_group_rules']],
             'meta': {},
         }
 
@@ -829,6 +826,12 @@ class NeutronNetwork(network.Network):
             if sec_gr['tenant_id'] != service_tenant_id:
                 sec_gr_info = self.convert(sec_gr, self.cloud,
                                            'security_group')
+                if not sec_gr_info['tenant_name']:
+                    # Skip security group from undefined tenant
+                    LOG.warning("Security group '%s' (%s) from tenant %s "
+                                "has been skipped.", sec_gr['name'],
+                                sec_gr['id'], sec_gr['tenant_id'])
+                    continue
                 sec_groups_info.append(sec_gr_info)
 
         LOG.info("Done")
