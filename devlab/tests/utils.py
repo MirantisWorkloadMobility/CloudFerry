@@ -167,3 +167,29 @@ class MigrationUtils(object):
                     return addr['addr']
         raise RuntimeError('VM with name {} and id {} doesnt have fip'.format(
             vm.name, vm.id))
+
+
+class AddAdminUserRoleToNonAdminTenant(object):
+
+    def __init__(self, ks_client, admin_user, tenant):
+        self.keystone = ks_client
+        self.tenant = self.keystone.tenants.find(name=tenant)
+        self.user = self.keystone.users.find(name=admin_user)
+        self.role = self.keystone.roles.find(name='admin')
+        self.user_has_role = False
+        roles = self.keystone.users.list_roles(self.user.id, self.tenant.id)
+        for role in roles:
+            if role.id == self.role.id:
+                self.user_has_role = True
+
+    def __enter__(self):
+        if not self.user_has_role:
+            self.keystone.roles.add_user_role(user=self.user,
+                                              role=self.role,
+                                              tenant=self.tenant)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self.user_has_role:
+            self.keystone.roles.remove_user_role(user=self.user,
+                                                 role=self.role,
+                                                 tenant=self.tenant)

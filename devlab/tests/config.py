@@ -47,7 +47,7 @@ roles = [
 # Tenants to create/delete
 tenants = [
     {'name': 'tenant1', 'description': 'None', 'enabled': True,
-     'quota': {'instances': '9', 'cores': '19', 'ram': '52199',
+     'quota': {'instances': '20', 'cores': '19', 'ram': '52199',
                'floating_ips': '9', 'fixed_ips': '', 'metadata_items': '',
                'injected_files': '', 'injected_file_content_bytes': '',
                'injected_file_path_bytes': '', 'key_pairs': '5',
@@ -59,11 +59,17 @@ tenants = [
          'router': 14,
          'subnet': 55
      },
+     'server_groups': [
+         {'name': 'tn1_server_group', 'policies': ['affinity']},
+         {'name': 'tn1_server_group2', 'policies': ['affinity']}
+     ],
      'vms': [
          {'name': 'tn1server1', 'image': 'image1', 'flavor': 'flavorname2',
-          'key_name': 'key1'},
-         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1'},
-         {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr'}],
+          'key_name': 'key1', 'server_group': 'tn1_server_group'},
+         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1',
+          'server_group': 'tn1_server_group'},
+         {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr',
+          'server_group': 'tn1_server_group2'}],
      'networks': [
          {'name': 'tenantnet1', 'admin_state_up': True,
           'subnets': [
@@ -369,6 +375,10 @@ vips = [
         'subnet_name': "subnet_1"
     }]
 
+# Server groups to create
+server_groups = [
+    {'name': 'admin_server_group', 'policies': ['anti-affinity']}
+]
 # VM's to create/delete
 vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
@@ -380,7 +390,8 @@ vms = [
     {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'server7', 'image': 'image1', 'flavor': 'flavorname1',
      'broken': True},
-    {'name': 'server8', 'image': 'broken_image', 'flavor': 'flavorname1'}
+    {'name': 'server8', 'image': 'broken_image', 'flavor': 'flavorname1',
+     'server_group': 'admin_server_group'}
 ]
 
 vms_from_volumes = [

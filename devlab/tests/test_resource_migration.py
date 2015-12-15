@@ -182,6 +182,36 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             src_sec_gr, dst_sec_gr, resource_name='security_groups',
             parameter='description')
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2', 'tenant4'])
+    def test_migrate_nova_server_groups(self):
+        def get_members_names(client, sg_groups):
+            groups = {}
+            for sg_group in sg_groups:
+                members_names = [client.servers.get(member).name
+                                 for member in sg_group.members]
+                groups[sg_group.name] = members_names
+            return groups
+
+        if self.src_cloud.openstack_release == 'grizzly':
+            self.skipTest('Grizzly release does not support server groups')
+        src_server_groups = self.src_cloud.get_all_server_groups()
+        dst_server_groups = self.dst_cloud.get_all_server_groups()
+        self.validate_resource_parameter_in_dst(
+            src_server_groups, dst_server_groups,
+            resource_name='server_groups',
+            parameter='name')
+        src_members = get_members_names(self.src_cloud.novaclient,
+                                        src_server_groups)
+        dst_members = get_members_names(self.dst_cloud.novaclient,
+                                        dst_server_groups)
+        for group in src_members:
+            self.assertListEqual(src_members[group], dst_members[group],
+                                 'Members in server group: "{0}" are different'
+                                 ': "{1}" and "{2}"'.format(group,
+                                                            src_members[group],
+                                                            dst_members[group])
+                                 )
+
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_image_members(self):
 
