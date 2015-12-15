@@ -1,3 +1,18 @@
+# Copyright (c) 2015 Mirantis Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the License);
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and#
+# limitations under the License.
+
+from nose.plugins.attrib import attr
 import tests.config as config
 import tests.functional_test as functional_test
 import unittest
@@ -95,6 +110,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
 
         return set(src_users_with_keypair).intersection(user_names_tenant)
 
+    @attr(migrated_tenant='tenant2')
     def test_tenant_exists_on_dst(self):
 
         undeleted_tenants = []
@@ -106,6 +122,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
             msg = 'Tenants {0} exist on destination, but should be deleted!'
             self.fail(msg.format(undeleted_tenants))
 
+    @attr(migrated_tenant='tenant2')
     def test_tenant_users_exist_on_dst(self):
         undeleted_users = []
         for tenant_name, _ in self.deleted_tenants:
@@ -124,6 +141,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
                   ' but should be deleted!'
             self.fail(msg.format(undeleted_users))
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_tenant_net_exists_on_dst(self):
 
         tenant_nets_ids = []
@@ -153,6 +171,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
                   ' but should be!'
             self.fail(msg.format(tenants_vms))
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_tenants_volumes_on_dst(self):
         undeleted_volumes = []
         for tenant_name, tenant in self.deleted_tenants:
@@ -168,6 +187,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
                   ' but should be deleted!'
             self.fail(msg.format(undeleted_volumes))
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_tenant_key_exists_on_dst(self):
         unused_keypairs = []
         for tenant_name, tenant in self.deleted_tenants:
@@ -191,6 +211,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
                   ' but should be deleted!'
             self.fail(msg.format(unused_keypairs))
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_tenant_flavors_exist_on_dst(self):
         unused_flavors = []
         for tenant_name, tenant in self.deleted_tenants:

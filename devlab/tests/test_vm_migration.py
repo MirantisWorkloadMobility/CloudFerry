@@ -1,5 +1,21 @@
-import unittest
+# Copyright (c) 2015 Mirantis Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the License);
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and#
+# limitations under the License.
+
 import json
+from nose.plugins.attrib import attr
+import unittest
+
 import functional_test
 import config
 
@@ -27,6 +43,7 @@ class VmMigration(functional_test.FunctionalTest):
             self.before_migr_states = json.load(data_file)
         self.filter_vms = self.filtering_utils.filter_vms(src_vms)
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_vms_not_in_filter_stay_active_on_src(self):
         original_states = self.before_migr_states
         for vm in config.vms_not_in_filter:
@@ -37,6 +54,7 @@ class VmMigration(functional_test.FunctionalTest):
                     filtered_vm.status == original_states[filtered_vm.name],
                     msg="Vm %s has wrong state" % filtered_vm.name)
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_vm_not_in_filter_did_not_migrate(self):
         dst_vms = [x.name for x in self.dst_cloud.novaclient.servers.list(
                    search_opts={'all_tenants': 1})]
@@ -45,6 +63,7 @@ class VmMigration(functional_test.FunctionalTest):
                             'VM migrated despite that it was not included in '
                             'filter, VM info: \n{}'.format(vm))
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_cold_migrate_vm_state(self):
         original_states = self.before_migr_states
         for vm_name in original_states.keys():
@@ -66,6 +85,7 @@ class VmMigration(functional_test.FunctionalTest):
                 self.assertTrue(src_vm.status == 'SHUTOFF' and
                                 self.dst_vms[vm_index].status == 'ACTIVE')
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_cold_migrate_vm_ip(self):
         src_vms = self.filter_vms[0]
         for src_vm, vm_index in zip(src_vms, self.dst_vm_indexes):
@@ -77,6 +97,7 @@ class VmMigration(functional_test.FunctionalTest):
                     self.assertTrue(src_net_addr['addr'] ==
                                     dst_net_addr['addr'])
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_cold_migrate_vm_security_groups(self):
         src_vms = self.filter_vms[0]
         for src_vm, vm_index in zip(src_vms, self.dst_vm_indexes):
