@@ -52,30 +52,22 @@ class GlanceImageProgessMigrationView(object):
         for image_id in images:
             img = images[image_id]['image']
 
-            if img and img['resource']:
+            if not img:
+                continue
+            elif img['resource']:
                 image_key = (img['name'], img['owner_name'], img['checksum'],
                              img['is_public'])
                 dst_image = dst_images.get(image_key)
-            elif img['resource'] is None:
-                # recreated image
-                dst_image = None
-            elif not img:
-                # empty image
-                continue
-
-            if dst_image:
-                self.num_migrated += 1
-                self.migrated_size += dst_image.size
-                self.list_migrated.append('%s (%s)' % (dst_image.name,
-                                                       dst_image.id))
+                if dst_image:
+                    self.num_migrated += 1
+                    self.migrated_size += dst_image.size
+                    self.list_migrated.append('%s (%s)' % (dst_image.name,
+                                                           dst_image.id))
                 continue
 
             self.total_size += img.get('size', 0)
 
-            if 'is_public' not in img:
-                continue
-
-            if img['is_public']:
+            if img.get('is_public'):
                 self.num_public += 1
                 self.list_public.append('%s (%s)' % (img['name'], img['id']))
             else:
