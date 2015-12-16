@@ -11,6 +11,7 @@ preparation:
   - pre_migration_test:
       - act_get_filter: True
       - act_check_filter: True
+      - check_affinity: True
       - check_config_quota_neutron: True
       - src_test:
           - act_check_image_api_src: True

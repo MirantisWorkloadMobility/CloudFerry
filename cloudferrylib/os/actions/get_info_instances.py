@@ -13,20 +13,20 @@
 # limitations under the License.
 
 
+import copy
+
 from cloudferrylib.base.action import action
-from cloudferrylib.utils import utils as utl
+from cloudferrylib.utils import utils
 
 
 class GetInfoInstances(action.Action):
-    def __init__(self, init, cloud=None):
-        super(GetInfoInstances, self).__init__(init, cloud)
 
     def run(self, **kwargs):
         search_opts = {'search_opts': kwargs.get('search_opts', {})}
         search_opts.update(kwargs.get('search_opts_tenant', {}))
-        compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
+        compute_resource = self.cloud.resources[utils.COMPUTE_RESOURCE]
         info = compute_resource.read_info(**search_opts)
         return {
             'info': info,
-            'src_info': info
+            'src_info': copy.deepcopy(info)
         }
