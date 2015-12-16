@@ -172,6 +172,8 @@ migrate_opts = [
                 help="Don't show ssl warnings"),
     cfg.BoolOpt('keep_affinity_settings', default=False,
                 help="Keep affinity/anti-affinity settings"),
+    cfg.IntOpt('boot_timeout', default=300,
+               help="Timeout booting of instance"),
 ]
 
 mail = cfg.OptGroup(name='mail',
