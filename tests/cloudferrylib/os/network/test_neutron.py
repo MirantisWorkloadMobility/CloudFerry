@@ -70,6 +70,19 @@ class NeutronTestCase(test.TestCase):
         self.identity_mock.get_tenants_func = \
             mock.Mock(return_value=self.f_mock)
 
+        self.neutron_network_client.get_lb_pools = mock.Mock()
+        self.neutron_network_client.get_lb_pools.return_value = [{
+            'name': 'pool2',
+            'description': 'desc2',
+            'tenant_name': 'fake_tenant_name_1',
+            'subnet_id': 'sub_id_2_src',
+            'id': 'pool_id_2_dst',
+            'protocol': 'HTTP',
+            'lb_method': 'SOURCE_IP',
+            'provider': 'haproxy',
+            'res_hash': 'hash2'
+        }]
+
         self.net_1_info = {'name': 'fake_network_name_1',
                            'id': 'fake_network_id_1',
                            'admin_state_up': True,
@@ -172,6 +185,194 @@ class NeutronTestCase(test.TestCase):
         self.neutron_mock_client().update_quota\
             .assert_called_once_with("fake_tenant_id_1",
                                      quota['fake_tenant_name_1'])
+
+    def test_upload_lb_monitors(self):
+        self.neutron_network_client.get_lb_monitors = mock.Mock()
+        self.neutron_network_client.get_lb_monitors.return_value = [
+            {
+                'id': 'mon_id_1_dst',
+                'res_hash': 'hash_monitor_1'
+            }
+        ]
+        monitors = [{
+            'meta': {
+                'id': None
+            },
+            'tenant_name': 'fake_tenant_name_1',
+            'type': 'type1',
+            'delay': '111',
+            'timeout': '131',
+            'max_retries': '12',
+            'url_path': None,
+            'res_hash': 'hash_monitor_2'
+        }
+        ]
+        res_monitors = {
+            'health_monitor': {
+                'tenant_id': 'fake_tenant_id_1',
+                'type': 'type1',
+                'delay': '111',
+                'timeout': '131',
+                'max_retries': '12',
+            }
+        }
+        self.neutron_network_client.upload_lb_monitors(monitors)
+        self.neutron_mock_client().\
+            create_health_monitor.assert_called_once_with(res_monitors)
+
+    def test_upload_lb_members(self):
+        self.neutron_network_client.get_subnets = mock.Mock()
+        self.neutron_network_client.get_subnets.return_value = [
+            {
+                'id': 'sub_id_1_dst',
+                'res_hash': 'hash_subnet_1'
+            }
+        ]
+        self.neutron_network_client.get_lb_members = mock.Mock()
+        self.neutron_network_client.get_lb_members.return_value = [
+            {
+                'id': 'member_id_1_dst',
+                'res_hash': 'hash_member_2'
+            }
+        ]
+        pools = [{
+            'id': 'pool_id_src_1',
+            'name': 'pool1',
+            'description': 'desc1',
+            'tenant_name': 'fake_tenant_name_1',
+            'subnet_id': 'sub_id_1',
+            'protocol': 'HTTP',
+            'lb_method': 'SOURCE_IP',
+            'res_hash': 'hash2',
+            'meta': {
+                'id': None
+            }
+        }]
+        members = [{
+            'meta': {
+                'id': None
+            },
+            'protocol_port': '83',
+            'address': '10.5.5.1',
+            'pool_id': 'pool_id_src_1',
+            'tenant_name': 'fake_tenant_name_1',
+            'res_hash': 'hash_member_1'
+        }]
+        res_members = {
+            'member': {
+                'protocol_port': '83',
+                'address': '10.5.5.1',
+                'tenant_id': 'fake_tenant_id_1',
+                'pool_id': 'pool_id_2_dst'
+            }
+        }
+        self.neutron_network_client.upload_lb_members(members, pools)
+        self.neutron_mock_client().\
+            create_member.assert_called_once_with(res_members)
+
+    def test_upload_lb_vips(self):
+        self.neutron_network_client.get_subnets = mock.Mock()
+        self.neutron_network_client.get_subnets.return_value = [
+            {
+                'id': 'sub_id_1_dst',
+                'res_hash': 'hash_subnet_1'
+            }
+        ]
+
+        pools = [{
+            'id': 'pool_id_src_1',
+            'name': 'pool1',
+            'description': 'desc1',
+            'tenant_name': 'fake_tenant_name_1',
+            'subnet_id': 'sub_id_1',
+            'protocol': 'HTTP',
+            'lb_method': 'SOURCE_IP',
+            'res_hash': 'hash2',
+            'meta': {
+                'id': None
+            }
+        }]
+        vips = [
+            {
+                'name': 'vip1',
+                'description': 'desc1',
+                'address': '10.5.5.1',
+                'protocol': 'HTTP',
+                'protocol_port': '80',
+                'connection_limit': '100',
+                'pool_id': 'pool_id_src_1',
+                'tenant_name': 'fake_tenant_name_1',
+                'subnet_id': 'sub_id_1',
+                'res_hash': 'hash1_vip',
+                'session_persistence': None,
+                'meta': {
+                    'id': None
+                }
+            }
+        ]
+        subnets = [
+            {
+                'id': 'sub_id_1',
+                'res_hash': 'hash_subnet_1'
+            }
+        ]
+        res_vip = {
+            'vip': {
+                'name': 'vip1',
+                'description': 'desc1',
+                'address': '10.5.5.1',
+                'protocol': 'HTTP',
+                'protocol_port': '80',
+                'connection_limit': '100',
+                'pool_id': 'pool_id_2_dst',
+                'tenant_id': 'fake_tenant_id_1',
+                'subnet_id': 'sub_id_1_dst',
+            }
+        }
+        self.neutron_network_client.upload_lb_vips(vips, pools, subnets)
+        self.neutron_mock_client().\
+            create_vip.assert_called_once_with(res_vip)
+
+    def test_lb_pools(self):
+        self.neutron_network_client.get_subnets = mock.Mock()
+        self.neutron_network_client.get_subnets.return_value = [
+            {
+                'id': 'sub_id_1_dst',
+                'res_hash': 'hash_subnet_1'
+            }
+        ]
+
+        pools = [{
+            'name': 'pool1',
+            'description': 'desc1',
+            'tenant_name': 'fake_tenant_name_1',
+            'subnet_id': 'sub_id_1',
+            'protocol': 'HTTP',
+            'lb_method': 'SOURCE_IP',
+            'res_hash': 'hash1',
+            'meta': {
+                'id': None
+            }
+        }]
+        subnets = [
+            {
+                'id': 'sub_id_1',
+                'res_hash': 'hash_subnet_1'
+            }
+        ]
+        res_pools = {
+            'pool': {
+                'name': 'pool1',
+                'description': 'desc1',
+                'tenant_id': 'fake_tenant_id_1',
+                'subnet_id': 'sub_id_1_dst',
+                'protocol': 'HTTP',
+                'lb_method': 'SOURCE_IP'
+            }
+        }
+        self.neutron_network_client.upload_lb_pools(pools, subnets)
+        self.neutron_mock_client().\
+            create_pool.assert_called_once_with(res_pools)
 
     def test_get_quotas(self):
         ten1 = mock.Mock()

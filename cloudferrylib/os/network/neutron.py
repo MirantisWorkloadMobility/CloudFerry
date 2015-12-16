@@ -123,10 +123,10 @@ class NeutronNetwork(network.Network):
                 }}
         if self.config.migrate.keep_lbaas:
             info['lbaas'] = dict()
-            info['lb_pools'] = self.get_lb_pools()
-            info['lb_monitors'] = self.get_lb_monitors()
-            info['lb_members'] = self.get_lb_members()
-            info['lb_vips'] = self.get_lb_vips()
+            info['lb_pools'] = self.get_lb_pools(tenant_id)
+            info['lb_monitors'] = self.get_lb_monitors(tenant_id)
+            info['lb_members'] = self.get_lb_members(tenant_id)
+            info['lb_vips'] = self.get_lb_vips(tenant_id)
         return info
 
     def show_quota(self, tenant_id=''):
@@ -577,7 +577,8 @@ class NeutronNetwork(network.Network):
         identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
         net_res = cloud.resources[utl.NETWORK_RESOURCE]
 
-        get_tenant_name = identity_res.get_tenants_func()
+        get_tenant_name = identity_res.get_tenants_func(
+            return_default_tenant=False)
 
         result = {
             'name': pool['name'],
@@ -585,8 +586,8 @@ class NeutronNetwork(network.Network):
             'description': pool['description'],
             'lb_method': pool['lb_method'],
             'protocol': pool['protocol'],
-            'provider': pool['provider'],
             'subnet_id': pool['subnet_id'],
+            'provider': pool.get('provider'),
             'tenant_id': pool['tenant_id'],
             'tenant_name': get_tenant_name(pool['tenant_id']),
             'health_monitors': pool['health_monitors'],
@@ -598,9 +599,7 @@ class NeutronNetwork(network.Network):
                                              'name',
                                              'tenant_name',
                                              'lb_method',
-                                             'protocol',
-                                             'provider')
-
+                                             'protocol')
         result['res_hash'] = res_hash
 
         return result
@@ -610,7 +609,8 @@ class NeutronNetwork(network.Network):
         identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
         net_res = cloud.resources[utl.NETWORK_RESOURCE]
 
-        get_tenant_name = identity_res.get_tenants_func()
+        get_tenant_name = identity_res.get_tenants_func(
+            return_default_tenant=False)
 
         result = {
             'id': monitor['id'],
@@ -622,7 +622,7 @@ class NeutronNetwork(network.Network):
             'max_retries': monitor['max_retries'],
             'url_path': monitor.get('url_path', None),
             'expected_codes': monitor.get('expected_codes', None),
-            'pools': monitor['pools'],
+            'pools': monitor.get('pools'),
             'meta': {}
         }
 
@@ -642,7 +642,8 @@ class NeutronNetwork(network.Network):
         identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
         net_res = cloud.resources[utl.NETWORK_RESOURCE]
 
-        get_tenant_name = identity_res.get_tenants_func()
+        get_tenant_name = identity_res.get_tenants_func(
+            return_default_tenant=False)
 
         result = {
             'id': member['id'],
@@ -670,7 +671,8 @@ class NeutronNetwork(network.Network):
         identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
         net_res = cloud.resources[utl.NETWORK_RESOURCE]
 
-        get_tenant_name = identity_res.get_tenants_func()
+        get_tenant_name = identity_res.get_tenants_func(
+            return_default_tenant=False)
 
         result = {
             'name': vip['name'],
@@ -832,9 +834,9 @@ class NeutronNetwork(network.Network):
         LOG.info("Done")
         return sec_groups_info
 
-    def get_lb_pools(self):
+    def get_lb_pools(self, tenant_id=''):
         LOG.info("Getting load balancer pools...")
-        pools = self.neutron_client.list_pools()['pools']
+        pools = self.neutron_client.list_pools(tenant_id=tenant_id)['pools']
         pools_info = []
 
         for pool in pools:
@@ -844,10 +846,11 @@ class NeutronNetwork(network.Network):
         LOG.info("Done")
         return pools_info
 
-    def get_lb_monitors(self):
+    def get_lb_monitors(self, tenant_id=''):
         LOG.info("Getting load balancer monitors...")
         monitors = \
-            self.neutron_client.list_health_monitors()['health_monitors']
+            self.neutron_client.list_health_monitors(
+                tenant_id=tenant_id)['health_monitors']
         monitors_info = []
 
         for mon in monitors:
@@ -857,9 +860,10 @@ class NeutronNetwork(network.Network):
         LOG.info("Done")
         return monitors_info
 
-    def get_lb_members(self):
+    def get_lb_members(self, tenant_id=''):
         LOG.info("Getting load balancer members...")
-        members = self.neutron_client.list_members()['members']
+        members = self.neutron_client.list_members(
+            tenant_id=tenant_id)['members']
         members_info = []
 
         for member in members:
@@ -869,9 +873,10 @@ class NeutronNetwork(network.Network):
         LOG.info("Done")
         return members_info
 
-    def get_lb_vips(self):
+    def get_lb_vips(self, tenant_id=''):
         LOG.info("Getting load balancer VIPs...")
-        vips = self.neutron_client.list_vips()['vips']
+        vips = self.neutron_client.list_vips(
+            tenant_id=tenant_id)['vips']
         vips_info = []
 
         for vip in vips:
@@ -889,6 +894,8 @@ class NeutronNetwork(network.Network):
         existing_pools = self.get_lb_pools()
         existing_snets = self.get_subnets()
         for vip in vips:
+            if not vip['tenant_name']:
+                continue
             if vip['res_hash'] not in existing_vips_hashlist:
                 tenant_id = self.identity_client.get_tenant_id_by_name(
                     vip['tenant_name'])
@@ -927,14 +934,19 @@ class NeutronNetwork(network.Network):
             [ex_member['res_hash'] for ex_member in existing_members]
         existing_pools = self.get_lb_pools()
         for member in members:
+            if not member['tenant_name']:
+                continue
             if member['res_hash'] not in existing_members_hashlist:
+                tenant_id = self.identity_client.get_tenant_id_by_name(
+                    member['tenant_name'])
                 pool_hash = self.get_res_hash_by_id(pools, member['pool_id'])
                 dst_pool = self.get_res_by_hash(existing_pools, pool_hash)
                 member_info = {
                     'member': {
                         'protocol_port': member["protocol_port"],
                         'address': member['address'],
-                        'pool_id': dst_pool['id']
+                        'pool_id': dst_pool['id'],
+                        'tenant_id': tenant_id
                     }
                 }
                 member['meta']['id'] = self.neutron_client.create_member(
@@ -951,6 +963,8 @@ class NeutronNetwork(network.Network):
         existing_mons_hashlist = \
             [ex_mon['res_hash'] for ex_mon in existing_mons]
         for mon in monitors:
+            if not mon['tenant_name']:
+                continue
             if mon['res_hash'] not in existing_mons_hashlist:
                 tenant_id = self.identity_client.get_tenant_id_by_name(
                     mon['tenant_name'])
@@ -981,6 +995,8 @@ class NeutronNetwork(network.Network):
         existing_pools = self.get_lb_pools()
         existing_monitors = self.get_lb_monitors()
         for pool in pools:
+            if not pool['tenant_name']:
+                continue
             pool_hash = self.get_res_hash_by_id(pools, pool['id'])
             dst_pool = self.get_res_by_hash(existing_pools, pool_hash)
             for monitor_id in pool['health_monitors']:
@@ -1010,24 +1026,25 @@ class NeutronNetwork(network.Network):
             [ex_pool['res_hash'] for ex_pool in existing_pools]
         existing_subnets = self.get_subnets()
         for pool in pools:
-            if pool['res_hash'] not in existing_pools_hashlist:
+            if pool['res_hash'] not in existing_pools_hashlist and \
+                    pool['tenant_name']:
                 tenant_id = self.identity_client.get_tenant_id_by_name(
                     pool['tenant_name'])
                 snet_hash = self.get_res_hash_by_id(subnets, pool['subnet_id'])
                 snet_id = self.get_res_by_hash(existing_subnets,
                                                snet_hash)['id']
                 pool_info = {
-                    'pool':
-                        {
-                            'name': pool['name'],
-                            'description': pool['description'],
-                            'tenant_id': tenant_id,
-                            'provider': pool['provider'],
-                            'subnet_id': snet_id,
-                            'protocol': pool['protocol'],
-                            'lb_method': pool['lb_method']
-                        }
+                    'pool': {
+                        'name': pool['name'],
+                        'description': pool['description'],
+                        'tenant_id': tenant_id,
+                        'subnet_id': snet_id,
+                        'protocol': pool['protocol'],
+                        'lb_method': pool['lb_method']
+                    }
                 }
+                if pool.get('provider'):
+                    pool_info['pool']['provider'] = pool.get('provider')
                 LOG.debug("Creating LB pool '%s'", pool['name'])
                 pool['meta']['id'] = \
                     self.neutron_client.create_pool(pool_info)['pool']['id']
