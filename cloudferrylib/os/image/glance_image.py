@@ -63,7 +63,7 @@ class GlanceImageProgessMigrationView(object):
                     self.migrated_size += dst_image.size
                     self.list_migrated.append('%s (%s)' % (dst_image.name,
                                                            dst_image.id))
-                continue
+                    continue
 
             self.total_size += img.get('size', 0)
 
