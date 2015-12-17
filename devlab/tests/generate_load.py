@@ -1227,7 +1227,11 @@ class CleanEnv(BasePrerequisites):
 
     def clean_flavors(self):
         flavors_names = [flavor['name'] for flavor in self.config.flavors]
-        for flavor in self.novaclient.flavors.list():
+        for tenant in self.config.tenants:
+            if not tenant.get('flavors'):
+                continue
+            flavors_names.extend([f['name'] for f in tenant['flavors']])
+        for flavor in self.novaclient.flavors.list(is_public=None):
             if flavor.name not in flavors_names:
                 continue
             self.novaclient.flavors.delete(self.get_flavor_id(flavor.name))
