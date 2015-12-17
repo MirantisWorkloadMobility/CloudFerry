@@ -34,6 +34,7 @@ from cloudferrylib.utils import filters
 from cloudferrylib.utils import sizeof_format
 from cloudferrylib.os.image import filters as glance_filters
 from cloudferrylib.utils import file_like_proxy
+from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import remote_runner
 
@@ -235,7 +236,10 @@ class GlanceImage(image.Image):
 
     def get_ref_image(self, image_id):
         try:
-            return self.get_resp(self.glance_client.images.data(image_id))
+            with proxy_client.expect_exception(
+                    glance_exceptions.NotFound,
+                    glance_exceptions.HTTPInternalServerError):
+                return self.get_resp(self.glance_client.images.data(image_id))
         except (glance_exceptions.HTTPInternalServerError,
                 glance_exceptions.HTTPNotFound):
             raise exception.ImageDownloadError
