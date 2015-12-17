@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+from nose.plugins.attrib import attr
 import os
 import re
-import yaml
 import unittest
+import yaml
+
 import functional_test
 
 
@@ -167,10 +169,12 @@ class GroupProcedureVerification(functional_test.FunctionalTest):
                     else:
                         self._verify_user_groups([tenant], verify_vm_state)
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_grouping_by_network(self):
         self.src_vms_info_generator('network')
         self.network_verification_scenario()
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_grouping_by_tenant(self):
         self.src_vms_info_generator('tenant')
         self.tenant_verification_scenario()
