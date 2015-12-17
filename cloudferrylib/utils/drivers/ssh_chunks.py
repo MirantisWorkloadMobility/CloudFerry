@@ -20,6 +20,7 @@ from cloudferrylib.utils import driver_transporter
 from cloudferrylib.utils import files
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import utils
+from cloudferrylib.utils import ssh_util
 
 
 LOG = utils.get_log(__name__)
@@ -51,12 +52,13 @@ def remote_gzip(runner, path):
 
 
 def remote_scp(runner, dst_user, src_path, dst_host, dst_path):
-    scp_file_to_dest = "scp -o {opts} {file} {user}@{host}:{path}".format(
+    scp_file_to_dest = "scp {cipher} -o {opts} {file} {user}@{host}:{path}".format(
         opts='StrictHostKeyChecking=no',
         file=src_path,
         user=dst_user,
         path=dst_path,
-        host=dst_host)
+        host=dst_host,
+        cipher=ssh_util.get_cipher_option())
     runner.run(scp_file_to_dest)
 
 

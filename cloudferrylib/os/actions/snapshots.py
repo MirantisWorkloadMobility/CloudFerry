@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import utils
+from cloudferrylib.utils import ssh_util
 from fabric.api import local
 
 
@@ -60,14 +60,17 @@ class MysqlDump(action.Action):
         # copy dump file to host with cloudferry (for now just in case)
         # in future we will store snapshot for every step of migration
         key_string = ' -i '.join(self.cloud.config.migrate.key_filename)
+
         context = {
             'host_src': db_host,
             'path_src': self.cloud.cloud_config.snapshot.snapshot_path,
             'user_src': self.cloud.cloud_config.cloud.ssh_user,
             'key': key_string,
-            'path_dst': self.cloud.cloud_config.snapshot.snapshot_path}
+            'path_dst': self.cloud.cloud_config.snapshot.snapshot_path,
+            'cipher': ssh_util.get_cipher_option(),
+        }
         command = (
-            "scp -o StrictHostKeyChecking=no -i {key} "
+            "scp {cipher} -o StrictHostKeyChecking=no -i {key} "
             "{user_src}@{host_src}:{path_src} {path_dst}".format(**context))
         LOG.info("EXECUTING {command} local".format(command=command))
         local(command)
