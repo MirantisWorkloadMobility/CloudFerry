@@ -92,6 +92,15 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 resource_name='flavor',
                                                 parameter='id')
 
+    def validate_network_name_in_port_lists(self, src_ports, dst_ports):
+        dst_net_names = [self.dst_cloud.get_net_name(dst_port['network_id'])
+                         for dst_port in dst_ports]
+        src_net_names = [self.src_cloud.get_net_name(src_port['network_id'])
+                         for src_port in src_ports]
+        self.assertTrue(dst_net_names.sort() == src_net_names.sort(),
+                        msg="Network ports is not the same. SRC: %s \n DST: %s"
+                            % (src_net_names, dst_net_names))
+
     def test_migrate_keystone_users(self):
         src_users = self.filter_users()
         dst_users = self.dst_cloud.keystoneclient.users.list()
@@ -310,6 +319,37 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         for router in src_routers_names:
             self.assertTrue(dst_routers_names.count(router) == 1,
                             msg='Router %s presents multiple times' % router)
+
+    @attr(migrated_tenant=['tenant1', 'tenant2'])
+    def test_router_connected_to_correct_networks(self):
+        src_routers = self.filter_routers()['routers']
+        dst_routers = self.dst_cloud.neutronclient.list_routers()['routers']
+        for dst_router in dst_routers:
+            dst_ports = self.dst_cloud.neutronclient.list_ports(
+                retrieve_all=True, **{'device_id': dst_router['id']})['ports']
+            for src_router in src_routers:
+                if src_router['name'] == dst_router['name']:
+                    src_ports = self.src_cloud.neutronclient.list_ports(
+                        retrieve_all=True, **{'device_id': src_router['id']})\
+                        ['ports']
+                    self.validate_network_name_in_port_lists(
+                        src_ports=src_ports, dst_ports=dst_ports)
+
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    def test_router_migrated_to_correct_tenant(self):
+        src_routers = self.filter_routers()['routers']
+        dst_routers = self.dst_cloud.neutronclient.list_routers()['routers']
+        for dst_router in dst_routers:
+            dst_tenant_name = self.dst_cloud.get_tenant_name(
+                dst_router['tenant_id'])
+            for src_router in src_routers:
+                if src_router['name'] == dst_router['name']:
+                    src_tenant_name = self.src_cloud.get_tenant_name(
+                        src_router['tenant_id'])
+                    self.assertTrue(src_tenant_name == dst_tenant_name,
+                                    msg='DST tenant name %s is not equal to '
+                                        'SRC %s' %
+                                        (dst_tenant_name, src_tenant_name))
 
     @attr(migrated_tenant='tenant2')
     def test_migrate_vms_parameters(self):

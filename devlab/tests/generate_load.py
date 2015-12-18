@@ -146,6 +146,12 @@ class BasePrerequisites(object):
                 return tenant.id
         raise NotFound('Tenant with name "%s" was not found' % tenant_name)
 
+    def get_tenant_name(self, tenant_id):
+        for tenant in self.keystoneclient.tenants.list():
+            if tenant.id == tenant_id:
+                return tenant.name
+        raise NotFound('Tenant with id "%s" was not found' % tenant_id)
+
     def get_user_id(self, user_name):
         for user in self.keystoneclient.users.list():
             if user.name == user_name:
@@ -188,6 +194,13 @@ class BasePrerequisites(object):
         if _net:
             return _net[0]['id']
         raise NotFound('Network with name "%s" was not found' % net)
+
+    def get_net_name(self, net_id):
+        _net = self.neutronclient.list_networks(id=net_id,
+                                                all_tenants=True)['networks']
+        if _net:
+            return _net[0]['name']
+        raise NotFound('Network with id "%s" was not found' % net_id)
 
     def get_sg_id(self, sg):
         _sg = self.neutronclient.list_security_groups(
