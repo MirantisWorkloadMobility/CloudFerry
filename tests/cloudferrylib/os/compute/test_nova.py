@@ -211,10 +211,13 @@ class NovaComputeTestCase(test.TestCase):
             user_id=None,
             instances='new_fake_value')
 
+
+class ComputeHostsTestCase(NovaComputeTestCase):
     @classmethod
     def _host(cls, name, up=True, enabled=True):
         h = mock.Mock()
         h.host = name
+        h.host_name = name
         h.state = 'up' if up else 'down'
         h.status = 'enabled' if enabled else 'disabled'
         return h
@@ -228,6 +231,7 @@ class NovaComputeTestCase(test.TestCase):
         all_hosts = active_hosts + down_hosts
 
         self.mock_client().services.list.return_value = all_hosts
+        self.mock_client().hosts.list.return_value = all_hosts
 
         hosts = self.nova_client.get_compute_hosts()
 
@@ -250,6 +254,7 @@ class NovaComputeTestCase(test.TestCase):
         all_hosts = active_hosts + disabled_hosts
 
         self.mock_client().services.list.return_value = all_hosts
+        self.mock_client().hosts.list.return_value = all_hosts
 
         hosts = self.nova_client.get_compute_hosts()
 
@@ -272,6 +277,7 @@ class NovaComputeTestCase(test.TestCase):
         all_hosts = active_hosts + disabled_hosts
 
         self.mock_client().services.list.return_value = all_hosts
+        self.mock_client().hosts.list.return_value = all_hosts
 
         hosts = self.nova_client.get_compute_hosts()
 
@@ -283,6 +289,45 @@ class NovaComputeTestCase(test.TestCase):
 
         for disabled in disabled_host_names:
             self.assertNotIn(disabled, hosts)
+
+    def test_hosts_outside_availability_zone_are_not_shown(self):
+        active_hosts = ['h1', 'h2', 'h3', 'h4', 'h5']
+        # az == availability zone
+        az_hosts = ['h1', 'h2']
+
+        all_hosts = [self._host(name) for name in active_hosts]
+        hosts_in_az = [self._host(name) for name in az_hosts]
+
+        self.mock_client().services.list.return_value = all_hosts
+        self.mock_client().hosts.list.return_value = hosts_in_az
+
+        hosts = self.nova_client.get_compute_hosts(availability_zone='az')
+
+        self.assertEqual(az_hosts, hosts)
+
+    def test_disabled_hosts_from_availability_zone_are_not_shown(self):
+        active_hosts = ['h1', 'h2', 'h3', 'h4', 'h5']
+        # az == availability zone
+        out_az_disabled_hosts = ['disabled1', 'disabled2', 'disabled3']
+        disabled_az_hosts = ['az_disabled1', 'az_disabled2']
+        disabled_hosts = out_az_disabled_hosts + disabled_az_hosts
+
+        enabled_az_hosts = ['h1', 'h2']
+        az_hosts = enabled_az_hosts
+
+        all_hosts = [self._host(name) for name in active_hosts]
+        all_hosts += [self._host(name, enabled=False)
+                      for name in disabled_hosts]
+        hosts_in_az = [self._host(name) for name in az_hosts] + \
+                      [self._host(name, enabled=False)
+                       for name in disabled_az_hosts]
+
+        self.mock_client().services.list.return_value = all_hosts
+        self.mock_client().hosts.list.return_value = hosts_in_az
+
+        hosts = self.nova_client.get_compute_hosts(availability_zone='az')
+
+        self.assertEqual(az_hosts, hosts)
 
 
 class DeployInstanceWithManualScheduling(test.TestCase):

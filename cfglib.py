@@ -176,6 +176,9 @@ migrate_opts = [
     cfg.IntOpt('boot_timeout', default=300,
                help="Timeout booting of instance"),
     cfg.StrOpt('ssh_cipher', default=None, help='SSH cipher to use for SCP'),
+    cfg.StrOpt('default_availability_zone', default="nova",
+               help="Availability zone to use for VM provisioning, in case "
+                    "source cloud zones do not match destination"),
     cfg.StrOpt('ephemeral_copy_backend', default="rsync",
                help="Allows to choose how ephemeral storage is copied over "
                     "from source to destination. Possible values: 'rsync' "
