@@ -202,7 +202,7 @@ tenants = [
          {
              'name': "pool3",
              'tenant_name': "tenant3",
-             'subnet_name': "subnet_1",
+             'subnet_name': "t3_s1",
              'protocol': "HTTPS",
              'lb_method': "SOURCE_IP"}
      ],
@@ -218,7 +218,7 @@ tenants = [
      'members_lbaas': [
          {
              'protocol_port': "83",
-             'address': "10.4.2.8",
+             'address': "10.7.2.8",
              'pool_name': "pool3",
              'tenant_name': "tenant3"
          }
@@ -227,13 +227,13 @@ tenants = [
          {
              'name': "vip3",
              'description': "111",
-             'address': "10.4.2.9",
+             'address': "10.7.2.9",
              'protocol': "HTTPS",
              'protocol_port': "83",
              'connection_limit': 100,
              'pool_name': "pool3",
              'tenant_name': "tenant3",
-             'subnet_name': "subnet_1"
+             'subnet_name': "t3_s1"
          }
      ]
      },

@@ -1276,6 +1276,10 @@ class CleanEnv(BasePrerequisites):
                 port['device_id'], {'port_id': port['id']})
         elif port_owner == 'network:dhcp' or not port_owner:
             self.neutronclient.delete_port(port['id'])
+        elif 'LOADBALANCER' in port_owner:
+            vips = self.neutronclient.list_vips(port_id=port['id'])['vips']
+            for vip in vips:
+                self.neutronclient.delete_vip(vip['id'])
         else:
             msg = 'Unknown port owner %s'
             raise RuntimeError(msg % port['device_owner'])
@@ -1392,8 +1396,63 @@ class CleanEnv(BasePrerequisites):
             cmd = 'neutron-netns-cleanup'
         self.migration_utils.execute_command_on_vm(ip_addr, cmd, 'root')
 
+    def clean_lb_pools(self):
+        pools = getattr(self.config, 'pools', [])
+        pools += itertools.chain(
+            *[tenant['pools'] for tenant in self.config.tenants
+              if 'pools' in tenant])
+        pools_names = [pool['name'] for pool in pools]
+        for pool in self.neutronclient.list_pools()['pools']:
+            if pool['name'] in pools_names:
+                self.neutronclient.delete_pool(pool['id'])
+                print('LBaaS pool "%s" has been deleted' % pool['name'])
+
+    def clean_lb_vips(self):
+        vips = getattr(self.config, 'vips', [])
+        vips += itertools.chain(
+            *[tenant['vips'] for tenant in self.config.tenants
+              if 'vips' in tenant])
+        vips_names = [vip['name'] for vip in vips]
+        for vip in self.neutronclient.list_vips()['vips']:
+            if vip['name'] in vips_names:
+                self.neutronclient.delete_vip(vip['id'])
+                print('LBaaS vip "%s" has been deleted' % vip['name'])
+
+    def clean_lb_members(self):
+        members = getattr(self.config, 'lb_members', [])
+        members += itertools.chain(
+            *[tenant['members'] for tenant in self.config.tenants
+              if 'members' in tenant])
+        member_address = [member['address'] for member in members]
+        for member in self.neutronclient.list_members()['members']:
+            if member['address'] in member_address:
+                self.neutronclient.delete_member(member['id'])
+                msg = 'LBaaS member for tenant "%s" has been deleted'
+                print(msg % member['tenant_id'])
+
+    def clean_lbaas_health_monitors(self):
+        def check_tenant(tenant_id):
+            try:
+                self.keystoneclient.tenants.get(tenant_id)
+                return True
+            except ks_exceptions.NotFound:
+                return False
+
+        tenants_ids = [self.get_tenant_id(tenant['name'])
+                       for tenant in self.config.tenants]
+        for hm in self.neutronclient.list_health_monitors()['health_monitors']:
+            if hm['tenant_id'] in tenants_ids or not check_tenant(
+                    hm['tenant_id']):
+                self.neutronclient.delete_health_monitor(hm['id'])
+                msg = 'LBaaS health monitor for tenant "%s" has been deleted'
+                print(msg % hm['tenant_id'])
+
     def clean_all_networking(self):
         self.clean_fips()
+        self.clean_lb_members()
+        self.clean_lb_vips()
+        self.clean_lb_pools()
+        self.clean_lbaas_health_monitors()
         self.clean_routers()
         self.clean_networks()
         self.clean_namespaces()
