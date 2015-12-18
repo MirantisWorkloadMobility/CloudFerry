@@ -31,11 +31,12 @@ from novaclient import exceptions as nova_exc
 
 from cloudferrylib.base import compute
 from cloudferrylib.os.identity import keystone
+from cloudferrylib.utils import log
 from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import utils
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 SQL_SELECT_ALL_GROUPS = ("SELECT user_id, project_id, uuid, name, id FROM "
                          "instance_groups WHERE deleted=0;")

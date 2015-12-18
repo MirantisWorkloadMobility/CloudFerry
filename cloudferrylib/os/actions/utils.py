@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from cloudferrylib.utils import utils
 from fabric.api import run, settings, env
 import copy
-from cloudferrylib.utils import utils as utl
 
-LOG = utils.get_log(__name__)
+from cloudferrylib.utils import log
+from cloudferrylib.utils import utils
+
+LOG = log.getLogger(__name__)
 
 
 def transfer_file_to_file(src_cloud,
@@ -71,7 +72,7 @@ def require_methods(methods, obj):
 
 
 def select_boot_volume(info):
-    for k, v in info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE].iteritems():
+    for k, v in info[utils.STORAGE_RESOURCE][utils.VOLUMES_TYPE].iteritems():
         if not((v['num_device'] == 0) and v['bootable']):
-            del info[utl.STORAGE_RESOURCE][utl.VOLUMES_TYPE][k]
+            del info[utils.STORAGE_RESOURCE][utils.VOLUMES_TYPE][k]
     return info

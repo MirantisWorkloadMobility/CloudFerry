@@ -48,12 +48,13 @@ from cloudferrylib.os.compute import libvirt
 from cloudferrylib.os.compute.nova_compute import instance_host
 from cloudferrylib.os.compute.nova_compute import instance_libvirt_name
 from cloudferrylib.utils import files
+from cloudferrylib.utils import log
 from cloudferrylib.utils import ubuntu
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import utils
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class LiveMigration(action.Action):

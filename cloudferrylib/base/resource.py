@@ -13,11 +13,11 @@
 # limitations under the License.
 
 import time
+from cloudferrylib.utils import log
 from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import timeout_exception
-from cloudferrylib.utils import utils
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class Resource(object):

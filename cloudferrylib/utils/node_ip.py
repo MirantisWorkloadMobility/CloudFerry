@@ -18,10 +18,10 @@ from fabric.operations import run
 from fabric.state import env
 import ipaddr
 
-from cloudferrylib.utils import utils
+from cloudferrylib.utils import log
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 def get_ext_ip(ext_cidr, init_host, compute_host, ssh_user):

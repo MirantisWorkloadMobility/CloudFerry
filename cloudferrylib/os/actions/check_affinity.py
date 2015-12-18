@@ -17,10 +17,11 @@ from novaclient import exceptions as nova_exceptions
 
 from cloudferrylib.base import exception as cf_exceptions
 from cloudferrylib.base.action import action
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class CheckAffinity(action.Action):

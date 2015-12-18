@@ -14,16 +14,17 @@
 
 
 import copy
+
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import rbd_util
 from cloudferrylib.utils import qemu_img
 from cloudferrylib.utils import ssh_util
-from cloudferrylib.utils import utils as utl
 
 SRC = "src"
 DST = "dst"
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class Cloud(object):

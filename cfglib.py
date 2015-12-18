@@ -94,8 +94,8 @@ migrate_opts = [
                help='tenant for creation router ip stubs, if it "None" as '
                     'default stub creates in router tenant'),
     cfg.StrOpt('cinder_migration_strategy',
-               default=
-               'cloudferrylib.os.storage.cinder_storage.CinderNFSStorage',
+               default='cloudferrylib.os.storage.cinder_storage.'
+                       'CinderNFSStorage',
                help='path to class that will perform '
                     'cinder migration actions'),
     cfg.BoolOpt('keep_lbaas', default=False,
@@ -180,7 +180,12 @@ migrate_opts = [
                help="Allows to choose how ephemeral storage is copied over "
                     "from source to destination. Possible values: 'rsync' "
                     "(default) and 'scp'. scp seem to be faster, while rsync "
-                    "is more reliable")
+                    "is more reliable"),
+    cfg.StrOpt('log_config', default='configs/logging_config.yaml',
+               help='The path of a logging configuration file.'),
+    cfg.BoolOpt('debug', default=False,
+                help="Print debugging output (set logging level to DEBUG "
+                     "instead of default INFO level)."),
 ]
 
 mail = cfg.OptGroup(name='mail',

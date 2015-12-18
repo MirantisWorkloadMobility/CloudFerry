@@ -12,17 +12,22 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from cloudferrylib.base.action import action
-from cloudferrylib.utils import log
+import logging
+from logging import config
+import yaml
+
+import cfglib
 
 
-LOG = log.getLogger(__name__)
+def configure_logging():
+    with open(cfglib.CONF.migrate.log_config, 'r') as f:
+        config.dictConfig(yaml.load(f))
+    if cfglib.CONF.migrate.debug:
+        logger = logging.getLogger()
+        for handler in logger.handlers:
+            if handler.name == 'console':
+                handler.setLevel(logging.DEBUG)
+                break
 
 
-class DivisionByZero(action.Action):
-
-    def run(self, *args, **kwargs):
-        LOG.debug("Dividing by zero "
-                  "(special case to fail migration execution)")
-        a = 1 / 0
-        return a
+getLogger = logging.getLogger

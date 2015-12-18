@@ -14,9 +14,11 @@
 
 import unicodedata
 import data_storage
-from cloudferrylib.utils import utils as utl
 import json
-LOG = utl.get_log(__name__)
+
+from cloudferrylib.utils import log
+
+LOG = log.getLogger(__name__)
 
 
 TRANSFER = "transfer"

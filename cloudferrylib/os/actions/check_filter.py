@@ -20,12 +20,13 @@ from keystoneclient import exceptions as keystone_exc
 from novaclient import exceptions as nova_exc
 from cloudferrylib.base.action import action
 from cloudferrylib.os.storage import filters as cinder_filters
+from cloudferrylib.utils import log
 from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import utils as utl
 
 import datetime
 
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class CheckFilter(action.Action):

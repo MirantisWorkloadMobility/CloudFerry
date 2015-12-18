@@ -18,10 +18,11 @@ import cloud
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.os.network import neutron
 from cloudferrylib.os.compute import nova_compute
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class Grouping(object):

@@ -17,10 +17,11 @@ from fabric.api import settings
 
 from cloudferrylib.utils import cmd_cfg
 from cloudferrylib.utils import driver_transporter
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class SSHFileToFile(driver_transporter.DriverTransporter):

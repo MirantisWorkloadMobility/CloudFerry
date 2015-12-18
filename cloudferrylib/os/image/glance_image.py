@@ -34,12 +34,13 @@ from cloudferrylib.utils import filters
 from cloudferrylib.utils import sizeof_format
 from cloudferrylib.os.image import filters as glance_filters
 from cloudferrylib.utils import file_like_proxy
+from cloudferrylib.utils import log
 from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import remote_runner
 
 
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class GlanceImageProgessMigrationView(object):

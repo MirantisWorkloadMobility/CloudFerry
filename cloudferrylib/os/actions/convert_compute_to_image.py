@@ -17,10 +17,11 @@ import copy
 
 from cloudferrylib.base.action import action
 from cloudferrylib.base import exception
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils as utl
 
 
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 def get_boot_volume(instance):

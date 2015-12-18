@@ -16,9 +16,10 @@
 
 import collections
 from cloudferrylib.base.action import action
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class FilterSimilarVMsFromDST(action.Action):
