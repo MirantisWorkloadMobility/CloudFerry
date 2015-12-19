@@ -15,7 +15,7 @@
 
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils
-
+import copy
 
 LOG = utils.get_log(__name__)
 VM_STATUSES = "VM_STATUSES"
@@ -48,16 +48,66 @@ class VmSnapshot(VmSnapshotBasic):
         state_to_record = {}
         for vm in self.get_list_of_vms():
             state_to_record.update({vm.id: vm.status})
-        return {self.namespace_variable: state_to_record}
+        return {
+            self.namespace_variable: state_to_record,
+            'rollback_vars': {
+                'vms': []
+            }
+        }
+
+
+class CheckPointVm(action.Action):
+    """
+    This task needs to save successfully migrated instances.
+    Need for Vm Restore.
+
+    in Namespace must be info about instance.
+    """
+    def __init__(self, init,
+                 var_info="info"):
+        self.var_info = var_info
+        super(CheckPointVm, self).__init__(init)
+
+    def run(self, rollback_vars=None, *args, **kwargs):
+        info = kwargs[self.var_info]['instances']
+        if not info.keys():
+            return {}
+        vm = info[info.keys()[0]]
+        rollback_vars_local = copy.deepcopy(rollback_vars)
+        success_vms = rollback_vars_local['vms']
+        pair_vm = {
+            'src_id': vm['old_id'] if 'old_id' in vm else '',
+            'dst_id': info.keys()[0]
+        }
+        success_vms.append(pair_vm)
+        return {
+            'rollback_vars': rollback_vars_local
+        }
 
 
 class VmRestore(VmSnapshotBasic):
 
-    def run(self, *args, **kwargs):
+    def run(self, rollback_vars=None, *args, **kwargs):
         LOG.debug("restoring vms from snapshot")
         snapshot_from_namespace = kwargs.get(self.namespace_variable)
         compute = self.get_compute_resource()
+        vm_id_targets = ('src_id', 'dst_id') \
+            if self.cloud.position == 'src' else ('dst_id', 'src_id')
+        vms_succesed = {}
+        if rollback_vars:
+            vms = rollback_vars.get('vms', [])
+            vms_succesed = {pair_vms[vm_id_targets[0]]: pair_vms[
+                vm_id_targets[1]] for pair_vms in vms}
         for vm in self.get_list_of_vms():
+            if vm.id in vms_succesed:
+                LOG.debug("Successfully copied instances")
+                if self.cloud.position == 'src':
+                    LOG.debug("SRC ID %s", vm.id)
+                    LOG.debug("DST ID %s", vms_succesed[vm.id])
+                else:
+                    LOG.debug("SRC ID %s", vms_succesed[vm.id])
+                    LOG.debug("DST ID %s", vm.id)
+                continue
             if vm.id not in snapshot_from_namespace:
                 # delete this vm - we don't have its id in snapshot data
                 LOG.debug("vm {vm} will be deleted on {location}".format(

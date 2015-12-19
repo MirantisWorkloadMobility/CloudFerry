@@ -31,16 +31,16 @@ preparation:
           - check_dst_rabbit: True
           - act_get_info_objects_dst: False
       - check_networks: True
-  - create_snapshot: True
+  - create_snapshot: False
   - create_vm_snapshot_src: True
   - create_vm_snapshot_dst: True
-  - create_image_snapshot_dst: True
+  - create_image_snapshot_dst: False
 
 rollback:
   - restore_from_vm_snapshot_dst: True
   - restore_from_vm_snapshot_src: True
-  - image_rollback_dst: True
-  - restore_from_snapshot: True
+  - image_rollback_dst: False
+  - restore_from_snapshot: False
 
 
 process:
@@ -92,5 +92,6 @@ process:
           - act_dissociate_floatingip: True
           - act_start_vms_if_needed: True
       - save_result_migrate_instances: True
+      - act_check_point_vm: True
       - is_instances: ['get_next_instance']
       - rename_info_iter: True
