@@ -14,6 +14,7 @@
 
 from cloudferrylib.utils import remote_runner
 
+import cfglib
 import cmd_cfg
 from utils import forward_agent
 
@@ -25,13 +26,13 @@ class SshUtil(object):
         self.config_migrate = config_migrate
 
     def execute(self, cmd, internal_host=None, host_exec=None,
-                ignore_errors=False):
+                ignore_errors=False, sudo=False):
         host = host_exec if host_exec else self.host
         runner = \
             remote_runner.RemoteRunner(host,
                                        self.cloud.ssh_user,
                                        password=self.cloud.ssh_sudo_password,
-                                       sudo=False,
+                                       sudo=sudo,
                                        ignore_errors=ignore_errors)
         if internal_host:
             return self.execute_on_inthost(runner, str(cmd), internal_host)
@@ -41,3 +42,10 @@ class SshUtil(object):
     def execute_on_inthost(self, runner, cmd, host):
         with forward_agent(self.config_migrate.key_filename):
             return runner.run(str(cmd_cfg.ssh_cmd(host, str(cmd))))
+
+
+def get_cipher_option():
+    if cfglib.CONF.migrate.ssh_cipher:
+        return '-c ' + cfglib.CONF.migrate.ssh_cipher
+    else:
+        return ''

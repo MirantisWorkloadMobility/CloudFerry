@@ -103,7 +103,9 @@ process:
           - act_dissociate_floatingip: True
           - act_start_vms_if_needed: True
       - save_result_migrate_instances: True
+      - act_check_point_vm: True
       - is_instances: ['get_next_instance']
       - rename_info_iter: True
   - verify:
       - verify_vms: True
+      - remove_failed_instances: True

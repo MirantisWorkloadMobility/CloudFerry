@@ -42,9 +42,9 @@ def clean_if_exists(func):
             return func(self, *args, **kwargs)
         except (ks_exceptions.Conflict,
                 nv_exceptions.Conflict,
-                nt_exceptions.NeutronClientException):
-            print('Method "%s" failed, current resource already exists'
-                  % func.__name__)
+                nt_exceptions.NeutronClientException) as e:
+            print('Method "%s" failed, current resource already exists:\n%s'
+                  % (func.__name__, e))
             clean_method = getattr(self.clean_tools,
                                    CREATE_CLEAN_METHODS_MAP[func.__name__])
             print 'Run cleanup method "%s"' % clean_method.__name__
@@ -513,7 +513,19 @@ class Prerequisites(BasePrerequisites):
     @clean_if_exists
     def create_flavors(self):
         for flavor in self.config.flavors:
-            self.novaclient.flavors.create(**flavor)
+            fl = self.novaclient.flavors.create(**flavor)
+            if flavor.get('is_public') == False:
+                self.novaclient.flavor_access.add_tenant_access(
+                    flavor=fl.id,
+                    tenant=self.get_tenant_id(self.tenant))
+        for tenant in self.config.tenants:
+            if tenant.get('flavors'):
+                for flavor in tenant['flavors']:
+                    fl = self.novaclient.flavors.create(**flavor)
+                    if flavor.get('is_public') == False:
+                        self.novaclient.flavor_access.add_tenant_access(
+                            flavor=fl.id,
+                            tenant=self.get_tenant_id(tenant['name']))
 
     def _get_parameters_for_vm_creating(self, vm):
         def get_vm_nics(_vm):
@@ -663,23 +675,77 @@ class Prerequisites(BasePrerequisites):
                     {'subnet': get_body_for_subnet_creating(subnet)})
                 self.neutronclient.create_port(
                     {"port": {"network_id": net['network']['id']}})
-                if not subnet.get('routers_to_connect'):
-                    continue
                 # If network has attribute routers_to_connect, interface to
-                # this network is crated for given router, in case when network
-                # is internal and gateway set if - external.
-                for router in subnet['routers_to_connect']:
-                    router_id = self.get_router_id(router)
-                    if network.get('router:external'):
-                        self.neutronclient.add_gateway_router(
-                            router_id, {"network_id": net['network']['id']})
-                    else:
+                # this network is created for given router.
+                # If network has attribute set_as_gateway_for_routers, it will
+                # be set as router's gateway.
+                if subnet.get('routers_to_connect') is not None:
+                    for router in subnet['routers_to_connect']:
+                        router_id = self.get_router_id(router)
                         self.neutronclient.add_interface_router(
                             router_id, {"subnet_id": _subnet['subnet']['id']})
+                if network.get('router:external') and \
+                        subnet.get('set_as_gateway_for_routers') is not None:
+                    for router in subnet['set_as_gateway_for_routers']:
+                        router_id = self.get_router_id(router)
+                        self.neutronclient.add_gateway_router(
+                            router_id, {"network_id": net['network']['id']})
 
     def create_routers(self):
         for router in self.config.routers:
             self.neutronclient.create_router(router)
+        for tenant in self.config.tenants:
+            if tenant.get('routers'):
+                self.switch_user(user=self.username, password=self.password,
+                                 tenant=tenant['name'])
+                for router in tenant['routers']:
+                    self.neutronclient.create_router(router)
+        self.switch_user(user=self.username, password=self.password,
+                         tenant=self.tenant)
+
+    def get_subnet_id(self, name):
+        subs = self.neutronclient.list_subnets()['subnets']
+        for sub in subs:
+            if sub['name'] == name:
+                return sub['id']
+
+    def get_pool_id(self, name):
+        pools = self.neutronclient.list_pools()['pools']
+        for pool in pools:
+            if pool['name'] == name:
+                return pool['id']
+
+    def create_pools(self, pools):
+        for pool in pools:
+            pool["tenant_id"] = self.get_tenant_id(pool["tenant_name"])
+            pool["subnet_id"] = self.get_subnet_id(pool["subnet_name"])
+            pool = {i: v for i, v in pool.iteritems()
+                    if i not in ["tenant_name", "subnet_name"]}
+            self.neutronclient.create_pool({'pool': pool})
+
+    def create_members(self, members):
+        for member in members:
+            member["pool_id"] = self.get_pool_id(member["pool_name"])
+            member["tenant_id"] = self.get_tenant_id(member["tenant_name"])
+            member = {i: v for i, v in member.iteritems()
+                      if i not in ["pool_name", "tenant_name"]}
+            self.neutronclient.create_member({"member": member})
+
+    def create_monitors(self, monitors):
+        for mon in monitors:
+            mon["tenant_id"] = self.get_tenant_id(mon["tenant_name"])
+            mon = {i: v for i, v in mon.iteritems()
+                   if i not in ["tenant_name"]}
+            self.neutronclient.create_health_monitor({"health_monitor": mon})
+
+    def create_vips(self, vips):
+        for vip in vips:
+            vip["pool_id"] = self.get_pool_id(vip["pool_name"])
+            vip["tenant_id"] = self.get_tenant_id(vip["tenant_name"])
+            vip["subnet_id"] = self.get_subnet_id(vip["subnet_name"])
+            vip = {i: v for i, v in vip.iteritems()
+                   if i not in ["tenant_name", "pool_name", "subnet_name"]}
+            self.neutronclient.create_vip({"vip": vip})
 
     @clean_if_exists
     def create_all_networking(self):
@@ -690,11 +756,24 @@ class Prerequisites(BasePrerequisites):
         self.ext_net_id = self.get_net_id(
             [n['name'] for n in self.config.networks
              if n.get('real_network')][0])
+        self.create_pools(self.config.pools)
+        self.create_members(self.config.members_lbaas)
+        self.create_monitors(self.config.monitors)
+        self.create_vips(self.config.vips)
+
         for tenant in self.config.tenants:
             if tenant.get('networks'):
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
                 self.create_networks(tenant['networks'])
+            if tenant.get('pools'):
+                self.create_pools(tenant['pools'])
+            if tenant.get('members_lbaas'):
+                self.create_members(tenant['members_lbaas'])
+            if tenant.get('monitors'):
+                self.create_monitors(tenant['monitors'])
+            if tenant.get('vips'):
+                self.create_vips(tenant['vips'])
             if not tenant.get('unassociated_fip'):
                 continue
             for _ in range(tenant['unassociated_fip']):
@@ -1197,6 +1276,10 @@ class CleanEnv(BasePrerequisites):
                 port['device_id'], {'port_id': port['id']})
         elif port_owner == 'network:dhcp' or not port_owner:
             self.neutronclient.delete_port(port['id'])
+        elif 'LOADBALANCER' in port_owner:
+            vips = self.neutronclient.list_vips(port_id=port['id'])['vips']
+            for vip in vips:
+                self.neutronclient.delete_vip(vip['id'])
         else:
             msg = 'Unknown port owner %s'
             raise RuntimeError(msg % port['device_owner'])
@@ -1214,6 +1297,10 @@ class CleanEnv(BasePrerequisites):
     def clean_routers(self):
         router_names = [router['router']['name']
                         for router in self.config.routers]
+        for tenant in self.config.tenants:
+            if tenant.get('routers'):
+                for router in tenant['routers']:
+                    router_names += router
         for router in self.neutronclient.list_routers()['routers']:
             if router['name'] not in router_names:
                 continue
@@ -1309,8 +1396,63 @@ class CleanEnv(BasePrerequisites):
             cmd = 'neutron-netns-cleanup'
         self.migration_utils.execute_command_on_vm(ip_addr, cmd, 'root')
 
+    def clean_lb_pools(self):
+        pools = getattr(self.config, 'pools', [])
+        pools += itertools.chain(
+            *[tenant['pools'] for tenant in self.config.tenants
+              if 'pools' in tenant])
+        pools_names = [pool['name'] for pool in pools]
+        for pool in self.neutronclient.list_pools()['pools']:
+            if pool['name'] in pools_names:
+                self.neutronclient.delete_pool(pool['id'])
+                print('LBaaS pool "%s" has been deleted' % pool['name'])
+
+    def clean_lb_vips(self):
+        vips = getattr(self.config, 'vips', [])
+        vips += itertools.chain(
+            *[tenant['vips'] for tenant in self.config.tenants
+              if 'vips' in tenant])
+        vips_names = [vip['name'] for vip in vips]
+        for vip in self.neutronclient.list_vips()['vips']:
+            if vip['name'] in vips_names:
+                self.neutronclient.delete_vip(vip['id'])
+                print('LBaaS vip "%s" has been deleted' % vip['name'])
+
+    def clean_lb_members(self):
+        members = getattr(self.config, 'lb_members', [])
+        members += itertools.chain(
+            *[tenant['members'] for tenant in self.config.tenants
+              if 'members' in tenant])
+        member_address = [member['address'] for member in members]
+        for member in self.neutronclient.list_members()['members']:
+            if member['address'] in member_address:
+                self.neutronclient.delete_member(member['id'])
+                msg = 'LBaaS member for tenant "%s" has been deleted'
+                print(msg % member['tenant_id'])
+
+    def clean_lbaas_health_monitors(self):
+        def check_tenant(tenant_id):
+            try:
+                self.keystoneclient.tenants.get(tenant_id)
+                return True
+            except ks_exceptions.NotFound:
+                return False
+
+        tenants_ids = [self.get_tenant_id(tenant['name'])
+                       for tenant in self.config.tenants]
+        for hm in self.neutronclient.list_health_monitors()['health_monitors']:
+            if hm['tenant_id'] in tenants_ids or not check_tenant(
+                    hm['tenant_id']):
+                self.neutronclient.delete_health_monitor(hm['id'])
+                msg = 'LBaaS health monitor for tenant "%s" has been deleted'
+                print(msg % hm['tenant_id'])
+
     def clean_all_networking(self):
         self.clean_fips()
+        self.clean_lb_members()
+        self.clean_lb_vips()
+        self.clean_lb_pools()
+        self.clean_lbaas_health_monitors()
         self.clean_routers()
         self.clean_networks()
         self.clean_namespaces()

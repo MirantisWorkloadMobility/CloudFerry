@@ -30,6 +30,7 @@ from cloudferrylib.utils import utils as utl
 from sqlalchemy.exc import ProgrammingError
 
 LOG = utl.get_log(__name__)
+NO_TENANT = ''
 
 
 class AddAdminUserToNonAdminTenant(object):
@@ -156,14 +157,12 @@ class KeystoneIdentity(identity.Identity):
         info = {'tenants': [],
                 'users': [],
                 'roles': []}
-
         if kwargs.get('tenant_id'):
             self.filter_tenant_id = kwargs['tenant_id'][0]
 
         tenant_list = self.get_tenants_list()
-        for tenant in tenant_list:
-            tnt = self.convert(tenant, self.config)
-            info['tenants'].append(tnt)
+        info['tenants'] = [self.convert(tenant, self.config)
+                           for tenant in tenant_list]
         user_list = self.get_users_list()
         has_tenants_by_id_cached = self.has_tenants_by_id_cached()
         has_roles_by_ids_cached = self._get_user_roles_cached()
@@ -183,9 +182,8 @@ class KeystoneIdentity(identity.Identity):
                         usr['user']['tenantId'] = t.id
                         info['users'].append(usr)
                         break
-        for role in self.get_roles_list():
-            rl = self.convert(role, self.config)
-            info['roles'].append(rl)
+        info['roles'] = [self.convert(role, self.config)
+                         for role in self.get_roles_list()]
         info['user_tenants_roles'] = \
             self._get_user_tenants_roles(tenant_list, user_list)
         if self.config['migrate']['keep_user_passwords']:
@@ -260,12 +258,14 @@ class KeystoneIdentity(identity.Identity):
 
         return self.keystone_client.service_catalog.url_for(**kwargs)
 
-    def get_tenants_func(self):
+    def get_tenants_func(self, return_default_tenant=True):
+        default_tenant = self.config.cloud.tenant \
+            if return_default_tenant else NO_TENANT
         tenants = {tenant.id: tenant.name for tenant in
                    self.get_tenants_list()}
 
         def func(tenant_id):
-            return tenants.get(tenant_id, 'admin')
+            return tenants.get(tenant_id, default_tenant)
 
         return func
 
@@ -406,11 +406,15 @@ class KeystoneIdentity(identity.Identity):
                     enabled=True):
         """ Create new user in keystone. """
 
-        return self.keystone_client.users.create(name=name,
-                                                 password=password,
-                                                 email=email,
-                                                 tenant_id=tenant_id,
-                                                 enabled=enabled)
+        try:
+            return self.keystone_client.users.create(name=name,
+                                                     password=password,
+                                                     email=email,
+                                                     tenant_id=tenant_id,
+                                                     enabled=enabled)
+        except keystoneclient.exceptions.NotFound, e:
+            LOG.warning(e.message)
+        return self.keystone_client.users.find(name=name)
 
     def update_tenant(self, tenant_id, tenant_name=None, description=None,
                       enabled=None):
@@ -572,8 +576,8 @@ class KeystoneIdentity(identity.Identity):
                 res_raw = self.mysql_connector.execute(
                     "SELECT * FROM assignment")
                 res_tmp = {}
-                for (type_record, actor_id, project_id,
-                     role_id, inher_tmp) in res_raw:
+                for (_, actor_id, project_id,
+                     role_id, _) in res_raw:
                     if (actor_id, project_id) not in res_tmp:
                         res_tmp[(actor_id, project_id)] = {'roles': []}
                     res_tmp[(actor_id, project_id)]['roles'].append(role_id)
@@ -610,8 +614,7 @@ class KeystoneIdentity(identity.Identity):
         tenant_ids = {tenant.id: tenant.name for tenant in tenant_list}
         user_ids = {user.id: user.name for user in user_list}
         roles = {r.id: r for r in self.get_roles_list()}
-        res = self._get_roles_sql_request()
-        for user_id, tenant_id, roles_field in res:
+        for user_id, tenant_id, roles_field in self._get_roles_sql_request():
             # skip filtered tenants and users
             if user_id not in user_ids or tenant_id not in tenant_ids:
                 continue
@@ -619,7 +622,7 @@ class KeystoneIdentity(identity.Identity):
             roles_ids = ast.literal_eval(roles_field)['roles']
             db_version = self.get_db_version()
             if 29 <= db_version <= 38:
-                _roles_ids = map(lambda role_id: role_id.get('id'), roles_ids)
+                _roles_ids = [role_id.get('id') for role_id in roles_ids]
             else:
                 _roles_ids = roles_ids
 
@@ -652,17 +655,15 @@ class KeystoneIdentity(identity.Identity):
 
     def _upload_user_tenant_roles(self, user_tenants_roles, users, tenants):
         roles_id = {role.name: role.id for role in self.get_roles_list()}
-        dst_users_obj = self.get_users_list()
-        dst_users = {user.name: user.id for user in dst_users_obj}
+        dst_users = {user.name: user.id for user in self.get_users_list()}
         dst_roles = {role.id: role.name for role in self.get_roles_list()}
-        _get_user_roles_cached = self._get_user_roles_cached()
         for _user in users:
             user = _user['user']
             if user['name'] not in dst_users:
                 continue
             for _tenant in tenants:
                 tenant = _tenant['tenant']
-                user_roles_objs = _get_user_roles_cached(
+                user_roles_objs = self._get_user_roles_cached()(
                     _user['meta']['new_id'],
                     _tenant['meta']['new_id'])
                 exists_roles = [dst_roles[role] if not hasattr(role,

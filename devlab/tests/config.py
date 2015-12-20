@@ -68,14 +68,55 @@ tenants = [
          {'name': 'tenantnet1', 'admin_state_up': True,
           'subnets': [
               {'cidr': '10.5.2.0/24', 'ip_version': 4, 'name': 't1_s1',
-               'routers_to_connect': ['ext_router']}]},
+               'routers_to_connect': ['tn1_router']}]},
          {'name': 'tenant1_net2', 'admin_state_up': True,
           'subnets': [
               {'cidr': '10.6.2.0/24', 'ip_version': 4, 'name': 't1_s2',
-               'routers_to_connect': ['ext_router']}]
+               'routers_to_connect': ['tn2_router']}]
           }
      ],
-
+     'routers': [
+         {'router': {'external_gateway_info': {}, 'name': 'tn1_router',
+                     'admin_state_up': True}}
+     ],
+     'pools': [
+         {
+             'name': "pool2",
+             'tenant_name': "tenant1",
+             'subnet_name': "t1_s1",
+             'protocol': "HTTPS",
+             'lb_method': "SOURCE_IP"}
+     ],
+     'monitors': [
+         {
+             'tenant_name': "tenant1",
+             'type': "PING",
+             'delay': 600,
+             'timeout': 100,
+             'max_retries': 10
+         }
+     ],
+     'members_lbaas': [
+         {
+             'protocol_port': "83",
+             'address': "10.5.2.1",
+             'pool_name': "pool2",
+             'tenant_name': "tenant1"
+         }
+     ],
+     'vips': [
+         {
+             'name': "vip2",
+             'description': "111",
+             'address': "10.5.2.5",
+             'protocol': "HTTPS",
+             'protocol_port': "83",
+             'connection_limit': 100,
+             'pool_name': "pool2",
+             'tenant_name': "tenant1",
+             'subnet_name': "t1_s1"
+         }
+     ],
      'security_groups': [
          {'name': 'sg11', 'description': 'Blah blah group', 'rules': [
              {'ip_protocol': 'icmp',
@@ -98,6 +139,9 @@ tenants = [
      'cinder_snapshots': [
          # Commented because of unimplemented error in nfs driver for grizzly.
          # {'name': 'tn1snapsh', 'volume_id': 'tn1_volume2'}
+     ],
+     'flavors': [
+         {'name': 'tn1fl1', 'disk': '1', 'ram': '64', 'vcpus': '1'}
      ]
      },
     {'name': 'tenant2', 'description': 'Bljakslhf ajsdfh', 'enabled': True,
@@ -118,8 +162,12 @@ tenants = [
          {'name': 'tenantnet2', 'admin_state_up': True,
           'subnets': [
               {'cidr': '22.2.2.0/24', 'ip_version': 4, 'name': 't2_s1',
-               'routers_to_connect': ['ext_router']}]
+               'routers_to_connect': ['tn2_router']}]
           }
+     ],
+     'routers': [
+         {'router': {'external_gateway_info': {}, 'name': 'tn2_router',
+                     'admin_state_up': True}}
      ],
      'cinder_volumes': [
          {'display_name': 'tn_volume1', 'size': 1, 'volume_type': 'nfs1',
@@ -146,7 +194,48 @@ tenants = [
          {'display_name': 'tn3_volume1', 'size': 1,
           'server_to_attach': 'tn3server1', 'device': '/dev/vdb'}],
      'cinder_snapshots': [],
-     'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': True}]
+     'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': True}],
+     'flavors': [
+         {'name': 'tn3fl1', 'disk': '1', 'ram': '64', 'vcpus': '1'}
+     ],
+     'pools': [
+         {
+             'name': "pool3",
+             'tenant_name': "tenant3",
+             'subnet_name': "t3_s1",
+             'protocol': "HTTPS",
+             'lb_method': "SOURCE_IP"}
+     ],
+     'monitors': [
+         {
+             'tenant_name': "tenant3",
+             'type': "PING",
+             'delay': 600,
+             'timeout': 100,
+             'max_retries': 10
+         }
+     ],
+     'members_lbaas': [
+         {
+             'protocol_port': "83",
+             'address': "10.7.2.8",
+             'pool_name': "pool3",
+             'tenant_name': "tenant3"
+         }
+     ],
+     'vips': [
+         {
+             'name': "vip3",
+             'description': "111",
+             'address': "10.7.2.9",
+             'protocol': "HTTPS",
+             'protocol_port': "83",
+             'connection_limit': 100,
+             'pool_name': "pool3",
+             'tenant_name': "tenant3",
+             'subnet_name': "t3_s1"
+         }
+     ]
      },
     {'name': 'tenant4', 'description': 'None', 'enabled': True,
      'quota': {'instances': '4', 'cores': '9', 'ram': '84399',
@@ -215,9 +304,8 @@ img_to_add_members = ['image3', 'image4']
 # Flavors to create/delete
 flavors = [
     {'name': 'flavorname1', 'disk': '1', 'ram': '64', 'vcpus': '1'},
-    # Disabled for now, but in the future we need to generate non-pubic flavors
-    # {'name': 'flavorname3', 'disk': '10', 'ram': '32', 'vcpus': '1',
-    #  'is_public': False},
+    {'name': 'flavorname3', 'disk': '10', 'ram': '32', 'vcpus': '1',
+     'is_public': False},
     {'name': 'flavorname2', 'disk': '2', 'ram': '48', 'vcpus': '2'},
     {'name': 'del_flvr', 'disk': '1', 'ram': '64', 'vcpus': '1'}
 ]
@@ -237,11 +325,49 @@ networks = [
      'router:external': True, 'real_network': True,
      'subnets': [
          {'cidr': '192.168.1.0/24', 'ip_version': 4, 'name': 'external_subnet',
-          'routers_to_connect': ['ext_router'], 'allocation_pools': [
+          'set_as_gateway_for_routers': ['ext_router', 'tn1_router',
+                                         'tn2_router'],
+          'allocation_pools': [
               {'start': '192.168.1.100', 'end': '192.168.1.254'}]
           }]
      }
 ]
+pools = [
+    {
+        'name': "pool1",
+        'tenant_name': "admin",
+        'subnet_name': "subnet_1",
+        'protocol': "HTTPS",
+        'lb_method': "SOURCE_IP"
+    }]
+members_lbaas = [
+    {
+        'protocol_port': "83",
+        'address': "10.4.2.1",
+        'pool_name': "pool1",
+        'tenant_name': 'admin'
+    }
+]
+monitors = [
+    {
+        'tenant_name': "admin",
+        'type': "PING",
+        'delay': 600,
+        'timeout': 100,
+        'max_retries': 10
+    }]
+vips = [
+    {
+        'name': "vip1",
+        'description': "111",
+        'address': "10.4.2.5",
+        'protocol': "HTTPS",
+        'protocol_port': "83",
+        'connection_limit': 100,
+        'pool_name': "pool1",
+        'tenant_name': "admin",
+        'subnet_name': "subnet_1"
+    }]
 
 # VM's to create/delete
 vms = [

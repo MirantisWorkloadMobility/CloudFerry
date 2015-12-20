@@ -1,7 +1,7 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby ts=2 sw=2 et sua= inex= :
 
-config_file = "config.ini"
+config_file = File.join(File.dirname(__FILE__), "/config.ini")
 options = {}
 File.foreach(config_file) { |line|
   option, value = line.split("=")
@@ -45,9 +45,32 @@ nodes = {
   }
 }
 
+options['http_proxy'] ||= ""
+options['https_proxy'] ||= ""
+options['ftp_proxy'] ||= ""
+
 Vagrant.require_version '>= 1.6.0'
 
+if not options['http_proxy'].empty?
+    unless Vagrant.has_plugin?("vagrant-proxyconf")
+        system('vagrant plugin install vagrant-proxyconf')
+    end
+end
+
 Vagrant.configure(2) do |config|
+
+  if Vagrant.has_plugin?("vagrant-proxyconf")
+    config.proxy.http     = "#{options['http_proxy']}"
+    config.proxy.https    = "#{options['https_proxy']}"
+    config.proxy.ftp      = "#{options['ftp_proxy']}"
+    config.proxy.no_proxy = "localhost,127.0.0.1,"\
+                            "#{options['grizzly_ip']},"\
+                            "#{options['icehouse_ip']},"\
+                            "#{options['juno_ip']},"\
+                            "#{options['cloudferry_ip']},"\
+                            "#{options['nfs_ip']}"
+  end
+
   config.vm.provision "shell", path: "./provision/prerequisites.sh"
   etc_hosts = nodes.map { |name, data| [data["ip"], name].join(' ') }.join("\n")
 

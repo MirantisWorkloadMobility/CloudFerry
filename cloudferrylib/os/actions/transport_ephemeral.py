@@ -14,6 +14,8 @@
 
 
 import copy
+import hashlib
+import os
 
 from fabric.api import env
 from fabric.api import run
@@ -23,6 +25,7 @@ from cloudferrylib.base.action import action
 from cloudferrylib.os.actions import task_transfer
 from cloudferrylib.utils.utils import forward_agent
 from cloudferrylib.utils import utils as utl
+from cloudferrylib.utils import qemu_img as qemu_img_util
 
 
 CLOUD = 'cloud'
@@ -126,6 +129,7 @@ class TransportEphemeral(action.Action):
                                    utl.EPHEMERAL_BODY,
                                    utl.COMPUTE_RESOURCE,
                                    utl.INSTANCES_TYPE)
+            self.rebase_diff(dst_cloud, info)
 
     def copy_ephemeral_ceph_to_iscsi(self, src_cloud, dst_cloud, info):
         transporter = task_transfer.TaskTransfer(
@@ -185,3 +189,19 @@ class TransportEphemeral(action.Action):
             inst[EPHEMERAL][PATH_SRC] = path_src_temp_raw
 
         transporter.run(info=info)
+
+    @staticmethod
+    def rebase_diff(dst_cloud, info):
+        for instance_id, obj in info[utl.INSTANCES_TYPE].items():
+            image_id = obj['instance']['image_id']
+            new_backing_file = hashlib.sha1(image_id).hexdigest()
+            diff = obj['diff']
+            host = diff['host_dst']
+            qemu_img = qemu_img_util.QemuImg(dst_cloud.config.dst,
+                                             dst_cloud.config.migrate,
+                                             host)
+            diff_path = diff['path_dst']
+            backing_path = qemu_img.detect_backing_file(diff_path, None)
+            backing_dir = os.path.dirname(backing_path)
+            new_backing_path = os.path.join(backing_dir, new_backing_file)
+            qemu_img.diff_rebase(new_backing_path, diff_path)

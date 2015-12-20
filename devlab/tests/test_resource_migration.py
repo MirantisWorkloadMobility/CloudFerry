@@ -1,8 +1,23 @@
+# Copyright (c) 2015 Mirantis Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the License);
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and#
+# limitations under the License.
+
 import config
 from test_exceptions import NotFound
 import functional_test
-import itertools
 
+import itertools
+from nose.plugins.attrib import attr
 import pprint
 import unittest
 
@@ -58,6 +73,25 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 msg = 'Resource {res} with name {r_name} was not found on dst'
                 self.fail(msg.format(res=resource_name, r_name=i['name']))
 
+    def validate_flavor_parameters(self, src_flavors, dst_flavors):
+        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
+                                                resource_name='flavor',
+                                                parameter='name')
+        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
+                                                resource_name='flavor',
+                                                parameter='ram')
+        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
+                                                resource_name='flavor',
+                                                parameter='vcpus')
+        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
+                                                resource_name='flavor',
+                                                parameter='disk')
+        # Id can be changed, but for now in CloudFerry we moving flavor with
+        # its id.
+        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
+                                                resource_name='flavor',
+                                                parameter='id')
+
     def test_migrate_keystone_users(self):
         src_users = self.filter_users()
         dst_users = self.dst_cloud.keystoneclient.users.list()
@@ -69,6 +103,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 resource_name='user',
                                                 parameter='email')
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_keystone_user_tenant_roles(self):
         src_users = self.filter_users()
         src_user_names = [user.name for user in src_users]
@@ -87,6 +122,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                " resource 'USER'.")
         self.assertTrue(least_user_match, msg=msg)
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_keystone_roles(self):
         src_roles = self.filter_roles()
         dst_roles = self.dst_cloud.keystoneclient.roles.list()
@@ -95,6 +131,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 resource_name='role',
                                                 parameter='name')
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_keystone_tenants(self):
         src_tenants = self.filter_tenants()
         dst_tenants_gen = self.dst_cloud.keystoneclient.tenants.list()
@@ -121,27 +158,19 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 resource_name='keypair',
                                                 parameter='fingerprint')
 
-    def test_migrate_nova_flavors(self):
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    def test_migrate_nova_public_flavors(self):
         src_flavors = self.filter_flavors()
         dst_flavors = self.dst_cloud.novaclient.flavors.list()
 
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='name')
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='ram')
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='vcpus')
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='disk')
-        # Id can be changed, but for now in CloudFerry we moving flavor with
-        # its id.
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='id')
+        self.validate_flavor_parameters(src_flavors, dst_flavors)
+
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    def test_migrate_nova_private_flavors(self):
+        src_flavors = self.filter_flavors(filter_only_private=True)
+        dst_flavors = self.dst_cloud.novaclient.flavors.list(is_public=False)
+
+        self.validate_flavor_parameters(src_flavors, dst_flavors)
 
     def test_migrate_nova_security_groups(self):
         src_sec_gr = self.filter_security_groups()
@@ -153,6 +182,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             src_sec_gr, dst_sec_gr, resource_name='security_groups',
             parameter='description')
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_image_members(self):
 
         def member_list_collector(_images, client, auth_client):
@@ -184,6 +214,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                             msg="Member: %s not in the DST list of image "
                                 "members." % member)
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_glance_images(self):
         src_images = self.filter_images()
         dst_images_gen = self.dst_cloud.glanceclient.images.list()
@@ -208,6 +239,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 resource_name='image',
                                                 parameter='checksum')
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_glance_belongs_to_deleted_tenant(self):
         src_images = self.filter_images()
         src_tnt_ids = [i.id for i in self.filter_tenants()]
@@ -229,6 +261,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                " resource 'Image'.")
         self.assertTrue(least_image_check, msg=msg)
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_glance_images_not_in_filter_did_not_migrate(self):
         dst_images_gen = self.dst_cloud.glanceclient.images.list()
         dst_images = [x.name for x in dst_images_gen]
@@ -260,12 +293,25 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             src_subnets, dst_subnets, resource_name='subnets',
             parameter='cidr')
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_neutron_routers(self):
         src_routers = self.filter_routers()
         dst_routers = self.dst_cloud.neutronclient.list_routers()
         self.validate_neutron_resource_parameter_in_dst(
             src_routers, dst_routers, resource_name='routers')
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    def test_validate_router_migrated_once(self):
+        src_routers_names = [router['name'] for router
+                             in self.filter_routers()['routers']]
+        dst_routers_names = [router['name'] for router
+                             in self.dst_cloud.neutronclient.list_routers()
+                             ['routers']]
+        for router in src_routers_names:
+            self.assertTrue(dst_routers_names.count(router) == 1,
+                            msg='Router %s presents multiple times' % router)
+
+    @attr(migrated_tenant='tenant2')
     def test_migrate_vms_parameters(self):
         src_vms = self.filter_vms()
         dst_vms = self.dst_cloud.novaclient.servers.list(
@@ -283,6 +329,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.validate_resource_parameter_in_dst(
             src_vms, dst_vms, resource_name='VM', parameter='key_name')
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_vms_with_floating(self):
         vm_names_with_fip = self.get_vms_with_fip_associated()
         dst_vms = self.dst_cloud.novaclient.servers.list(
@@ -297,6 +344,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 raise RuntimeError('Vm {0} does not have floating ip'.format(
                     vm.name))
 
+    @attr(migrated_tenant='tenant2')
     def test_migrate_cinder_volumes(self):
 
         src_volume_list = self.filter_volumes()
@@ -313,6 +361,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             src_volume_list, dst_volume_list, resource_name='volume',
             parameter='bootable')
 
+    @attr(migrated_tenant='tenant2')
     def test_migrate_cinder_volumes_data(self):
         def check_file_valid(filename):
             get_md5_cmd = 'md5sum %s' % filename
@@ -407,6 +456,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 'Neutron quotas for tenant %s migrated not successfully'
                 % tenant)
 
+    @attr(migrated_tenant='tenant2')
     def test_ssh_connectivity_by_keypair(self):
         vms = self.dst_cloud.novaclient.servers.list(
             search_opts={'all_tenants': 1})
@@ -437,6 +487,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                       'via key pair'
                 self.fail(msg.format(name=vm.name, addr=ip_addr))
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_floating_ips_migrated(self):
         def get_fips(client):
             return set([fip['floating_ip_address']
@@ -474,6 +525,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                     ' {1}'.format(dst_router['name'],
                                   dst_gateway['fixed_ips'][0]['ip_address']))
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_not_valid_vms_did_not_migrate(self):
         all_vms = self.migration_utils.get_all_vms_from_config()
         vms = [vm['name'] for vm in all_vms if vm.get('broken')]
@@ -487,6 +539,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         if migrated_vms:
             self.fail('Not valid vms %s migrated')
 
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_not_valid_images_did_not_migrate(self):
         all_images = self.migration_utils.get_all_images_from_config()
         images = [image['name'] for image in all_images if image.get('broken')]
