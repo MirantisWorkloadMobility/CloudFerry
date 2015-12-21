@@ -42,6 +42,7 @@ import traceback
 
 env.forward_agent = True
 env.user = 'root'
+env.cloud = None
 LOG = log.getLogger(__name__)
 
 
@@ -56,8 +57,8 @@ def migrate(name_config=None, debug=None):
     init(name_config, debug)
     env.key_filename = cfglib.CONF.migrate.key_filename
     env.connection_attempts = cfglib.CONF.migrate.ssh_connection_attempts
-    cloud = cloud_ferry.CloudFerry(cfglib.CONF)
-    status_error = cloud.migrate(Scenario(
+    env.cloud = cloud_ferry.CloudFerry(cfglib.CONF)
+    status_error = env.cloud.migrate(Scenario(
         path_scenario=cfglib.CONF.migrate.scenario,
         path_tasks=cfglib.CONF.migrate.tasks_mapping))
     sys.exit(status_error)

@@ -14,9 +14,12 @@
 
 import logging
 from logging import config
+
 import yaml
 
 import cfglib
+
+getLogger = logging.getLogger
 
 
 def configure_logging():
@@ -28,6 +31,3 @@ def configure_logging():
             if handler.name == 'console':
                 handler.setLevel(logging.DEBUG)
                 break
-
-
-getLogger = logging.getLogger
