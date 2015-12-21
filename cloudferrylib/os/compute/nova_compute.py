@@ -26,9 +26,9 @@ from cloudferrylib.os.compute import cold_evacuate
 from cloudferrylib.os.compute import server_groups
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.utils import mysql_connector
+from cloudferrylib.utils import node_ip
 from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils as utl
-
 
 LOG = utl.get_log(__name__)
 
@@ -306,10 +306,10 @@ class NovaCompute(compute.Compute):
 
         if direct_transfer:
             ext_cidr = cfg.cloud.ext_cidr
-            host = utl.get_ext_ip(ext_cidr,
-                                  cloud.getIpSsh(),
-                                  instance_node,
-                                  ssh_user)
+            host = node_ip.get_ext_ip(ext_cidr,
+                                      cloud.getIpSsh(),
+                                      instance_node,
+                                      ssh_user)
         elif is_ceph:
             host = cfg.compute.host_eph_drv
         else:
