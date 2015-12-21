@@ -1,3 +1,5 @@
+INVALID_STATUSES = ['creating', 'error', 'deleting', 'error_deleting']
+
 img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
 # username and password for ssh access for cirros image
 username_for_ssh = 'cirros'

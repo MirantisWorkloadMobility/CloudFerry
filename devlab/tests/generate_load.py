@@ -934,6 +934,27 @@ class Prerequisites(BasePrerequisites):
                 self.migration_utils.execute_command_on_vm(vm_ip, cmd.format(
                     path=path, _file=filename))
 
+    def create_invalid_cinder_objects(self):
+        invalid_volume_tmlt = 'cinder_volume_%s'
+        volumes = [
+            {
+                'display_name': invalid_volume_tmlt % st,
+                'size': 1,
+            }
+            for st in self.config.INVALID_STATUSES
+        ]
+        existing = [vol.display_name
+                    for vol in self.cinderclient.volumes.list(
+                        search_opts={'all_tenants': 1})]
+        volumes = [vol
+                   for vol in volumes if vol['display_name'] not in existing]
+        if volumes:
+            self.create_cinder_volumes(volumes)
+        for st in self.config.INVALID_STATUSES:
+            vol = self.cinderclient.volumes.find(
+                display_name=invalid_volume_tmlt % st)
+            self.cinderclient.volumes.reset_state(vol, state=st)
+
     def emulate_vm_states(self):
         for vm_state in self.config.vm_states:
             # emulate error state:
@@ -1149,6 +1170,8 @@ class Prerequisites(BasePrerequisites):
         self.create_cinder_objects()
         print('>>> Writing data into the volumes:')
         self.write_data_to_volumes()
+        print('>>> Creating invalid cinder objects:')
+        self.create_invalid_cinder_objects()
         print('>>> Emulating vm states:')
         self.emulate_vm_states()
         print('>>> Generating vm states list:')

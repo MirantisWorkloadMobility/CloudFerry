@@ -47,6 +47,8 @@ class FilteringUtils(object):
         file_path = os.path.join(self.main_folder, file_name.lstrip('/'))
         with open(file_path, "r") as f:
             filter_dict = yaml.load(f)
+            if filter_dict is None:
+                filter_dict = {}
         return [filter_dict, file_path]
 
     def filter_vms(self, src_data_list):
@@ -77,6 +79,19 @@ class FilteringUtils(object):
                     src_data_list.pop(index)
         return [src_data_list, popped_img_list]
 
+    def filter_volumes(self, src_data_list):
+        loaded_data = self.load_file('configs/filter.yaml')
+        filter_dict = loaded_data[0]
+        popped_vol_list = []
+        if 'volumes' not in filter_dict:
+            return [src_data_list, []]
+        for vol in src_data_list[:]:
+            if vol.id not in filter_dict['volumes']['volumes_list']:
+                popped_vol_list.append(vol)
+                index = src_data_list.index(vol)
+                src_data_list.pop(index)
+        return [src_data_list, popped_vol_list]
+
     def filter_tenants(self, src_data_list):
         loaded_data = self.load_file(self.filter_file_path)
         filter_dict = loaded_data[0]
@@ -93,8 +108,8 @@ class FilteringUtils(object):
 
 class MigrationUtils(object):
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, conf):
+        self.config = conf
 
     def execute_command_on_vm(self, ip_addr, cmd, username=None,
                               warn_only=False, password=None, key=None,
