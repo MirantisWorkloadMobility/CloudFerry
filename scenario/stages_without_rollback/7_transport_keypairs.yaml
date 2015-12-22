@@ -1,0 +1,11 @@
+# NOTE: Rollback has been disabled.
+# Stage to migrate keypair resource.
+
+preparation:
+  - create_snapshot: True
+
+process:
+  - act_get_filter: True
+  - act_check_filter: True
+  - act_identity_trans: True
+  - transport_key_pairs: True

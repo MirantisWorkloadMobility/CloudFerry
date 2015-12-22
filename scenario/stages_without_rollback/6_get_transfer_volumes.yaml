@@ -1,0 +1,12 @@
+# NOTE: Rollback has been disabled.
+# Stage to migrate cinder resources such as volumes, snapshots, quotas.
+
+preparation:
+  - create_snapshot: True
+
+process:
+  - act_get_filter: True
+  - act_check_filter: True
+  - act_identity_trans: True
+  - get_volumes_db_data: True
+  - write_volumes_db_data: True

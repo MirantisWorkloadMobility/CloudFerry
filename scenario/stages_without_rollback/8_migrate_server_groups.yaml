@@ -1,0 +1,11 @@
+# NOTE: Rollback has been disabled.
+# Affinity and Anti-affinity service group policies migration.
+# This will later allow boot VMs with proper "hint" on Destination
+# cloud and place them in correct affinity or anti-affinity groups
+# if they had any.
+preparation:
+  - create_snapshot: True
+
+process:
+  - task_associations_transporting:
+      - act_server_group_trans: True
