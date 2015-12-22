@@ -19,6 +19,7 @@ from cinderclient.v1 import client as cinder_client
 from oslotest import mockpatch
 
 from cloudferrylib.os.storage import cinder_storage
+from cloudferrylib.os.storage import filters
 from cloudferrylib.utils import utils
 from tests import test
 
@@ -44,7 +45,7 @@ FAKE_CONFIG = utils.ext_dict(
 
 class CinderStorageTestCase(test.TestCase):
     def setUp(self):
-        super(CinderStorageTestCase, self).setUp()
+        test.TestCase.setUp(self)
         self.mock_client = mock.Mock()
         self.cs_patch = mockpatch.PatchObject(cinder_client, 'Client',
                                               new=self.mock_client)
@@ -59,8 +60,15 @@ class CinderStorageTestCase(test.TestCase):
         self.fake_cloud.resources = dict(identity=self.identity_mock,
                                          compute=self.compute_mock)
 
-        self.cinder_client = cinder_storage.CinderStorage(FAKE_CONFIG,
-                                                          self.fake_cloud)
+        self.cinder_client = cinder_storage.CinderStorage(
+            FAKE_CONFIG, self.fake_cloud)
+
+        filter_yaml = mock.Mock()
+        filter_yaml.get_tenant.return_value = None
+        filter_yaml.get_volume_ids.return_value = []
+        filter_yaml.get_volume_date.return_value = None
+        self.cinder_client.volume_filter = \
+            filters.CinderFilters(self.cinder_client, filter_yaml=filter_yaml)
 
         self.fake_volume_0 = mock.Mock()
         self.fake_volume_1 = mock.Mock()

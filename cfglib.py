@@ -94,7 +94,8 @@ migrate_opts = [
                help='tenant for creation router ip stubs, if it "None" as '
                     'default stub creates in router tenant'),
     cfg.StrOpt('cinder_migration_strategy',
-               default='cloudferrylib.os.storage.cinder_storage.CinderStorage',
+               default=
+               'cloudferrylib.os.storage.cinder_storage.CinderNFSStorage',
                help='path to class that will perform '
                     'cinder migration actions'),
     cfg.BoolOpt('keep_lbaas', default=False,

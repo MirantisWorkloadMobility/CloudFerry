@@ -15,13 +15,13 @@
 
 
 import abc
+import copy
 from cloudferrylib.base.action import action
 from cloudferrylib.base.exception import AbortMigrationError
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import utils
 from fabric.context_managers import settings
 
-import jsondate
 import os
 
 LOG = utils.get_log(__name__)
@@ -40,6 +40,7 @@ DST = 'dst'
 CLOUD = 'cloud'
 RES = 'res'
 CFG = 'cfg'
+METADATA_TABLES = ('volume_metadata', 'volume_glance_metadata')
 
 AWK_GET_MOUNTED_PREFIX = (
     "/^nfs_shares_config/ "
@@ -66,9 +67,11 @@ AWK_GET_MOUNTED_LAST_NFS_SHARES = ''.join([
 ])
 
 RSYNC_CMD = (
-    'rsync --progress --append -a --no-owner --no-group'
+    'rsync --progress --partial --inplace --perms --times'
     ' -e "ssh -o StrictHostKeyChecking=no"'
 )
+
+QUOTA_RESOURCES = ('volumes', 'gigabytes')
 
 
 def _remote_runner(cloud):
@@ -93,7 +96,10 @@ def _modify_data(data):
             volume['status'] = 'available'
             volume['instance_uuid'] = None
             volume['attach_status'] = 'detached'
+    return data
 
+
+def _clean_data(data):
     # disregard volume types
     if 'volume_types' in data:
         del data['volume_types']
@@ -139,30 +145,158 @@ class GetVolumesDb(CinderDatabaseInteraction):
         :return: namespace with db info
 
         """
-        search_opts = kwargs.get('search_opts_tenant', {})
         return {NAMESPACE_CINDER_CONST:
-                self.get_resource().read_db_info(**search_opts)}
+                self.get_resource().read_info()}
 
 
-class WriteVolumesDb(CinderDatabaseInteraction):
+class TransportVolumes(CinderDatabaseInteraction):
 
     """
-    Copy volumes' data on nfs backends.
+    Migrate volumes.
 
-    Work via rsync, can handle big files
-    and resume after errors.
     Depends on 'GetVolumesDb' action, it must be run first.
 
     """
 
     def __init__(self, *args, **kwargs):
-        super(WriteVolumesDb, self).__init__(*args, **kwargs)
+        super(TransportVolumes, self).__init__(*args, **kwargs)
 
-        self.ssh_attempts = self.cfg.migrate.ssh_connection_attempts
+    def run(self, *args, **kwargs):
+        """Run TransportVolumes Action."""
+        data_from_namespace = kwargs.get(NAMESPACE_CINDER_CONST)
+        if not data_from_namespace:
+            raise AbortMigrationError(
+                "Cannot read attribute {attribute} from namespace".format(
+                    attribute=NAMESPACE_CINDER_CONST))
+
+        data = data_from_namespace
+        self.get_resource().deploy(data)
+
+
+class WriteVolumesDb(CinderDatabaseInteraction):
+
+    """
+    Copy volumes.
+
+    Work via rsync, can handle big files
+    and resume after errors.
+
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(WriteVolumesDb, self).__init__(*args, **kwargs)
+        self.cp_volumes = CopyVolumes(self.cfg, self.src_cloud, self.dst_cloud)
+
+    @staticmethod
+    def _default_quota_usages(quota_usages, quotas):
+        def existed_usage(q):
+            return [u for u in quota_usages
+                    if u['project_id'] == q['project_id'] and
+                    u['resource'] == q['resource']]
+
+        def _quota_usage(q):
+            return {
+                'resource': q['resource'],
+                'project_id': q['project_id'],
+                'in_use': 0,
+                'reserved': 0,
+            }
+        return [_quota_usage(q) for q in quotas
+                if q['resource'] in QUOTA_RESOURCES and
+                not existed_usage(q)]
+
+    @staticmethod
+    def _recalculate_quota_usages(quota_usages, volumes):
+        for u in quota_usages:
+            if u['resource'] in QUOTA_RESOURCES:
+                u['in_use'] = 0
+
+        for v in volumes:
+            for res in QUOTA_RESOURCES:
+                u = [q for q in quota_usages
+                     if q['project_id'] == v['project_id'] and
+                     q['resource'] == res]
+                if res == 'volumes':
+                    add = 1
+                elif res == 'gigabytes':
+                    add = v.get('size', 0)
+
+                if u:
+                    u[0]['in_use'] += add
+                else:
+                    u = {'resource': res,
+                         'project_id': v['project_id'],
+                         'in_use': add,
+                         'reserved': 0}
+                    quota_usages.append(u)
+        return quota_usages
+
+    def fix_quota_usages(self, data):
+        """Re-calculate quota usages.
+
+        :return: dict
+
+        """
+        volumes = data.get('volumes', [])
+        quotas = data.get('quotas', [])
+        quota_usages = data.get('quota_usages', [])
+
+        quota_usages.extend(self._default_quota_usages(quota_usages, quotas))
+
+        quota_usages = self._recalculate_quota_usages(quota_usages, volumes)
+
+        data['quota_usages'] = quota_usages
+        if quotas:
+            data['quotas'] = quotas
+        return data
+
+    def run(self, *args, **kwargs):
+        """Run WriteVolumesDb Action.
+
+        :return: dict
+
+        """
+
+        data = self.cp_volumes.run()
+
+        res = self.dst_cloud.resources.get(utils.STORAGE_RESOURCE)
+        res.deploy(data)
+        data = self.fix_quota_usages(res.reread())
+        res.deploy({'quota_usages': data['quota_usages']})
+        return data
+
+
+class CopyVolumes(object):
+
+    """
+    Copy volumes from NFS backend(s) to NFS backend(s).
+
+    Work via rsync, can handle big files
+    and resume after errors.
+
+    """
+
+    def __init__(self, cfg, src_cloud, dst_cloud):
+        self.ssh_attempts = cfg.migrate.ssh_connection_attempts
+        self.key_filename = cfg.migrate.key_filename
+
         self.storage = {
-            SRC: self.cfg.src_storage,
-            DST: self.cfg.dst_storage,
+            SRC: cfg.src_storage,
+            DST: cfg.dst_storage,
         }
+        self.clouds = {
+            SRC: {
+                CLOUD: src_cloud,
+                RES: src_cloud.resources.get(utils.STORAGE_RESOURCE),
+                CFG: cfg.src,
+            },
+            DST: {
+                CLOUD: dst_cloud,
+                RES: dst_cloud.resources.get(utils.STORAGE_RESOURCE),
+                CFG: cfg.dst,
+            }
+        }
+        self.migration = src_cloud.migration
 
         self.data = {SRC: {}, DST: {}}
 
@@ -174,39 +308,56 @@ class WriteVolumesDb(CinderDatabaseInteraction):
         self.path_map = None
         self.mount_all = {}
 
-    def run(self, *args, **kwargs):
-        """Run WriteVolumesDb Action."""
-        data_from_namespace = kwargs.get(NAMESPACE_CINDER_CONST)
-        if not data_from_namespace:
-            raise AbortMigrationError(
-                "Cannot read attribute {attribute} from namespace".format(
-                    attribute=NAMESPACE_CINDER_CONST))
+    def run(self):
+        """Copy volumes and return result data.
 
-        self.cloud = {
-            SRC: {
-                CLOUD: self.src_cloud,
-                RES: self.src_cloud.resources.get(utils.STORAGE_RESOURCE),
-                CFG: self.cfg.src,
-            },
-            DST: {
-                CLOUD: self.dst_cloud,
-                RES: self.dst_cloud.resources.get(utils.STORAGE_RESOURCE),
-                CFG: self.cfg.dst,
-            }
-        }
+        :return: dict
 
-        self.data[SRC] = jsondate.loads(data_from_namespace)
+        """
+        for position in self.clouds:
+            self.data[position] = self.clouds[position][RES].read_db_info()
 
-        search_opts = kwargs.get('search_opts_tenant', {})
-        self.data[DST] = jsondate.loads(
-            self.cloud[DST][RES].read_db_info(**search_opts))
+        self._skip_existing_volumes()
 
-        LOG.debug('Cloud info: %s', str(self.cloud))
-
-        self._copy_volumes()
+        self._try_copy_volumes()
 
         self.data[SRC] = _modify_data(self.data[SRC])
-        self.cloud[DST][RES].deploy(jsondate.dumps(self.data[SRC]))
+        self.data[SRC] = self.fix_metadata(self.data[SRC])
+
+        self.data[SRC] = _clean_data(self.data[SRC])
+        return self.data[SRC]
+
+    def _skip_existing_volumes(self):
+        res = []
+        dst_ids = [v['id'] for v in self.data[DST]['volumes']]
+        for v in self.data[SRC]['volumes']:
+            if v['id'] in dst_ids:
+                LOG.warning('Volume %s existing, skipping migration.', v['id'])
+            else:
+                res.append(v)
+        self.data[SRC]['volumes'] = res
+
+    def fix_metadata(self, data):
+        """Fix metadata table.
+
+        Replace src image ids by correspoing dst image ids.
+
+        :return: dict
+
+        """
+        data = copy.deepcopy(data)
+        vol_ids = [v['id'] for v in data['volumes']]
+        migrated = self.migration[utils.IMAGE_RESOURCE]
+
+        for table in METADATA_TABLES:
+            metadata = data.get(table, {})
+            metadata = [m for m in metadata if m['volume_id'] in vol_ids]
+
+            for m in metadata:
+                if m['key'] == 'image_id':
+                    m['value'] = migrated.migrated_id(m['value'])
+            data[table] = metadata
+        return data
 
     def _run_cmd(self, cloud, cmd):
         runner = _remote_runner(cloud)
@@ -217,11 +368,18 @@ class WriteVolumesDb(CinderDatabaseInteraction):
             return res if len(res) > 1 else res[0]
 
     def run_repeat_on_errors(self, cloud, cmd):
-        """Run remote command cmd."""
+        """Run remote command cmd.
+
+        :return: err or None
+
+        """
         runner = _remote_runner(cloud)
         with settings(gateway=cloud[CLOUD].getIpSsh(),
                       connection_attempts=self.ssh_attempts):
-            runner.run_repeat_on_errors(cmd)
+            try:
+                runner.run_repeat_on_errors(cmd)
+            except remote_runner.RemoteExecutionError as e:
+                return e.message
 
     def find_dir(self, position, paths, v):
         """
@@ -235,17 +393,25 @@ class WriteVolumesDb(CinderDatabaseInteraction):
         volume_filename = self.storage[position].volume_name_template + v['id']
         for p in paths:
             cmd = 'ls -1 %s' % p
-            lst = self._run_cmd(self.cloud[position], cmd)
+            lst = self._run_cmd(self.clouds[position], cmd)
             if lst and not isinstance(lst, list):
                 lst = [lst]
             if volume_filename in lst:
                 return '%s/%s' % (p, volume_filename)
 
-    def _run_rsync(self, src, dst):
+    def run_rsync(self, src, dst):
+        """Run repeating remote rsync commmand.
+
+        :return: True on success (or False otherwise)
+
+        """
         cmd = RSYNC_CMD
-        cmd += ' %s %s@%s:%s' % (src, self.cloud[DST][CFG].ssh_user,
-                                 self.cloud[DST][CFG].get(HOST), dst)
-        self.run_repeat_on_errors(self.cloud[SRC], cmd)
+        cmd += ' %s %s@%s:%s' % (src, self.clouds[DST][CFG].ssh_user,
+                                 self.clouds[DST][CFG].get(HOST), dst)
+        err = self.run_repeat_on_errors(self.clouds[SRC], cmd)
+        if err:
+            LOG.warning("Failed copying to %s", dst)
+        return err
 
     def volume_size(self, cloud, vol_file):
         """
@@ -254,9 +420,7 @@ class WriteVolumesDb(CinderDatabaseInteraction):
         :return: int
 
         """
-        cmd = (
-            "du -b %s | awk '{print $1}'"
-        ) % vol_file
+        cmd = "du -b %s | awk '{print $1}'" % vol_file
         size = self._run_cmd(cloud, cmd)
         return int(size)
 
@@ -281,16 +445,21 @@ class WriteVolumesDb(CinderDatabaseInteraction):
         cmd = (
             'rm -f %s'
         ) % filepath
-        LOG.debug("Cleaning %s", filepath)
+        LOG.info("Cleaning %s", filepath)
         self.run_repeat_on_errors(cloud, cmd)
 
-    def _rsync_if_enough_space(self, src_size, src, dst):
-        dst_free_space = self.free_space(self.cloud[DST], dst)
-        if dst_free_space > src_size:
-            LOG.debug("Enough space found on %s", dst)
-            self._run_rsync(src, dst)
-            return True
-        LOG.debug("No enough space on %s", dst)
+    def rsync_if_enough_space(self, size, src, dst):
+        """Rsync if enough space.
+
+        :return: True on success (or False otherwise)
+
+        """
+        dst_free_space = self.free_space(self.clouds[DST], dst)
+        if dst_free_space > size:
+            LOG.info("Enough space found on %s", dst)
+            err = self.run_rsync(src, dst)
+            return not err
+        LOG.warning("No enough space on %s", dst)
 
     def checksum(self, position, filepath):
         """
@@ -302,31 +471,33 @@ class WriteVolumesDb(CinderDatabaseInteraction):
         cmd = (
             "md5sum %s | awk '{print $1}'"
         ) % filepath
-        return self._run_cmd(self.cloud[position], cmd)
+        return self._run_cmd(self.clouds[position], cmd)
 
     def _rsync(self, src, dstpaths, volume):
         LOG.debug("Trying rsync file for volume: %s[%s]",
                   volume.get('display_name', None), volume['id'])
         dstfile = self.find_dir(DST, dstpaths, volume)
-        src_size = self.volume_size(self.cloud[SRC], src)
+        src_size = self.volume_size(self.clouds[SRC], src)
         LOG.debug("Source file size = %d", src_size)
         LOG.debug("Searching for space for volume: %s[%s]",
                   volume.get('display_name', None), volume['id'])
         if dstfile:
             LOG.debug("File found on destination: %s", dstfile)
-            dst_size = self.volume_size(self.cloud[DST], dstfile)
-            LOG.debug("Destination file size = %d", dst_size)
+            dst_size = self.volume_size(self.clouds[DST], dstfile)
+            LOG.debug("Destination file (%s) size = %d", dstfile, dst_size)
             dst = os.path.dirname(dstfile)
-            if self.checksum(SRC, src) == self.checksum(DST, dstfile):
-                LOG.debug("Destination file is up-to-date")
+
+            if src_size == dst_size and \
+                    self.checksum(SRC, src) == self.checksum(DST, dstfile):
+                LOG.info("Destination file %s is up-to-date", dstfile)
                 return dst
-            if self._rsync_if_enough_space(src_size, src, dst):
+            if self.rsync_if_enough_space(src_size - dst_size, src, dst):
                 return dst
             else:
-                self._clean(self.cloud[DST], dstfile)
+                self._clean(self.clouds[DST], dstfile)
 
         for dst in dstpaths:
-            res = self._rsync_if_enough_space(src_size, src, dst)
+            res = self.rsync_if_enough_space(src_size, src, dst)
             if res:
                 return dst
         raise AbortMigrationError('No space found for %s on %s' % (
@@ -345,7 +516,7 @@ class WriteVolumesDb(CinderDatabaseInteraction):
             "%s"
             "\" | tr ',' '\n'"
         ) % (self.storage[position].conf)
-        backend_blocks = self._run_cmd(self.cloud[position], cmd)
+        backend_blocks = self._run_cmd(self.clouds[position], cmd)
         if backend_blocks and not isinstance(backend_blocks, list):
             backend_blocks = [backend_blocks]
         for backend_block in backend_blocks:
@@ -360,7 +531,7 @@ class WriteVolumesDb(CinderDatabaseInteraction):
                 "'"
                 " '%s'"
             ) % (backend_block, self.storage[position].conf)
-            backend = self._run_cmd(self.cloud[position], cmd)
+            backend = self._run_cmd(self.clouds[position], cmd)
 
             vtid = None
             if backend:
@@ -380,7 +551,7 @@ class WriteVolumesDb(CinderDatabaseInteraction):
             ) % (backend_block)
             cmd += AWK_GET_MOUNTED_NFS_SHARES % self.storage[position].conf
             cmd += print_cmd
-            nfs_shares = self._run_cmd(self.cloud[position], cmd)
+            nfs_shares = self._run_cmd(self.clouds[position], cmd)
             if not isinstance(nfs_shares, list):
                 nfs_shares = [nfs_shares]
             fld = vtid if vtid else DEFAULT
@@ -411,7 +582,7 @@ class WriteVolumesDb(CinderDatabaseInteraction):
             cmd += \
                 AWK_GET_MOUNTED_LAST_NFS_SHARES % self.storage[position].conf
             cmd += print_cmd
-            res = self._run_cmd(self.cloud[position], cmd)
+            res = self._run_cmd(self.clouds[position], cmd)
             res = set(res if isinstance(res, list) else [res])
         if not res:
             raise AbortMigrationError('No NFS share found on "%s"' % position)
@@ -443,7 +614,7 @@ class WriteVolumesDb(CinderDatabaseInteraction):
         if self.dst_hosts is None:
             self.dst_hosts = \
                 [i.host for i in
-                 self.cloud[DST][RES].cinder_client.services.list(
+                 self.clouds[DST][RES].cinder_client.services.list(
                      binary=CINDER_VOLUME) if i.state == 'up']
         # cached property
         if self.dst_volume_types is None:
@@ -467,13 +638,15 @@ class WriteVolumesDb(CinderDatabaseInteraction):
                 self.dst_mount[DEFAULT] = set([
                     tuple(line.split(MOUNT_DELIM))
                     for line in self._mount_output(DST)
+                    if line
                 ])
             for vt in _volume_types(self.data[DST]):
                 self.dst_mount[vt['id']] = set([])
                 output = self._mount_output(DST, vt=vt)
                 for line in output:
-                    self.dst_mount[vt['id']].add(
-                        tuple(line.split(MOUNT_DELIM)))
+                    if line:
+                        self.dst_mount[vt['id']].add(
+                            tuple(line.split(MOUNT_DELIM)))
 
         return self.dst_mount
 
@@ -526,7 +699,7 @@ class WriteVolumesDb(CinderDatabaseInteraction):
             paths[DST][BY_VTID][vt['id']] = set(
                 t[0] for t in mount_info[vt['id']])
 
-        for i in self.cloud:
+        for i in self.clouds:
             for sd in sorted(paths[i][BY_VTID].values()):
                 paths[i][ALL].update(sd)
 
@@ -542,10 +715,15 @@ class WriteVolumesDb(CinderDatabaseInteraction):
                 return res
         return self.path_map[position][ALL]
 
-    def _copy_volumes(self):
+    def _try_copy_volumes(self):
         vt_map = self._vt_map()
 
+        failed = []
+
         for v in self.data[SRC]['volumes']:
+            LOG.info('Migrating volume: %s(%s)',
+                     v.get('display_name', ''), v['id'])
+
             volume_type_id = v.get('volume_type_id', None)
             srcpaths = self._paths(SRC, volume_type_id)
             LOG.debug('srcpaths: %s', str(srcpaths))
@@ -558,6 +736,12 @@ class WriteVolumesDb(CinderDatabaseInteraction):
             LOG.debug('Vt map: %s', str(vt_map))
 
             dstpaths = self._paths(DST, v['volume_type_id'])
+            if not dstpaths:
+                err_msg = 'No mount found on DST Cloud'
+                if v['volume_type_id']:
+                    err_msg += ' for volume type: %s' % v['volume_type_id']
+                raise AbortMigrationError(err_msg)
+
             LOG.debug('dstpaths: %s', str(dstpaths))
 
             src = self.find_dir(SRC, srcpaths, v)
@@ -565,9 +749,25 @@ class WriteVolumesDb(CinderDatabaseInteraction):
                 raise AbortMigrationError(
                     'No SRC volume file found for %s[%s]'
                     % (v.get('display_name', None), v['id']))
-            LOG.debug('SRC volume file: %s', str(src))
+            LOG.info('Copying volume file: %s', str(src))
             dst = self._rsync(src, dstpaths, v)
 
-            v['provider_location'] = self._dir_to_provider(dst)
-            vtid = self._provider_to_vtid(v['provider_location'])
-            v[HOST] = self._dst_host(vtid)
+            if dst:
+                v['provider_location'] = self._dir_to_provider(dst)
+                vtid = self._provider_to_vtid(v['provider_location'])
+                v[HOST] = self._dst_host(vtid)
+            else:
+                failed.append(v)
+
+        if failed:
+            LOG.error(
+                'Migration failed for volumes: %s',
+                ', '.join([
+                    "%s(%s)" % (v['display_name'], v['id'])
+                    for v in failed])
+            )
+            self.data[SRC]['volumes'] = [
+                v for v in self.data[SRC]['volumes'] if v not in failed
+            ]
+
+        return failed
