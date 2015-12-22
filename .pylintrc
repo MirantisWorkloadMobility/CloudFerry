@@ -1,10 +1,13 @@
 [MESSAGES CONTROL]
 # The format of this file isn't really documented; just use --generate-rcfile
+# I0011: Allow inline disable of pylint check
 # C0111: Don't require docstrings on every method
 # W0511: TODOs in code comments are fine.
 # W0142: *args and **kwargs are fine.
 # W0622: Redefining id is fine.
-disable=C0111,W0511,W0142,W0622
+# C: Disable all conventional warnings
+# R: Disable all refactoring warnings
+disable=I0011,W0511,W0142,W0622,C,R
 
 [BASIC]
 # Variable names can be 1 to 31 characters long, with lowercase and underscores
@@ -27,3 +30,9 @@ no-docstring-rgx=((__.*__)|([tT]est.*)|setUp|tearDown)$
 max-public-methods=100
 min-public-methods=3
 max-args=6
+
+[REPORTS]
+reports=no
+
+[FORMAT]
+indent-string='    '
