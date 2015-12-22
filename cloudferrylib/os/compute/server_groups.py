@@ -225,7 +225,12 @@ class ServerGroupsHandler(compute.Compute):
                 client_config.cloud.user,
                 instance_tenant):
             nclient = self.compute.get_client(client_config)
-            server_group_list = nclient.server_groups.list()
+
+            try:
+                server_group_list = nclient.server_groups.list()
+            except nova_exc.NotFound:
+                LOG.info("Cloud does not support server_groups")
+                return
 
         for server_group in server_group_list:
             if instance_id in server_group.members:

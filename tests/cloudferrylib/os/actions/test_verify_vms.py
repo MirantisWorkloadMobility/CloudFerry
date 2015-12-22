@@ -40,7 +40,8 @@ class VerifyVmsTest(test.TestCase):
                         'key_name': 'fake_key_name_1',
                         'volumes': [{
                             'dev': 1
-                        }]
+                        }],
+                        'server_group': 'fake_server_group_1',
                     }
                 },
                 'id2': {
@@ -55,7 +56,8 @@ class VerifyVmsTest(test.TestCase):
                         'key_name': 'fake_key_name_2',
                         'volumes': [{
                             'dev': 1
-                        }]
+                        }],
+                        'server_group': 'fake_server_group_2',
                     }
                 }
             }
@@ -81,7 +83,8 @@ class VerifyVmsTest(test.TestCase):
                         'key_name': 'fake_key_name_1',
                         'interfaces': {
                             'int': 'int1'
-                        }
+                        },
+                        'server_group': 'fake_server_group_1',
                     },
                     'meta': {
                         'old_id': 'id1',
@@ -101,7 +104,8 @@ class VerifyVmsTest(test.TestCase):
                         'key_name': 'fake_key_name_2',
                         'interfaces': {
                             'int': 'int2'
-                        }
+                        },
+                        'server_group': 'fake_server_group_2',
                     },
                     'meta': {
                         'old_id': 'id2',
