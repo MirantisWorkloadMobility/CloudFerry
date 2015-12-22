@@ -21,26 +21,31 @@ handlers:
     stream: ext://sys.stdout
   info:
     backupCount: 20
-    class: logging.handlers.RotatingFileHandler
+    class: cloudferrylib.utils.log.RunRotatingFileHandler
     encoding: utf-8
-    filename: info.log
+    filename: 'info-%(scenario)s-%(date)s.log'
+    date_format: '%F-%H-%M-%S'
     formatter: colored
     level: INFO
     maxBytes: 10485760
   error:
     backupCount: 20
-    class: logging.handlers.RotatingFileHandler
+    class: cloudferrylib.utils.log.RunRotatingFileHandler
     encoding: utf-8
-    filename: errors.log
+    filename: 'info-%(scenario)s-%(date)s.log'
+    date_format: '%F-%H-%M-%S'
     formatter: colored
     level: ERROR
     maxBytes: 10485760
 loggers:
   paramiko.transport:
-    level: INFO
+    level: WARNING
     handlers: [console, info, error]
   glanceclient.common.http:
-    level: INFO
+    level: WARNING
+    handlers: [console, info, error]
+  requests.packages.urllib3.connectionpool:
+    level: WARNING
     handlers: [console, info, error]
 
 root:
