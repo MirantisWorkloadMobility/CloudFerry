@@ -18,6 +18,7 @@ from logging import handlers
 import datetime
 import os
 
+from fabric import api
 import yaml
 
 import cfglib
@@ -59,7 +60,7 @@ class RunRotatingFileHandler(handlers.RotatingFileHandler):
         self.date_format = date_format
 
         super(RunRotatingFileHandler, self).__init__(
-                filename=self.get_filename(filename), **kwargs)
+            filename=self.get_filename(filename), **kwargs)
 
     def get_filename(self, filename):
         """Format the filename
@@ -69,9 +70,28 @@ class RunRotatingFileHandler(handlers.RotatingFileHandler):
         current datetime.
         """
         scenario = os.path.splitext(os.path.basename(
-                cfglib.CONF.migrate.scenario))[0]
+            cfglib.CONF.migrate.scenario))[0]
         dt = datetime.datetime.now().strftime(self.date_format)
         return filename % {
             'scenario': scenario,
             'date': dt
         }
+
+
+class CurrentTaskFilter(logging.Filter):
+    """Define the current_task variable for the log messages.
+
+    :param name_format: The format of current task name.
+    Default value is %(name)s
+    """
+
+    def __init__(self, name_format='%(name)s', **kwargs):
+        super(CurrentTaskFilter, self).__init__(**kwargs)
+        self.name_format = name_format
+
+    def filter(self, record):
+        current_task = self.name_format % {
+            'name': api.env.current_task or '',
+        }
+        record.current_task = current_task
+        return True

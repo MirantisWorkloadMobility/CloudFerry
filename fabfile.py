@@ -43,6 +43,7 @@ import traceback
 env.forward_agent = True
 env.user = 'root'
 env.cloud = None
+env.current_task = None
 LOG = log.getLogger(__name__)
 
 
