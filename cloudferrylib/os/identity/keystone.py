@@ -16,13 +16,13 @@
 import pika
 import ast
 
-import keystoneclient
 from keystoneclient import exceptions as ks_exceptions
 from keystoneclient.v2_0 import client as keystone_client
 
 import cfglib
 from cloudferrylib.base import identity
 from cloudferrylib.utils.cache import Cached
+from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils.utils import GeneratorPassword
 from cloudferrylib.utils.utils import Postman
 from cloudferrylib.utils.utils import Templater
@@ -57,8 +57,9 @@ class AddAdminUserToNonAdminTenant(object):
 
         self.keystone = keystone
         try:
-            self.tenant = self.keystone.tenants.find(name=tenant)
-        except keystoneclient.exceptions.NotFound:
+            with proxy_client.expect_exception(ks_exceptions.NotFound):
+                self.tenant = self.keystone.tenants.find(name=tenant)
+        except ks_exceptions.NotFound:
             self.tenant = self.keystone.tenants.find(id=tenant)
         self.user = self.keystone.users.find(name=admin_user)
         self.role = self.keystone.roles.find(name=member_role)
@@ -290,7 +291,8 @@ class KeystoneIdentity(identity.Identity):
 
         tenants = self.keystone_client.tenants
         try:
-            return tenants.get(tenant_id)
+            with proxy_client.expect_exception(ks_exceptions.NotFound):
+                return tenants.get(tenant_id)
         except ks_exceptions.NotFound:
             if default is None:
                 return tenants.find(name=self.config.cloud.tenant)
@@ -301,8 +303,9 @@ class KeystoneIdentity(identity.Identity):
         """ Same as `get_tenant_by_id` but returns `default` in case tenant
         ID is not present """
         try:
-            return self.keystone_client.tenants.get(tenant_id).name
-        except keystoneclient.exceptions.NotFound:
+            with proxy_client.expect_exception(ks_exceptions.NotFound):
+                return self.keystone_client.tenants.get(tenant_id).name
+        except ks_exceptions.NotFound:
             LOG.warning("Tenant '%s' not found, returning default value = "
                         "'%s'", tenant_id, default)
             return default
@@ -357,8 +360,9 @@ class KeystoneIdentity(identity.Identity):
 
     def try_get_username_by_id(self, user_id, default=None):
         try:
-            return self.keystone_client.users.get(user_id).name
-        except keystoneclient.exceptions.NotFound:
+            with proxy_client.expect_exception(ks_exceptions.NotFound):
+                return self.keystone_client.users.get(user_id).name
+        except ks_exceptions.NotFound:
             return default
 
     def try_get_user_by_id(self, user_id, default=None):
@@ -367,16 +371,18 @@ class KeystoneIdentity(identity.Identity):
                 self.try_get_user_by_name(username=self.config.cloud.user)
             default = admin_usr.id
         try:
-            return self.keystone_client.users.find(id=user_id)
-        except keystoneclient.exceptions.NotFound:
+            with proxy_client.expect_exception(ks_exceptions.NotFound):
+                return self.keystone_client.users.find(id=user_id)
+        except ks_exceptions.NotFound:
             LOG.warning("User '%s' has not been found, returning default "
                         "value = '%s'", user_id, default)
             return self.keystone_client.users.find(id=default)
 
     def try_get_user_by_name(self, username, default=None):
         try:
-            return self.keystone_client.users.find(name=username)
-        except keystoneclient.exceptions.NotFound:
+            with proxy_client.expect_exception(ks_exceptions.NotFound):
+                return self.keystone_client.users.find(name=username)
+        except ks_exceptions.NotFound:
             LOG.warning("User '%s' has not been found, returning default "
                         "value = '%s'", username, default)
             return self.keystone_client.users.find(name=default)
@@ -426,9 +432,10 @@ class KeystoneIdentity(identity.Identity):
         """ Create new tenant in keystone. """
 
         try:
-            return self.keystone_client.tenants.create(tenant_name=tenant_name,
-                                                       description=description,
-                                                       enabled=enabled)
+            with proxy_client.expect_exception(ks_exceptions.Conflict):
+                return self.keystone_client.tenants.create(
+                    tenant_name=tenant_name, description=description,
+                    enabled=enabled)
         except ks_exceptions.Conflict:
             return self.keystone_client.tenants.find(name=tenant_name)
 
@@ -437,12 +444,13 @@ class KeystoneIdentity(identity.Identity):
         """ Create new user in keystone. """
 
         try:
-            return self.keystone_client.users.create(name=name,
-                                                     password=password,
-                                                     email=email,
-                                                     tenant_id=tenant_id,
-                                                     enabled=enabled)
-        except keystoneclient.exceptions.NotFound, e:
+            with proxy_client.expect_exception(ks_exceptions.NotFound):
+                return self.keystone_client.users.create(name=name,
+                                                         password=password,
+                                                         email=email,
+                                                         tenant_id=tenant_id,
+                                                         enabled=enabled)
+        except ks_exceptions.NotFound as e:
             LOG.warning(e.message)
         return self.keystone_client.users.find(name=name)
 
@@ -705,9 +713,11 @@ class KeystoneIdentity(identity.Identity):
                     if role['name'] in exists_roles:
                         continue
                     try:
-                        self.keystone_client.roles.add_user_role(
-                            _user['meta']['new_id'], roles_id[role['name']],
-                            _tenant['meta']['new_id'])
+                        with proxy_client.expect_exception(
+                                ks_exceptions.Conflict):
+                            self.keystone_client.roles.add_user_role(
+                                _user['meta']['new_id'], roles_id[role['name']],
+                                _tenant['meta']['new_id'])
                     except ks_exceptions.Conflict:
                         LOG.info("Role '%s' for user '%s' in tenant '%s' "
                                  "already exists, skipping", role['name'],
@@ -759,9 +769,10 @@ def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
     """Returns user from destination with the same name as on source. None if
     user does not exist"""
     try:
-        src_user = src_keystone.keystone_client.users.find(id=src_user_id)
+        with proxy_client.expect_exception(ks_exceptions.NotFound):
+            src_user = src_keystone.keystone_client.users.find(id=src_user_id)
         src_user_name = src_user.name
-    except keystoneclient.exceptions.NotFound:
+    except ks_exceptions.NotFound:
         LOG.warning("User '%s' not found on SRC!", src_user_id)
         if fallback_to_admin:
             LOG.warning("Replacing user '%s' with SRC admin", src_user_id)
@@ -770,9 +781,11 @@ def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
             return
 
     try:
-        dst_user = dst_keystone.keystone_client.users.find(name=src_user_name)
+        with proxy_client.expect_exception(ks_exceptions.NotFound):
+            dst_user = dst_keystone.keystone_client.users.find(
+                name=src_user_name)
         return dst_user
-    except keystoneclient.exceptions.NotFound:
+    except ks_exceptions.NotFound:
         LOG.warning("User '%s' not found on DST!", src_user_name)
         if fallback_to_admin:
             LOG.warning("Replacing user '%s' with DST admin", src_user_name)

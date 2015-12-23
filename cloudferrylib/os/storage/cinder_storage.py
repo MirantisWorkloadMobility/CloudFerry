@@ -20,6 +20,7 @@ from cinderclient import exceptions as cinder_exc
 
 from cloudferrylib.base import storage
 from cloudferrylib.os.storage import filters as cinder_filters
+from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import filters
 
@@ -210,10 +211,10 @@ class CinderStorage(storage.Storage):
 
     def finish(self, vol):
         try:
-            self.cinder_client.volumes.set_bootable(
-                vol[utl.VOLUME_BODY]['id'],
-                vol[utl.VOLUME_BODY]['bootable']
-            )
+            with proxy_client.expect_exception(cinder_exc.BadRequest):
+                self.cinder_client.volumes.set_bootable(
+                    vol[utl.VOLUME_BODY]['id'],
+                    vol[utl.VOLUME_BODY]['bootable'])
         except cinder_exc.BadRequest:
             LOG.info("Can't update bootable flag of volume with id = %s "
                      "using API, trying to use DB...",

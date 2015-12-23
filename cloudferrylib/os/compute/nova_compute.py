@@ -29,6 +29,7 @@ from cloudferrylib.os.compute import server_groups
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import node_ip
+from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils as utl
 
@@ -217,7 +218,8 @@ class NovaCompute(compute.Compute):
 
         for flavor in self.get_flavor_list(is_public=None):
             try:
-                internal_flavor = self.convert(flavor, cloud=self.cloud)
+                with proxy_client.expect_exception(nova_exc.NotFound):
+                    internal_flavor = self.convert(flavor, cloud=self.cloud)
                 if internal_flavor is None:
                     continue
                 info['flavors'][flavor.id] = internal_flavor
@@ -529,7 +531,8 @@ class NovaCompute(compute.Compute):
             LOG.debug("Adding access for tenant '%s' to flavor '%s'", t,
                       flavor_id)
             try:
-                self.add_flavor_access(flavor_id, t)
+                with proxy_client.expect_exception(nova_exc.Conflict):
+                    self.add_flavor_access(flavor_id, t)
             except nova_exc.Conflict:
                 LOG.debug("Tenant '%s' already has access to flavor '%s'", t,
                           flavor_id)
@@ -589,7 +592,8 @@ class NovaCompute(compute.Compute):
         flavor_details = instance['flav_details']
         new_flavor_id = None
         try:
-            flavor = self.get_flavor_from_id(flavor_id)
+            with proxy_client.expect_exception(nova_exc.NotFound):
+                flavor = self.get_flavor_from_id(flavor_id)
             need_new_flavor = (
                 flavor.vcpus != flavor_details['vcpus'] or
                 flavor.ram != flavor_details['memory_mb'] or
@@ -736,7 +740,8 @@ class NovaCompute(compute.Compute):
             servers = []
             for i in ids:
                 try:
-                    servers.append(self.nova_client.servers.get(i))
+                    with proxy_client.expect_exception(nova_exc.NotFound):
+                        servers.append(self.nova_client.servers.get(i))
                 except nova_exc.NotFound:
                     LOG.warning("No server with ID of '%s' exists.", i)
 
@@ -754,7 +759,8 @@ class NovaCompute(compute.Compute):
         :return: True - if it is Nova Server instance, False - if it is not
         """
         try:
-            self.get_instance(object_id)
+            with proxy_client.expect_exception(nova_exc.NotFound):
+                self.get_instance(object_id)
         except nova_exc.NotFound:
             LOG.error("%s is not a Nova Server instance", object_id)
             return False

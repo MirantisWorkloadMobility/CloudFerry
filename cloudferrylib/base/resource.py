@@ -51,6 +51,8 @@ class Resource(object):
         LOG.debug("Waiting for status change")
         delay = 1
         stop_statuses = [s.lower() for s in (stop_statuses or [])]
+        if 'error' not in stop_statuses:
+            stop_statuses.append('error')
         while delay < timeout:
             actual_status = get_status(res_id).lower()
             LOG.debug("Expected status is '%s', actual - '%s', "

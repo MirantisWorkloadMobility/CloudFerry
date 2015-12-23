@@ -16,6 +16,7 @@ import contextlib
 import time
 
 from cloudferrylib.base.action import action
+from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.identity.keystone import KeystoneIdentity
 from cloudferrylib.os.compute.nova_compute import NovaCompute
@@ -119,7 +120,8 @@ class CheckCloud(action.Action):
         try:
             delay = 1
             while timeout > delay:
-                nv_client.nova_client.servers.get(instance_id)
+                with proxy_client.expect_exception(nova_exc.NotFound):
+                    nv_client.nova_client.servers.get(instance_id)
                 LOG.info("Instance still exist, waiting %s sec", delay)
                 time.sleep(delay)
                 delay *= 2
