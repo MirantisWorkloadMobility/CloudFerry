@@ -16,8 +16,8 @@ import os
 import yaml
 import config as cfg
 
-from generate_load import Prerequisites
-from utils import FilteringUtils
+import generate_load
+import utils
 
 
 class DataCollector(object):
@@ -25,9 +25,6 @@ class DataCollector(object):
     Class to collect data for existing objects on both clusters. As a result
     returns __dict__ with info for both SRC and DST clusters.
     Methods description:
-        - unified_method: method to get resources for each tenant separately in
-                          case the resource is specific for each tenant,
-                          example key-pairs, security-groups, etc.
         - nova_collector: method to get nova resources, list of resources can
                           be obtained in config.py:
                             config.rollback_params['param_dict']['Nova']
@@ -46,124 +43,109 @@ class DataCollector(object):
     """
     def __init__(self, config):
         self.cloud_info = None
-        self.migration_utils = FilteringUtils()
-        self.main_folder = self.migration_utils.main_folder
+        self.filtering_utils = utils.FilteringUtils()
+        self.main_folder = self.filtering_utils.main_folder
+        self.config_ini = generate_load.get_dict_from_config_file(
+            self.filtering_utils.cf_config)
         self.config = config
 
     def chose_destination_cloud(self, destination):
-        self.cloud_info = Prerequisites(cloud_prefix=destination,
-                                        config=self.config)
+        self.cloud_info = generate_load.Prerequisites(
+            cloud_prefix=destination, config=self.config,
+            configuration_ini=self.config_ini)
 
-    def return_to_admin_privileges(self):
-        self.cloud_info.switch_user(user=self.cloud_info.username,
-                                    password=self.cloud_info.password,
-                                    tenant=self.cloud_info.tenant)
-
-    def form_client_method(self, *arguments):
-        client = self.cloud_info
-        for argument in arguments:
-            client = getattr(client, argument)
-        return client()
-
-    def unified_method(self, destination, collected_items, _res, *args):
-        main_dict = {}
-        if destination == 'SRC':
-            for user, key_pair in zip(self.config.users, self.config.keypairs):
-                self.cloud_info.switch_user(user=user['name'],
-                                            password=user['password'],
-                                            tenant=user['tenant'])
-                names_list = self.form_client_method(*args)
-                instance_list = []
-                for instance in names_list:
-                    instance_list.append(instance.__dict__['_info'])
-                main_dict[user['tenant']] = instance_list
-            self.return_to_admin_privileges()
-            names_list = self.form_client_method(*args)
-            instance_list = []
-            for instance in names_list:
-                instance_list.append(instance.__dict__['_info'])
-            main_dict['admin'] = instance_list
-            collected_items[_res] = main_dict
-        elif destination == 'DST':
-            names_list = self.form_client_method(*args)
-            instance_list = []
-            for instance in names_list:
-                instance_list.append(instance.__dict__['_info'])
-            collected_items[_res] = instance_list
-
-    def nova_collector(self, destination, *args):
+    def nova_collector(self, destination, resources):
         """
         Nova data collector method.
         """
         collected_items = {}
         self.chose_destination_cloud(destination)
-        for arg in args[0]:
-            if arg == 'servers':
-                vm_list = []
-                servers_list = self.cloud_info.novaclient.servers.list(
-                    search_opts={'all_tenants': 1})
-                for server in servers_list:
-                    vm = server.__dict__['_info']
-                    for data in vm.keys():
-                        if data == u'updated':
-                            del vm[data]
-                    vm_list.append(vm)
-                collected_items[arg] = vm_list
-            elif arg == 'security_groups':
-                self.unified_method(destination, collected_items, arg,
-                                    'novaclient', arg, 'list')
-            elif arg == 'flavors':
-                flavor_list = []
-                flavors = self.cloud_info.novaclient.flavors.list()
-                for inst in flavors:
-                    flavor = inst.__dict__
-                    flavor_list.append(flavor['_info'])
-                collected_items[arg] = flavor_list
-            elif arg == 'quotas':
-                quotas = {}
-                tenant_list = self.cloud_info.keystoneclient.tenants.list()
-                for tenant in tenant_list:
-                    tenant = tenant.__dict__
-                    quota_list = self.cloud_info.novaclient.quotas.get(
-                        tenant['id'])
-                    quotas[tenant['name']] = quota_list.__dict__['_info']
-                collected_items[arg] = quotas
-            elif arg == 'keypairs':
-                self.unified_method(destination, collected_items, arg,
-                                    'novaclient', arg, 'list')
+        if 'servers' in resources:
+            vm_list = []
+            servers_list = self.cloud_info.novaclient.servers.list(
+                search_opts={'all_tenants': 1})
+            for server in servers_list:
+                vm = server.__dict__['_info']
+                vm.pop('updated', None)
+                vm_list.append(vm)
+            collected_items['servers'] = vm_list
+        if 'flavors' in resources:
+            flavors = self.cloud_info.novaclient.flavors.list(is_public=None)
+            collected_items['flavors'] = [f.__dict__['_info'] for f in flavors]
+        if 'quotas' in resources:
+            quotas = {}
+            for tenant in self.cloud_info.keystoneclient.tenants.list():
+                quota_list = self.cloud_info.novaclient.quotas.get(
+                    tenant.id)
+                quotas[tenant.name] = quota_list.__dict__['_info']
+            collected_items['quotas'] = quotas
+
+        if 'security_groups' in resources:
+            sgs = self.cloud_info.novaclient.security_groups.list()
+            collected_items['security_groups'] = [sg.__dict__['_info']
+                                                  for sg in sgs]
+        if 'keypairs' in resources:
+            def get_user(name):
+                for _user in users:
+                    if _user['name'] == name:
+                        return _user
+            keypairs = []
+            users = self.config.users
+            users.append({'name': self.cloud_info.username,
+                          'password': self.cloud_info.password,
+                          'tenant': self.cloud_info.tenant})
+            user_names = [u['name'] for u in self.config.users]
+            existing_tenants = [t.id for t in
+                                self.cloud_info.keystoneclient.tenants.list()]
+            for user in self.cloud_info.keystoneclient.users.list():
+                if user.name not in user_names or\
+                        not getattr(user, 'tenantId', None) or\
+                        not user.enabled or\
+                        user.tenantId not in existing_tenants:
+                    continue
+                creds = get_user(user.name)
+                self.cloud_info.switch_user(user=creds['name'],
+                                            password=creds['password'],
+                                            tenant=creds['tenant'])
+                kps = self.cloud_info.novaclient.keypairs.list()
+                if kps:
+                    kps = [kp.__dict__['_info'] for kp in kps]
+                keypairs.append({user.name: kps})
+            collected_items['keypairs'] = keypairs
+            self.cloud_info.switch_user(user=self.cloud_info.username,
+                                        password=self.cloud_info.password,
+                                        tenant=self.cloud_info.tenant)
         return collected_items
 
-    def neutron_collector(self, destination, *args):
+    def neutron_collector(self, destination, resources):
         """
         Neutron data collector method.
         """
         collected_items = {}
         self.chose_destination_cloud(destination)
-        for arg in args[0]:
-            if arg == 'networks':
-                networks_list = self.cloud_info.neutronclient.list_networks()
-                collected_items['networks'] = networks_list['networks']
-            elif arg == 'subnets':
-                subnets_list = self.cloud_info.neutronclient.list_subnets()
-                collected_items['subnets'] = subnets_list['subnets']
-            elif arg == 'routers':
-                routers_list = self.cloud_info.neutronclient.list_routers()
-                collected_items['routers'] = routers_list['routers']
-            elif arg == 'ports':
-                ports_list = self.cloud_info.neutronclient.list_ports()
-                collected_items['ports'] = ports_list['ports']
-            elif arg == 'quotas':
-                quotas = {}
-                tenant_list = self.cloud_info.keystoneclient.tenants.list()
-                for tenant in tenant_list:
-                    tenant = tenant.__dict__
-                    quota_list = self.cloud_info.neutronclient.show_quota(
-                        tenant['id'])
-                    quotas[tenant['name']] = quota_list
-                collected_items[arg] = quotas
+        if 'networks' in resources:
+            networks_list = self.cloud_info.neutronclient.list_networks()
+            collected_items['networks'] = networks_list['networks']
+        if 'subnets' in resources:
+            subnets_list = self.cloud_info.neutronclient.list_subnets()
+            collected_items['subnets'] = subnets_list['subnets']
+        if 'routers' in resources:
+            routers_list = self.cloud_info.neutronclient.list_routers()
+            collected_items['routers'] = routers_list['routers']
+        if 'ports' in resources:
+            ports_list = self.cloud_info.neutronclient.list_ports()
+            collected_items['ports'] = ports_list['ports']
+        if 'quotas' in resources:
+            quotas = {}
+            tenant_list = self.cloud_info.keystoneclient.tenants.list()
+            for tenant in tenant_list:
+                quota_list = self.cloud_info.neutronclient.show_quota(
+                    tenant.id)
+                quotas[tenant.name] = quota_list
+            collected_items['quotas'] = quotas
         return collected_items
 
-    def keystone_collector(self, destination, *args):
+    def keystone_collector(self, destination, resources):
         """
         Keystone data collector method.
         """
@@ -175,107 +157,87 @@ class DataCollector(object):
 
         collected_items = {}
         self.chose_destination_cloud(destination)
-        for arg in args[0]:
-            if arg == 'users':
-                user_list = self.cloud_info.keystoneclient.users.list()
-                data_list = optimizer(user_list)
-                collected_items[arg] = data_list
-            elif arg == 'tenants':
-                tenant_list = self.cloud_info.keystoneclient.tenants.list()
-                data_list = optimizer(tenant_list)
-                collected_items[arg] = data_list
-            elif arg == 'roles':
-                role_list = self.cloud_info.keystoneclient.roles.list()
-                data_list = optimizer(role_list)
-                collected_items[arg] = data_list
+        if 'users' in resources:
+            user_list = self.cloud_info.keystoneclient.users.list()
+            collected_items['users'] = optimizer(user_list)
+        if 'tenants' in resources:
+            tenant_list = self.cloud_info.keystoneclient.tenants.list()
+            collected_items['tenants'] = optimizer(tenant_list)
+        if 'roles' in resources:
+            role_list = self.cloud_info.keystoneclient.roles.list()
+            collected_items['roles'] = optimizer(role_list)
         return collected_items
 
-    def glance_collector(self, destination, *args):
+    def glance_collector(self, destination, resources):
         """
         Glance data collector method.
         """
         collected_items = {}
         self.chose_destination_cloud(destination)
-        for arg in args[0]:
-            if arg == 'images':
-                image_list = [x.__dict__['_info'] for x in
-                              self.cloud_info.glanceclient.images.list()]
-                collected_items[arg] = image_list
-            elif arg == 'members':
-                members = {}
-                image_list = [x.__dict__ for x in
-                              self.cloud_info.glanceclient.images.list()]
-                for image in image_list:
-                    member_list = \
-                        self.cloud_info.glanceclient.image_members.list(
-                            image['id'])
-                    final_list = []
-                    for member in member_list:
-                        final_list.append(member.__dict__['_info'])
-                    members[image['name']] = final_list
-                collected_items[arg] = members
-
+        image_list = [x for x in self.cloud_info.glanceclient.images.list()]
+        if 'images' in resources:
+            _image_list = [x.__dict__['_info'] for x in image_list]
+            collected_items['images'] = _image_list
+        if 'members' in resources:
+            members = {}
+            for image in image_list:
+                member_list = self.cloud_info.glanceclient.image_members.list(
+                    image.id)
+                members[image.name] = [member.__dict__['_info']
+                                       for member in member_list]
+            collected_items['members'] = members
         return collected_items
 
-    def cinder_collector(self, destination, *args):
+    def cinder_collector(self, destination, resources):
         """
         Cinder data collector method.
         """
         collected_items = {}
         self.chose_destination_cloud(destination)
-        for arg in args[0]:
-            if arg == 'volumes':
-                self.unified_method(destination, collected_items, arg,
-                                    'cinderclient', arg, 'list')
-            elif arg == 'volume_snapshots':
-                self.unified_method(destination, collected_items, arg,
-                                    'cinderclient', arg, 'list')
-            elif arg == 'quotas':
-                quotas = {}
-                tenant_list = self.cloud_info.keystoneclient.tenants.list()
-                for tenant in tenant_list:
-                    tenant = tenant.__dict__
-                    quota_list = self.cloud_info.cinderclient.quotas.get(
-                        tenant['id'])
-                    quotas[tenant['name']] = quota_list.__dict__['_info']
-                collected_items[arg] = quotas
+        if 'volumes' in resources:
+            volumes = self.cloud_info.cinderclient.volumes.list(
+                search_opts={'all_tenants': 1})
+            collected_items['volumes'] = [vol.__dict__['_info']
+                                          for vol in volumes]
+        if 'volume_snapshots' in resources:
+            volumes_snp = self.cloud_info.cinderclient.volume_snapshots.list(
+                search_opts={'all_tenants': 1})
+            collected_items['volume_snapshots'] = [vol.__dict__['_info']
+                                                   for vol in volumes_snp]
+        if 'quotas' in resources:
+            quotas = {}
+            tenant_list = self.cloud_info.keystoneclient.tenants.list()
+            for tenant in tenant_list:
+                quota_list = self.cloud_info.cinderclient.quotas.get(
+                    tenant.id)
+                quotas[tenant.name] = quota_list.__dict__['_info']
+            collected_items['quotas'] = quotas
         return collected_items
 
     def data_collector(self):
         all_data = {'SRC': {}, 'DST': {}}
         param_dict = self.config.rollback_params['param_dict']
-        for key in all_data.keys():
-            for service in param_dict.keys():
-                if service == 'Nova':
-                    nova_data_list = \
-                        self.nova_collector(key, param_dict[service])
-                    all_data[key][service] = nova_data_list
-                elif service == 'Keystone':
-                    keystone_data_list = \
-                        self.keystone_collector(key, param_dict[service])
-                    all_data[key][service] = keystone_data_list
-                elif service == 'Neutron':
-                    neutron_data_list = \
-                        self.neutron_collector(key, param_dict[service])
-                    all_data[key][service] = neutron_data_list
-                elif service == 'Cinder':
-                    cinder_data_list = \
-                        self.cinder_collector(key, param_dict[service])
-                    all_data[key][service] = cinder_data_list
-                elif service == 'Glance':
-                    glance_data_list = \
-                        self.glance_collector(key, param_dict[service])
-                    all_data[key][service] = glance_data_list
+        for key in all_data:
+            all_data[key]['Nova'] = self.nova_collector(
+                key, param_dict['Nova'])
+            all_data[key]['Keystone'] = self.keystone_collector(
+                key, param_dict['Keystone'])
+            all_data[key]['Neutron'] = self.neutron_collector(
+                key, param_dict['Neutron'])
+            all_data[key]['Cinder'] = self.cinder_collector(
+                key, param_dict['Cinder'])
+            all_data[key]['Glance'] = self.glance_collector(
+                key, param_dict['Glance'])
+
         return all_data
 
-    def dump_data(self, file_name=None):
-        if not file_name:
-            file_name = self.config.rollback_params['data_file_names']['PRE']
+    def dump_data(self):
+        file_name = self.config.rollback_params['data_file_names']['PRE']
         path = 'devlab/tests'
         pre_file_path = os.path.join(self.main_folder, path, file_name)
         data = self.data_collector()
         with open(pre_file_path, "w") as f:
-            yaml.dump(data, f, default_flow_style=False)
+            yaml.dump(utils.convert(data), f, default_flow_style=False)
 
 if __name__ == '__main__':
     rollback = DataCollector(cfg)
