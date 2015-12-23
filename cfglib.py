@@ -176,6 +176,11 @@ migrate_opts = [
     cfg.IntOpt('boot_timeout', default=300,
                help="Timeout booting of instance"),
     cfg.StrOpt('ssh_cipher', default=None, help='SSH cipher to use for SCP'),
+    cfg.StrOpt('ephemeral_copy_backend', default="rsync",
+               help="Allows to choose how ephemeral storage is copied over "
+                    "from source to destination. Possible values: 'rsync' "
+                    "(default) and 'scp'. scp seem to be faster, while rsync "
+                    "is more reliable")
 ]
 
 mail = cfg.OptGroup(name='mail',

@@ -65,7 +65,7 @@ from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
 from cloudferrylib.utils.drivers import ssh_ceph_to_file
 from cloudferrylib.utils.drivers import ssh_file_to_file
 from cloudferrylib.utils.drivers import ssh_file_to_ceph
-from cloudferrylib.utils.drivers import ssh_chunks
+from cloudferrylib.utils.drivers import copy_engine
 from cloudferrylib.os.actions import get_filter
 from cloudferrylib.os.actions import deploy_snapshots
 from cloudferrylib.base.action import is_option
@@ -112,7 +112,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             'SSHFileToFile': ssh_file_to_file.SSHFileToFile,
             'SSHFileToCeph': ssh_file_to_ceph.SSHFileToCeph,
             'CopyFilesBetweenComputeHosts':
-                ssh_chunks.CopyFilesBetweenComputeHosts,
+                copy_engine.CopyFilesBetweenComputeHosts,
         }
 
     def migrate(self, scenario=None):

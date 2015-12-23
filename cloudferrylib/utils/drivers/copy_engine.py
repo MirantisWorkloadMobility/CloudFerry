@@ -17,7 +17,6 @@ import os
 import math
 
 from cloudferrylib.utils import driver_transporter
-from cloudferrylib.utils import files
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import utils
 from cloudferrylib.utils import ssh_util
@@ -121,17 +120,51 @@ def remote_rm_file(runner, path):
     runner.run(rm)
 
 
+def file_transfer_engine(config, host, user, password):
+    """Factory which either returns RSYNC copier if `rsync` is available on
+    destination compute, or `scp` otherwise"""
+    copier = RsyncCopier
+    if config.migrate.ephemeral_copy_backend == 'rsync':
+        try:
+            src_runner = remote_runner.RemoteRunner(host,
+                                                    user,
+                                                    password=password,
+                                                    sudo=True)
+            LOG.debug("Checking if rsync is installed")
+            src_runner.run("rsync --help")
+            LOG.debug("Using rsync copy")
+        except remote_runner.RemoteExecutionError:
+            LOG.debug("rsync is not available, using scp copy")
+            copier = ScpCopier
+    elif config.migrate.ephemeral_copy_backend == 'scp':
+        copier = ScpCopier
+    return copier
+
+
 class CopyFilesBetweenComputeHosts(driver_transporter.DriverTransporter):
+    def transfer(self, data):
+        src_host = data['host_src']
+        src_user = self.cfg.src.ssh_user
+        src_password = self.cfg.src.ssh_sudo_password
+
+        copier = file_transfer_engine(self.cfg, src_host, src_user,
+                                      src_password)
+        copier(self.src_cloud, self.dst_cloud, self.cfg).transfer(data)
+
+
+class ScpCopier(driver_transporter.DriverTransporter):
     """Copies file splitting it into gzipped chunks.
 
     If one chunk failed to copy, retries until succeeds or retry limit reached
     """
-
     def transfer(self, data):
         src_host = data['host_src']
         src_path = data['path_src']
         dst_host = data['host_dst']
         dst_path = data['path_dst']
+
+        src_dir = os.path.dirname(src_path)
+        dst_dir = os.path.dirname(dst_path)
 
         src_user = self.cfg.src.ssh_user
         dst_user = self.cfg.dst.ssh_user
@@ -151,41 +184,80 @@ class CopyFilesBetweenComputeHosts(driver_transporter.DriverTransporter):
 
         file_size = remote_file_size_mb(src_runner, src_path)
 
-        with files.RemoteTempDir(src_runner) as src_temp_dir,\
-                files.RemoteTempDir(dst_runner) as dst_temp_dir:
-            partial_files = []
+        partial_files = []
 
-            src_md5 = remote_md5_sum(src_runner, src_path)
+        src_md5 = remote_md5_sum(src_runner, src_path)
 
-            num_blocks = int(math.ceil(float(file_size) / block_size))
+        num_blocks = int(math.ceil(float(file_size) / block_size))
 
-            for i in xrange(num_blocks):
-                part = os.path.basename(src_path) + '.part{i}'.format(i=i)
-                part_path = os.path.join(src_temp_dir, part)
-                remote_split_file(src_runner, src_path, part_path, i,
-                                  block_size)
-                gzipped_path = remote_gzip(src_runner, part_path)
-                gzipped_filename = os.path.basename(gzipped_path)
-                dst_gzipped_path = os.path.join(dst_temp_dir, gzipped_filename)
+        for i in xrange(num_blocks):
+            part = os.path.basename(src_path) + '.part{i}'.format(i=i)
+            part_path = os.path.join(src_dir, part)
+            remote_split_file(src_runner, src_path, part_path, i, block_size)
+            gzipped_path = remote_gzip(src_runner, part_path)
+            gzipped_filename = os.path.basename(gzipped_path)
+            dst_gzipped_path = os.path.join(dst_dir, gzipped_filename)
 
-                verified_file_copy(src_runner, dst_runner, dst_user,
-                                   gzipped_path, dst_gzipped_path, dst_host,
-                                   num_retries)
+            verified_file_copy(src_runner, dst_runner, dst_user,
+                               gzipped_path, dst_gzipped_path, dst_host,
+                               num_retries)
 
-                remote_unzip(dst_runner, dst_gzipped_path)
-                partial_files.append(os.path.join(dst_temp_dir, part))
+            remote_unzip(dst_runner, dst_gzipped_path)
+            partial_files.append(os.path.join(dst_dir, part))
 
-            for i in xrange(num_blocks):
-                remote_join_file(dst_runner, dst_path, partial_files[i], i,
-                                 block_size)
+        for i in xrange(num_blocks):
+            remote_join_file(dst_runner, dst_path, partial_files[i], i,
+                             block_size)
 
-            dst_md5 = remote_md5_sum(dst_runner, dst_path)
+        dst_md5 = remote_md5_sum(dst_runner, dst_path)
 
-            if src_md5 != dst_md5:
-                message = ("Error copying file from '{src_host}:{src_file}' "
-                           "to '{dst_host}:{dst_file}'").format(
-                    src_file=src_path, src_host=src_host, dst_file=dst_path,
-                    dst_host=dst_host)
-                LOG.error(message)
-                remote_rm_file(dst_runner, dst_path)
-                raise FileCopyFailure(message)
+        if src_md5 != dst_md5:
+            message = ("Error copying file from '{src_host}:{src_file}' "
+                       "to '{dst_host}:{dst_file}'").format(
+                src_file=src_path, src_host=src_host, dst_file=dst_path,
+                dst_host=dst_host)
+            LOG.error(message)
+            remote_rm_file(dst_runner, dst_path)
+            raise FileCopyFailure(message)
+
+
+class RsyncCopier(driver_transporter.DriverTransporter):
+    """Uses `rsync` to copy files. Used by ephemeral drive copy process"""
+
+    def transfer(self, data):
+        src_host = data['host_src']
+        src_path = data['path_src']
+        dst_host = data['host_dst']
+        dst_path = data['path_dst']
+
+        src_user = self.cfg.src.ssh_user
+        dst_user = self.cfg.dst.ssh_user
+        src_password = self.cfg.src.ssh_sudo_password
+
+        src_runner = remote_runner.RemoteRunner(src_host,
+                                                src_user,
+                                                password=src_password,
+                                                sudo=True)
+
+        ssh_cipher = ssh_util.get_cipher_option()
+        ssh_opts = ["UserKnownHostsFile=/dev/null", "StrictHostKeyChecking=no"]
+
+        rsync = ("rsync "
+                 "--perms "
+                 "--owner "
+                 "--group "
+                 "--compress "
+                 "--verbose "
+                 "--progress "
+                 "--append "
+                 "--rsh='ssh {ssh_opts} {ssh_cipher}' "
+                 "{source_file} "
+                 "{dst_user}@{dst_host}:{dst_path}").format(
+            ssh_cipher=ssh_cipher,
+            ssh_opts=" ".join(["-o {}".format(opt) for opt in ssh_opts]),
+            source_file=src_path,
+            dst_user=dst_user,
+            dst_host=dst_host,
+            dst_path=dst_path)
+
+        src_runner.run_repeat_on_errors(rsync)
