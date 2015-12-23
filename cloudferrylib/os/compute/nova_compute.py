@@ -93,13 +93,14 @@ class RandomSchedulerVmDeployer(object):
         try:
             return self.nc.deploy_instance(create_params, client_conf)
         except timeout_exception.TimeoutException:
-            hosts = self.nc.get_compute_hosts()
+            az = instance['availability_zone']
+            hosts = self.nc.get_compute_hosts(availability_zone=az)
             random.seed()
             random.shuffle(hosts)
 
             while hosts:
-                create_params['availability_zone'] = ':'.join([
-                    instance['availability_zone'], hosts.pop()])
+                next_host = hosts.pop()
+                create_params['availability_zone'] = ':'.join([az, next_host])
                 LOG.info("Trying to deploy instance '%s' in '%s'",
                          create_params['name'],
                          create_params.get('availability_zone', 'UNKNOWN'))
@@ -946,9 +947,22 @@ class NovaCompute(compute.Compute):
     def get_hypervisor_statistics(self):
         return self.nova_client.hypervisors.statistics()
 
-    def get_compute_hosts(self):
+    def get_compute_hosts(self, availability_zone=None):
+        if availability_zone:
+            try:
+                self.nova_client.availability_zones.find(
+                        zoneName=availability_zone)
+            except nova_exc.NotFound:
+                availability_zone = \
+                    self.config.migrate.default_availability_zone
+
+        hosts = self.nova_client.hosts.list(zone=availability_zone)
+        az_host_names = set([h.host_name for h in hosts])
+
         computes = self.nova_client.services.list(binary='nova-compute')
-        return [c.host for c in computes if host_available(c)]
+        return [c.host
+                for c in computes if host_available(c) and
+                c.host in az_host_names]
 
     def get_free_vcpus(self):
         hypervisor_statistics = self.get_hypervisor_statistics()
