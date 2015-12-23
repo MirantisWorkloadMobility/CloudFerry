@@ -97,3 +97,5 @@ process:
       - act_check_point_vm: True
       - is_instances: ['get_next_instance']
       - rename_info_iter: True
+  - verify:
+      - remove_failed_instances: True
