@@ -131,7 +131,7 @@ def file_transfer_engine(config, host, user, password):
                                                     password=password,
                                                     sudo=True)
             LOG.debug("Checking if rsync is installed")
-            src_runner.run("rsync --help")
+            src_runner.run("rsync --help &>/dev/null")
             LOG.debug("Using rsync copy")
         except remote_runner.RemoteExecutionError:
             LOG.debug("rsync is not available, using scp copy")
