@@ -320,65 +320,30 @@ class DeployInstanceWithManualScheduling(test.TestCase):
 
 
 class FlavorDeploymentTestCase(test.TestCase):
-    def test_flavor_is_updated_with_destination_id(self):
-        config = mock.Mock()
-        cloud = mock.MagicMock()
-        cloud.position = 'dst'
-
-        expected_id = 'flavor1'
-        existing_flavor = mock.Mock()
-        existing_flavor.id = 'non-public-flavor'
-        existing_flavor.name = 'non-public-flavor'
-        created_flavor = mock.Mock()
-        created_flavor.id = expected_id
-        nc = nova_compute.NovaCompute(config, cloud)
-        nc.get_flavor_list = mock.MagicMock()
-        nc.get_flavor_list.return_value = [existing_flavor]
-        nc.add_flavor_access = mock.MagicMock()
-        nc._create_flavor_if_not_exists = mock.MagicMock()
-        nc._create_flavor_if_not_exists.return_value = created_flavor
-
-        flavors = {
-            expected_id: {
-                'flavor': {
-                    'is_public': True,
-                    'name': 'flavor1',
-                    'tenants': []
-                },
-                'meta': {}
-            },
-            existing_flavor.id: {
-                'flavor': {
-                    'is_public': False,
-                    'name': existing_flavor.name,
-                    'tenants': ['t1', 't2']
-                },
-                'meta': {}
-            }
-
-        }
-
-        tenant_map = {
-            't1': 't1dest',
-            't2': 't2dest',
-        }
-        nc._deploy_flavors(flavors, tenant_map)
-
-        for f in flavors:
-            self.assertTrue('id' in flavors[f]['meta'])
-            self.assertEqual(flavors[f]['meta']['id'], f)
-
     def test_flavor_is_not_created_if_already_exists_on_dest(self):
         existing_flavor = mock.Mock()
         existing_flavor.id = 'existing-id'
         existing_flavor.name = 'existing-name'
+        existing_flavor.is_public = True
+        existing_flavor.ram = 48
+        existing_flavor.vcpus = 1
+        existing_flavor.disk = 0
+        existing_flavor.ephemeral = 1
+        existing_flavor.swap = 0
+        existing_flavor.rxtx_factor = 1.0
 
         flavors = {
             existing_flavor.id: {
                 'flavor': {
                     'is_public': True,
                     'name': existing_flavor.name,
-                    'tenants': []
+                    'tenants': [],
+                    'ram': 48,
+                    'vcpus': 1,
+                    'disk': 0,
+                    'ephemeral': 1,
+                    'swap': 0,
+                    'rxtx_factor': 1.0,
                 },
                 'meta': {}
             }
@@ -396,13 +361,21 @@ class FlavorDeploymentTestCase(test.TestCase):
 
         assert not nc._create_flavor_if_not_exists.called
 
-    def test_access_not_updated_for_public_flavors(self):
+    @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute'
+                '.create_flavor')
+    def test_access_not_updated_for_public_flavors(self, _):
         flavors = {
             'flavor1': {
                 'flavor': {
                     'is_public': True,
                     'name': 'flavor1',
-                    'tenants': []
+                    'tenants': [],
+                    'ram': 48,
+                    'vcpus': 1,
+                    'disk': 0,
+                    'ephemeral': 1,
+                    'swap': 0,
+                    'rxtx_factor': 1.0,
                 },
                 'meta': {}
             }
@@ -422,13 +395,21 @@ class FlavorDeploymentTestCase(test.TestCase):
 
         assert not nc._add_flavor_access_for_tenants.called
 
-    def test_access_list_is_updated_for_non_public_flavors(self):
+    @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute'
+                '.create_flavor')
+    def test_access_list_is_updated_for_non_public_flavors(self, _):
         flavors = {
             'flavor1': {
                 'flavor': {
                     'is_public': False,
                     'name': 'flavor1',
-                    'tenants': []
+                    'tenants': [],
+                    'ram': 48,
+                    'vcpus': 1,
+                    'disk': 0,
+                    'ephemeral': 1,
+                    'swap': 0,
+                    'rxtx_factor': 1.0,
                 },
                 'meta': {}
             }
