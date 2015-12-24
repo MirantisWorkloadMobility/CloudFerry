@@ -22,9 +22,9 @@ from novaclient import exceptions as nova_exc
 from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import timeout_exception
-from cloudferrylib.utils import utils
+from cloudferrylib.utils import log
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 # How many times to take calling function successfully before giving up
 # by default

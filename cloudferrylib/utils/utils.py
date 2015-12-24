@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import logging
 import time
 import timeit
 import random
@@ -25,9 +24,7 @@ import json
 import os
 import inspect
 from multiprocessing import Lock
-from logging import config
 
-from pkg_resources import Requirement, resource_filename
 from jinja2 import Environment, FileSystemLoader
 from fabric.api import run, settings, local, env, sudo
 from fabric.context_managers import hide
@@ -44,12 +41,6 @@ REMOTE_FILE = "remote file"
 QCOW2 = "qcow2"
 RAW = "raw"
 YES = "yes"
-# Use configs/logging_config.yaml as logging config in current folder
-# otherwise will use config from CloudFerry package.
-LOGGING_CONFIG = ('configs/logging_config.yaml'
-                  if os.path.isfile('configs/logging_config.yaml') else
-                  resource_filename(Requirement.parse("CloudFerry"),
-                                    'configs/logging_config.yaml'))
 PATH_TO_SNAPSHOTS = 'snapshots'
 AVAILABLE = 'available'
 IN_USE = 'in-use'
@@ -254,20 +245,6 @@ class Templater:
             temp_render = temp_render.replace("{{%s}}" % arg, args[arg])
         temp_file.close()
         return temp_render
-
-with open(LOGGING_CONFIG, 'r') as logging_config:
-    # read config from file and store it as module global variable
-    config.dictConfig(yaml.load(logging_config))
-    LOGGER = logging.getLogger("CF")
-
-
-def configure_logging(level):
-    # redefine default logging level
-    LOGGER.setLevel(level)
-
-
-def get_log(name):
-    return LOGGER
 
 
 class StackCallFunctions(object):

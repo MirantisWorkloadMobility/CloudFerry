@@ -15,8 +15,10 @@ import cfglib
 
 from condensation import cloud
 from condensation import utils as condense_utils
-from cloudferrylib.utils import utils as utl
-LOG = utl.get_log(__name__)
+
+from cloudferrylib.utils import log
+
+LOG = log.getLogger(__name__)
 SOURCE = "source"
 DESTINATION = "destination"
 

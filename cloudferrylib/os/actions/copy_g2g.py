@@ -15,9 +15,10 @@
 
 from cloudferrylib.base.action import transporter
 from cloudferrylib.os.actions import get_info_images
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils as utl
 
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class CopyFromGlanceToGlance(transporter.Transporter):

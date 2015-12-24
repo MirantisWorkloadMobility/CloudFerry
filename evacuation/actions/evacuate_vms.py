@@ -14,13 +14,13 @@
 
 import json
 from cloudferrylib.base.action import action
-from cloudferrylib.utils import utils as utl
+from cloudferrylib.utils import log
 from condensation import process
 from condensation import action as c_action
 import data_storage
 
 
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class Evacuate(action.Action):

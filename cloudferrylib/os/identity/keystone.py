@@ -26,10 +26,11 @@ from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils.utils import GeneratorPassword
 from cloudferrylib.utils.utils import Postman
 from cloudferrylib.utils.utils import Templater
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils as utl
 from sqlalchemy.exc import ProgrammingError
 
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 NO_TENANT = ''
 
 

@@ -113,3 +113,7 @@ tasks:
    remove_failed_instances: ['RemoveFailedInstances', 'dst_cloud']
    act_check_point_vm: ['CheckPointVm']
    check_affinity: ['CheckAffinity']
+   print_configuration: ['PrintConfiguration']
+   print_scenario: ['PrintScenario']
+   print_filter_raw: ['PrintFilter', True]
+   print_filter: ['PrintFilter', False]

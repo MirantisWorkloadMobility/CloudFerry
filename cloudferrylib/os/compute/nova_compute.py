@@ -27,13 +27,14 @@ from cloudferrylib.os.compute import instances
 from cloudferrylib.os.compute import cold_evacuate
 from cloudferrylib.os.compute import server_groups
 from cloudferrylib.os.identity import keystone
+from cloudferrylib.utils import log
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import node_ip
 from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils as utl
 
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 DISK = "disk"

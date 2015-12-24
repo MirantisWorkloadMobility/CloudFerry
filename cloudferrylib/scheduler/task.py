@@ -99,7 +99,7 @@ class BaseTask(AltSyntax, EquInstance):
             namespace.vars.update(result)
 
     def __repr__(self):
-        return "BaseTask|%s" % self.__class__.__name__
+        return self.__class__.__name__
 
 
 class Task(BaseTask):

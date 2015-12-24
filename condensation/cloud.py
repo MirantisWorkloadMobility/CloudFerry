@@ -21,8 +21,9 @@ from condensation import vm
 import prettytable
 import fractions
 from cfglib import CONF
-from cloudferrylib.utils import utils
-LOG = utils.get_log(__name__)
+from cloudferrylib.utils import log
+
+LOG = log.getLogger(__name__)
 
 
 class Cloud(object):

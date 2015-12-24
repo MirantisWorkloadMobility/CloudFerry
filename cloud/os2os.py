@@ -114,8 +114,10 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             'CopyFilesBetweenComputeHosts':
                 copy_engine.CopyFilesBetweenComputeHosts,
         }
+        self.scenario = None
 
     def migrate(self, scenario=None):
+        self.scenario = scenario
         namespace_scheduler = namespace.Namespace({
             '__init_task__': self.init,
             'info_result': {

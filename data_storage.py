@@ -13,9 +13,9 @@
 # limitations under the License.
 
 from cfglib import CONF
-from cloudferrylib.utils import utils
+from cloudferrylib.utils import log
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 # we don't want to create connection to database on module import - so that
 # we will create it only on first database call

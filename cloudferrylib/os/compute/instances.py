@@ -15,10 +15,10 @@ from fabric.api import run
 from fabric.api import settings
 
 from cloudferrylib.base import clients
-from cloudferrylib.utils import utils
+from cloudferrylib.utils import log
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 def update_user_ids_for_instance(db, instance_id, user_id):

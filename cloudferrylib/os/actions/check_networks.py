@@ -20,10 +20,11 @@ import ipaddr
 from cloudferrylib.base import exception
 from cloudferrylib.base.action import action
 from cloudferrylib.os.network import neutron
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class CheckNetworks(action.Action):

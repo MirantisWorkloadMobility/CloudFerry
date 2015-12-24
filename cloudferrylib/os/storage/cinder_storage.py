@@ -20,20 +20,19 @@ from cinderclient import exceptions as cinder_exc
 
 from cloudferrylib.base import storage
 from cloudferrylib.os.storage import filters as cinder_filters
+from cloudferrylib.utils import filters
+from cloudferrylib.utils import log
 from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import utils as utl
-from cloudferrylib.utils import filters
 
 import re
-
-LOG = utl.get_log(__name__)
 
 RE_EXTRACT_HOST = re.compile(r'//([^:^/]*)')
 
 AVAILABLE = 'available'
 IN_USE = "in-use"
 CINDER_VOLUME = "cinder-volume"
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 ID = 'id'
 DISPLAY_NAME = 'display_name'
 PROJECT_ID = 'project_id'

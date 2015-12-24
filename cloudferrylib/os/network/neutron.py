@@ -25,10 +25,11 @@ from cloudferrylib.base import exception
 from cloudferrylib.base import network
 from cloudferrylib.os.identity import keystone as ksresource
 from cloudferrylib.utils import cache
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils as utl
 
 
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 DEFAULT_SECGR = 'default'
 
 
