@@ -532,7 +532,7 @@ class CinderTable(object):
             if 'snapshot_id' in entry:
                 entry.pop('snapshot_id')
             keys = entry.keys()
-            values = tuple([str(entry[k]) for k in keys])
+            values = tuple([entry[k] for k in keys])
 
             reserved = ['key']
             for key in reserved:
