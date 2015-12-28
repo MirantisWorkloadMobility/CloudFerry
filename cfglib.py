@@ -217,7 +217,7 @@ src_mysql_opts = [
                help='host of mysql'),
     cfg.IntOpt('db_port', default='3306',
                help='port for mysql connection'),
-    cfg.StrOpt('db_connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default='mysql+pymysql',
                help='driver for connection'),
 ]
 
@@ -248,7 +248,7 @@ src_compute_opts = [
                 help='live-migration without shared_storage'),
     cfg.StrOpt('host_eph_drv', default='-',
                help='host ephemeral drive'),
-    cfg.StrOpt('db_connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default='mysql+pymysql',
                help='driver for db connection'),
     cfg.StrOpt('db_host', default=None,
                help='compute mysql node ip address'),
@@ -392,7 +392,7 @@ dst_mysql_opts = [
                help='host of mysql'),
     cfg.IntOpt('db_port', default='3306',
                help='port for mysql connection'),
-    cfg.StrOpt('db_connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default='mysql+pymysql',
                help='driver for connection'),
 ]
 
