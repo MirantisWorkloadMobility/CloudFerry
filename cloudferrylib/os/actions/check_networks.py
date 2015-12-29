@@ -57,7 +57,7 @@ class CheckNetworks(action.Action):
         LOG.debug("Retrieving Network information from Destination cloud...")
         dst_net_info = NetworkInfo(dst_net.read_info())
         LOG.debug("Retrieving Compute information from Source cloud...")
-        src_compute_info = ComputeInfo(src_compute.read_info(**search_opts))
+        src_compute_info = ComputeInfo(src_compute, search_opts)
 
         # Check subnets and segmentation IDs overlap
         LOG.info("Check networks overlapping...")
@@ -94,8 +94,10 @@ class CheckNetworks(action.Action):
 
 
 class ComputeInfo(object):
-    def __init__(self, info):
-        self.instance_ids = info['instances'].keys()
+    def __init__(self, src_compute, search_opts):
+        search_opts['all_tenants'] = True
+        self.instances = {s.id for s in src_compute.get_instances_list(
+            search_opts=search_opts)}
 
     def list_vms_in_external_network(self, devices):
         """
@@ -110,8 +112,7 @@ class ComputeInfo(object):
                       'Finishing check.')
             return []
 
-        return list({instance_id for instance_id in self.instance_ids
-                     if instance_id in devices})
+        return list(self.instances & devices)
 
 
 class NetworkInfo(object):
