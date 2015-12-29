@@ -635,7 +635,7 @@ class Prerequisites(BasePrerequisites):
             self.migration_utils.wait_until_vm_accessible_via_ssh(fip_addr)
 
         def get_params_for_volume_creating(_volume):
-            params = ['display_name', 'size', 'imageRef']
+            params = ['display_name', 'size', 'imageRef', 'metadata']
             vt_exists = 'volume_type' in _volume and \
                 [vt for vt in self.cinderclient.volume_types.list()
                  if vt.name == _volume['volume_type']]
