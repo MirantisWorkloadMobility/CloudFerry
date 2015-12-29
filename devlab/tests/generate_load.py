@@ -411,7 +411,7 @@ class Prerequisites(BasePrerequisites):
     def upload_image(self):
         @retry_until_resources_created('image')
         def wait_until_images_created(image_ids):
-            for img_id in image_ids[:]:
+            for img_id in image_ids:
                 img = self.glanceclient.images.get(img_id)
                 if img.status == 'active':
                     image_ids.remove(img_id)
@@ -444,22 +444,19 @@ class Prerequisites(BasePrerequisites):
             img = self.glanceclient.images.create(
                 **_get_body_for_image_creating(image))
             img_ids.append(img.id)
-        wait_until_images_created(img_ids)
-        src_cloud = Prerequisites(cloud_prefix='SRC',
-                                  configuration_ini=self.configuration_ini,
-                                  config=self.config)
-        src_img = [x.__dict__ for x in
-                   src_cloud.glanceclient.images.list()]
-        for image in src_img:
-            if image['name'] in self.config.img_to_add_members:
-                image_id = image['id']
-                tenant_list = self.keystoneclient.tenants.list()
+        wait_until_images_created(img_ids[:])
+
+        tenant_list = self.keystoneclient.tenants.list()
+        for image_id in img_ids:
+            if self.glanceclient.images.get(image_id).name in \
+                    self.config.img_to_add_members:
                 for tenant in tenant_list:
                     tenant = tenant.__dict__
                     if tenant['name'] in self.config.members:
                         member_id = tenant['id']
                         self.glanceclient.image_members.create(image_id,
                                                                member_id)
+
         if getattr(self.config, 'create_zero_image', None):
             self.glanceclient.images.create()
 
