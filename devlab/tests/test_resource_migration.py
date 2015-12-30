@@ -204,6 +204,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             src_sec_gr, dst_sec_gr, resource_name='security_groups',
             parameter='description')
 
+    @unittest.skipUnless(
+        functional_test.config_ini['migrate']['keep_affinity_settings'],
+        'Keep affinity settings disabled in CloudFerry config')
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2', 'tenant4'])
     def test_migrate_nova_server_groups(self):
         def get_members_names(client, sg_groups):
