@@ -53,8 +53,8 @@
     cd CloudFerry
     virtualenv .venv
     source .venv/bin/activate
-    pip install pip==6.1.1
-    pip install --allow-all-external -r requirements.txt
+    pip install pip==7.1.2
+    pip install -r requirements.txt
     pip install -r test-requirements.txt
     ```
 

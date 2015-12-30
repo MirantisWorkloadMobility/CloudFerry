@@ -89,16 +89,16 @@ How-To: CloudFerry for Beginners
 
 17. [vagrant@nfs ~/CloudFerry]$ ```git checkout -b devel origin/devel```
     
-    Now we'll finish up some prep. pip version 6.1.1 is required so
+    Now we'll finish up some prep. pip version 7.1.2 is required so
     install that now.
 
 18. [vagrant@nfs ~/CloudFerry]$ ```virtualenv .venv```
 
 19. [vagrant@nfs ~/CloudFerry]$ ```source .venv/bin/activate```
 
-20. [vagrant@nfs ~/CloudFerry]$ ```pip install pip==6.1.1```
+20. [vagrant@nfs ~/CloudFerry]$ ```pip install pip==7.1.2```
 
-21. [vagrant@nfs ~/CloudFerry]$ ```pip install --allow-all-external -r requirements.txt```
+21. [vagrant@nfs ~/CloudFerry]$ ```pip install -r requirements.txt```
 
 22. [vagrant@nfs ~/CloudFerry]$ ```pip install -r test-requirements.txt```
     
