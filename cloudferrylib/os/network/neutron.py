@@ -1284,15 +1284,28 @@ class NeutronNetwork(network.Network):
             self.add_router_interfaces(router, existing_router, subnets,
                                        existing_subnets)
 
-            if router['external_gateway_info']:
+            ex_gw_info = router['external_gateway_info']
+            if ex_gw_info:
                 self.add_router_gateway(existing_router, router['ext_net_id'],
-                                        networks)
+                                        networks,
+                                        ex_gw_info.get('enable_snat'))
 
-    def add_router_gateway(self, dst_router, ext_net_id, src_nets):
+    def add_router_gateway(self, dst_router, ext_net_id, src_nets,
+                           set_snat=None):
+        """
+        :param set_snat: possible values:
+         1. `None` - do not update, useful in cases when destination cloud does
+            not support SNAT for external networks (pre-icehouse);
+         2. `True` - enable SNAT
+         3. `False` - disable SNAT
+        """
+
         dst_nets = self.get_networks()
         dst_net_id = self.get_new_extnet_id(ext_net_id, src_nets, dst_nets)
         if dst_net_id:
             info = {'network_id': dst_net_id}
+            if set_snat is not None:
+                info['enable_snat'] = set_snat
             LOG.debug("Setting the external network (%s) gateway for a router "
                       "'%s' (%s)", dst_net_id, dst_router['name'],
                       dst_router['id'])
