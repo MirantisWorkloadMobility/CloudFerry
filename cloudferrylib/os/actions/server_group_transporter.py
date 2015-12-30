@@ -49,7 +49,7 @@ class ServerGroupTransporter(transporter.Transporter):
 
         [src_compute]
         service = nova
-        db_connection = mysql+mysqlconnector
+        db_connection = mysql+pymysql
         db_host = <db_host>
         db_port = <db_port>
         db_name = nova
@@ -58,7 +58,7 @@ class ServerGroupTransporter(transporter.Transporter):
 
         [dst_compute]
         service = nova
-        db_connection = mysql+mysqlconnector
+        db_connection = mysql+pymysql
         db_host = <db_host>
         db_port = <db_port>
         db_name = nova

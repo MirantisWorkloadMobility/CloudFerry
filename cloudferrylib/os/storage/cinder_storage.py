@@ -17,6 +17,7 @@ from itertools import ifilter
 
 from cinderclient.v1 import client as cinder_client
 from cinderclient import exceptions as cinder_exc
+from pymysql import cursors
 
 from cloudferrylib.base import storage
 from cloudferrylib.os.storage import filters as cinder_filters
@@ -629,7 +630,7 @@ class CinderTable(object):
     def deploy(self, data):
         sql_engine = self.mysql_connector.get_engine()
         connection = sql_engine.raw_connection()
-        cursor = connection.cursor(dictionary=True)
+        cursor = connection.cursor(cursors.DictCursor)
 
         primary_key = self.get_primary_key(cursor)
         auto_increment = self.get_auto_increment(cursor)
