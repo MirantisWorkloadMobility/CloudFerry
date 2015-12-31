@@ -369,8 +369,8 @@ networks = [
      'router:external': True, 'real_network': True,
      'subnets': [
          {'cidr': '192.168.1.0/24', 'ip_version': 4, 'name': 'external_subnet',
-          'set_as_gateway_for_routers': ['ext_router', 'tn1_router',
-                                         'tn2_router'],
+          'set_as_gateway_for_routers': {'ext_router': {'enable_snat': False},
+                                         'tn1_router': {}, 'tn2_router': {}},
           'allocation_pools': [
               {'start': '192.168.1.100', 'end': '192.168.1.254'}]
           }]

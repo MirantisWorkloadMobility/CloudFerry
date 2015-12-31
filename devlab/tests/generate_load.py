@@ -481,12 +481,18 @@ class Prerequisites(BasePrerequisites):
                         router_id = self.get_router_id(router)
                         self.neutronclient.add_interface_router(
                             router_id, {"subnet_id": _subnet['subnet']['id']})
-                if network.get('router:external') and \
-                        subnet.get('set_as_gateway_for_routers') is not None:
-                    for router in subnet['set_as_gateway_for_routers']:
-                        router_id = self.get_router_id(router)
-                        self.neutronclient.add_gateway_router(
-                            router_id, {"network_id": net['network']['id']})
+                if not network.get('router:external') or \
+                        subnet.get('set_as_gateway_for_routers') is None:
+                    continue
+                routers = subnet['set_as_gateway_for_routers']
+                for router, gw_info in routers.iteritems():
+                    router_id = self.get_router_id(router)
+                    parameters = {"network_id": net['network']['id']}
+                    if self.openstack_release in ['icehouse', 'juno'] and \
+                            gw_info.get('enable_snat') is not None:
+                        parameters['enable_snat'] = gw_info.get('enable_snat')
+                    self.neutronclient.add_gateway_router(
+                        router_id, parameters)
 
     def create_routers(self):
         for router in self.config.routers:

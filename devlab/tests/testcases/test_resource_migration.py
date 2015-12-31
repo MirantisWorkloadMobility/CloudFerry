@@ -357,10 +357,33 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_neutron_routers(self):
+        def format_external_gateway_info(client, info):
+            """ Method replaces network id with network name and deletes all
+            attributes except enable_snat and network_name
+            """
+            _info = {'network_name': client.neutronclient.show_network(
+                info['network_id'])['network']['name']}
+            if check_snat:
+                _info['enable_snat'] = info['enable_snat']
+            return _info
+
         src_routers = self.filter_routers()
         dst_routers = self.dst_cloud.neutronclient.list_routers()
+        # check, do src and dst clouds support snat
+        check_snat = {self.src_cloud.openstack_release,
+                      self.dst_cloud.openstack_release}.issubset({'icehouse',
+                                                                  'juno'})
+        for src_router in src_routers['routers']:
+            src_router['external_gateway_info'] = format_external_gateway_info(
+                self.src_cloud, src_router['external_gateway_info'])
+        for dst_router in dst_routers['routers']:
+            dst_router['external_gateway_info'] = format_external_gateway_info(
+                self.dst_cloud, dst_router['external_gateway_info'])
         self.validate_neutron_resource_parameter_in_dst(
             src_routers, dst_routers, resource_name='routers')
+        self.validate_neutron_resource_parameter_in_dst(
+            src_routers, dst_routers, resource_name='routers',
+            parameter='external_gateway_info')
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_validate_router_migrated_once(self):
