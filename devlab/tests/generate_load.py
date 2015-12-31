@@ -1357,7 +1357,7 @@ class CleanEnv(BasePrerequisites):
         for tenant in self.config.tenants:
             if tenant.get('routers'):
                 for router in tenant['routers']:
-                    router_names += router
+                    router_names.append(router['router']['name'])
         for router in self.neutronclient.list_routers()['routers']:
             if router['name'] not in router_names:
                 continue
@@ -1496,7 +1496,9 @@ class CleanEnv(BasePrerequisites):
                 return False
 
         tenants_ids = [self.get_tenant_id(tenant['name'])
-                       for tenant in self.config.tenants]
+                       for tenant in self.config.tenants
+                       if self.tenant_exists(tenant['name'])]
+        tenants_ids.append(self.get_tenant_id(self.tenant))
         for hm in self.neutronclient.list_health_monitors()['health_monitors']:
             if hm['tenant_id'] in tenants_ids or not check_tenant(
                     hm['tenant_id']):
