@@ -597,8 +597,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                       "{fips}".format(num=len(missing_fips),
                                       fips=pprint.pformat(missing_fips)))
 
-    @unittest.skipUnless(functional_test.cfglib.CONF.migrate.change_router_ips,
-                         'Change router ips disabled in CloudFerry config')
+    @unittest.skipUnless(
+        functional_test.config_ini['migrate']['change_router_ips'],
+        'Change router ips disabled in CloudFerry config')
     def test_ext_router_ip_changed(self):
         dst_routers = self.dst_cloud.get_ext_routers()
         src_routers = self.src_cloud.get_ext_routers()

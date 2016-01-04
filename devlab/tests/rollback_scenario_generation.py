@@ -23,21 +23,19 @@ import os
 import random
 import yaml
 
-from utils import FilteringUtils
+import utils
 
 
 class RollbackScenarioGeneration(object):
     def __init__(self):
-        self.migration_utils = FilteringUtils()
+        self.utils = utils.Utils()
         self.file_path = 'devlab/tests/scenarios/cold_migrate.yaml'
-        self.main_folder = self.migration_utils.main_folder
-        self.full_path = os.path.join(self.main_folder, self.file_path)
+        self.full_path = os.path.join(self.utils.main_folder, self.file_path)
         self.exception_task = {'fail_migration': True}
         self.steps_list = []
 
     def _read_migrationation_file(self):
-        migration_data = self.migration_utils.load_file(self.file_path)[0]
-        return migration_data
+        return self.utils.load_file(self.file_path)[0]
 
     @staticmethod
     def _dump_into_file(file_path, data):
