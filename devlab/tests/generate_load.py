@@ -1236,12 +1236,12 @@ class CleanEnv(BasePrerequisites):
             vms_ids.append(vm.id)
             self.novaclient.servers.delete(vm.id)
             print('VM "%s" has been deleted' % vm.name)
-        self.wait_vms_deleted(all_tenants=True)
+        self.wait_vms_deleted()
 
-    def wait_vms_deleted(self, all_tenants=False):
-        search_opts = {}
-        if all_tenants:
-            search_opts.update({'all_tenants': 1})
+    def wait_vms_deleted(self, tenant_id=None):
+        search_opts = {'all_tenants': 1}
+        if tenant_id is not None:
+            search_opts['tenant_id'] = tenant_id
         timeout = 120
         for _ in range(timeout):
             servers = self.novaclient.servers.list(
