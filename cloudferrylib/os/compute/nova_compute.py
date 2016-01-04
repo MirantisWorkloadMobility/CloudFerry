@@ -250,6 +250,8 @@ class NovaCompute(compute.Compute):
 
         if kwargs.get('tenant_id'):
             self.filter_tenant_id = kwargs['tenant_id'][0]
+        else:
+            self.filter_tenant_id = None
 
         if target == 'resources':
             return self._read_info_resources()
