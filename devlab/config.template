@@ -29,7 +29,7 @@ cinder_migration_strategy = cloudferrylib.os.storage.cinder_storage.CinderNFSSto
 migrate_user_quotas = False
 incloud_live_migration = nova
 ssh_connection_attempts = 3
-keep_affinity_settings = False
+keep_affinity_settings = True
 
 [src]
 type = os

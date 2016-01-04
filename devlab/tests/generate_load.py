@@ -123,6 +123,8 @@ class BasePrerequisites(object):
         self.cinderclient = cinder.Client(self.username, self.password,
                                           self.tenant, self.auth_url)
         self.openstack_release = self._get_openstack_release()
+        self.server_groups_supported = self.openstack_release in ['icehouse',
+                                                                  'juno']
 
     def _get_openstack_release(self):
         for release in OPENSTACK_RELEASES:
@@ -204,6 +206,13 @@ class BasePrerequisites(object):
             return _sg[0]['id']
         raise NotFound('Security group with name "%s" was not found' % sg)
 
+    def get_server_group_id(self, server_group_name):
+        for server_group in self.get_all_server_groups():
+            if server_group.name == server_group_name:
+                return server_group.id
+        msg = 'Server group with name "%s" was not found'
+        raise NotFound(msg % server_group_name)
+
     def get_volume_id(self, volume_name):
         volumes = self.cinderclient.volumes.list(
             search_opts={'all_tenants': 1})
@@ -262,6 +271,21 @@ class BasePrerequisites(object):
                                  user['tenant'])
             keypairs.extend(self.novaclient.keypairs.list())
         return keypairs
+
+    def get_all_server_groups(self):
+        initial_tenant = self.keystoneclient.tenant_name
+        self.switch_user(self.username, self.password, self.tenant)
+        server_groups = self.novaclient.server_groups.list()
+        for tenant in self.config.tenants:
+            if not self.tenant_exists(tenant['name']):
+                continue
+            with utils.AddAdminUserRoleToNonAdminTenant(
+                    self.keystoneclient, self.username, tenant['name']):
+                self.switch_user(self.username, self.password,
+                                 tenant['name'])
+                server_groups.extend(self.novaclient.server_groups.list())
+        self.switch_user(self.username, self.password, initial_tenant)
+        return server_groups
 
     def user_has_not_primary_tenants(self, user_name):
         user_id = self.get_user_id(user_name)
@@ -547,12 +571,28 @@ class Prerequisites(BasePrerequisites):
                     if not net['router:external'] and net['tenant_id'] == _t]
             return nics
         image_id = self.get_image_id(vm['image']) if vm.get('image') else ''
+        params = {'image': image_id,
+                  'flavor': self.get_flavor_id(vm['flavor']),
+                  'nics': get_vm_nics(vm),
+                  'name': vm['name'],
+                  'key_name': vm.get('key_name')}
+        if 'server_group' in vm and self.server_groups_supported:
+            params['scheduler_hints'] = {'group': self.get_server_group_id(
+                vm['server_group'])}
+        return params
 
-        return {'image': image_id,
-                'flavor': self.get_flavor_id(vm['flavor']),
-                'nics': get_vm_nics(vm),
-                'name': vm['name'],
-                'key_name': vm.get('key_name')}
+    def create_server_groups(self):
+        def _create_groups(server_groups_list):
+            for server_group in server_groups_list:
+                self.novaclient.server_groups.create(**server_group)
+        # Create server group for admin tenant
+        _create_groups(self.config.server_groups)
+        for tenant in self.config.tenants:
+            if not tenant.get('server_groups'):
+                continue
+            self.switch_user(self.username, self.password, tenant['name'])
+            _create_groups(tenant['server_groups'])
+        self.switch_user(self.username, self.password, self.tenant)
 
     def create_vms(self):
 
@@ -1174,13 +1214,15 @@ class Prerequisites(BasePrerequisites):
         self.upload_image()
         print('>>> Creating networking:')
         self.create_all_networking()
-        print('>>> Creating vms:')
-        self.create_vms()
         if self.openstack_release in ['icehouse', 'juno']:
+            print('>>> Creating server groups')
+            self.create_server_groups()
             print('>>> Create bootable volume from image')
             self.create_volumes_from_images()
             print('>>> Boot vm from volume')
             self.boot_vms_from_volumes()
+        print('>>> Creating vms:')
+        self.create_vms()
         print('>>> Breaking VMs:')
         self.break_vm()
         print('>>> Breaking Images:')
@@ -1503,6 +1545,16 @@ class CleanEnv(BasePrerequisites):
                 msg = 'LBaaS health monitor for tenant "%s" has been deleted'
                 print(msg % hm['tenant_id'])
 
+    def clean_server_groups(self):
+        server_group_from_config = self.config.server_groups
+        for tenant in self.config.tenants:
+            if tenant.get('server_groups'):
+                server_group_from_config.extend(tenant['server_groups'])
+        server_group_names = [sg['name'] for sg in server_group_from_config]
+        for server_group in self.get_all_server_groups():
+            if server_group.name in server_group_names:
+                self.novaclient.server_groups.delete(server_group.id)
+
     def clean_all_networking(self):
         self.clean_fips()
         self.clean_lb_members()
@@ -1524,6 +1576,8 @@ class CleanEnv(BasePrerequisites):
         self.clean_security_groups()
         self.clean_roles()
         self.clean_keypairs()
+        if self.server_groups_supported:
+            self.clean_server_groups()
         self.clean_users()
         self.clean_tenants()
 
