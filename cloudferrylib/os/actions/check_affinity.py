@@ -18,6 +18,7 @@ from novaclient import exceptions as nova_exceptions
 from cloudferrylib.base import exception as cf_exceptions
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import log
+from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import utils
 
 
@@ -48,9 +49,10 @@ class CheckAffinity(action.Action):
 
 def check_affinity_api(cloud):
     compute_resource = cloud.resources[utils.COMPUTE_RESOURCE]
-    try:
-        compute_resource.nova_client.server_groups.list()
-    except nova_exceptions.NotFound:
-        raise cf_exceptions.AbortMigrationError(
-            "'%s' cloud does not support affinity/anti-affinity "
-            "(Nova server groups) API." % cloud.position)
+    with proxy_client.expect_exception(nova_exceptions.NotFound):
+        try:
+            compute_resource.nova_client.server_groups.list()
+        except nova_exceptions.NotFound:
+            raise cf_exceptions.AbortMigrationError(
+                "'%s' cloud does not support affinity/anti-affinity "
+                "(Nova server groups) API." % cloud.position)
