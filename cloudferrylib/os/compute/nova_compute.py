@@ -25,6 +25,7 @@ from novaclient import exceptions as nova_exc
 from cloudferrylib.base import compute
 from cloudferrylib.base import exception
 from cloudferrylib.os.compute import instances
+from cloudferrylib.os.compute import instance_info_caches
 from cloudferrylib.os.compute import cold_evacuate
 from cloudferrylib.os.compute import server_groups
 from cloudferrylib.os.identity import keystone
@@ -128,6 +129,8 @@ class NovaCompute(compute.Compute):
         self.mysql_connector = cloud.mysql_connector('nova')
         # List of instance IDs which failed to create
         self._failed_instances = []
+        self.instance_info_caches = instance_info_caches.InstanceInfoCaches(
+            self.get_db_connection())
 
     @property
     def nova_client(self):
@@ -921,11 +924,15 @@ class NovaCompute(compute.Compute):
         return self.nova_client.servers.get(res_id).status
 
     def get_networks(self, instance):
-        network_resource = self.cloud.resources.get('network')
-        if network_resource is not None:
-            return network_resource.get_instance_network_info(instance.id)
-        raise RuntimeError("Can't get network interface info without "
-                           "network resource")
+        network_resource = self.cloud.resources[utl.NETWORK_RESOURCE]
+        interfaces = network_resource.get_instance_network_info(
+            instance.id)
+        if self.config.migrate.keep_network_interfaces_order:
+            keys = (self.instance_info_caches.
+                    enumerate_addresses(instance.id))
+            interfaces = sorted(interfaces,
+                                key=lambda i: keys[i['mac_address']])
+        return interfaces
 
     def attach_volume_to_instance(self, instance, volume):
         self.nova_client.volumes.create_server_volume(
