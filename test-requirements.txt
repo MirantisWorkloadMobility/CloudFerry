@@ -1,5 +1,6 @@
+coverage
 flake8
 oslotest
-rednose
 ipdb
-nose-testconfig
+nose==1.3.7
+nose-testconfig==0.9.1

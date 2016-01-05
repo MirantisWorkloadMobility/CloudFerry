@@ -23,7 +23,6 @@ python-novaclient==2.20.0
 python-swiftclient==2.3.1
 pyyaml
 redis
-nose
 sqlalchemy
 # see https://github.com/paramiko/paramiko/issues/570 and https://github.com/paramiko/paramiko/pull/571
 -e git://github.com/mirrorcoder/paramiko.git#egg=paramiko-1.16.0
