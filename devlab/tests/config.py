@@ -202,7 +202,7 @@ tenants = [
          {'display_name': 'tn3_volume1', 'size': 1,
           'server_to_attach': 'tn3server1', 'device': '/dev/vdb'}],
      'cinder_snapshots': [],
-     'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': True}],
+     'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': False}],
      'flavors': [
          {'name': 'tn3fl1', 'disk': '1', 'ram': '64', 'vcpus': '1'}
      ],
@@ -329,7 +329,7 @@ vms_not_in_filter = ['not_in_filter']
 
 # Images that should have few specific members:
 members = ['tenant1']
-img_to_add_members = ['image3', 'image4']
+img_to_add_members = ['image3', 'image4', 'image6']
 
 # Flavors to create/delete
 flavors = [
