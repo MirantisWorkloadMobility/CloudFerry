@@ -163,7 +163,10 @@ class GlanceImage(image.Image):
             insecure=self.config.cloud.insecure
         )
 
-    def required_tenants(self):
+    def required_tenants(self, filter_tenant_id=None):
+        old_filter_tanant_id = self.filter_tenant_id
+        self.filter_tenant_id = filter_tenant_id
+
         tenants = set()
 
         for i in self.get_image_list():
@@ -173,6 +176,8 @@ class GlanceImage(image.Image):
                     entry.member_id, default=self.config.cloud.tenant)
                 tenant_id = self.identity_client.get_tenant_id_by_name(name)
                 tenants.add(tenant_id)
+
+        self.filter_tenant_id = old_filter_tanant_id
 
         return list(tenants)
 

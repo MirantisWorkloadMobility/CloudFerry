@@ -41,7 +41,9 @@ class Resource(object):
     def restore(self):
         pass
 
-    def required_tenants(self):
+    def required_tenants(
+            self,
+            filter_tenant_id=None):  # pylint: disable=unused-argument
         """Returns list of tenants required by resource. Important for the
         filtering feature."""
         return []
