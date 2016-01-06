@@ -17,6 +17,7 @@ import os
 import math
 
 from cloudferrylib.utils import driver_transporter
+from cloudferrylib.utils import files
 from cloudferrylib.utils import log
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import ssh_util
@@ -163,9 +164,6 @@ class ScpCopier(driver_transporter.DriverTransporter):
         dst_host = data['host_dst']
         dst_path = data['path_dst']
 
-        src_dir = os.path.dirname(src_path)
-        dst_dir = os.path.dirname(dst_path)
-
         src_user = self.cfg.src.ssh_user
         dst_user = self.cfg.dst.ssh_user
         block_size = self.cfg.migrate.ssh_chunk_size
@@ -190,24 +188,31 @@ class ScpCopier(driver_transporter.DriverTransporter):
 
         num_blocks = int(math.ceil(float(file_size) / block_size))
 
-        for i in xrange(num_blocks):
-            part = os.path.basename(src_path) + '.part{i}'.format(i=i)
-            part_path = os.path.join(src_dir, part)
-            remote_split_file(src_runner, src_path, part_path, i, block_size)
-            gzipped_path = remote_gzip(src_runner, part_path)
-            gzipped_filename = os.path.basename(gzipped_path)
-            dst_gzipped_path = os.path.join(dst_dir, gzipped_filename)
+        src_temp_dir = os.path.join(os.path.basename(src_path), '.cf.copy')
+        dst_temp_dir = os.path.join(os.path.basename(dst_path), '.cf.copy')
 
-            verified_file_copy(src_runner, dst_runner, dst_user,
-                               gzipped_path, dst_gzipped_path, dst_host,
-                               num_retries)
+        with files.RemoteDir(src_runner, src_temp_dir) as src_temp, \
+                files.RemoteDir(dst_runner, dst_temp_dir) as dst_temp:
+            for i in xrange(num_blocks):
+                part = os.path.basename(src_path) + '.part{i}'.format(i=i)
+                part_path = os.path.join(src_temp.dirname, part)
+                remote_split_file(src_runner, src_path, part_path, i,
+                                  block_size)
+                gzipped_path = remote_gzip(src_runner, part_path)
+                gzipped_filename = os.path.basename(gzipped_path)
+                dst_gzipped_path = os.path.join(dst_temp.dirname,
+                                                gzipped_filename)
 
-            remote_unzip(dst_runner, dst_gzipped_path)
-            partial_files.append(os.path.join(dst_dir, part))
+                verified_file_copy(src_runner, dst_runner, dst_user,
+                                   gzipped_path, dst_gzipped_path, dst_host,
+                                   num_retries)
 
-        for i in xrange(num_blocks):
-            remote_join_file(dst_runner, dst_path, partial_files[i], i,
-                             block_size)
+                remote_unzip(dst_runner, dst_gzipped_path)
+                partial_files.append(os.path.join(dst_temp.dirname, part))
+
+            for i in xrange(num_blocks):
+                remote_join_file(dst_runner, dst_path, partial_files[i], i,
+                                 block_size)
 
         dst_md5 = remote_md5_sum(dst_runner, dst_path)
 
