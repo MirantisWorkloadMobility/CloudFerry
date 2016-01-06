@@ -243,13 +243,13 @@ class RsyncCopier(driver_transporter.DriverTransporter):
         ssh_opts = ["UserKnownHostsFile=/dev/null", "StrictHostKeyChecking=no"]
 
         rsync = ("rsync "
+                 "--partial "
+                 "--inplace "
                  "--perms "
-                 "--owner "
-                 "--group "
+                 "--times "
                  "--compress "
                  "--verbose "
                  "--progress "
-                 "--append "
                  "--rsh='ssh {ssh_opts} {ssh_cipher}' "
                  "{source_file} "
                  "{dst_user}@{dst_host}:{dst_path}").format(
