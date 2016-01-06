@@ -250,6 +250,8 @@ class NovaCompute(compute.Compute):
 
         if kwargs.get('tenant_id'):
             self.filter_tenant_id = kwargs['tenant_id'][0]
+        else:
+            self.filter_tenant_id = None
 
         if target == 'resources':
             return self._read_info_resources()
@@ -789,6 +791,7 @@ class NovaCompute(compute.Compute):
             instance = self.nova_client.servers.get(instance_id)
         curr = self.get_status(instance.id).lower()
         will = status.lower()
+        # TODO (svilgelm): Refactor this ASAP
         func_restore = {
             'start': lambda instance: instance.start(),
             'stop': lambda instance: instance.stop(),
@@ -800,7 +803,7 @@ class NovaCompute(compute.Compute):
             'status': lambda status: lambda instance: self.wait_for_status(
                 instance_id,
                 self.get_status,
-                status)
+                status)  # pylint: disable=undefined-variable
         }
         map_status = {
             'paused': {
@@ -946,7 +949,7 @@ class NovaCompute(compute.Compute):
         if availability_zone:
             try:
                 self.nova_client.availability_zones.find(
-                        zoneName=availability_zone)
+                    zoneName=availability_zone)
             except nova_exc.NotFound:
                 availability_zone = \
                     self.config.migrate.default_availability_zone
@@ -999,11 +1002,11 @@ class NovaCompute(compute.Compute):
             instances.incloud_live_migrate(self.nova_client, self.config,
                                            vm_id, destination_host)
 
-    def get_instance_sql_id_by_uuid(self, uuid):
-        sql = "select id from instances where uuid='%s'" % uuid
+    def get_instance_sql_id_by_uuid(self, instance_uuid):
+        sql = "select id from instances where uuid='%s'" % instance_uuid
         libvirt_instance_id = self.mysql_connector.execute(sql).fetchone()[0]
 
-        LOG.debug("Libvirt instance ID of VM '%s' is '%s'", uuid,
+        LOG.debug("Libvirt instance ID of VM '%s' is '%s'", instance_uuid,
                   libvirt_instance_id)
 
         return libvirt_instance_id

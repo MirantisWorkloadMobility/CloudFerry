@@ -40,6 +40,7 @@ class FilterSimilarVMsFromDST(action.Action):
         self.src_instances = None
         self.dst_instances = {}
         self.tenant_id_to_new_id = {}
+        self.skipped_instances = []
         self.similar_isntances = collections.defaultdict(set)
         self.conflict_instances = collections.defaultdict(set)
 
@@ -60,6 +61,12 @@ class FilterSimilarVMsFromDST(action.Action):
                         "It will be excluded from migration.",
                         src_instance_id, dst_ids)
             self.src_instances.pop(src_instance_id)
+        for src_instance_id in set(self.skipped_instances):
+            instance = self.src_instances.pop(src_instance_id)
+            LOG.warning("Instance %s can not be migrated to DST because "
+                        "instance was booted in deleted tenant %s",
+                        src_instance_id,
+                        instance['instance']['tenant_id'])
 
     def find_similar_instances(self):
         # titii = tenant & ip to instance id
@@ -67,12 +74,15 @@ class FilterSimilarVMsFromDST(action.Action):
         titii_src = self.make_tenant_ip_to_instance_id_dict(self.src_instances)
         compute_resource = self.dst_cloud.resources[utils.COMPUTE_RESOURCE]
         for tenant_id in titii_src:
-            self.dst_instances.update(compute_resource.read_info(
-                tenant_id=[self.tenant_id_to_new_id[tenant_id]])['instances'])
+            if tenant_id in self.tenant_id_to_new_id:
+                self.dst_instances.update(compute_resource.read_info(
+                    tenant_id=[self.tenant_id_to_new_id[tenant_id]]
+                )['instances'])
         titii_dst = self.make_tenant_ip_to_instance_id_dict(self.dst_instances)
         for tenant_id, ip_to_id in titii_src.items():
             tenant_new_id = self.tenant_id_to_new_id.get(tenant_id, None)
             if tenant_new_id is None:
+                self.skipped_instances.extend(ip_to_id.values())
                 continue
             dst_ip_to_id = titii_dst[tenant_new_id]
             for ip, instance_id in ip_to_id.items():
