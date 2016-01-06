@@ -294,27 +294,33 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 resource_name='image',
                                                 parameter='checksum')
 
-    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
-    def test_migrate_glance_belongs_to_deleted_tenant(self):
-        src_images = self.filter_images()
-        src_tnt_ids = [i.id for i in self.filter_tenants()]
-        src_tnt_ids.append(self.src_cloud.get_tenant_id(self.src_cloud.tenant))
-        src_images = [i.name for i in src_images if i.owner not in src_tnt_ids]
+    @attr(migrated_tenant=['tenant1', 'tenant2'])
+    def test_migrate_glance_image_belongs_to_deleted_tenant(self):
+        src_image_names = []
 
-        dst_images = self.dst_cloud.glanceclient.images.list()
+        def get_image_by_name(image_list, img_name):
+            for image in image_list:
+                if image.name == img_name:
+                    return image
+
+        for tenant in config.tenants:
+            if tenant.get('deleted') and tenant.get('images'):
+                src_image_names.extend([image['name'] for image in
+                                        tenant['images']])
+
+        dst_images = [image for image in
+                      self.dst_cloud.glanceclient.images.list()]
+        dst_image_names = [image.name for image in dst_images]
         dst_tenant_id = self.dst_cloud.get_tenant_id(self.dst_cloud.tenant)
 
-        least_image_check = False
-        for image in dst_images:
-            if image.name not in src_images:
-                continue
-            least_image_check = True
+        for image_name in src_image_names:
+            self.assertTrue(image_name in dst_image_names,
+                            'Image {0} is not in DST image list: {1}'
+                            .format(image_name, dst_image_names))
+            image = get_image_by_name(dst_images, image_name)
             self.assertEqual(image.owner, dst_tenant_id,
                              'Image owner on dst is {0} instead of {1}'.format(
                                  image.owner, dst_tenant_id))
-        msg = ("Either migration is not initiated or it was not successful for"
-               " resource 'Image'.")
-        self.assertTrue(least_image_check, msg=msg)
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_glance_images_not_in_filter_did_not_migrate(self):
