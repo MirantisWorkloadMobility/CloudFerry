@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import config
-from test_exceptions import NotFound
-import functional_test
+import tests.config as config
+from tests.test_exceptions import NotFound
+import tests.functional_test as functional_test
 
 import itertools
 from nose.plugins.attrib import attr

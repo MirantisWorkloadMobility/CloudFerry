@@ -18,7 +18,7 @@ import re
 import unittest
 import yaml
 
-import functional_test
+import tests.functional_test as functional_test
 
 
 class GroupProcedureVerification(functional_test.FunctionalTest):
