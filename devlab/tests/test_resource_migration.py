@@ -204,8 +204,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             src_sec_gr, dst_sec_gr, resource_name='security_groups',
             parameter='description')
 
-    @unittest.skipUnless(
-        functional_test.config_ini['migrate']['keep_affinity_settings'],
+    @unittest.skipIf(
+        functional_test.config_ini['migrate']
+                                  ['keep_affinity_settings'] == 'False',
         'Keep affinity settings disabled in CloudFerry config')
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2', 'tenant4'])
     def test_migrate_nova_server_groups(self):
@@ -214,7 +215,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             for sg_group in sg_groups:
                 members_names = [client.servers.get(member).name
                                  for member in sg_group.members]
-                groups[sg_group.name] = members_names
+                groups[sg_group.name] = sorted(members_names)
             return groups
 
         if self.src_cloud.openstack_release == 'grizzly':
@@ -636,8 +637,8 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                       "{fips}".format(num=len(missing_fips),
                                       fips=pprint.pformat(missing_fips)))
 
-    @unittest.skipUnless(
-        functional_test.config_ini['migrate']['change_router_ips'],
+    @unittest.skipIf(
+        functional_test.config_ini['migrate']['change_router_ips'] == 'False',
         'Change router ips disabled in CloudFerry config')
     def test_ext_router_ip_changed(self):
         dst_routers = self.dst_cloud.get_ext_routers()
