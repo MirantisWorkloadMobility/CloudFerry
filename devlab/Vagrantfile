@@ -40,7 +40,7 @@ nodes = {
   "nfs" => {
     "box" => "openstack-user/nfs-server",
     "ip" => "#{options['nfs_ip']}",
-    "memory" => 256,
+    "memory" => 1024,
     "cpus" => 1
   }
 }
