@@ -172,8 +172,8 @@ class FunctionalTest(unittest.TestCase):
     def filter_images(self):
         all_images = self.migration_utils.get_all_images_from_config()
         images = [i['name'] for i in all_images if not i.get('broken')]
-        return [i for i in self.src_cloud.glanceclient.images.list()
-                if i.name in images]
+        image_list = self.src_cloud.glanceclient.images.list(is_public=None)
+        return [i for i in image_list if i.name in images]
 
     def filter_volumes(self):
         volumes = config.cinder_volumes

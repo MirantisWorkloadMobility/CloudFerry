@@ -162,7 +162,7 @@ class BasePrerequisites(object):
         raise NotFound('Router with name "%s" was not found' % router)
 
     def get_image_id(self, image_name):
-        for image in self.glanceclient.images.list():
+        for image in self.glanceclient.images.list(is_public=None):
             if image.name == image_name:
                 return image.id
         raise NotFound('Image with name "%s" was not found' % image_name)
@@ -1330,7 +1330,7 @@ class CleanEnv(BasePrerequisites):
         all_images = self.migration_utils.get_all_images_from_config()
         images_names = [image['name'] for image in all_images]
 
-        for image in self.glanceclient.images.list():
+        for image in self.glanceclient.images.list(is_public=None):
             if image.name not in images_names:
                 continue
             self.glanceclient.images.delete(self.get_image_id(image.name))
