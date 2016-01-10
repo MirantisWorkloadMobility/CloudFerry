@@ -15,10 +15,11 @@ from operator import attrgetter
 
 from cloudferrylib.base.action import action
 from cloudferrylib.base import exception as cf_exceptions
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class CheckUsersAvailabilityOnSrcAndDst(action.Action):

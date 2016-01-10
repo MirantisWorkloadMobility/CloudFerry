@@ -13,13 +13,13 @@
 # limitations under the License.
 
 from cloudferrylib.base.action import action
+from cloudferrylib.utils import log
 from cloudferrylib.utils import mysql_connector
-from cloudferrylib.utils import utils
 from cloudferrylib.utils import ssh_util
 from fabric.api import local
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class MysqlDump(action.Action):

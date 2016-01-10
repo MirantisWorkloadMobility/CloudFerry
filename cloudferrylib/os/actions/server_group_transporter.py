@@ -21,10 +21,10 @@ from a source cloud and deploying them into a destination cloud
 
 from cloudferrylib.base.action import transporter
 from cloudferrylib.os.compute import server_groups
-from cloudferrylib.utils import utils
+from cloudferrylib.utils import log
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class ServerGroupTransporter(transporter.Transporter):
@@ -49,7 +49,7 @@ class ServerGroupTransporter(transporter.Transporter):
 
         [src_compute]
         service = nova
-        db_connection = mysql+mysqlconnector
+        db_connection = mysql+pymysql
         db_host = <db_host>
         db_port = <db_port>
         db_name = nova
@@ -58,7 +58,7 @@ class ServerGroupTransporter(transporter.Transporter):
 
         [dst_compute]
         service = nova
-        db_connection = mysql+mysqlconnector
+        db_connection = mysql+pymysql
         db_host = <db_host>
         db_port = <db_port>
         db_name = nova

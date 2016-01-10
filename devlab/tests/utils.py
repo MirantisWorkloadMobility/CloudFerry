@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import collections
 import os
 import yaml
 import config
-import ConfigParser
 import time
 
 from fabric.api import run, settings, sudo, hide
@@ -26,15 +26,36 @@ from neutronclient.common.exceptions import NeutronClientException
 VM_ACCESSIBILITY_ATTEMPTS = 20
 
 
-class FilteringUtils(object):
+def convert(data):
+    """ Method converts all unicode objects to string objects"""
+    if isinstance(data, basestring):
+        return str(data)
+    elif isinstance(data, collections.Mapping):
+        return dict(map(convert, data.iteritems()))
+    elif isinstance(data, collections.Iterable):
+        return type(data)(map(convert, data))
+    else:
+        return data
 
+
+class Utils(object):
     def __init__(self):
         self.main_folder = os.path.dirname(os.path.dirname(
             os.path.split(__file__)[0]))
-        cf_config = ConfigParser.ConfigParser()
-        cf_config.read(os.path.join(self.main_folder,
-                                    config.cloud_ferry_conf))
-        self.filter_file_path = cf_config.get('migrate', 'filter_path')
+
+    def load_file(self, file_name):
+        file_path = os.path.join(self.main_folder, file_name.lstrip('/'))
+        with open(file_path, "r") as f:
+            filter_dict = yaml.load(f)
+            if filter_dict is None:
+                filter_dict = {}
+        return [filter_dict, file_path]
+
+
+class FilteringUtils(Utils):
+    def __init__(self, path_to_filter):
+        super(FilteringUtils, self).__init__()
+        self.filter_file_path = path_to_filter
         self.filters_file_naming_template = config.filters_file_naming_template
 
     def build_filter_files_list(self):
@@ -42,12 +63,6 @@ class FilteringUtils(object):
             tenant_name=tenant['name'])
             for tenant in config.tenants
             if 'deleted' not in tenant and not tenant['deleted']]
-
-    def load_file(self, file_name):
-        file_path = os.path.join(self.main_folder, file_name.lstrip('/'))
-        with open(file_path, "r") as f:
-            filter_dict = yaml.load(f)
-        return [filter_dict, file_path]
 
     def filter_vms(self, src_data_list):
         loaded_data = self.load_file(self.filter_file_path)
@@ -77,6 +92,19 @@ class FilteringUtils(object):
                     src_data_list.pop(index)
         return [src_data_list, popped_img_list]
 
+    def filter_volumes(self, src_data_list):
+        loaded_data = self.load_file('configs/filter.yaml')
+        filter_dict = loaded_data[0]
+        popped_vol_list = []
+        if 'volumes' not in filter_dict:
+            return [src_data_list, []]
+        for vol in src_data_list[:]:
+            if vol.id not in filter_dict['volumes']['volumes_list']:
+                popped_vol_list.append(vol)
+                index = src_data_list.index(vol)
+                src_data_list.pop(index)
+        return [src_data_list, popped_vol_list]
+
     def filter_tenants(self, src_data_list):
         loaded_data = self.load_file(self.filter_file_path)
         filter_dict = loaded_data[0]
@@ -93,8 +121,8 @@ class FilteringUtils(object):
 
 class MigrationUtils(object):
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, conf):
+        self.config = conf
 
     def execute_command_on_vm(self, ip_addr, cmd, username=None,
                               warn_only=False, password=None, key=None,
@@ -167,3 +195,29 @@ class MigrationUtils(object):
                     return addr['addr']
         raise RuntimeError('VM with name {} and id {} doesnt have fip'.format(
             vm.name, vm.id))
+
+
+class AddAdminUserRoleToNonAdminTenant(object):
+
+    def __init__(self, ks_client, admin_user, tenant):
+        self.keystone = ks_client
+        self.tenant = self.keystone.tenants.find(name=tenant)
+        self.user = self.keystone.users.find(name=admin_user)
+        self.role = self.keystone.roles.find(name='admin')
+        self.user_has_role = False
+        roles = self.keystone.users.list_roles(self.user.id, self.tenant.id)
+        for role in roles:
+            if role.id == self.role.id:
+                self.user_has_role = True
+
+    def __enter__(self):
+        if not self.user_has_role:
+            self.keystone.roles.add_user_role(user=self.user,
+                                              role=self.role,
+                                              tenant=self.tenant)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self.user_has_role:
+            self.keystone.roles.remove_user_role(user=self.user,
+                                                 role=self.role,
+                                                 tenant=self.tenant)

@@ -94,7 +94,8 @@ migrate_opts = [
                help='tenant for creation router ip stubs, if it "None" as '
                     'default stub creates in router tenant'),
     cfg.StrOpt('cinder_migration_strategy',
-               default='cloudferrylib.os.storage.cinder_storage.CinderStorage',
+               default='cloudferrylib.os.storage.cinder_storage.'
+                       'CinderNFSStorage',
                help='path to class that will perform '
                     'cinder migration actions'),
     cfg.BoolOpt('keep_lbaas', default=False,
@@ -175,6 +176,19 @@ migrate_opts = [
     cfg.IntOpt('boot_timeout', default=300,
                help="Timeout booting of instance"),
     cfg.StrOpt('ssh_cipher', default=None, help='SSH cipher to use for SCP'),
+    cfg.StrOpt('default_availability_zone', default="nova",
+               help="Availability zone to use for VM provisioning, in case "
+                    "source cloud zones do not match destination"),
+    cfg.StrOpt('ephemeral_copy_backend', default="rsync",
+               help="Allows to choose how ephemeral storage is copied over "
+                    "from source to destination. Possible values: 'rsync' "
+                    "(default) and 'scp'. scp seem to be faster, while rsync "
+                    "is more reliable"),
+    cfg.StrOpt('log_config', default='configs/logging_config.yaml',
+               help='The path of a logging configuration file.'),
+    cfg.BoolOpt('debug', default=False,
+                help="Print debugging output (set logging level to DEBUG "
+                     "instead of default INFO level)."),
 ]
 
 mail = cfg.OptGroup(name='mail',
@@ -203,7 +217,7 @@ src_mysql_opts = [
                help='host of mysql'),
     cfg.IntOpt('db_port', default='3306',
                help='port for mysql connection'),
-    cfg.StrOpt('db_connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default='mysql+pymysql',
                help='driver for connection'),
 ]
 
@@ -234,7 +248,7 @@ src_compute_opts = [
                 help='live-migration without shared_storage'),
     cfg.StrOpt('host_eph_drv', default='-',
                help='host ephemeral drive'),
-    cfg.StrOpt('db_connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default='mysql+pymysql',
                help='driver for db connection'),
     cfg.StrOpt('db_host', default=None,
                help='compute mysql node ip address'),
@@ -378,7 +392,7 @@ dst_mysql_opts = [
                help='host of mysql'),
     cfg.IntOpt('db_port', default='3306',
                help='port for mysql connection'),
-    cfg.StrOpt('db_connection', default='mysql+mysqlconnector',
+    cfg.StrOpt('db_connection', default='mysql+pymysql',
                help='driver for connection'),
 ]
 

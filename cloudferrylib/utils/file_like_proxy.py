@@ -17,9 +17,9 @@ import progressbar
 import re
 import time
 
-from utils import get_log
+from cloudferrylib.utils import log
 
-LOG = get_log(__name__)
+LOG = log.getLogger(__name__)
 
 # Maximum Bytes Per Packet
 CHUNK_SIZE = 512 * 1024  # B

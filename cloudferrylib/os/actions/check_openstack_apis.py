@@ -14,6 +14,7 @@
 
 from cloudferrylib.base.action import action
 from cloudferrylib.base import exception
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils as utl
 from neutronclient.common import exceptions as neutron_exc
 from glanceclient import exc as glance_exc
@@ -21,7 +22,7 @@ from keystoneclient.openstack.common.apiclient import exceptions as ks_exc
 from cinderclient import exceptions as cinder_exc
 from novaclient import exceptions as nova_exc
 
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 def check(os_api_call,

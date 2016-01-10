@@ -59,9 +59,22 @@ to implement in nearest future.
 
 
 # Installation
+Cloudferry can be prepared and installed as docker container.
 
+## Building the docker container
 ```
-pip install CloudFerry
+docker build --build-arg cf_commit_or_branch=origin/master -t <username>/cf-in-docker .
+```
+
+## Container running
+```
+docker -it <username>/cf-in-docker
+```
+
+## Saving and loading the container files
+```
+docker save --output=/path/to/save/CloudFerry.img <username>/cf-in-docker
+docker load --input=/path/to/save/CloudFerry.img
 ```
 
 # Usage

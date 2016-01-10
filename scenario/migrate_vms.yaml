@@ -10,6 +10,8 @@ preparation:
   - pre_migration_test:
       - act_get_filter: True
       - act_check_filter: True
+      - check_affinity: True
+      - check_config_quota_neutron: True
       - src_test:
           - act_check_image_api_src: True
           - act_check_compute_api_src: True
@@ -95,3 +97,5 @@ process:
       - act_check_point_vm: True
       - is_instances: ['get_next_instance']
       - rename_info_iter: True
+  - verify:
+      - remove_failed_instances: True

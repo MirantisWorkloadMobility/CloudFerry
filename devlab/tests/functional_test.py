@@ -14,22 +14,12 @@
 
 import config
 import logging
-import os
 import unittest
 from generate_load import Prerequisites
 import utils
 from keystoneclient import exceptions as ks_exceptions
-import sys
 from test_exceptions import ConfFileError
 from testconfig import config as config_ini
-
-
-def get_cf_root_folder():
-    return os.path.dirname(os.path.dirname(os.path.split(__file__)[0]))
-
-sys.path.append(get_cf_root_folder())
-import cfglib
-cfglib.init_config(os.path.join(get_cf_root_folder(), config.cloud_ferry_conf))
 
 
 def suppress_dependency_logging():
@@ -48,7 +38,6 @@ class FunctionalTest(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(FunctionalTest, self).__init__(*args, **kwargs)
         suppress_dependency_logging()
-
         if not config_ini:
             raise ConfFileError('Configuration file parameter'
                                 ' --tc-file is missing or '
@@ -60,7 +49,8 @@ class FunctionalTest(unittest.TestCase):
         self.dst_cloud = Prerequisites(cloud_prefix='DST',
                                        configuration_ini=config_ini,
                                        config=config)
-        self.filtering_utils = utils.FilteringUtils()
+        self.filtering_utils = utils.FilteringUtils(
+            config_ini['migrate']['filter_path'])
         self.migration_utils = utils.MigrationUtils(config)
 
     def filter_networks(self):
@@ -182,8 +172,8 @@ class FunctionalTest(unittest.TestCase):
     def filter_images(self):
         all_images = self.migration_utils.get_all_images_from_config()
         images = [i['name'] for i in all_images if not i.get('broken')]
-        return [i for i in self.src_cloud.glanceclient.images.list()
-                if i.name in images]
+        image_list = self.src_cloud.glanceclient.images.list(is_public=None)
+        return [i for i in image_list if i.name in images]
 
     def filter_volumes(self):
         volumes = config.cinder_volumes

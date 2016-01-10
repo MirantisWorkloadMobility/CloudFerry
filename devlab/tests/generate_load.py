@@ -4,10 +4,8 @@ import time
 import json
 import os
 import yaml
-
 import config as conf
 import utils
-
 import ConfigParser
 
 from glanceclient.v1 import Client as glance
@@ -82,17 +80,14 @@ def get_dict_from_config_file(config_file):
 
 class BasePrerequisites(object):
 
-    def __init__(self, config,
-                 configuration_ini,
-                 cloud_prefix='SRC'):
-        self.filtering_utils = utils.FilteringUtils()
+    def __init__(self, config, configuration_ini, cloud_prefix='SRC'):
+        self.configuration_ini = configuration_ini
+        self.filtering_utils = utils.FilteringUtils(
+            self.configuration_ini['migrate']['filter_path'])
         self.migration_utils = utils.MigrationUtils(config)
 
         self.config = config
-
         self.cloud_prefix = cloud_prefix.lower()
-
-        self.configuration_ini = configuration_ini
 
         self.username = self.configuration_ini[self.cloud_prefix]['user']
         self.password = self.configuration_ini[self.cloud_prefix]['password']
@@ -128,6 +123,8 @@ class BasePrerequisites(object):
         self.cinderclient = cinder.Client(self.username, self.password,
                                           self.tenant, self.auth_url)
         self.openstack_release = self._get_openstack_release()
+        self.server_groups_supported = self.openstack_release in ['icehouse',
+                                                                  'juno']
 
     def _get_openstack_release(self):
         for release in OPENSTACK_RELEASES:
@@ -146,6 +143,12 @@ class BasePrerequisites(object):
                 return tenant.id
         raise NotFound('Tenant with name "%s" was not found' % tenant_name)
 
+    def get_tenant_name(self, tenant_id):
+        for tenant in self.keystoneclient.tenants.list():
+            if tenant.id == tenant_id:
+                return tenant.name
+        raise NotFound('Tenant with id "%s" was not found' % tenant_id)
+
     def get_user_id(self, user_name):
         for user in self.keystoneclient.users.list():
             if user.name == user_name:
@@ -159,7 +162,7 @@ class BasePrerequisites(object):
         raise NotFound('Router with name "%s" was not found' % router)
 
     def get_image_id(self, image_name):
-        for image in self.glanceclient.images.list():
+        for image in self.glanceclient.images.list(is_public=None):
             if image.name == image_name:
                 return image.id
         raise NotFound('Image with name "%s" was not found' % image_name)
@@ -189,12 +192,26 @@ class BasePrerequisites(object):
             return _net[0]['id']
         raise NotFound('Network with name "%s" was not found' % net)
 
+    def get_net_name(self, net_id):
+        _net = self.neutronclient.list_networks(id=net_id,
+                                                all_tenants=True)['networks']
+        if _net:
+            return _net[0]['name']
+        raise NotFound('Network with id "%s" was not found' % net_id)
+
     def get_sg_id(self, sg):
         _sg = self.neutronclient.list_security_groups(
             name=sg, all_tenants=True)['security_groups']
         if _sg:
             return _sg[0]['id']
         raise NotFound('Security group with name "%s" was not found' % sg)
+
+    def get_server_group_id(self, server_group_name):
+        for server_group in self.get_all_server_groups():
+            if server_group.name == server_group_name:
+                return server_group.id
+        msg = 'Server group with name "%s" was not found'
+        raise NotFound(msg % server_group_name)
 
     def get_volume_id(self, volume_name):
         volumes = self.cinderclient.volumes.list(
@@ -254,6 +271,21 @@ class BasePrerequisites(object):
                                  user['tenant'])
             keypairs.extend(self.novaclient.keypairs.list())
         return keypairs
+
+    def get_all_server_groups(self):
+        initial_tenant = self.keystoneclient.tenant_name
+        self.switch_user(self.username, self.password, self.tenant)
+        server_groups = self.novaclient.server_groups.list()
+        for tenant in self.config.tenants:
+            if not self.tenant_exists(tenant['name']):
+                continue
+            with utils.AddAdminUserRoleToNonAdminTenant(
+                    self.keystoneclient, self.username, tenant['name']):
+                self.switch_user(self.username, self.password,
+                                 tenant['name'])
+                server_groups.extend(self.novaclient.server_groups.list())
+        self.switch_user(self.username, self.password, initial_tenant)
+        return server_groups
 
     def user_has_not_primary_tenants(self, user_name):
         user_id = self.get_user_id(user_name)
@@ -400,7 +432,7 @@ class Prerequisites(BasePrerequisites):
     def upload_image(self):
         @retry_until_resources_created('image')
         def wait_until_images_created(image_ids):
-            for img_id in image_ids[:]:
+            for img_id in image_ids:
                 img = self.glanceclient.images.get(img_id)
                 if img.status == 'active':
                     image_ids.remove(img_id)
@@ -433,22 +465,19 @@ class Prerequisites(BasePrerequisites):
             img = self.glanceclient.images.create(
                 **_get_body_for_image_creating(image))
             img_ids.append(img.id)
-        wait_until_images_created(img_ids)
-        src_cloud = Prerequisites(cloud_prefix='SRC',
-                                  configuration_ini=self.configuration_ini,
-                                  config=self.config)
-        src_img = [x.__dict__ for x in
-                   src_cloud.glanceclient.images.list()]
-        for image in src_img:
-            if image['name'] in self.config.img_to_add_members:
-                image_id = image['id']
-                tenant_list = self.keystoneclient.tenants.list()
+        wait_until_images_created(img_ids[:])
+
+        tenant_list = self.keystoneclient.tenants.list()
+        for image_id in img_ids:
+            if self.glanceclient.images.get(image_id).name in \
+                    self.config.img_to_add_members:
                 for tenant in tenant_list:
                     tenant = tenant.__dict__
                     if tenant['name'] in self.config.members:
                         member_id = tenant['id']
                         self.glanceclient.image_members.create(image_id,
                                                                member_id)
+
         if getattr(self.config, 'create_zero_image', None):
             self.glanceclient.images.create()
 
@@ -539,12 +568,28 @@ class Prerequisites(BasePrerequisites):
                     if not net['router:external'] and net['tenant_id'] == _t]
             return nics
         image_id = self.get_image_id(vm['image']) if vm.get('image') else ''
+        params = {'image': image_id,
+                  'flavor': self.get_flavor_id(vm['flavor']),
+                  'nics': get_vm_nics(vm),
+                  'name': vm['name'],
+                  'key_name': vm.get('key_name')}
+        if 'server_group' in vm and self.server_groups_supported:
+            params['scheduler_hints'] = {'group': self.get_server_group_id(
+                vm['server_group'])}
+        return params
 
-        return {'image': image_id,
-                'flavor': self.get_flavor_id(vm['flavor']),
-                'nics': get_vm_nics(vm),
-                'name': vm['name'],
-                'key_name': vm.get('key_name')}
+    def create_server_groups(self):
+        def _create_groups(server_groups_list):
+            for server_group in server_groups_list:
+                self.novaclient.server_groups.create(**server_group)
+        # Create server group for admin tenant
+        _create_groups(self.config.server_groups)
+        for tenant in self.config.tenants:
+            if not tenant.get('server_groups'):
+                continue
+            self.switch_user(self.username, self.password, tenant['name'])
+            _create_groups(tenant['server_groups'])
+        self.switch_user(self.username, self.password, self.tenant)
 
     def create_vms(self):
 
@@ -934,6 +979,27 @@ class Prerequisites(BasePrerequisites):
                 self.migration_utils.execute_command_on_vm(vm_ip, cmd.format(
                     path=path, _file=filename))
 
+    def create_invalid_cinder_objects(self):
+        invalid_volume_tmlt = 'cinder_volume_%s'
+        volumes = [
+            {
+                'display_name': invalid_volume_tmlt % st,
+                'size': 1,
+            }
+            for st in self.config.INVALID_STATUSES
+        ]
+        existing = [vol.display_name
+                    for vol in self.cinderclient.volumes.list(
+                        search_opts={'all_tenants': 1})]
+        volumes = [vol
+                   for vol in volumes if vol['display_name'] not in existing]
+        if volumes:
+            self.create_cinder_volumes(volumes)
+        for st in self.config.INVALID_STATUSES:
+            vol = self.cinderclient.volumes.find(
+                display_name=invalid_volume_tmlt % st)
+            self.cinderclient.volumes.reset_state(vol, state=st)
+
     def emulate_vm_states(self):
         for vm_state in self.config.vm_states:
             # emulate error state:
@@ -1058,7 +1124,12 @@ class Prerequisites(BasePrerequisites):
                 if username == user['name']][0]
         tenants_names = [user['tenant']]
         for role in roles_to_create:
-            self.dst_cloud.keystoneclient.roles.create(name=role['role'])
+            try:
+                self.dst_cloud.keystoneclient.roles.create(name=role['role'])
+            except ks_exceptions.Conflict as e:
+                print "There was an error during role creating on dst: {}"\
+                    .format(e)
+                continue
             if role['tenant'] not in tenants_names:
                 tenants_names.append(role['tenant'])
 
@@ -1111,6 +1182,18 @@ class Prerequisites(BasePrerequisites):
             self.migration_utils.execute_command_on_vm(
                 self.get_vagrant_vm_ip(), cmd, username='root', password='')
 
+    def create_network_with_segm_id(self):
+        if not self.dst_cloud:
+            self.dst_cloud = Prerequisites(
+                cloud_prefix='DST',
+                configuration_ini=self.configuration_ini,
+                config=self.config)
+        self.dst_cloud.switch_user(user=self.dst_cloud.username,
+                                   password=self.dst_cloud.password,
+                                   tenant=self.dst_cloud.tenant)
+
+        self.dst_cloud.create_networks(self.config.dst_networks)
+
     def run_preparation_scenario(self):
         print('>>> Creating tenants:')
         self.create_tenants()
@@ -1128,13 +1211,15 @@ class Prerequisites(BasePrerequisites):
         self.upload_image()
         print('>>> Creating networking:')
         self.create_all_networking()
-        print('>>> Creating vms:')
-        self.create_vms()
         if self.openstack_release in ['icehouse', 'juno']:
+            print('>>> Creating server groups')
+            self.create_server_groups()
             print('>>> Create bootable volume from image')
             self.create_volumes_from_images()
             print('>>> Boot vm from volume')
             self.boot_vms_from_volumes()
+        print('>>> Creating vms:')
+        self.create_vms()
         print('>>> Breaking VMs:')
         self.break_vm()
         print('>>> Breaking Images:')
@@ -1149,6 +1234,8 @@ class Prerequisites(BasePrerequisites):
         self.create_cinder_objects()
         print('>>> Writing data into the volumes:')
         self.write_data_to_volumes()
+        print('>>> Creating invalid cinder objects:')
+        self.create_invalid_cinder_objects()
         print('>>> Emulating vm states:')
         self.emulate_vm_states()
         print('>>> Generating vm states list:')
@@ -1171,6 +1258,8 @@ class Prerequisites(BasePrerequisites):
         self.create_tenant_wo_sec_group_on_dst()
         print('>>> Create role on dst:')
         self.create_user_on_dst()
+        print('>>> Creating networks on dst:')
+        self.create_network_with_segm_id()
 
 
 class CleanEnv(BasePrerequisites):
@@ -1186,12 +1275,12 @@ class CleanEnv(BasePrerequisites):
             vms_ids.append(vm.id)
             self.novaclient.servers.delete(vm.id)
             print('VM "%s" has been deleted' % vm.name)
-        self.wait_vms_deleted(all_tenants=True)
+        self.wait_vms_deleted()
 
-    def wait_vms_deleted(self, all_tenants=False):
-        search_opts = {}
-        if all_tenants:
-            search_opts.update({'all_tenants': 1})
+    def wait_vms_deleted(self, tenant_id=None):
+        search_opts = {'all_tenants': 1}
+        if tenant_id is not None:
+            search_opts['tenant_id'] = tenant_id
         timeout = 120
         for _ in range(timeout):
             servers = self.novaclient.servers.list(
@@ -1227,7 +1316,11 @@ class CleanEnv(BasePrerequisites):
 
     def clean_flavors(self):
         flavors_names = [flavor['name'] for flavor in self.config.flavors]
-        for flavor in self.novaclient.flavors.list():
+        for tenant in self.config.tenants:
+            if not tenant.get('flavors'):
+                continue
+            flavors_names.extend([f['name'] for f in tenant['flavors']])
+        for flavor in self.novaclient.flavors.list(is_public=None):
             if flavor.name not in flavors_names:
                 continue
             self.novaclient.flavors.delete(self.get_flavor_id(flavor.name))
@@ -1237,7 +1330,7 @@ class CleanEnv(BasePrerequisites):
         all_images = self.migration_utils.get_all_images_from_config()
         images_names = [image['name'] for image in all_images]
 
-        for image in self.glanceclient.images.list():
+        for image in self.glanceclient.images.list(is_public=None):
             if image.name not in images_names:
                 continue
             self.glanceclient.images.delete(self.get_image_id(image.name))
@@ -1300,7 +1393,7 @@ class CleanEnv(BasePrerequisites):
         for tenant in self.config.tenants:
             if tenant.get('routers'):
                 for router in tenant['routers']:
-                    router_names += router
+                    router_names.append(router['router']['name'])
         for router in self.neutronclient.list_routers()['routers']:
             if router['name'] not in router_names:
                 continue
@@ -1439,13 +1532,25 @@ class CleanEnv(BasePrerequisites):
                 return False
 
         tenants_ids = [self.get_tenant_id(tenant['name'])
-                       for tenant in self.config.tenants]
+                       for tenant in self.config.tenants
+                       if self.tenant_exists(tenant['name'])]
+        tenants_ids.append(self.get_tenant_id(self.tenant))
         for hm in self.neutronclient.list_health_monitors()['health_monitors']:
             if hm['tenant_id'] in tenants_ids or not check_tenant(
                     hm['tenant_id']):
                 self.neutronclient.delete_health_monitor(hm['id'])
                 msg = 'LBaaS health monitor for tenant "%s" has been deleted'
                 print(msg % hm['tenant_id'])
+
+    def clean_server_groups(self):
+        server_group_from_config = self.config.server_groups
+        for tenant in self.config.tenants:
+            if tenant.get('server_groups'):
+                server_group_from_config.extend(tenant['server_groups'])
+        server_group_names = [sg['name'] for sg in server_group_from_config]
+        for server_group in self.get_all_server_groups():
+            if server_group.name in server_group_names:
+                self.novaclient.server_groups.delete(server_group.id)
 
     def clean_all_networking(self):
         self.clean_fips()
@@ -1468,6 +1573,8 @@ class CleanEnv(BasePrerequisites):
         self.clean_security_groups()
         self.clean_roles()
         self.clean_keypairs()
+        if self.server_groups_supported:
+            self.clean_server_groups()
         self.clean_users()
         self.clean_tenants()
 
@@ -1476,15 +1583,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Script to generate load for Openstack and delete '
                     'generated objects')
-    parser.add_argument('--clean', help='clean objects described in '
-                                        'self.config.ini', action='store_true')
+    parser.add_argument('--clean', help='clean objects, described'
+                                        ' in configuration.ini file',
+                        action='store_true')
     parser.add_argument('--env', default='SRC',
                         help='choose cloud: SRC or DST')
     parser.add_argument('cloudsconf',
                         help='Please point configuration.ini file location')
 
     _args = parser.parse_args()
-
     confparser = ConfigParser.ConfigParser()
     confparser.read(_args.cloudsconf)
     cloudsconf = get_dict_from_config_file(confparser)

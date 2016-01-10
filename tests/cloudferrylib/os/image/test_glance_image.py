@@ -44,7 +44,7 @@ class FakeUser(object):
 class GlanceImageTestCase(test.TestCase):
 
     def setUp(self):
-        super(GlanceImageTestCase, self).setUp()
+        test.TestCase.setUp(self)
 
         self.glance_mock_client = mock.MagicMock()
         self.glance_mock_client().images.data()._resp = 'fake_resp_1'

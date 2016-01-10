@@ -20,11 +20,13 @@ from keystoneclient import exceptions as keystone_exc
 from novaclient import exceptions as nova_exc
 from cloudferrylib.base.action import action
 from cloudferrylib.os.storage import filters as cinder_filters
+from cloudferrylib.utils import log
+from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import utils as utl
 
 import datetime
 
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class CheckFilter(action.Action):
@@ -50,17 +52,19 @@ class CheckFilter(action.Action):
             for instance_id in instances:
                 LOG.debug('Filtered instance id: %s', instance_id)
                 try:
-                    instance = \
-                        compute_resource.nova_client.servers.get(instance_id)
+                    with proxy_client.expect_exception(nova_exc.NotFound):
+                        instance = \
+                            compute_resource.nova_client.servers.get(
+                                instance_id)
                     if instance:
                         LOG.debug('Filter config check: Instance ID %s is OK',
                                   instance_id)
-                except nova_exc.NotFound as e:
+                except nova_exc.NotFound:
                     LOG.error('Filter config check: Instance ID %s '
                               'is not present in source cloud, '
                               'please update your filter config. Aborting.',
                               instance_id)
-                    raise e
+                    raise
 
     def _check_opts_vol(self, opts):
         if not opts:
@@ -71,16 +75,17 @@ class CheckFilter(action.Action):
             for vol_id in volumes_list:
                 LOG.debug('Filtered volume id: %s', vol_id)
                 try:
-                    vol = cinder_resource.cinder_client.volumes.get(vol_id)
+                    with proxy_client.expect_exception(cinder_exc.NotFound):
+                        vol = cinder_resource.cinder_client.volumes.get(vol_id)
                     if vol:
                         LOG.debug('Filter config check: Volume ID %s is OK',
                                   vol_id)
-                except cinder_exc.NotFound as e:
+                except cinder_exc.NotFound:
                     LOG.error('Filter config check: Volume ID %s '
                               'is not present in source cloud, '
                               'please update your filter config. Aborting.',
                               vol_id)
-                    raise e
+                    raise
 
     @staticmethod
     def _check_opts_vol_date(opts):
@@ -95,10 +100,10 @@ class CheckFilter(action.Action):
                         volumes_date, cinder_filters.DATETIME_FMT)
                     LOG.debug('Filtered str volume date: %s',
                               str(volumes_date))
-                except ValueError, e:
+                except ValueError:
                     LOG.error('Filter config check: '
                               'invalid volume date format')
-                    raise e
+                    raise
 
     def _check_opts_img(self, opts):
         image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
@@ -107,16 +112,17 @@ class CheckFilter(action.Action):
             for img_id in images_list:
                 LOG.debug('Filtered image id: %s', img_id)
                 try:
-                    img = image_resource.glance_client.images.get(img_id)
+                    with proxy_client.expect_exception(glance_exc.NotFound):
+                        img = image_resource.glance_client.images.get(img_id)
                     if img:
                         LOG.debug('Filter config check: Image ID %s is OK',
                                   img_id)
-                except glance_exc.HTTPNotFound as e:
+                except glance_exc.HTTPNotFound:
                     LOG.error('Filter config check: Image ID %s '
                               'is not present in source cloud, '
                               'please update your filter config. Aborting.',
                               img_id)
-                    raise e
+                    raise
 
     def _check_opts_tenant(self, opts):
         ident_resource = self.cloud.resources[utl.IDENTITY_RESOURCE]
@@ -125,14 +131,15 @@ class CheckFilter(action.Action):
             for tenant_id in tenants:
                 LOG.debug('Filtered tenant id: %s', tenant_id)
                 try:
-                    tenant = ident_resource.keystone_client.tenants.find(
-                        id=tenant_id)
+                    with proxy_client.expect_exception(keystone_exc.NotFound):
+                        tenant = ident_resource.keystone_client.tenants.find(
+                            id=tenant_id)
                     if tenant:
                         LOG.debug('Filter config check: Tenant ID %s is OK',
                                   tenant_id)
-                except keystone_exc.NotFound as e:
+                except keystone_exc.NotFound:
                     LOG.error('Filter config check: Tenant ID %s '
                               'is not present in source cloud, '
                               'please update your filter config. Aborting.',
                               tenant_id)
-                    raise e
+                    raise

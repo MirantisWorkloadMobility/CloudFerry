@@ -34,11 +34,13 @@ from cloudferrylib.utils import filters
 from cloudferrylib.utils import sizeof_format
 from cloudferrylib.os.image import filters as glance_filters
 from cloudferrylib.utils import file_like_proxy
+from cloudferrylib.utils import log
+from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import remote_runner
 
 
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class GlanceImageProgessMigrationView(object):
@@ -162,12 +164,17 @@ class GlanceImage(image.Image):
         )
 
     def required_tenants(self):
-        image_owners = set()
+        tenants = set()
 
         for i in self.get_image_list():
-            image_owners.add(i.owner)
+            tenants.add(i.owner)
+            for entry in self.glance_client.image_members.list(image=i.id):
+                name = self.identity_client.try_get_tenant_name_by_id(
+                    entry.member_id, default=self.config.cloud.tenant)
+                tenant_id = self.identity_client.get_tenant_id_by_name(name)
+                tenants.add(tenant_id)
 
-        return list(image_owners)
+        return list(tenants)
 
     def get_image_list(self):
         images = self.glance_client.images.list(filters={"is_public": None})
@@ -219,9 +226,21 @@ class GlanceImage(image.Image):
     def get_image_status(self, image_id):
         return self.get_image_by_id(image_id).status
 
+    @staticmethod
+    def get_resp(data):
+        """Get _resp property.
+
+        :return: _resp
+
+        """
+        return getattr(data, '_resp')
+
     def get_ref_image(self, image_id):
         try:
-            return self.glance_client.images.data(image_id)._resp
+            with proxy_client.expect_exception(
+                    glance_exceptions.NotFound,
+                    glance_exceptions.HTTPInternalServerError):
+                return self.get_resp(self.glance_client.images.data(image_id))
         except (glance_exceptions.HTTPInternalServerError,
                 glance_exceptions.HTTPNotFound):
             raise exception.ImageDownloadError
@@ -301,7 +320,7 @@ class GlanceImage(image.Image):
                 info['images'][glance_image.id]['meta'] = meta
         return info
 
-    def read_info(self, **kwargs):
+    def read_info(self, **_):
         """Get info about images or specified image.
 
         :returns: Dictionary containing images data
@@ -365,24 +384,36 @@ class GlanceImage(image.Image):
 
         return info
 
-    def deploy(self, info):
-        LOG.info("Glance images deployment started...")
-        info = copy.deepcopy(info)
-        new_info = {'images': {}}
-        created_images = []
-        delete_container_format, delete_disk_format = [], []
-        empty_image_list = {}
-        keystone = self.cloud.resources["identity"]
-
-        # List for obsolete/broken images IDs, that will not be migrated
-        obsolete_images_ids_list = []
+    def _dst_images(self):
         dst_images = {}
+        keystone = self.cloud.resources["identity"]
         for dst_image in self.get_image_list():
             tenant_name = keystone.try_get_tenant_name_by_id(
                 dst_image.owner, default=self.cloud.cloud_config.cloud.tenant)
             image_key = (dst_image.name, tenant_name, dst_image.checksum,
                          dst_image.is_public)
             dst_images[image_key] = dst_image
+        return dst_images
+
+    def identical(self, src_image, dst_image):
+        """Compare images."""
+        for field in ('name', 'checksum', 'is_public'):
+            if src_image.get(field, None) != dst_image.get(field, None):
+                return False
+        migrated = self.cloud.migration[utl.IDENTITY_RESOURCE]
+        return migrated.identical(src_image['owner'], dst_image['owner'],
+                                  resource_type=utl.TENANTS_TYPE)
+
+    def deploy(self, info):
+        LOG.info("Glance images deployment started...")
+        info = copy.deepcopy(info)
+        created_images = []
+        delete_container_format, delete_disk_format = [], []
+        empty_image_list = {}
+
+        # List for obsolete/broken images IDs, that will not be migrated
+        obsolete_images_ids_list = []
+        dst_images = self._dst_images()
 
         view = GlanceImageProgessMigrationView(info['images'], dst_images)
         view.show_info()
@@ -504,6 +535,12 @@ class GlanceImage(image.Image):
         for img_id in obsolete_images_ids_list:
             info['images'].pop(img_id)
 
+        return self._new_info(created_images, empty_image_list,
+                              delete_disk_format, delete_container_format)
+
+    def _new_info(self, created_images, empty_image_list, delete_disk_format,
+                  delete_container_format):
+        new_info = {'images': {}}
         if created_images:
             im_name_list = [(im.name, tmp_meta) for (im, tmp_meta) in
                             created_images]

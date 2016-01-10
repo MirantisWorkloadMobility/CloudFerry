@@ -13,12 +13,12 @@
 # limitations under the License.
 
 from novaclient import client
-from cloudferrylib.utils import utils
+from cloudferrylib.utils import log
 from cloudferrylib.os.compute import nova_compute
 from condensation import utils as condensation_utils
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 def get_flavors_vms_and_nodes(conf):

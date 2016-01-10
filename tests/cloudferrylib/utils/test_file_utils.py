@@ -14,7 +14,7 @@
 import mock
 from cloudferrylib.utils import files
 from cloudferrylib.utils import remote_runner
-from cloudferrylib.utils.drivers import ssh_chunks
+from cloudferrylib.utils.drivers import copy_engine
 from tests import test
 
 
@@ -71,9 +71,9 @@ class RemoteDirTestCase(test.TestCase):
 
 
 class VerifiedFileCopyTestCase(test.TestCase):
-    @mock.patch("tests.cloudferrylib.utils.test_file_utils.ssh_chunks."
+    @mock.patch("tests.cloudferrylib.utils.test_file_utils.copy_engine."
                 "remote_scp")
-    @mock.patch("tests.cloudferrylib.utils.test_file_utils.ssh_chunks."
+    @mock.patch("tests.cloudferrylib.utils.test_file_utils.copy_engine."
                 "remote_md5_sum")
     def test_raises_error_on_copy_failure(self, scp, _):
         src_runner = mock.Mock()
@@ -87,14 +87,14 @@ class VerifiedFileCopyTestCase(test.TestCase):
 
         scp.side_effect = remote_runner.RemoteExecutionError
 
-        self.assertRaises(ssh_chunks.FileCopyFailure,
-                          ssh_chunks.verified_file_copy, src_runner,
+        self.assertRaises(copy_engine.FileCopyFailure,
+                          copy_engine.verified_file_copy, src_runner,
                           dst_runner, user, src_path, dst_path, dest_host,
                           num_retries)
 
-    @mock.patch("tests.cloudferrylib.utils.test_file_utils.ssh_chunks."
+    @mock.patch("tests.cloudferrylib.utils.test_file_utils.copy_engine."
                 "remote_scp")
-    @mock.patch("tests.cloudferrylib.utils.test_file_utils.ssh_chunks."
+    @mock.patch("tests.cloudferrylib.utils.test_file_utils.copy_engine."
                 "remote_md5_sum")
     def test_retries_if_error_occurs(self, scp, _):
         src_runner = mock.Mock()
@@ -109,10 +109,10 @@ class VerifiedFileCopyTestCase(test.TestCase):
         scp.side_effect = remote_runner.RemoteExecutionError
 
         try:
-            ssh_chunks.verified_file_copy(src_runner, dst_runner, user,
-                                          src_path, dst_path, dest_host,
-                                          num_retries)
-        except ssh_chunks.FileCopyFailure:
+            copy_engine.verified_file_copy(src_runner, dst_runner, user,
+                                           src_path, dst_path, dest_host,
+                                           num_retries)
+        except copy_engine.FileCopyFailure:
             assert scp.call_count == num_retries + 1
 
     def test_temp_dir_exception_inside_with(self):

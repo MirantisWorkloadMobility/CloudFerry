@@ -15,17 +15,19 @@
 
 import multiprocessing
 
+from fabric import api
+
 from cloudferrylib.scheduler.namespace import Namespace, CHILDREN
-from cloudferrylib.utils import utils
 from cloudferrylib.utils.errorcodes import NO_ERROR, \
     ERROR_INVALID_CONFIGURATION, ERROR_DURING_ROLLBACK, \
     ERROR_MIGRATION_FAILED, ERROR_INITIAL_CHECK
+from cloudferrylib.utils import log
 from cursor import Cursor
 import signal_handler
 from task import BaseTask
 from thread_tasks import WrapThreadTask
 import oslo.config.cfg
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 STEP_PREPARATION = "PREPARATION"
 STEP_MIGRATION = "MIGRATION"
@@ -46,11 +48,11 @@ class BaseScheduler(object):
         self.map_func_task[BaseTask()] = self.task_run
 
     def event_start_task(self, task):
-        LOG.info('%s Start task: %s', '-' * 8, task)
+        api.env.current_task = task
         return True
 
     def event_end_task(self, task):
-        LOG.info('%s End task: %s', '-' * 8, task)
+        api.env.current_task = None
         return True
 
     def event_error_task(self, task, e):

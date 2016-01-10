@@ -1,3 +1,5 @@
+INVALID_STATUSES = ['creating', 'error', 'deleting', 'error_deleting']
+
 img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
 # username and password for ssh access for cirros image
 username_for_ssh = 'cirros'
@@ -47,7 +49,7 @@ roles = [
 # Tenants to create/delete
 tenants = [
     {'name': 'tenant1', 'description': 'None', 'enabled': True,
-     'quota': {'instances': '9', 'cores': '19', 'ram': '52199',
+     'quota': {'instances': '20', 'cores': '19', 'ram': '52199',
                'floating_ips': '9', 'fixed_ips': '', 'metadata_items': '',
                'injected_files': '', 'injected_file_content_bytes': '',
                'injected_file_path_bytes': '', 'key_pairs': '5',
@@ -59,11 +61,17 @@ tenants = [
          'router': 14,
          'subnet': 55
      },
+     'server_groups': [
+         {'name': 'tn1_server_group', 'policies': ['affinity']},
+         {'name': 'tn1_server_group2', 'policies': ['affinity']}
+     ],
      'vms': [
          {'name': 'tn1server1', 'image': 'image1', 'flavor': 'flavorname2',
-          'key_name': 'key1'},
-         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1'},
-         {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr'}],
+          'key_name': 'key1', 'server_group': 'tn1_server_group'},
+         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1',
+          'server_group': 'tn1_server_group'},
+         {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr',
+          'server_group': 'tn1_server_group2'}],
      'networks': [
          {'name': 'tenantnet1', 'admin_state_up': True,
           'subnets': [
@@ -135,7 +143,7 @@ tenants = [
           'server_to_attach': 'tn1server1', 'device': '/dev/vdb'},
          {'display_name': 'tn1_volume2', 'size': 1,
           'volume_type': 'nfs2'}
-     ],
+         ],
      'cinder_snapshots': [
          # Commented because of unimplemented error in nfs driver for grizzly.
          # {'name': 'tn1snapsh', 'volume_id': 'tn1_volume2'}
@@ -177,7 +185,7 @@ tenants = [
               {'filename': 'test_data.txt', 'data': 'some useless string'},
               {'filename': 'test/dir/test_data.txt',
                'data': 'test data string'}]}
-     ],
+         ],
      'unassociated_fip': 1
      },
     {'name': 'tenant3', 'description': 'This tenant will be deleted',
@@ -194,7 +202,7 @@ tenants = [
          {'display_name': 'tn3_volume1', 'size': 1,
           'server_to_attach': 'tn3server1', 'device': '/dev/vdb'}],
      'cinder_snapshots': [],
-     'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': True}],
+     'images': [{'name': 'image6', 'copy_from': img_url, 'is_public': False}],
      'flavors': [
          {'name': 'tn3fl1', 'disk': '1', 'ram': '64', 'vcpus': '1'}
      ],
@@ -252,7 +260,29 @@ tenants = [
          {'name': 'tenantnet4', 'admin_state_up': True,
           'subnets': [
               {'cidr': '33.33.33.0/24', 'ip_version': 4, 'name': 't4_s1',
-               'routers_to_connect': ['ext_router']}]}],
+               'routers_to_connect': ['ext_router']}]},
+         {'name': 'tenantnet4_segm_id_cidr1', 'admin_state_up': True,
+          'shared': False,
+          'router:external': False, 'real_network': False,
+          'provider:segmentation_id': 177,
+          'provider:network_type': 'gre',
+          'subnets': [
+              {'cidr': '31.31.31.0/24', 'ip_version': 4,
+               'name': 'segm_id_test_subnet_1', 'connect_to_ext_router': False,
+               }
+              ]
+          },
+         {'name': 'tenantnet4_segm_id_cidr2', 'admin_state_up': True,
+          'shared': False,
+          'router:external': False, 'real_network': False,
+          'provider:segmentation_id': 178,
+          'provider:network_type': 'gre',
+          'subnets': [
+              {'cidr': '40.40.40.0/24', 'ip_version': 4,
+               'name': 'segm_id_test_subnet_2', 'connect_to_ext_router': False,
+               }
+              ]
+          }],
      'security_groups': [
          {'name': 'sg41', 'description': 'Tenant4 blah blah group', 'rules': [
              {'ip_protocol': 'icmp',
@@ -299,7 +329,7 @@ vms_not_in_filter = ['not_in_filter']
 
 # Images that should have few specific members:
 members = ['tenant1']
-img_to_add_members = ['image3', 'image4']
+img_to_add_members = ['image3', 'image4', 'image6']
 
 # Flavors to create/delete
 flavors = [
@@ -367,8 +397,37 @@ vips = [
         'pool_name': "pool1",
         'tenant_name': "admin",
         'subnet_name': "subnet_1"
-    }]
+        },
+    ]
 
+dst_networks = [
+    {'name': 'test_segm_id_cidr1', 'admin_state_up': True,
+     'shared': False,
+     'router:external': False, 'real_network': False,
+     'provider:segmentation_id': 177,
+     'provider:network_type': 'gre',
+     'subnets': [
+         {'cidr': '31.31.31.0/24', 'ip_version': 4,
+          'name': 'segm_id_test_subnet_1', 'connect_to_ext_router': False,
+          }
+         ]
+     },
+    {'name': 'test_segm_id_cidr2', 'admin_state_up': True,
+     'shared': False,
+     'router:external': False, 'real_network': False,
+     'provider:segmentation_id': 178,
+     'provider:network_type': 'gre',
+     'subnets': [
+         {'cidr': '41.41.41.0/24', 'ip_version': 4,
+          'name': 'segm_id_test_subnet_2', 'connect_to_ext_router': False,
+          }
+         ]
+     }]
+
+# Server groups to create
+server_groups = [
+    {'name': 'admin_server_group', 'policies': ['anti-affinity']}
+]
 # VM's to create/delete
 vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
@@ -380,7 +439,8 @@ vms = [
     {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'server7', 'image': 'image1', 'flavor': 'flavorname1',
      'broken': True},
-    {'name': 'server8', 'image': 'broken_image', 'flavor': 'flavorname1'}
+    {'name': 'server8', 'image': 'broken_image', 'flavor': 'flavorname1',
+     'server_group': 'admin_server_group'}
 ]
 
 vms_from_volumes = [
@@ -398,7 +458,6 @@ routers = [
 snapshots = [
     {'server': 'server2', 'image_name': 'asdasd'}
 ]
-
 
 '''
 Cinder images to create/delete

@@ -16,9 +16,9 @@ import os
 
 from xml.etree import ElementTree
 
-from cloudferrylib.utils import utils
+from cloudferrylib.utils import log
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 nova_instances_path = "/var/lib/nova/instances/"
 

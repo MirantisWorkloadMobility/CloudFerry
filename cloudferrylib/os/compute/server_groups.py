@@ -31,10 +31,12 @@ from novaclient import exceptions as nova_exc
 
 from cloudferrylib.base import compute
 from cloudferrylib.os.identity import keystone
+from cloudferrylib.utils import log
+from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import utils
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 SQL_SELECT_ALL_GROUPS = ("SELECT user_id, project_id, uuid, name, id FROM "
                          "instance_groups WHERE deleted=0;")
@@ -98,7 +100,8 @@ class ServerGroupsHandler(compute.Compute):
         """
         groups = []
         try:
-            self._nova_client.server_groups.list()
+            with proxy_client.expect_exception(nova_exc.NotFound):
+                self._nova_client.server_groups.list()
 
             for row in self._execute(SQL_SELECT_ALL_GROUPS).fetchall():
                 LOG.debug("Resulting row: %s", row)
@@ -180,8 +183,9 @@ class ServerGroupsHandler(compute.Compute):
                  server_group['tenant'], server_group['name'])
 
         try:
-            tenant_id = self.identity.get_tenant_id_by_name(
-                server_group["tenant"])
+            with proxy_client.expect_exception(keystone.ks_exceptions.NotFound):
+                tenant_id = self.identity.get_tenant_id_by_name(
+                    server_group["tenant"])
         except keystone.ks_exceptions.NotFound:
             LOG.info("Tenant '%s' does not exist on DST. Skipping server group"
                      " '%s' with id='%s'...",
@@ -225,7 +229,12 @@ class ServerGroupsHandler(compute.Compute):
                 client_config.cloud.user,
                 instance_tenant):
             nclient = self.compute.get_client(client_config)
-            server_group_list = nclient.server_groups.list()
+
+            try:
+                server_group_list = nclient.server_groups.list()
+            except nova_exc.NotFound:
+                LOG.info("Cloud does not support server_groups")
+                return
 
         for server_group in server_group_list:
             if instance_id in server_group.members:

@@ -19,11 +19,12 @@ from Crypto.PublicKey import RSA
 
 from novaclient import exceptions as nova_exc
 
+from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import timeout_exception
-from cloudferrylib.utils import utils
+from cloudferrylib.utils import log
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 # How many times to take calling function successfully before giving up
 # by default
@@ -107,7 +108,8 @@ def is_vm_deleted(client, instance_id):
     Returns True when there is no VM with ID provided in first argument.
     """
     try:
-        client.servers.get(instance_id)
+        with proxy_client.expect_exception(nova_exc.NotFound):
+            client.servers.get(instance_id)
         return False
     except nova_exc.NotFound:
         return True
@@ -120,7 +122,8 @@ def is_vm_status_in(client, instance_id, statuses):
     """
     statuses = [s.lower() for s in statuses]
     try:
-        instance = client.servers.get(instance_id)
+        with proxy_client.expect_exception(nova_exc.NotFound):
+            instance = client.servers.get(instance_id)
         status = instance.status.lower()
         if status == ERROR:
             raise RuntimeError("VM in error status")

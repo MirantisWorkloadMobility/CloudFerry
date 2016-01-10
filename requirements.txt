@@ -9,7 +9,7 @@ fabric>=1.8.2
 ipaddr
 jinja2
 jsondate
-mysql-connector-python
+PyMySQL==0.6.7
 oslo.config==1.15.0
 oslo.utils==1.9.0
 pika==0.9.14
@@ -23,7 +23,6 @@ python-novaclient==2.20.0
 python-swiftclient==2.3.1
 pyyaml
 redis
-nose
 sqlalchemy
 # see https://github.com/paramiko/paramiko/issues/570 and https://github.com/paramiko/paramiko/pull/571
 -e git://github.com/mirrorcoder/paramiko.git#egg=paramiko-1.16.0

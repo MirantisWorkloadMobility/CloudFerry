@@ -17,10 +17,10 @@ from fabric.api import run
 from fabric.api import settings
 
 import cfglib
+from cloudferrylib.utils import log
 from cloudferrylib.utils.utils import forward_agent
-from cloudferrylib.utils import utils
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class RemoteExecutionError(RuntimeError):

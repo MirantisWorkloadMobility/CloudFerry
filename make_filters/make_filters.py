@@ -17,8 +17,10 @@ import data_storage
 import json
 import yaml
 import os
-from cloudferrylib.utils import utils as utl
-LOG = utl.get_log(__name__)
+
+from cloudferrylib.utils import log
+
+LOG = log.getLogger(__name__)
 
 
 MIGRATE_VM_PREFIX = 'migrate_vm_'

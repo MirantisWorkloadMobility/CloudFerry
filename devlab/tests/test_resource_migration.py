@@ -24,8 +24,18 @@ import unittest
 from fabric.api import run, settings
 from fabric.network import NetworkError
 
+NET_NAMES_TO_OMIT = ['tenantnet4_segm_id_cidr1',
+                     'tenantnet4_segm_id_cidr2']
+SUBNET_NAMES_TO_OMIT = ['segm_id_test_subnet_1',
+                        'segm_id_test_subnet_2']
+PARAMS_NAMES_TO_OMIT = ['cidr', 'gateway_ip', 'provider:segmentation_id']
+
 
 class ResourceMigrationTests(functional_test.FunctionalTest):
+
+    def _is_segm_id_test(self, param, name):
+        return param in PARAMS_NAMES_TO_OMIT and (
+            name in NET_NAMES_TO_OMIT or name in SUBNET_NAMES_TO_OMIT)
 
     def validate_resource_parameter_in_dst(self, src_list, dst_list,
                                            resource_name, parameter):
@@ -39,7 +49,8 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             for j in dst_list:
                 if getattr(i, name_attr) != getattr(j, name_attr):
                     continue
-                if getattr(i, parameter) != getattr(j, parameter):
+                if getattr(i, parameter, None) and \
+                        getattr(i, parameter) != getattr(j, parameter):
                     msg = 'Parameter {param} for resource {res} with name ' \
                           '{name} are different src: {r1}, dst: {r2}'
                     self.fail(msg.format(
@@ -63,11 +74,13 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 if i['name'] != j['name']:
                     continue
                 if i[parameter] != j[parameter]:
-                    msg = 'Parameter {param} for resource {res} with name ' \
-                          '{name} are different src: {r1}, dst: {r2}'
-                    self.fail(msg.format(
-                        param=parameter, res=resource_name, name=i['name'],
-                        r1=i[parameter], r2=j[parameter]))
+                    if not self._is_segm_id_test(parameter, i['name']):
+                        msg = 'Parameter {param} for resource {res}' \
+                              ' with name {name} are different' \
+                              ' src: {r1}, dst: {r2}'
+                        self.fail(msg.format(
+                            param=parameter, res=resource_name, name=i['name'],
+                            r1=i[parameter], r2=j[parameter]))
                 break
             else:
                 msg = 'Resource {res} with name {r_name} was not found on dst'
@@ -91,6 +104,15 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
                                                 resource_name='flavor',
                                                 parameter='id')
+
+    def validate_network_name_in_port_lists(self, src_ports, dst_ports):
+        dst_net_names = [self.dst_cloud.get_net_name(dst_port['network_id'])
+                         for dst_port in dst_ports]
+        src_net_names = [self.src_cloud.get_net_name(src_port['network_id'])
+                         for src_port in src_ports]
+        self.assertTrue(dst_net_names.sort() == src_net_names.sort(),
+                        msg="Network ports is not the same. SRC: %s \n DST: %s"
+                            % (src_net_names, dst_net_names))
 
     def test_migrate_keystone_users(self):
         src_users = self.filter_users()
@@ -182,6 +204,40 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             src_sec_gr, dst_sec_gr, resource_name='security_groups',
             parameter='description')
 
+    @unittest.skipIf(
+        functional_test.config_ini['migrate']
+                                  ['keep_affinity_settings'] == 'False',
+        'Keep affinity settings disabled in CloudFerry config')
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2', 'tenant4'])
+    def test_migrate_nova_server_groups(self):
+        def get_members_names(client, sg_groups):
+            groups = {}
+            for sg_group in sg_groups:
+                members_names = [client.servers.get(member).name
+                                 for member in sg_group.members]
+                groups[sg_group.name] = sorted(members_names)
+            return groups
+
+        if self.src_cloud.openstack_release == 'grizzly':
+            self.skipTest('Grizzly release does not support server groups')
+        src_server_groups = self.src_cloud.get_all_server_groups()
+        dst_server_groups = self.dst_cloud.get_all_server_groups()
+        self.validate_resource_parameter_in_dst(
+            src_server_groups, dst_server_groups,
+            resource_name='server_groups',
+            parameter='name')
+        src_members = get_members_names(self.src_cloud.novaclient,
+                                        src_server_groups)
+        dst_members = get_members_names(self.dst_cloud.novaclient,
+                                        dst_server_groups)
+        for group in src_members:
+            self.assertListEqual(src_members[group], dst_members[group],
+                                 'Members in server group: "{0}" are different'
+                                 ': "{1}" and "{2}"'.format(group,
+                                                            src_members[group],
+                                                            dst_members[group])
+                                 )
+
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_image_members(self):
 
@@ -201,7 +257,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         src_images = [img for img in self.src_cloud.glanceclient.images.list()
                       if img.name not in config.images_not_included_in_filter]
         dst_images = [img for img in self.dst_cloud.glanceclient.images.list(
-                      is_public=None)]
+            is_public=None)]
 
         src_members = member_list_collector(src_images,
                                             self.src_cloud.glanceclient,
@@ -239,27 +295,33 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 resource_name='image',
                                                 parameter='checksum')
 
-    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
-    def test_migrate_glance_belongs_to_deleted_tenant(self):
-        src_images = self.filter_images()
-        src_tnt_ids = [i.id for i in self.filter_tenants()]
-        src_tnt_ids.append(self.src_cloud.get_tenant_id(self.src_cloud.tenant))
-        src_images = [i.name for i in src_images if i.owner not in src_tnt_ids]
+    @attr(migrated_tenant=['tenant1', 'tenant2'])
+    def test_migrate_glance_image_belongs_to_deleted_tenant(self):
+        src_image_names = []
 
-        dst_images = self.dst_cloud.glanceclient.images.list()
+        def get_image_by_name(image_list, img_name):
+            for image in image_list:
+                if image.name == img_name:
+                    return image
+
+        for tenant in config.tenants:
+            if tenant.get('deleted') and tenant.get('images'):
+                src_image_names.extend([image['name'] for image in
+                                        tenant['images']])
+
+        dst_images = [image for image in
+                      self.dst_cloud.glanceclient.images.list()]
+        dst_image_names = [image.name for image in dst_images]
         dst_tenant_id = self.dst_cloud.get_tenant_id(self.dst_cloud.tenant)
 
-        least_image_check = False
-        for image in dst_images:
-            if image.name not in src_images:
-                continue
-            least_image_check = True
+        for image_name in src_image_names:
+            self.assertTrue(image_name in dst_image_names,
+                            'Image {0} is not in DST image list: {1}'
+                            .format(image_name, dst_image_names))
+            image = get_image_by_name(dst_images, image_name)
             self.assertEqual(image.owner, dst_tenant_id,
                              'Image owner on dst is {0} instead of {1}'.format(
                                  image.owner, dst_tenant_id))
-        msg = ("Either migration is not initiated or it was not successful for"
-               " resource 'Image'.")
-        self.assertTrue(least_image_check, msg=msg)
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_glance_images_not_in_filter_did_not_migrate(self):
@@ -311,6 +373,37 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             self.assertTrue(dst_routers_names.count(router) == 1,
                             msg='Router %s presents multiple times' % router)
 
+    @attr(migrated_tenant=['tenant1', 'tenant2'])
+    def test_router_connected_to_correct_networks(self):
+        src_routers = self.filter_routers()['routers']
+        dst_routers = self.dst_cloud.neutronclient.list_routers()['routers']
+        for dst_router in dst_routers:
+            dst_ports = self.dst_cloud.neutronclient.list_ports(
+                retrieve_all=True, **{'device_id': dst_router['id']})['ports']
+            for src_router in src_routers:
+                if src_router['name'] == dst_router['name']:
+                    src_ports = self.src_cloud.neutronclient.list_ports(
+                        retrieve_all=True, **{'device_id': src_router['id']})\
+                        ['ports']
+                    self.validate_network_name_in_port_lists(
+                        src_ports=src_ports, dst_ports=dst_ports)
+
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    def test_router_migrated_to_correct_tenant(self):
+        src_routers = self.filter_routers()['routers']
+        dst_routers = self.dst_cloud.neutronclient.list_routers()['routers']
+        for dst_router in dst_routers:
+            dst_tenant_name = self.dst_cloud.get_tenant_name(
+                dst_router['tenant_id'])
+            for src_router in src_routers:
+                if src_router['name'] == dst_router['name']:
+                    src_tenant_name = self.src_cloud.get_tenant_name(
+                        src_router['tenant_id'])
+                    self.assertTrue(src_tenant_name == dst_tenant_name,
+                                    msg='DST tenant name %s is not equal to '
+                                        'SRC %s' %
+                                        (dst_tenant_name, src_tenant_name))
+
     @attr(migrated_tenant='tenant2')
     def test_migrate_vms_parameters(self):
         src_vms = self.filter_vms()
@@ -351,15 +444,25 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         dst_volume_list = self.dst_cloud.cinderclient.volumes.list(
             search_opts={'all_tenants': 1})
 
+        for parameter in ('display_name', 'size', 'bootable', 'metadata'):
+            self.validate_resource_parameter_in_dst(
+                src_volume_list, dst_volume_list, resource_name='volume',
+                parameter=parameter)
+
+        def ignore_image_id(volumes):
+            for vol in volumes:
+                metadata = getattr(vol, 'volume_image_metadata', None)
+                if metadata and 'image_id' in metadata:
+                    del metadata['image_id']
+                    vol.volume_image_metadata = metadata
+            return volumes
+
+        src_volume_list = ignore_image_id(src_volume_list)
+        dst_volume_list = ignore_image_id(dst_volume_list)
+
         self.validate_resource_parameter_in_dst(
             src_volume_list, dst_volume_list, resource_name='volume',
-            parameter='display_name')
-        self.validate_resource_parameter_in_dst(
-            src_volume_list, dst_volume_list, resource_name='volume',
-            parameter='size')
-        self.validate_resource_parameter_in_dst(
-            src_volume_list, dst_volume_list, resource_name='volume',
-            parameter='bootable')
+            parameter='volume_image_metadata')
 
     @attr(migrated_tenant='tenant2')
     def test_migrate_cinder_volumes_data(self):
@@ -394,6 +497,37 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                        warn_only=True)
             for _file in volume['write_to_file']:
                 check_file_valid(volume['mount_point'] + _file['filename'])
+
+    def test_cinder_volumes_not_in_filter_did_not_migrate(self):
+        src_volume_list = self.filter_volumes()
+        dst_volume_list = self.dst_cloud.cinderclient.volumes.list(
+            search_opts={'all_tenants': 1})
+        dst_volumes = [x.id for x in dst_volume_list]
+
+        filtering_data = self.filtering_utils.filter_volumes(src_volume_list)
+
+        volumes_filtered_out = filtering_data[1]
+        for volume in volumes_filtered_out:
+            self.assertTrue(volume.id not in dst_volumes,
+                            'Volume migrated despite that it was not included '
+                            'in filter, Volume info: \n{}'.format(volume))
+
+    def test_invalid_status_cinder_volumes_did_not_migrate(self):
+        src_volume_list = self.src_cloud.cinderclient.volumes.list(
+            search_opts={'all_tenants': 1})
+        dst_volume_list = self.dst_cloud.cinderclient.volumes.list(
+            search_opts={'all_tenants': 1})
+        dst_volumes = [x.id for x in dst_volume_list]
+
+        invalid_status_volumes = [
+            vol for vol in src_volume_list
+            if vol.status in config.INVALID_STATUSES
+        ]
+
+        for volume in invalid_status_volumes:
+            self.assertTrue(volume.id not in dst_volumes,
+                            'Volume migrated despite that it had '
+                            'invalid status, Volume info: \n{}'.format(volume))
 
     @unittest.skip("Temporarily disabled: snapshots doesn't implemented in "
                    "cinder's nfs driver")
@@ -503,8 +637,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                       "{fips}".format(num=len(missing_fips),
                                       fips=pprint.pformat(missing_fips)))
 
-    @unittest.skipUnless(functional_test.cfglib.CONF.migrate.change_router_ips,
-                         'Change router ips disabled in CloudFerry config')
+    @unittest.skipIf(
+        functional_test.config_ini['migrate']['change_router_ips'] == 'False',
+        'Change router ips disabled in CloudFerry config')
     def test_ext_router_ip_changed(self):
         dst_routers = self.dst_cloud.get_ext_routers()
         src_routers = self.src_cloud.get_ext_routers()

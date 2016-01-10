@@ -18,10 +18,11 @@ from fabric.api import settings
 from cloudferrylib.base.action import action
 from cloudferrylib.base import exception
 from cloudferrylib.utils import remote_runner
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils
 
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class CheckSSH(action.Action):

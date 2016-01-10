@@ -18,6 +18,7 @@ import warnings
 import cfglib
 from cloudferrylib.scheduler.namespace import Namespace
 from cloudferrylib.scheduler.scheduler import Scheduler
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils
 from cloudferrylib.utils.errorcodes import ERROR_INVALID_CONFIGURATION
 from cloudferrylib.scheduler.scenario import Scenario
@@ -36,41 +37,37 @@ from evacuation import evacuation_chain
 from make_filters import make_filters
 import sys
 import oslo.config.cfg
+import oslo.config.types
 import traceback
 
 env.forward_agent = True
 env.user = 'root'
-LOG = utils.get_log(__name__)
+env.cloud = None
+env.current_task = None
+LOG = log.getLogger(__name__)
 
 
 DEFAULT_FILTERS_FILES = 'configs/filters'
 
 
 @task
-def migrate(name_config=None, debug=False):
+def migrate(name_config=None, debug=None):
     """
         :name_config - name of config yaml-file, example 'config.yaml'
     """
-    if debug:
-        utils.configure_logging("DEBUG")
-    try:
-        load_config(name_config)
-        env.key_filename = cfglib.CONF.migrate.key_filename
-        env.connection_attempts = cfglib.CONF.migrate.ssh_connection_attempts
-        cloud = cloud_ferry.CloudFerry(cfglib.CONF)
-        status_error = cloud.migrate(Scenario(
-            path_scenario=cfglib.CONF.migrate.scenario,
-            path_tasks=cfglib.CONF.migrate.tasks_mapping))
-    except oslo.config.cfg.Error:
-        traceback.print_exc()
-        sys.exit(ERROR_INVALID_CONFIGURATION)
+    init(name_config, debug)
+    env.key_filename = cfglib.CONF.migrate.key_filename
+    env.connection_attempts = cfglib.CONF.migrate.ssh_connection_attempts
+    env.cloud = cloud_ferry.CloudFerry(cfglib.CONF)
+    status_error = env.cloud.migrate(Scenario(
+        path_scenario=cfglib.CONF.migrate.scenario,
+        path_tasks=cfglib.CONF.migrate.tasks_mapping))
     sys.exit(status_error)
 
 
 @task
-def get_info(name_config, debug=False):
-    if debug:
-        utils.configure_logging("DEBUG")
+def get_info(name_config, debug=None):
+    init(name_config, debug)
     LOG.info("Init getting information")
     namespace = Namespace({'name_config': name_config})
     Scheduler(namespace)
@@ -78,21 +75,19 @@ def get_info(name_config, debug=False):
 
 @task
 def dry_run():
+    init()
     chain.process_test_chain()
 
 
 @task
-def evacuate(name_config=None, debug=False, iteration=False):
-    if debug:
-        utils.configure_logging("DEBUG")
-
+def evacuate(name_config=None, debug=None, iteration=False):
+    init(name_config, debug)
     try:
         iteration = int(iteration)
     except ValueError:
         LOG.error("Invalid value provided as 'iteration' argument, it must be "
                   "integer")
         return
-    load_config(name_config)
     env.key_filename = cfglib.CONF.migrate.key_filename
     cloud = cloud_ferry.CloudFerry(cfglib.CONF)
     LOG.info("running evacuation")
@@ -111,7 +106,7 @@ def evacuate(name_config=None, debug=False, iteration=False):
 
 @task
 def get_groups(name_config=None, group_file=None, cloud_id='src',
-               validate_users_group=False, debug=False):
+               validate_users_group=False, debug=None):
     """
     Function to group VMs by any of those dependencies (f.e. tenants,
     networks, etc.).
@@ -122,17 +117,13 @@ def get_groups(name_config=None, group_file=None, cloud_id='src',
            VM id specified. Takes more time because of nova API multiple calls
     :return: yaml-file with tree-based groups defined based on grouping rules.
     """
-
-    if debug:
-        utils.configure_logging("DEBUG")
-
-    load_config(name_config)
+    init(name_config, debug)
     group = grouping.Grouping(cfglib.CONF, group_file, cloud_id)
     group.group(validate_users_group)
 
 
 @task
-def condense(config=None, vm_grouping_config=None, debug=False):
+def condense(config=None, vm_grouping_config=None, debug=None):
     """
     When migration is done in-place (there's no spare hardware), cloud
     migration admin would want to free as many hardware nodes as possible. This
@@ -153,9 +144,7 @@ def condense(config=None, vm_grouping_config=None, debug=False):
                 `configs/groups.yaml`)
      :debug: - boolean value, enables debugging messages if set to `True`
     """
-    if debug:
-        utils.configure_logging("DEBUG")
-    load_config(config)
+    init(config, debug)
     data_storage.check_redis_config()
 
     LOG.info("Retrieving flavors, VMs and nodes from SRC cloud")
@@ -191,7 +180,7 @@ def condense(config=None, vm_grouping_config=None, debug=False):
 
 @task
 def get_condensation_info(name_config=None):
-    load_config(name_config)
+    init(name_config)
     nova_collector.run_it(cfglib.CONF)
 
 
@@ -200,16 +189,25 @@ def create_filters(name_config=None, filter_folder=DEFAULT_FILTERS_FILES,
                    images_date='2000-01-01'):
     """Generates filter files for CloudFerry based on the schedule prepared by
     condensation/grouping."""
-    load_config(name_config)
+    init(name_config)
     make_filters.make(filter_folder, images_date)
 
 
-def load_config(name_config):
+def init(name_config=None, debug=None):
     cfglib.collector_configs_plugins()
-    cfglib.init_config(name_config)
+    try:
+        cfglib.init_config(name_config)
+    except oslo.config.cfg.Error:
+        traceback.print_exc()
+        sys.exit(ERROR_INVALID_CONFIGURATION)
+
     utils.init_singletones(cfglib.CONF)
     if cfglib.CONF.migrate.hide_ssl_warnings:
         warnings.simplefilter("ignore")
+    if debug is not None:
+        value = oslo.config.types.Boolean()(debug)
+        cfglib.CONF.set_override('debug', value, 'migrate')
+    log.configure_logging()
 
 
 if __name__ == '__main__':

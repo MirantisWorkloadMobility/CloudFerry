@@ -13,11 +13,11 @@
 # limitations under the License.
 
 
-from cloudferrylib.utils import utils
 from cloudferrylib.base import exception
 from cloudferrylib.base.action import action
+from cloudferrylib.utils import log
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class VerifyVms(action.Action):
@@ -54,6 +54,10 @@ class VerifyVms(action.Action):
                 new_dst_volumes.append(dst_vol['volume'])
             dst_cmp_info[old_id].update(
                 {'volumes': new_dst_volumes})
+
+            dst_cmp_info[old_id].update(
+                {'server_group': dst_inst_['server_group']})
+
             inst_cnt += 1
         failed_vms = []
         for src_inst_id in src_info['instances']:
@@ -84,6 +88,17 @@ class VerifyVms(action.Action):
                     LOG.warning("Wrong volumes of instance {} on DST"
                                 .format(src_inst_id))
                     failed_vms.append(src_inst_id)
+
+                # Verify that migrated VM belongs to correct server group
+                if (src_inst_info['server_group'] !=
+                        dst_cmp_inst['server_group']):
+                    LOG.warning("Wrong server group of instance '%s' on DST! "
+                                "SRC server group: '%s', "
+                                "DST server group: '%s'.",
+                                src_inst_id,
+                                src_inst_info['server_group'],
+                                dst_cmp_inst['server_group'])
+
         if failed_vms:
             LOG.warning("Instances were not migrated:")
             for vm in failed_vms:

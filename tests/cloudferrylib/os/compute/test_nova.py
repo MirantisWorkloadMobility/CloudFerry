@@ -211,10 +211,13 @@ class NovaComputeTestCase(test.TestCase):
             user_id=None,
             instances='new_fake_value')
 
+
+class ComputeHostsTestCase(NovaComputeTestCase):
     @classmethod
     def _host(cls, name, up=True, enabled=True):
         h = mock.Mock()
         h.host = name
+        h.host_name = name
         h.state = 'up' if up else 'down'
         h.status = 'enabled' if enabled else 'disabled'
         return h
@@ -228,6 +231,7 @@ class NovaComputeTestCase(test.TestCase):
         all_hosts = active_hosts + down_hosts
 
         self.mock_client().services.list.return_value = all_hosts
+        self.mock_client().hosts.list.return_value = all_hosts
 
         hosts = self.nova_client.get_compute_hosts()
 
@@ -250,6 +254,7 @@ class NovaComputeTestCase(test.TestCase):
         all_hosts = active_hosts + disabled_hosts
 
         self.mock_client().services.list.return_value = all_hosts
+        self.mock_client().hosts.list.return_value = all_hosts
 
         hosts = self.nova_client.get_compute_hosts()
 
@@ -272,6 +277,7 @@ class NovaComputeTestCase(test.TestCase):
         all_hosts = active_hosts + disabled_hosts
 
         self.mock_client().services.list.return_value = all_hosts
+        self.mock_client().hosts.list.return_value = all_hosts
 
         hosts = self.nova_client.get_compute_hosts()
 
@@ -283,6 +289,45 @@ class NovaComputeTestCase(test.TestCase):
 
         for disabled in disabled_host_names:
             self.assertNotIn(disabled, hosts)
+
+    def test_hosts_outside_availability_zone_are_not_shown(self):
+        active_hosts = ['h1', 'h2', 'h3', 'h4', 'h5']
+        # az == availability zone
+        az_hosts = ['h1', 'h2']
+
+        all_hosts = [self._host(name) for name in active_hosts]
+        hosts_in_az = [self._host(name) for name in az_hosts]
+
+        self.mock_client().services.list.return_value = all_hosts
+        self.mock_client().hosts.list.return_value = hosts_in_az
+
+        hosts = self.nova_client.get_compute_hosts(availability_zone='az')
+
+        self.assertEqual(az_hosts, hosts)
+
+    def test_disabled_hosts_from_availability_zone_are_not_shown(self):
+        active_hosts = ['h1', 'h2', 'h3', 'h4', 'h5']
+        # az == availability zone
+        out_az_disabled_hosts = ['disabled1', 'disabled2', 'disabled3']
+        disabled_az_hosts = ['az_disabled1', 'az_disabled2']
+        disabled_hosts = out_az_disabled_hosts + disabled_az_hosts
+
+        enabled_az_hosts = ['h1', 'h2']
+        az_hosts = enabled_az_hosts
+
+        all_hosts = [self._host(name) for name in active_hosts]
+        all_hosts += [self._host(name, enabled=False)
+                      for name in disabled_hosts]
+        hosts_in_az = [self._host(name) for name in az_hosts] + \
+                      [self._host(name, enabled=False)
+                       for name in disabled_az_hosts]
+
+        self.mock_client().services.list.return_value = all_hosts
+        self.mock_client().hosts.list.return_value = hosts_in_az
+
+        hosts = self.nova_client.get_compute_hosts(availability_zone='az')
+
+        self.assertEqual(az_hosts, hosts)
 
 
 class DeployInstanceWithManualScheduling(test.TestCase):
@@ -320,65 +365,30 @@ class DeployInstanceWithManualScheduling(test.TestCase):
 
 
 class FlavorDeploymentTestCase(test.TestCase):
-    def test_flavor_is_updated_with_destination_id(self):
-        config = mock.Mock()
-        cloud = mock.MagicMock()
-        cloud.position = 'dst'
-
-        expected_id = 'flavor1'
-        existing_flavor = mock.Mock()
-        existing_flavor.id = 'non-public-flavor'
-        existing_flavor.name = 'non-public-flavor'
-        created_flavor = mock.Mock()
-        created_flavor.id = expected_id
-        nc = nova_compute.NovaCompute(config, cloud)
-        nc.get_flavor_list = mock.MagicMock()
-        nc.get_flavor_list.return_value = [existing_flavor]
-        nc.add_flavor_access = mock.MagicMock()
-        nc._create_flavor_if_not_exists = mock.MagicMock()
-        nc._create_flavor_if_not_exists.return_value = created_flavor
-
-        flavors = {
-            expected_id: {
-                'flavor': {
-                    'is_public': True,
-                    'name': 'flavor1',
-                    'tenants': []
-                },
-                'meta': {}
-            },
-            existing_flavor.id: {
-                'flavor': {
-                    'is_public': False,
-                    'name': existing_flavor.name,
-                    'tenants': ['t1', 't2']
-                },
-                'meta': {}
-            }
-
-        }
-
-        tenant_map = {
-            't1': 't1dest',
-            't2': 't2dest',
-        }
-        nc._deploy_flavors(flavors, tenant_map)
-
-        for f in flavors:
-            self.assertTrue('id' in flavors[f]['meta'])
-            self.assertEqual(flavors[f]['meta']['id'], f)
-
     def test_flavor_is_not_created_if_already_exists_on_dest(self):
         existing_flavor = mock.Mock()
         existing_flavor.id = 'existing-id'
         existing_flavor.name = 'existing-name'
+        existing_flavor.is_public = True
+        existing_flavor.ram = 48
+        existing_flavor.vcpus = 1
+        existing_flavor.disk = 0
+        existing_flavor.ephemeral = 1
+        existing_flavor.swap = 0
+        existing_flavor.rxtx_factor = 1.0
 
         flavors = {
             existing_flavor.id: {
                 'flavor': {
                     'is_public': True,
                     'name': existing_flavor.name,
-                    'tenants': []
+                    'tenants': [],
+                    'ram': 48,
+                    'vcpus': 1,
+                    'disk': 0,
+                    'ephemeral': 1,
+                    'swap': 0,
+                    'rxtx_factor': 1.0,
                 },
                 'meta': {}
             }
@@ -396,13 +406,21 @@ class FlavorDeploymentTestCase(test.TestCase):
 
         assert not nc._create_flavor_if_not_exists.called
 
-    def test_access_not_updated_for_public_flavors(self):
+    @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute'
+                '.create_flavor')
+    def test_access_not_updated_for_public_flavors(self, _):
         flavors = {
             'flavor1': {
                 'flavor': {
                     'is_public': True,
                     'name': 'flavor1',
-                    'tenants': []
+                    'tenants': [],
+                    'ram': 48,
+                    'vcpus': 1,
+                    'disk': 0,
+                    'ephemeral': 1,
+                    'swap': 0,
+                    'rxtx_factor': 1.0,
                 },
                 'meta': {}
             }
@@ -422,13 +440,21 @@ class FlavorDeploymentTestCase(test.TestCase):
 
         assert not nc._add_flavor_access_for_tenants.called
 
-    def test_access_list_is_updated_for_non_public_flavors(self):
+    @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute'
+                '.create_flavor')
+    def test_access_list_is_updated_for_non_public_flavors(self, _):
         flavors = {
             'flavor1': {
                 'flavor': {
                     'is_public': False,
                     'name': 'flavor1',
-                    'tenants': []
+                    'tenants': [],
+                    'ram': 48,
+                    'vcpus': 1,
+                    'disk': 0,
+                    'ephemeral': 1,
+                    'swap': 0,
+                    'rxtx_factor': 1.0,
                 },
                 'meta': {}
             }

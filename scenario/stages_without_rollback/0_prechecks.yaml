@@ -1,0 +1,33 @@
+# Initial checks only, to ensure CF is setup correctly prior to migration.
+# This scenario checks includes: SSH connectivity to compute nodes,
+# DB access, RabbitMQ connectivity, required bandwidth verification,
+# Opentack API functionality on source  and destination clouds.
+# As well as network verification such as segmentation IDs, subnets and
+# floating IP overlap checks. And no VMs spawned directly in ext. network.
+# In case CF filter is used, it verifies if the IDs are correct in it.
+
+preparation:
+  - pre_migration_test:
+      - act_get_filter: True
+      - act_check_filter: True
+      - check_config_quota_neutron: True
+      - src_test:
+          - act_check_image_api_src: True
+          - act_check_compute_api_src: True
+          - act_check_storage_api_src: True
+          - act_check_neutron_api_src: True
+          - check_src_ssh_access: True
+          - act_check_bandwidth_src: True
+          - check_src_sql: True
+          - check_src_rabbit: True
+      - dst_test:
+          - act_check_image_api_dst: True
+          - act_check_compute_api_dst: True
+          - act_check_storage_api_dst: True
+          - act_check_neutron_api_dst: True
+          - check_dst_ssh_access: True
+          - act_check_bandwidth_dst: True
+          - check_dst_sql: True
+          - check_dst_rabbit: True
+      - check_networks: True
+  - check_users_availability: True

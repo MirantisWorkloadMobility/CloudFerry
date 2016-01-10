@@ -32,6 +32,8 @@ Volumes filtering logic:
  - If volumes' IDs are specified, only these volumes specified MUST migrate.
 
 """
+
+
 import datetime
 
 from cloudferrylib.utils import filters
@@ -44,49 +46,6 @@ def _filtering_disabled(elem):
     return elem is None or (isinstance(elem, list) and len(elem) == 0)
 
 
-def _tenant_filter(filter_yaml):
-    """
-    Filter volumes not specified in tenant_id section of filters file.
-
-    :return: filter function
-
-    """
-    tenant_id = filter_yaml.get_tenant()
-    return lambda i: (_filtering_disabled(tenant_id) or
-                      i.get('project_id') == tenant_id)
-
-
-def _volume_id_filter(filter_yaml):
-    """
-    Filter volumes not specified in volume_ids section of filters file.
-
-    :return: filter function
-
-    """
-    volumes = filter_yaml.get_volume_ids()
-    return lambda i: (_filtering_disabled(volumes) or
-                      i.get('id') in volumes)
-
-
-def _datetime_filter(filter_yaml):
-    """
-    Filter volumes not older than :arg date:.
-
-    :return: filter function
-
-    """
-    date = filter_yaml.get_volume_date()
-    if isinstance(date, str):
-        date = datetime.datetime.strptime(date, DATETIME_FMT)
-
-    def _filter(vol):
-        upd = vol.get('updated_at')
-        if isinstance(upd, str):
-            upd = datetime.datetime.strptime(upd, DATETIME_FMT)
-        return (_filtering_disabled(date) or date <= upd)
-    return _filter
-
-
 class CinderFilters(filters.CFFilters):
 
     """Build required filters based on filter configuration file."""
@@ -96,23 +55,42 @@ class CinderFilters(filters.CFFilters):
         self.cinder_client = cinder_client
 
     def get_filters(self):
-        """
-        Get filter list.
-
-        :return: list
-
-        """
         return [
-            _datetime_filter(self.filter_yaml),
-            _tenant_filter(self.filter_yaml),
-            _volume_id_filter(self.filter_yaml),
+            self.datetime_filter(),
+            self.tenant_filter(),
+            self.volume_id_filter(),
         ]
 
     def get_tenant_filter(self):
-        """
-        Get tenant filter only.
+        return self.tenant_filter()
 
-        :return: list
+    def tenant_filter(self):
+        tenant_id = self.filter_yaml.get_tenant()
+        return lambda i: (_filtering_disabled(tenant_id) or
+                          self.get_col(i, 'project_id') == tenant_id)
 
-        """
-        return _tenant_filter(self.filter_yaml)
+    def volume_id_filter(self):
+        volumes = self.filter_yaml.get_volume_ids()
+        return lambda i: (_filtering_disabled(volumes) or
+                          self.get_col(i, 'id') in volumes)
+
+    def datetime_filter(self):
+        date = self.filter_yaml.get_volume_date()
+        if isinstance(date, str):
+            date = datetime.datetime.strptime(date, DATETIME_FMT)
+
+        def _filter(vol):
+            upd = self.get_col(vol, 'updated_at')
+            if not upd:
+                upd = self.get_col(vol, 'created_at')
+            if isinstance(upd, str):
+                upd = datetime.datetime.strptime(upd, DATETIME_FMT)
+            return _filtering_disabled(date) or date <= upd
+        return _filter
+
+    @staticmethod
+    def get_col(elem, col):
+        atr = 'os-vol-tenant-attr:tenant_id' if col == 'project_id' else col
+        return elem.get(col, None) \
+            if isinstance(elem, dict) \
+            else getattr(elem, atr, None)

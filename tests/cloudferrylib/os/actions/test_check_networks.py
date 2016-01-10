@@ -29,9 +29,10 @@ class CheckNetworksTestCase(test.TestCase):
                             'subnets': [],
                             'floating_ips': []}
         if not src_compute_info:
-            src_compute_info = {'instances': {}}
+            src_compute_info = [mock.Mock(id='fake_id_1'),
+                                mock.Mock(id='fake_id_2')]
         fake_src_compute = mock.Mock()
-        fake_src_compute.read_info.return_value = src_compute_info
+        fake_src_compute.get_instances_list.return_value = src_compute_info
         fake_src_net = mock.Mock()
         fake_src_net.read_info.return_value = src_net_info
         fake_src_net.get_ports_list.return_value = [
@@ -338,10 +339,7 @@ class CheckNetworksTestCase(test.TestCase):
                                      'external': True}],
                         'floating_ips': []}
 
-        src_cmp_info = {'instances': {
-            'fake_instance_id_not_in_external': {
-                'instance': {
-                    'id': 'fake_instance_id_not_in_external'}}}}
+        src_cmp_info = [mock.Mock(id='fake_instance_id_not_in_external')]
 
         self.get_action(src_net_info, src_compute_info=src_cmp_info).run()
 
@@ -358,10 +356,7 @@ class CheckNetworksTestCase(test.TestCase):
                                      'external': True}],
                         'floating_ips': []}
 
-        src_cmp_info = {'instances': {
-            'fake_instance_id': {
-                'instance': {
-                    'id': 'fake_instance_id'}}}}
+        src_cmp_info = [mock.Mock(id='fake_instance_id')]
 
         action = self.get_action(src_net_info, src_compute_info=src_cmp_info)
         self.assertRaises(exception.AbortMigrationError, action.run)

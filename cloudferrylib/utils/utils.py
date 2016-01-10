@@ -12,28 +12,23 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import logging
 import time
 import timeit
 import random
 import string
 import smtplib
-import os.path
-from pkg_resources import Requirement, resource_filename
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from functools import wraps
 import json
-from jinja2 import Environment, FileSystemLoader
 import os
 import inspect
 from multiprocessing import Lock
+
+from jinja2 import Environment, FileSystemLoader
 from fabric.api import run, settings, local, env, sudo
 from fabric.context_managers import hide
-import ipaddr
 import yaml
-from logging import config
-
 
 ISCSI = "iscsi"
 CEPH = "ceph"
@@ -46,12 +41,6 @@ REMOTE_FILE = "remote file"
 QCOW2 = "qcow2"
 RAW = "raw"
 YES = "yes"
-# Use configs/logging_config.yaml as logging config in current folder
-# otherwise will use config from CloudFerry package.
-LOGGING_CONFIG = ('configs/logging_config.yaml'
-                  if os.path.isfile('configs/logging_config.yaml') else
-                  resource_filename(Requirement.parse("CloudFerry"),
-                                    'configs/logging_config.yaml'))
 PATH_TO_SNAPSHOTS = 'snapshots'
 AVAILABLE = 'available'
 IN_USE = 'in-use'
@@ -74,6 +63,7 @@ SNAPSHOTS = 'snapshots'
 
 OBJSTORAGE_RESOURCE = 'objstorage'
 CONTAINERS = 'containers'
+CONTAINER_BODY = 'container'
 
 COMPUTE_RESOURCE = 'compute'
 INSTANCES_TYPE = 'instances'
@@ -94,7 +84,17 @@ IMAGE_BODY = 'image'
 
 IDENTITY_RESOURCE = 'identity'
 TENANTS_TYPE = 'tenants'
+USERS_TYPE = 'users'
 IGNORE = 'ignore'
+
+RESOURCE_TYPES = {
+    STORAGE_RESOURCE: VOLUMES_TYPE,
+    COMPUTE_RESOURCE: INSTANCES_TYPE,
+    NETWORK_RESOURCE: NETWORKS_TYPE,
+    IMAGE_RESOURCE: IMAGES_TYPE,
+    OBJSTORAGE_RESOURCE: CONTAINERS,
+    IDENTITY_RESOURCE: TENANTS_TYPE,
+}
 
 META_INFO = 'meta'
 OLD_ID = 'old_id'
@@ -245,20 +245,6 @@ class Templater:
             temp_render = temp_render.replace("{{%s}}" % arg, args[arg])
         temp_file.close()
         return temp_render
-
-with open(LOGGING_CONFIG, 'r') as logging_config:
-    # read config from file and store it as module global variable
-    config.dictConfig(yaml.load(logging_config))
-    LOGGER = logging.getLogger("CF")
-
-
-def configure_logging(level):
-    # redefine default logging level
-    LOGGER.setLevel(level)
-
-
-def get_log(name):
-    return LOGGER
 
 
 class StackCallFunctions(object):
@@ -505,34 +491,6 @@ def get_disk_path(instance, blk_list, is_ceph_ephemeral=False, disk=DISK):
             if ("compute/%s%s" % (instance.id, disk)) == i:
                 disk_path = i
     return disk_path
-
-
-def get_ips(init_host, compute_host, ssh_user):
-    with settings(host_string=compute_host,
-                  user=ssh_user,
-                  gateway=init_host,
-                  connection_attempts=env.connection_attempts):
-        cmd = ("ifconfig | awk -F \"[: ]+\" \'/inet addr:/ "
-               "{ if ($4 != \"127.0.0.1\") print $4 }\'")
-        out = run(cmd)
-        list_ips = []
-        for info in out.split():
-            try:
-                ipaddr.IPAddress(info)
-            except ValueError:
-                continue
-            list_ips.append(info)
-    return list_ips
-
-
-def get_ext_ip(ext_cidr, init_host, compute_host, ssh_user):
-    list_ips = get_ips(init_host, compute_host, ssh_user)
-    for ip_str in list_ips:
-        ip_addr = ipaddr.IPAddress(ip_str)
-        for cidr in ext_cidr:
-            if ipaddr.IPNetwork(cidr.strip()).Contains(ip_addr):
-                return ip_str
-    return None
 
 
 def check_file(file_path):

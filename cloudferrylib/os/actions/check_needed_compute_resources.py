@@ -16,10 +16,11 @@ import collections
 
 from cloudferrylib.base.action import action
 from cloudferrylib.base import exception
+from cloudferrylib.utils import log
 from cloudferrylib.utils import utils as utl
 
 
-LOG = utl.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class CheckNeededComputeResources(action.Action):
@@ -29,7 +30,6 @@ class CheckNeededComputeResources(action.Action):
         cnt_map = collections.defaultdict(int)
         for instance in objs.values():
             cnt_map[instance['instance']['flavor_id']] += 1
-        self.check_in_use_flavor(objs, info)
         needed_cpu = 0
         needed_ram = 0
         needed_hdd = 0
@@ -55,33 +55,3 @@ class CheckNeededComputeResources(action.Action):
                                            "Have %s %s, needed %s %s." % (
                                                name, have, units, needed,
                                                units))
-
-    def check_in_use_flavor(self, objs, info):
-        # when a flavor is updated, the flavor id will change. If an instance
-        # is in this flavor, it will keep the old flavor id, can not be matched
-        # to existing flavors
-        src_compute = self.src_cloud.resources[utl.COMPUTE_RESOURCE]
-        src_flavor_ids = \
-            [flavor.id for flavor in src_compute.get_flavor_list()]
-        dst_compute = self.dst_cloud.resources[utl.COMPUTE_RESOURCE]
-        dst_flavors = dst_compute.get_flavor_list()
-        for instance in objs.values():
-            inst_flavor_id = instance['instance']['flavor_id']
-            _instance = instance['instance']
-            instance_id = _instance['id']
-            flav_details = \
-                info['instances'][instance_id]['instance']['flav_details']
-            re_create_dst_flavor = False
-            for flavor in dst_flavors:
-                if flavor.name == flav_details['name']:
-                    dst_compute.delete_flavor(flavor.id)
-                    re_create_dst_flavor = True
-            if inst_flavor_id not in src_flavor_ids or re_create_dst_flavor:
-                dst_compute.create_flavor(name=flav_details['name'],
-                                          flavorid=_instance['flavor_id'],
-                                          ram=flav_details['memory_mb'],
-                                          vcpus=flav_details['vcpus'],
-                                          disk=flav_details['root_gb'],
-                                          ephemeral=flav_details[
-                                              'ephemeral_gb'])
-                src_flavor_ids.append(_instance['flavor_id'])

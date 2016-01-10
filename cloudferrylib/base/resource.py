@@ -13,11 +13,11 @@
 # limitations under the License.
 
 import time
+from cloudferrylib.utils import log
 from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import timeout_exception
-from cloudferrylib.utils import utils
 
-LOG = utils.get_log(__name__)
+LOG = log.getLogger(__name__)
 
 
 class Resource(object):
@@ -51,6 +51,8 @@ class Resource(object):
         LOG.debug("Waiting for status change")
         delay = 1
         stop_statuses = [s.lower() for s in (stop_statuses or [])]
+        if 'error' not in stop_statuses:
+            stop_statuses.append('error')
         while delay < timeout:
             actual_status = get_status(res_id).lower()
             LOG.debug("Expected status is '%s', actual - '%s', "

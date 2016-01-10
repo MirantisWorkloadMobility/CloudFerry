@@ -26,6 +26,7 @@ import yaml
 
 import config
 import functional_test
+import utils
 from data_collector import DataCollector
 
 
@@ -34,7 +35,7 @@ class RollbackVerification(functional_test.FunctionalTest):
     def setUp(self):
         data_collector = DataCollector(config=config)
 
-        self.data_after = data_collector.data_collector()
+        self.data_after = utils.convert(data_collector.data_collector())
 
         path = 'devlab/tests'
         file_name = config.rollback_params['data_file_names']['PRE']
@@ -45,4 +46,10 @@ class RollbackVerification(functional_test.FunctionalTest):
 
     def test_verify_rollback(self):
         self.maxDiff = None
-        self.assertEqual(self.data_after, self.pre_data)
+        msg = 'Comparing "{0}-{1}" resources...'
+        for cloud in self.data_after:
+            for service in self.data_after[cloud]:
+                for resource in self.data_after[cloud][service]:
+                    print(msg.format(service.lower(), resource.lower()))
+                    self.assertEqual(self.data_after[cloud][service][resource],
+                                     self.pre_data[cloud][service][resource])

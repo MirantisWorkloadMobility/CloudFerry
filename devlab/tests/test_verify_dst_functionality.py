@@ -99,10 +99,6 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
             {"floatingip": {"floating_network_id":
                             self.external_networks_ids_list[0]}})
 
-        fip = self.dst_cloud.neutronclient.create_floatingip(
-            {"floatingip": {"floating_network_id":
-                            self.external_networks_ids_list[0]}})
-
         self.float_ip_address = fip['floatingip']['floating_ip_address']
         self.float_ip_id = fip['floatingip']['id']
 
@@ -147,7 +143,7 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         for key_p in self.dst_cloud.novaclient.keypairs.list():
             key_p.delete()
 
-        self.dst_cloud.clean_tools.wait_vms_deleted()
+        self.dst_cloud.clean_tools.wait_vms_deleted(self.dst_tenant_id)
         self.release_fips_tenant()
 
         self.update_floatip_neutron_quota(self.fip_quota_neutron,
