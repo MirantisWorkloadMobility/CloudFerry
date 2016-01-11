@@ -5,11 +5,7 @@
 preparation:
   - create_snapshot: True
 
-rollback:
-  - restore_from_snapshot: True
-
 process:
   - act_get_filter: True
   - act_check_filter: True
-  - act_identity_trans: True
   - act_network_trans: True

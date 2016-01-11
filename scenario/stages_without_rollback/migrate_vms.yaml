@@ -1,4 +1,4 @@
-# NOTE: Rollback has been disabled.
+# NOTE: Only VM rollback is on. DB rollback from snapshot disabled.
 # Virtual machines migration only: only VMs will be migrated.
 # Before using it, all needed resources should be migrated.
 # Use path to this file in the configuration.ini in block [migrate].
@@ -11,6 +11,8 @@ preparation:
   - pre_migration_test:
       - act_get_filter: True
       - act_check_filter: True
+      - check_affinity: True
+      - check_config_quota_neutron: True
       - src_test:
           - act_check_image_api_src: True
           - act_check_compute_api_src: True
@@ -32,10 +34,12 @@ preparation:
           - check_dst_rabbit: True
           - act_get_info_objects_dst: False
       - check_networks: True
-  - create_snapshot: True
   - create_vm_snapshot_src: True
   - create_vm_snapshot_dst: True
-  - create_image_snapshot_dst: True
+
+rollback:
+  - restore_from_vm_snapshot_dst: True
+  - restore_from_vm_snapshot_src: True
 
 process:
   - transport_instances_and_dependency_resources:
@@ -62,6 +66,7 @@ process:
               - set_volume_id_for_attaching: True
           - transport_inst:
               - act_net_prep: True
+              - act_create_vrrp_ports: True
               - associate_floatingip_on_dest: True
               - act_map_com_info: True
               - act_is_not_trans_image: ['act_is_not_merge_diff']
@@ -85,5 +90,8 @@ process:
           - act_dissociate_floatingip: True
           - act_start_vms_if_needed: True
       - save_result_migrate_instances: True
+      - act_check_point_vm: True
       - is_instances: ['get_next_instance']
       - rename_info_iter: True
+  - verify:
+      - remove_failed_instances: True

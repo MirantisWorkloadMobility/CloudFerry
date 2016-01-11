@@ -4,7 +4,6 @@
 
 preparation:
   - create_snapshot: True
-  - create_image_snapshot_dst: True
 
 process:
   - act_get_filter: True
