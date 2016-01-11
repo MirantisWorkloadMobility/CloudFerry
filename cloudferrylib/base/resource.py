@@ -13,9 +13,10 @@
 # limitations under the License.
 
 import time
+
+from cloudferrylib.base import exception
 from cloudferrylib.utils import log
 from cloudferrylib.utils import proxy_client
-from cloudferrylib.utils import timeout_exception
 
 LOG = log.getLogger(__name__)
 
@@ -60,7 +61,7 @@ class Resource(object):
                       wait_status, actual_status, stop_statuses)
             if actual_status in stop_statuses:
                 LOG.debug("Stop status reached, exit")
-                raise timeout_exception.TimeoutException(
+                raise exception.TimeoutException(
                     get_status(res_id).lower(),
                     wait_status, "Timed out waiting for state change")
             elif actual_status == wait_status.lower():
@@ -73,14 +74,14 @@ class Resource(object):
             delay *= 2
         else:
             LOG.debug("Timed out waiting for state change")
-            raise timeout_exception.TimeoutException(
+            raise exception.TimeoutException(
                 get_status(res_id).lower(),
                 wait_status, "Timed out waiting for state change")
 
     def try_wait_for_status(self, res_id, get_status, wait_status, timeout=60):
         try:
             self.wait_for_status(res_id, get_status, wait_status, timeout)
-        except timeout_exception.TimeoutException as e:
+        except exception.TimeoutException as e:
             LOG.warning("Resource '%s' has not changed status to '%s'(%s)",
                         res_id, wait_status, e)
 

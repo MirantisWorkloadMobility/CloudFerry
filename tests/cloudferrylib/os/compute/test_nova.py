@@ -19,8 +19,8 @@ import mock
 from novaclient.v1_1 import client as nova_client
 from oslotest import mockpatch
 
+from cloudferrylib.base import exception
 from cloudferrylib.os.compute import nova_compute
-from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils
 
 from tests import test
@@ -340,7 +340,7 @@ class DeployInstanceWithManualScheduling(test.TestCase):
 
         nc = mock.Mock()
         nc.get_compute_hosts.return_value = compute_hosts
-        nc.deploy_instance.side_effect = timeout_exception.TimeoutException(
+        nc.deploy_instance.side_effect = exception.TimeoutException(
             None, None, None)
 
         deployer = nova_compute.RandomSchedulerVmDeployer(nc)
