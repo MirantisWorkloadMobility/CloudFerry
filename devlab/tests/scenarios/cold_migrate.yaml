@@ -63,10 +63,10 @@ process:
       - act_server_group_trans: True
   - transport_instances_and_dependency_resources:
       - act_get_info_inst: True
-      - act_filter_similar_vms_from_dst: True
       - init_iteration_instance:
           - init_iteration_instance_copy_var: True
           - init_iteration_instance_ref: True
+      - act_filter_similar_vms_from_dst: True
       - check_needed_compute_resources: True
       - check_instances: ['rename_info_iter']
       - get_next_instance: True

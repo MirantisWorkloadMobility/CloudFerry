@@ -31,7 +31,7 @@ class VerifyVms(action.Action):
         dst_info = kwargs['info']
         search_opts = {'search_opts': kwargs.get('search_opts', {})}
         search_opts.update(kwargs.get('search_opts_tenant', {}))
-        src_info = kwargs['src_info']
+        src_info = kwargs['info_backup']
         old_ids = set(dst_inst['meta']['old_id']
                       for dst_inst in dst_info['instances'].values())
         dst_cmp_info = {}
@@ -68,25 +68,26 @@ class VerifyVms(action.Action):
                 dst_cmp_inst = dst_cmp_info[src_inst_id]
                 src_inst_info = src_info['instances'][src_inst_id]['instance']
                 if src_inst_info['name'] != dst_cmp_inst['name']:
-                    LOG.warning("Wrong name of instance {} on DST"
-                                .format(src_inst_id))
+                    LOG.warning("Wrong name of instance %s on DST",
+                                src_inst_id)
                     failed_vms.append(src_inst_id)
                 if (src_inst_info['flav_details'] !=
                         dst_cmp_inst['flav_details']):
-                    LOG.warning("Wrong flav_details of instance {} on DST"
-                                .format(src_inst_id))
+                    LOG.warning("Wrong flav_details of instance %s on DST",
+                                src_inst_id)
                     failed_vms.append(src_inst_id)
                 if src_inst_info['key_name'] != dst_cmp_inst['key_name']:
-                    LOG.warning("Wrong key_name of instance {} on DST"
-                                .format(src_inst_id))
+                    LOG.warning("Wrong key_name of instance %s on DST",
+                                src_inst_id)
                     failed_vms.append(src_inst_id)
-                if src_inst_info['interfaces'] != dst_cmp_inst['interfaces']:
-                    LOG.warning("Wrong interfaces of instance {} on DST"
-                                .format(src_inst_id))
+                if (sorted(src_inst_info['interfaces']) !=
+                        sorted(dst_cmp_inst['interfaces'])):
+                    LOG.warning("Wrong interfaces of instance %s on DST",
+                                src_inst_id)
                     failed_vms.append(src_inst_id)
                 if src_inst_info['volumes'] != dst_cmp_inst['volumes']:
-                    LOG.warning("Wrong volumes of instance {} on DST"
-                                .format(src_inst_id))
+                    LOG.warning("Wrong volumes of instance %s on DST",
+                                src_inst_id)
                     failed_vms.append(src_inst_id)
 
                 # Verify that migrated VM belongs to correct server group
@@ -102,9 +103,9 @@ class VerifyVms(action.Action):
         if failed_vms:
             LOG.warning("Instances were not migrated:")
             for vm in failed_vms:
-                LOG.warning("{}".format(vm))
+                LOG.warning("%s", vm)
             return False
         LOG.debug("Compared instance names, flavors, "
                   "interfaces, volumes and key names. "
-                  "Number of migrated instances: {}".format(inst_cnt))
+                  "Number of migrated instances: %s", inst_cnt)
         return True
