@@ -19,9 +19,9 @@ from Crypto.PublicKey import RSA
 
 from novaclient import exceptions as nova_exc
 
+from cloudferrylib.base import exception
 from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import remote_runner
-from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import log
 
 LOG = log.getLogger(__name__)
@@ -154,7 +154,7 @@ def wait_for_condition(condition_fn, *args, **kwargs):
         time.sleep(delay)
         delay *= 2
     else:
-        raise timeout_exception.TimeoutException(None, None, "Timeout exp")
+        raise exception.TimeoutException(None, None, "Timeout exp")
 
 
 # TODO: move following function to utils and reuse in other parts of CloudFerry
@@ -338,7 +338,7 @@ def change_to_pre_migration_state(compute_api, instance_id):
                 wait_for_condition(is_vm_status_in, compute_api, instance_id,
                                    SUPPORTED_FINAL_STATES,
                                    timeout=state_change_timeout)
-            except timeout_exception.TimeoutException:
+            except exception.TimeoutException:
                 return False
         if state in (ACTIVE, SHUTOFF):
             return True

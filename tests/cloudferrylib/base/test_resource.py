@@ -16,12 +16,12 @@
 
 import mock
 
+from cloudferrylib.base import exception
 from cloudferrylib.base import resource
-from cloudferrylib.utils import timeout_exception
 
 from tests import test
 
-t_exc = timeout_exception.TimeoutException
+t_exc = exception.TimeoutException
 
 
 class ResourceTestCase(test.TestCase):

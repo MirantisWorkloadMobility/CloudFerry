@@ -23,6 +23,7 @@ from novaclient.v1_1 import client as nova_client
 from novaclient import exceptions as nova_exc
 
 from cloudferrylib.base import compute
+from cloudferrylib.base import exception
 from cloudferrylib.os.compute import instances
 from cloudferrylib.os.compute import cold_evacuate
 from cloudferrylib.os.compute import server_groups
@@ -31,7 +32,6 @@ from cloudferrylib.utils import log
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import node_ip
 from cloudferrylib.utils import proxy_client
-from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils as utl
 
 LOG = log.getLogger(__name__)
@@ -93,7 +93,7 @@ class RandomSchedulerVmDeployer(object):
 
         try:
             return self.nc.deploy_instance(create_params, client_conf)
-        except timeout_exception.TimeoutException:
+        except exception.TimeoutException:
             az = instance['availability_zone']
             hosts = self.nc.get_compute_hosts(availability_zone=az)
             random.seed()
@@ -107,7 +107,7 @@ class RandomSchedulerVmDeployer(object):
                          create_params.get('availability_zone', 'UNKNOWN'))
                 try:
                     return self.nc.deploy_instance(create_params, client_conf)
-                except timeout_exception.TimeoutException:
+                except exception.TimeoutException:
                     pass
 
         message = ("Unable to schedule VM '{vm}' on any of available compute "
@@ -646,7 +646,7 @@ class NovaCompute(compute.Compute):
                 self.wait_for_status(new_id, self.get_status, 'active',
                                      timeout=conf.migrate.boot_timeout,
                                      stop_statuses=[ERROR])
-            except timeout_exception.TimeoutException:
+            except exception.TimeoutException:
                 LOG.warning("Failed to create instance '%s'", new_id)
                 self._failed_instances.append(new_id)
                 raise
@@ -863,7 +863,7 @@ class NovaCompute(compute.Compute):
             try:
                 reduce(lambda res, f: f(instance), map_status[curr][will],
                        None)
-            except timeout_exception.TimeoutException:
+            except exception.TimeoutException:
                 LOG.warning("Failed to change state from '%s' to '%s' for VM "
                             "'%s'", curr, will, instance.name)
 
