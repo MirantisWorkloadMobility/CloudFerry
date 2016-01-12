@@ -43,7 +43,7 @@ SECURITY_GROUP_NAME = 'sg41'
 class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
 
     def setUp(self):
-
+        super(VerifyDstCloudFunctionality, self).setUp()
         self.dst_cloud.switch_user(user=self.dst_cloud.username,
                                    password=self.dst_cloud.password,
                                    tenant=self.dst_cloud.tenant)

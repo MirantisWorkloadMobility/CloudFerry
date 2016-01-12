@@ -29,6 +29,7 @@ class GroupProcedureVerification(functional_test.FunctionalTest):
         """
         SetUp method.
         """
+        super(GroupProcedureVerification, self).setUp()
         self.main_folder = os.path.dirname(os.path.dirname(os.getcwd()))
         # TODO:
         #  Using relative paths is a bad practice, unfortunately this is the
