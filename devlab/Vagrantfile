@@ -16,30 +16,35 @@ nodes = {
   "grizzly" => {
     "box" => "openstack-user/precise-grizzly",
     "ip" => "#{options['grizzly_ip']}",
+    "ip2" => "#{options['grizzly_ip2']}",
     "memory" => 4096,
     "role" => "openstack"
   },
   "icehouse" => {
     "box" => "openstack-user/trusty-icehouse",
     "ip" => "#{options['icehouse_ip']}",
+    "ip2" => "#{options['icehouse_ip2']}",
     "memory" => 4096,
     "role" => "openstack"
   },
   "juno" => {
     "box" => "openstack-user/trusty-juno",
     "ip" => "#{options['juno_ip']}",
+    "ip2" => "#{options['juno_ip2']}",
     "memory" => 4096,
     "role" => "openstack"
   },
   "cloudferry" => {
     "box" => "hashicorp/precise64",
     "ip" => "#{options['cloudferry_ip']}",
+    "ip2" => "#{options['cloudferry_ip2']}",
     "memory" => 2048,
     "role" => "lab"
   },
   "nfs" => {
     "box" => "openstack-user/nfs-server",
     "ip" => "#{options['nfs_ip']}",
+    "ip2" => "#{options['nfs_ip2']}",
     "memory" => 1024,
     "cpus" => 1
   }
@@ -103,6 +108,7 @@ Vagrant.configure(2) do |config|
       end
 
       thisnode.vm.network "private_network", ip: nodedata['ip']
+      thisnode.vm.network "private_network", ip: nodedata['ip2']
 
       thisnode.vm.provider "virtualbox" do |v|
         v.memory = nodedata.fetch("memory", 1024)
