@@ -13,8 +13,6 @@
 # limitations under the License.
 
 
-import copy
-
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import utils
 
@@ -27,6 +25,5 @@ class GetInfoInstances(action.Action):
         compute_resource = self.cloud.resources[utils.COMPUTE_RESOURCE]
         info = compute_resource.read_info(**search_opts)
         return {
-            'info': info,
-            'src_info': copy.deepcopy(info)
+            'info': info
         }

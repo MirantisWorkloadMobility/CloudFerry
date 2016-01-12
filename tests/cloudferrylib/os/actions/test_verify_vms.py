@@ -124,7 +124,7 @@ class VerifyVmsTest(test.TestCase):
             self.fake_init,
             cloud='src_cloud')
         try:
-            action.run(info=self.fake_dst_info, src_info=self.fake_info)
+            action.run(info=self.fake_dst_info, info_backup=self.fake_info)
         except exception.AbortMigrationError as e:
             self.fail(e)
 
@@ -138,5 +138,5 @@ class VerifyVmsTest(test.TestCase):
         action = verify_vms.VerifyVms(
             self.fake_init,
             cloud='src_cloud')
-        res = action.run(info=self.fake_dst_info, src_info=self.fake_info)
+        res = action.run(info=self.fake_dst_info, info_backup=self.fake_info)
         self.assertEqual(True, res)

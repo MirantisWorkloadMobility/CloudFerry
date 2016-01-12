@@ -45,7 +45,7 @@ class FilterSimilarVMsFromDST(action.Action):
         self.conflict_instances = collections.defaultdict(set)
 
     def run(self, **kwargs):
-        self.src_instances = kwargs['src_info']['instances']
+        self.src_instances = kwargs['info']['instances']
         for tenant in kwargs['identity_info']['tenants']:
             self.tenant_id_to_new_id[tenant['tenant']['id']] = \
                 tenant['meta']['new_id']

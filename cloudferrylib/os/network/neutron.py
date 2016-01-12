@@ -271,7 +271,7 @@ class NeutronNetwork(network.Network):
                 'ip_addresses': [x['ip_address'] for x in port['fixed_ips']],
                 'mac_address': port['mac_address'],
                 'floatingip': self.get_port_floating_ip(port['id']),
-                'allowed_address_pairs': port.get('allowed_address_pairs'),
+                'allowed_address_pairs': port.get('allowed_address_pairs', []),
             })
         return ports
 
