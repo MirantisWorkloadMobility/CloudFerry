@@ -189,6 +189,8 @@ migrate_opts = [
     cfg.BoolOpt('debug', default=False,
                 help="Print debugging output (set logging level to DEBUG "
                      "instead of default INFO level)."),
+    cfg.BoolOpt('keep_network_interfaces_order', default=True,
+                help="Keep the order of network interfaces of instances."),
 ]
 
 mail = cfg.OptGroup(name='mail',

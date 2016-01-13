@@ -4,6 +4,7 @@
 scenario = <scenario_file>
 tasks_mapping = <tasks_file>
 
+keep_network_interfaces_order = True
 keep_user_passwords = False
 ssh_transfer_port = 9990-9999
 key_filename = <migrate_key_filename>
