@@ -721,3 +721,100 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 pass
         if migrated_images:
             self.fail('Not valid images %s migrated')
+
+    def test_migrate_lbaas_pools(self):
+        src_lb_pools = self.replace_id_with_name(
+            self.src_cloud, 'pools', self.filter_pools())
+        dst_lb_pools = self.replace_id_with_name(
+            self.dst_cloud, 'pools', self.dst_cloud.neutronclient.list_pools())
+
+        parameters_to_validate = ['tenant_name', 'subnet_name', 'protocol',
+                                  'lb_method']
+        for param in parameters_to_validate:
+            self.validate_neutron_resource_parameter_in_dst(
+                src_lb_pools, dst_lb_pools, resource_name='pools',
+                parameter=param)
+
+    def test_migrate_lbaas_monitors(self):
+        monitors = self.filter_health_monitors()
+        src_lb_monitors = self.replace_id_with_name(
+            self.src_cloud, 'health_monitors', monitors)
+        monitors = self.dst_cloud.neutronclient.list_health_monitors()
+        dst_lb_monitors = self.replace_id_with_name(
+            self.dst_cloud, 'health_monitors', monitors)
+        parameters_to_validate = ['type', 'delay', 'timeout', 'max_retries',
+                                  'tenant_name']
+
+        src_lb_monitors = self.filter_resource_parameters(
+            'health_monitors', src_lb_monitors, parameters_to_validate)
+        dst_lb_monitors = self.filter_resource_parameters(
+            'health_monitors', dst_lb_monitors, parameters_to_validate)
+        self.assertListEqual(sorted(src_lb_monitors['health_monitors']),
+                             sorted(dst_lb_monitors['health_monitors']))
+
+    def test_migrate_lbaas_members(self):
+        members = self.filter_lbaas_members()
+        src_lb_members = self.replace_id_with_name(
+            self.src_cloud, 'members', members)
+        members = self.dst_cloud.neutronclient.list_members()
+        dst_lb_members = self.replace_id_with_name(
+            self.dst_cloud, 'members', members)
+        params_to_validate = ['protocol_port', 'address', 'pool_name',
+                              'tenant_name']
+
+        src_lb_members = self.filter_resource_parameters(
+            'members', src_lb_members, params_to_validate)
+        dst_lb_members = self.filter_resource_parameters(
+            'members', dst_lb_members, params_to_validate)
+        self.assertListEqual(sorted(src_lb_members['members']),
+                             sorted(dst_lb_members['members']))
+
+    def test_migrate_lbaas_vips(self):
+        vips = self.filter_vips()
+        src_lb_vips = self.replace_id_with_name(self.src_cloud, 'vips', vips)
+        vips = self.dst_cloud.neutronclient.list_vips()
+        dst_lb_vips = self.replace_id_with_name(self.dst_cloud, 'vips', vips)
+        parameters_to_validate = ['description', 'address', 'protocol',
+                                  'protocol_port', 'connection_limit',
+                                  'pool_name', 'tenant_name', 'subnet_name']
+        for param in parameters_to_validate:
+            self.validate_neutron_resource_parameter_in_dst(
+                src_lb_vips, dst_lb_vips, resource_name='vips',
+                parameter=param)
+
+    def test_lbaas_pools_belong_deleted_tenant_not_migrate(self):
+        pools = []
+        for tenant in config.tenants:
+            if not tenant.get('deleted'):
+                continue
+            if tenant.get('pools'):
+                pools.extend(tenant['pools'])
+        pools_names = {pool['name'] for pool in pools}
+        dst_pools = self.dst_cloud.neutronclient.list_pools()['pools']
+        dst_pools_names = {dst_pool['name'] for dst_pool in dst_pools}
+        migrated_pools = dst_pools_names.intersection(pools_names)
+        if migrated_pools:
+            msg = 'Lbaas pools %s belong to deleted tenant and were migrated'
+            self.fail(msg % list(migrated_pools))
+
+    @staticmethod
+    def filter_resource_parameters(resource, res_list, param_list):
+        finals_res_list = {resource: []}
+        for res in res_list[resource]:
+            finals_res_list[resource].append(
+                {param: res[param] for param in res if param in param_list})
+        return finals_res_list
+
+    @staticmethod
+    def replace_id_with_name(client, resource, res_list):
+        for res in res_list[resource]:
+            if res.get('pool_id'):
+                res['pool_name'] = client.neutronclient.show_pool(
+                    res['pool_id'])['pool']['name']
+            if res.get('subnet_id'):
+                res['subnet_name'] = client.neutronclient.show_subnet(
+                    res['subnet_id'])['subnet']['name']
+            if res.get('tenant_id'):
+                res['tenant_name'] = client.keystoneclient.tenants.get(
+                    res['tenant_id']).name
+        return res_list

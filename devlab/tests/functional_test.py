@@ -185,6 +185,30 @@ class FunctionalTest(unittest.TestCase):
         return [i for i in self.src_cloud.cinderclient.volumes.list(**opts)
                 if i.display_name in volumes_names]
 
+    def filter_health_monitors(self):
+        hm = self.src_cloud.neutronclient.list_health_monitors()
+        final_hm = [m for m in hm['health_monitors']
+                    if self.src_cloud.tenant_exists(tenant_id=m['tenant_id'])]
+        return {'health_monitors': final_hm}
+
+    def filter_pools(self):
+        pools = self.src_cloud.neutronclient.list_pools()['pools']
+        final_p = [p for p in pools
+                   if self.src_cloud.tenant_exists(tenant_id=p['tenant_id'])]
+        return {'pools': final_p}
+
+    def filter_lbaas_members(self):
+        members = self.src_cloud.neutronclient.list_members()['members']
+        final_m = [m for m in members
+                   if self.src_cloud.tenant_exists(tenant_id=m['tenant_id'])]
+        return {'members': final_m}
+
+    def filter_vips(self):
+        vips = self.src_cloud.neutronclient.list_vips()['vips']
+        final_v = [vip for vip in vips
+                   if self.src_cloud.tenant_exists(tenant_id=vip['tenant_id'])]
+        return {'vips': final_v}
+
     def _get_neutron_resources(self, res, names):
         _list = getattr(self.src_cloud.neutronclient, 'list_' + res)()
         return {res: [i for i in _list[res] if i['name'] in names]}
