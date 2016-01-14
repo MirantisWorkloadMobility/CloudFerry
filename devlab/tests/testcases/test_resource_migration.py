@@ -467,6 +467,17 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         dst_volume_list = self.dst_cloud.cinderclient.volumes.list(
             search_opts={'all_tenants': 1})
 
+        def ignore_default_metadata(volumes):
+            default_keys = ('readonly', 'attached_mode')
+            for vol in volumes:
+                for default_key in default_keys:
+                    if default_key in vol.metadata:
+                        del vol.metadata[default_key]
+            return volumes
+
+        src_volume_list = ignore_default_metadata(src_volume_list)
+        dst_volume_list = ignore_default_metadata(dst_volume_list)
+
         for parameter in ('display_name', 'size', 'bootable', 'metadata'):
             self.validate_resource_parameter_in_dst(
                 src_volume_list, dst_volume_list, resource_name='volume',

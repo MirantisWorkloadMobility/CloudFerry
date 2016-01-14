@@ -156,7 +156,8 @@ tenants = [
           'volume_type': 'nfs1',
           'server_to_attach': 'tn1server1', 'device': '/dev/vdb'},
          {'display_name': 'tn1_volume2', 'size': 1,
-          'volume_type': 'nfs2'}
+          'volume_type': 'nfs2', 'metadata': {'tenant_data': 'tenant_rocks',
+                                              'enabled': "True", 'exists': ""}}
          ],
      'cinder_snapshots': [
          # Commented because of unimplemented error in nfs driver for grizzly.
@@ -483,7 +484,7 @@ data. MD5 of file store in separate file in the same directory with name
 cinder_volumes = [
     {'display_name': 'cinder_volume1', 'size': 1, 'volume_type': 'nfs1'},
     {'display_name': 'cinder_volume2', 'size': 1,
-     'volume_type': 'nfs2',
+     'volume_type': 'nfs2',  'metadata': {'data': 'nope', 'enabled': "False"},
      'server_to_attach': 'server2', 'device': '/dev/vdb'},
     {'display_name': 'cinder_volume3', 'size': 1,
      'user': 'test_volume_migration'}
