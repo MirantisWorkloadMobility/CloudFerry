@@ -16,6 +16,7 @@ import logging
 import time
 import timeit
 import random
+import re
 import string
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -108,6 +109,8 @@ up_ssh_tunnel = None
 
 SSH_CMD = \
     "ssh -oStrictHostKeyChecking=no -L %s:%s:22 -R %s:localhost:%s %s -Nf"
+
+SSH_KEY_LIST_RE = re.compile(r'^\d+ [^ ]+ (?P<key_file>.+) [^ ]+$')
 
 
 class ext_dict(dict):
@@ -311,41 +314,42 @@ class forward_agent(object):
     def __init__(self, key_files):
         self.key_files = key_files
 
-    def _agent_already_running(self):
-        with settings(hide('warnings', 'running', 'stdout', 'stderr'),
-                      warn_only=True,
-                      connection_attempts=env.connection_attempts):
-            res = local("ssh-add -l", capture=True)
-
-            if res.succeeded:
-                present_keys = res.split(os.linesep)
-                # TODO: this will break for path with whitespaces
-                present_keys_paths = [
-                    present_key.split(' ')[2] for present_key in present_keys
-                    ]
-                for key in self.key_files:
-                    if os.path.expanduser(key) not in present_keys_paths:
-                        return False
-                return True
-
-        return False
-
     def __enter__(self):
-        if self._agent_already_running():
-            return
-        key_string = ' '.join(self.key_files)
-        start_ssh_agent = ("eval `ssh-agent` && echo $SSH_AUTH_SOCK && "
-                           "ssh-add %s") % key_string
-        info_agent = local(start_ssh_agent, capture=True).split("\n")
-        self.pid = info_agent[0].split(" ")[-1]
-        self.ssh_auth_sock = info_agent[1]
-        os.environ["SSH_AGENT_PID"] = self.pid
-        os.environ["SSH_AUTH_SOCK"] = self.ssh_auth_sock
+        ensure_ssh_key_added(self.key_files)
 
     def __exit__(self, type, value, traceback):
         # never kill previously started ssh-agent, so that user only has to
         # enter private key password once
         pass
+
+
+def ensure_ssh_key_added(key_files):
+    need_adding = set(os.path.abspath(os.path.expanduser(p))
+                      for p in key_files)
+    with settings(hide('warnings', 'running', 'stdout', 'stderr'),
+                  warn_only=True):
+        # First check already added keys
+        res = local("ssh-add -l", capture=True)
+        if res.succeeded:
+            for line in res.splitlines():
+                m = SSH_KEY_LIST_RE.match(line)
+                if not m:
+                    continue
+                path = os.path.abspath(os.path.expanduser(m.group('key_file')))
+                need_adding.discard(path)
+
+    with settings(hide('warnings', 'running', 'stdout', 'stderr')):
+        # Next add missing keys
+        if need_adding:
+            key_string = ' '.join(need_adding)
+            start_ssh_agent = ("eval `ssh-agent` && echo $SSH_AUTH_SOCK && "
+                               "ssh-add %s") % key_string
+            info_agent = local(start_ssh_agent, capture=True).splitlines()
+            os.environ["SSH_AGENT_PID"] = info_agent[0].split()[-1]
+            os.environ["SSH_AUTH_SOCK"] = info_agent[1]
+            return False
+        else:
+            return True
 
 
 class wrapper_singletone_ssh_tunnel:
