@@ -368,6 +368,7 @@ networks = [
      },
     {'name': 'shared_net', 'admin_state_up': True, 'shared': True,
      'router:external': True, 'real_network': True,
+     'provider:physical_network': 'physnet1', 'provider:network_type': 'flat',
      'subnets': [
          {'cidr': '192.168.1.0/24', 'ip_version': 4, 'name': 'external_subnet',
           'set_as_gateway_for_routers': {'ext_router': {'enable_snat': False},
