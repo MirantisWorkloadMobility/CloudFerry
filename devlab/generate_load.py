@@ -968,6 +968,20 @@ class Prerequisites(base.BasePrerequisites):
                                               self.config.dst_unassociated_fip,
                                               ext_net_id)
 
+    def create_ext_net_map_yaml(self):
+        src_ext_nets = [net['name'] for net in self.config.networks
+                        if net.get('router:external')]
+        dst_ext_nets = [net['name'] for net in self.config.dst_networks
+                        if net.get('router:external')]
+        with open(self.config.ext_net_map, "w") as f:
+            for src_net in src_ext_nets:
+                for dst_net in dst_ext_nets:
+                    if src_net == dst_net:
+                        src_net_id = self.get_net_id(src_net)
+                        dst_net_id = self.dst_cloud.get_net_id(dst_net)
+                        f.write('{src_net}: {dst_net}'.format(
+                                src_net=src_net_id, dst_net=dst_net_id))
+
     def run_preparation_scenario(self):
         LOG.info('Creating tenants')
         self.create_tenants()
@@ -1034,6 +1048,8 @@ class Prerequisites(base.BasePrerequisites):
         self.create_user_on_dst()
         LOG.info('Creating networks on dst')
         self.create_dst_networking()
+        LOG.info('Creating networks map')
+        self.create_ext_net_map_yaml()
 
 
 if __name__ == '__main__':

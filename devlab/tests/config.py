@@ -51,6 +51,10 @@ filters_file_naming_template = 'filter_{tenant_name}.yaml'
 pre_migration_vm_states_file = 'pre_migration_vm_states.json'
 """Path to store vm states file"""
 
+ext_net_map = 'ext_net_map.yaml'
+"""This file contains map of relationships between external networks on source
+and destination clouds."""
+
 users = [
     {'name': 'user1', 'password': 'passwd1', 'email': 'mail@example.com',
      'tenant': 'tenant1', 'enabled': True},
