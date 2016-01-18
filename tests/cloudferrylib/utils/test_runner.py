@@ -26,9 +26,9 @@ class RemoteRunnerTestCase(test.TestCase):
         self.assertRaises(remote_runner.RemoteExecutionError, rr.run,
                           "non existing failing command")
 
-    @mock.patch('cloudferrylib.utils.remote_runner.forward_agent')
-    @mock.patch('cloudferrylib.utils.remote_runner.fab_sudo')
-    @mock.patch('cloudferrylib.utils.remote_runner.settings')
+    @mock.patch('cloudferrylib.utils.utils.forward_agent')
+    @mock.patch('fabric.api.sudo')
+    @mock.patch('fabric.api.settings')
     def test_errors_are_suppressed_for_run_ignoring_errors(
             self, *_):
         rr = remote_runner.RemoteRunner('host', 'user', 'password', sudo=True,
@@ -41,9 +41,9 @@ class RemoteRunnerTestCase(test.TestCase):
         except Exception as e:
             self.fail("run_ignoring_errors must not raise exceptions: %s" % e)
 
-    @mock.patch('cloudferrylib.utils.remote_runner.forward_agent')
-    @mock.patch('cloudferrylib.utils.remote_runner.fab_sudo')
-    @mock.patch('cloudferrylib.utils.remote_runner.run')
+    @mock.patch('cloudferrylib.utils.utils.forward_agent')
+    @mock.patch('fabric.api.sudo')
+    @mock.patch('fabric.api.run')
     def test_root_user_does_not_sudo(self, _, sudo, run):
         rr = remote_runner.RemoteRunner('host', 'root',
                                         key='key', sudo=True,
