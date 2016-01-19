@@ -32,6 +32,9 @@ PARAMS_NAMES_TO_OMIT = ['cidr', 'gateway_ip', 'provider:segmentation_id']
 
 
 class ResourceMigrationTests(functional_test.FunctionalTest):
+    """
+    Test Case class which includes all resource's migration cases.
+    """
 
     def _is_segm_id_test(self, param, name):
         return param in PARAMS_NAMES_TO_OMIT and (
@@ -115,6 +118,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                             % (src_net_names, dst_net_names))
 
     def test_migrate_keystone_users(self):
+        """Validate users were migrated with correct name and email."""
         src_users = self.filter_users()
         dst_users = self.dst_cloud.keystoneclient.users.list()
 
@@ -127,6 +131,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_keystone_user_tenant_roles(self):
+        """Validate user's tenant roles were migrated with correct name."""
         src_users = self.filter_users()
         src_user_names = [user.name for user in src_users]
         dst_users = self.dst_cloud.keystoneclient.users.list()
@@ -146,6 +151,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_keystone_roles(self):
+        """Validate user's roles were migrated with correct name."""
         src_roles = self.filter_roles()
         dst_roles = self.dst_cloud.keystoneclient.roles.list()
 
@@ -155,6 +161,8 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_keystone_tenants(self):
+        """Validate tenants were migrated with correct name and description.
+        """
         src_tenants = self.filter_tenants()
         dst_tenants_gen = self.dst_cloud.keystoneclient.tenants.list()
         dst_tenants = [x for x in dst_tenants_gen]
@@ -170,6 +178,8 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                                 parameter='description')
 
     def test_migrate_nova_keypairs(self):
+        """Validate keypairs were migrated with correct name and fingerprint.
+        """
         src_keypairs = self.filter_keypairs()
         dst_keypairs = self.dst_cloud.get_users_keypairs()
 
@@ -182,6 +192,13 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_nova_public_flavors(self):
+        """Validate public flavors with parameters were migrated correct.
+
+        :param name: flavor name
+        :param ram: RAM amount set for flavor
+        :param vcpus: Virtual CPU's amount
+        :param disk: disk size
+        :param id: flavor's id"""
         src_flavors = self.filter_flavors()
         dst_flavors = self.dst_cloud.novaclient.flavors.list()
 
@@ -189,12 +206,20 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_nova_private_flavors(self):
+        """Validate private flavors with parameters were migrated correct.
+
+        List of parameters is the same as for public flavors.
+        """
         src_flavors = self.filter_flavors(filter_only_private=True)
         dst_flavors = self.dst_cloud.novaclient.flavors.list(is_public=False)
 
         self.validate_flavor_parameters(src_flavors, dst_flavors)
 
     def test_migrate_nova_security_groups(self):
+        """Validate security groups were migrated with correct parameters.
+
+        :param name: name of the security group
+        :param description: description of specific security group"""
         src_sec_gr = self.filter_security_groups()
         dst_sec_gr = self.dst_cloud.neutronclient.list_security_groups()
         self.validate_neutron_resource_parameter_in_dst(
@@ -204,12 +229,15 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             src_sec_gr, dst_sec_gr, resource_name='security_groups',
             parameter='description')
 
-    @unittest.skipIf(
-        functional_test.config_ini['migrate']
-                                  ['keep_affinity_settings'] == 'False',
+    @unittest.skipIf(functional_test.get_option_from_config_ini(
+            option='keep_affinity_settings') == 'False',
         'Keep affinity settings disabled in CloudFerry config')
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2', 'tenant4'])
     def test_migrate_nova_server_groups(self):
+        """Validate server groups were migrated with correct parameters.
+
+        :param name: server group name
+        :param members: servers in the current group"""
         def get_members_names(client, sg_groups):
             groups = {}
             for sg_group in sg_groups:
@@ -240,7 +268,8 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_image_members(self):
-
+        """Validate image members were migrated with correct names.
+        """
         def member_list_collector(_images, client, auth_client):
             _members = []
             for img in _images:
@@ -272,6 +301,13 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_glance_images(self):
+        """Validate images were migrated with correct parameters.
+
+        :param name: image name
+        :param disk_format: raw, vhd, vmdk, vdi, iso, qcow2, etc
+        :param container_format: bare, ovf, ova, etc
+        :param size: image size
+        :param checksum: MD5 checksum of the image file data"""
         src_images = self.filter_images()
         dst_images_gen = self.dst_cloud.glanceclient.images.list()
         dst_images = [x for x in dst_images_gen]
@@ -297,6 +333,8 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['tenant1', 'tenant2'])
     def test_migrate_glance_image_belongs_to_deleted_tenant(self):
+        """Validate images from deleted tenants were migrated to dst admin
+        tenant."""
         src_image_names = []
 
         def get_image_by_name(image_list, img_name):
@@ -325,6 +363,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_glance_images_not_in_filter_did_not_migrate(self):
+        """Validate images not in filter weren't migrated."""
         dst_images_gen = self.dst_cloud.glanceclient.images.list()
         dst_images = [x.name for x in dst_images_gen]
         for image in config.images_not_included_in_filter:
@@ -333,6 +372,11 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                             'in filter, Image info: \n{}'.format(image))
 
     def test_migrate_neutron_networks(self):
+        """Validate networks were migrated with correct parameters.
+
+        :param name:
+        :param provider\:network_type:
+        :param provider\:segmentation_id:"""
         src_nets = self.filter_networks()
         dst_nets = self.dst_cloud.neutronclient.list_networks()
 
@@ -345,6 +389,11 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             src_nets, dst_nets, parameter='provider:physical_network')
 
     def test_migrate_neutron_subnets(self):
+        """Validate subnets were migrated with correct parameters.
+
+        :param name:
+        :param gateway_ip:
+        :param cidr:"""
         src_subnets = self.filter_subnets()
         dst_subnets = self.dst_cloud.neutronclient.list_subnets()
 
@@ -359,6 +408,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_neutron_routers(self):
+        """Validate routers were migrated with correct parameters.
+
+        :param name:
+        :param external_gateway_info:"""
         def format_external_gateway_info(client, info):
             """ Method replaces network id with network name and deletes all
             attributes except enable_snat and network_name
@@ -389,6 +442,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_validate_router_migrated_once(self):
+        """Validate routers were migrated just one time."""
         src_routers_names = [router['name'] for router
                              in self.filter_routers()['routers']]
         dst_routers_names = [router['name'] for router
@@ -400,6 +454,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['tenant1', 'tenant2'])
     def test_router_connected_to_correct_networks(self):
+        """Validate routers were connected to correct network on dst."""
         src_routers = self.filter_routers()['routers']
         dst_routers = self.dst_cloud.neutronclient.list_routers()['routers']
         for dst_router in dst_routers:
@@ -415,6 +470,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_router_migrated_to_correct_tenant(self):
+        """Validate routers were migrated to correct tenant on dst."""
         src_routers = self.filter_routers()['routers']
         dst_routers = self.dst_cloud.neutronclient.list_routers()['routers']
         for dst_router in dst_routers:
@@ -431,6 +487,11 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant='tenant2')
     def test_migrate_vms_parameters(self):
+        """Validate VMs were migrated with correct parameters.
+
+        :param name:
+        :param config_drive:
+        :param key_name:"""
         src_vms = self.filter_vms()
         dst_vms = self.dst_cloud.novaclient.servers.list(
             search_opts={'all_tenants': 1})
@@ -449,6 +510,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_vms_with_floating(self):
+        """Validate VMs were migrated with floating ip assigned."""
         vm_names_with_fip = self.get_vms_with_fip_associated()
         dst_vms = self.dst_cloud.novaclient.servers.list(
             search_opts={'all_tenants': 1})
@@ -464,7 +526,12 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant='tenant2')
     def test_migrate_cinder_volumes(self):
+        """Validate volumes were migrated with correct parameters.
 
+        :param name:
+        :param size:
+        :param bootable:
+        :param metadata:"""
         src_volume_list = self.filter_volumes()
         dst_volume_list = self.dst_cloud.cinderclient.volumes.list(
             search_opts={'all_tenants': 1})
@@ -502,6 +569,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant='tenant2')
     def test_migrate_cinder_volumes_data(self):
+        """Validate volume data was migrated correctly."""
         def check_file_valid(filename):
             get_md5_cmd = 'md5sum %s' % filename
             get_old_md5_cmd = 'cat %s_md5' % filename
@@ -535,6 +603,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 check_file_valid(volume['mount_point'] + _file['filename'])
 
     def test_cinder_volumes_not_in_filter_did_not_migrate(self):
+        """Validate volumes not in filter weren't migrated."""
         src_volume_list = self.filter_volumes()
         dst_volume_list = self.dst_cloud.cinderclient.volumes.list(
             search_opts={'all_tenants': 1})
@@ -549,6 +618,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                             'in filter, Volume info: \n{}'.format(volume))
 
     def test_invalid_status_cinder_volumes_did_not_migrate(self):
+        """Validate volumes with invalid statuses weren't migrated.
+        Statuses described in :mod:`config.py`
+        """
         src_volume_list = self.src_cloud.cinderclient.volumes.list(
             search_opts={'all_tenants': 1})
         dst_volume_list = self.dst_cloud.cinderclient.volumes.list(
@@ -568,6 +640,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
     @unittest.skip("Temporarily disabled: snapshots doesn't implemented in "
                    "cinder's nfs driver")
     def test_migrate_cinder_snapshots(self):
+        """Validate volume snapshots were migrated with correct parameters.
+
+        :param name:
+        :param size:"""
         src_volume_list = self.filter_volumes()
         dst_volume_list = self.dst_cloud.cinderclient.volume_snapshots.list(
             search_opts={'all_tenants': 1})
@@ -580,9 +656,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             parameter='size')
 
     def test_migrate_tenant_quotas(self):
-        """
-        Validate tenant's quotas were migrated to correct tenant
-        """
+        """Validate tenant's quotas were migrated to correct tenant."""
 
         def get_tenant_quotas(tenants, client):
             """
@@ -628,6 +702,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant='tenant2')
     def test_ssh_connectivity_by_keypair(self):
+        """Validate migrated VMs ssh connectivity by keypairs."""
         vms = self.dst_cloud.novaclient.servers.list(
             search_opts={'all_tenants': 1})
         for _vm in vms:
@@ -659,6 +734,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_floating_ips_migrated(self):
+        """Validate floating IPs were migrated correctly."""
         def get_fips(client):
             return set([fip['floating_ip_address']
                         for fip in client.list_floatingips()['floatingips']])
@@ -673,10 +749,11 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                       "{fips}".format(num=len(missing_fips),
                                       fips=pprint.pformat(missing_fips)))
 
-    @unittest.skipIf(
-        functional_test.config_ini['migrate']['change_router_ips'] == 'False',
+    @unittest.skipIf(functional_test.get_option_from_config_ini(
+            option='change_router_ips') == 'False',
         'Change router ips disabled in CloudFerry config')
     def test_ext_router_ip_changed(self):
+        """Validate router IPs were changed after migration."""
         dst_routers = self.dst_cloud.get_ext_routers()
         src_routers = self.src_cloud.get_ext_routers()
         for dst_router in dst_routers:
@@ -698,6 +775,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_not_valid_vms_did_not_migrate(self):
+        """Validate VMs with invalid statuses weren't migrated.
+        Invalid VMs have 'broken': True value in :mod:`config.py`
+        """
         all_vms = self.migration_utils.get_all_vms_from_config()
         vms = [vm['name'] for vm in all_vms if vm.get('broken')]
         migrated_vms = []
@@ -712,6 +792,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_not_valid_images_did_not_migrate(self):
+        """Validate images with invalid statuses weren't migrated.
+        Invalid images have 'broken': True value in :mod:`config.py`
+        """
         all_images = self.migration_utils.get_all_images_from_config()
         images = [image['name'] for image in all_images if image.get('broken')]
         migrated_images = []
@@ -725,6 +808,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             self.fail('Not valid images %s migrated')
 
     def test_migrate_lbaas_pools(self):
+        """Validate load balancer pools were migrated successfuly."""
         src_lb_pools = self.replace_id_with_name(
             self.src_cloud, 'pools', self.filter_pools())
         dst_lb_pools = self.replace_id_with_name(
@@ -738,6 +822,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 parameter=param)
 
     def test_migrate_lbaas_monitors(self):
+        """Validate load balancer monitors were migrated successfuly."""
         monitors = self.filter_health_monitors()
         src_lb_monitors = self.replace_id_with_name(
             self.src_cloud, 'health_monitors', monitors)
@@ -755,6 +840,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                              sorted(dst_lb_monitors['health_monitors']))
 
     def test_migrate_lbaas_members(self):
+        """Validate load balancer members were migrated successfuly."""
         members = self.filter_lbaas_members()
         src_lb_members = self.replace_id_with_name(
             self.src_cloud, 'members', members)
@@ -772,6 +858,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                              sorted(dst_lb_members['members']))
 
     def test_migrate_lbaas_vips(self):
+        """Validate load balancer vips were migrated successfuly."""
         vips = self.filter_vips()
         src_lb_vips = self.replace_id_with_name(self.src_cloud, 'vips', vips)
         vips = self.dst_cloud.neutronclient.list_vips()
@@ -785,6 +872,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 parameter=param)
 
     def test_lbaas_pools_belong_deleted_tenant_not_migrate(self):
+        """Validate load balancer pools in deleted tenant weren't migrated."""
         pools = []
         for tenant in config.tenants:
             if not tenant.get('deleted'):

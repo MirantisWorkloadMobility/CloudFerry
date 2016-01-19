@@ -279,6 +279,8 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         return False
 
     def test_cinder_volume(self):
+        """Validate destination cloud's volumes running and attaching
+        successfully."""
         vm = self.dst_cloud.novaclient.servers.create(**self.TST_IMAGE)
         if not self.wait_vm_ready(vm, TIMEOUT):
             msg = '{tmout} seconds timeout of waiting for VM to be ready ' \
@@ -307,7 +309,7 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
                 name=vm.name, addr=self.float_ip_address))
 
     def test_create_vm(self):
-
+        """Validate destination cloud's VMs running successfully."""
         vm = self.dst_cloud.novaclient.servers.create(**self.TST_IMAGE)
         if not self.wait_vm_ready(vm, TIMEOUT):
             msg = '{tmout} seconds timeout of waiting for VM to be ready ' \
@@ -332,7 +334,7 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
                 name=vm.name, addr=self.float_ip_address))
 
     def test_floating_ips_neutron_quota(self):
-
+        """Validate destination cloud's floating IP quota information."""
         self.release_fips_tenant()
         self.update_floatip_neutron_quota(self.neutron_float_ip_quota,
                                           TEST_TENANT_NAME)
@@ -353,6 +355,7 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
             pass
 
     def test_nova_keypairs_quota_limit(self):
+        """Validate destination cloud's keypair quota information."""
         key_pair_test_name = 'TSTSKEYPAIR_QUOTALIM'
         message_out = self.keypair_quota
         quota_limit_left = int(

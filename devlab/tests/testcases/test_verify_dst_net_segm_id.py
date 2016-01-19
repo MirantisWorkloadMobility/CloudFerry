@@ -52,7 +52,8 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
                     (net['name'], net['provider:segmentation_id']))
 
     def test_check_segm_id_changed_on_dst(self):
-        # check if migrated network has unique id on both source and dst
+        """Validate if migrated network has unique id on both source and dst
+        clouds."""
         for dst_net, dst_net_id in self.dst_net_sid_mapping:
             if dst_net_id in self.dst_all_nets_sids:
                 msg = 'Network {0} migrated to destination with segmentation' \

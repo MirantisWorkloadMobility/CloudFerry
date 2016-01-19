@@ -113,7 +113,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
 
     @attr(migrated_tenant='tenant2')
     def test_tenant_exists_on_dst(self):
-
+        """Validate deleted tenant weren't migrated."""
         undeleted_tenants = []
         for tenant_name, _ in self.deleted_tenants:
             if tenant_name in self.dst_tenants:
@@ -125,6 +125,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
 
     @attr(migrated_tenant='tenant2')
     def test_tenant_users_exist_on_dst(self):
+        """Validate users with deleted tenant were migrated successfuly."""
         undeleted_users = []
         for tenant_name, _ in self.deleted_tenants:
             tenant_users_list_src = \
@@ -144,7 +145,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_tenant_net_exists_on_dst(self):
-
+        """Validate tenant's networks were migrated successfuly."""
         tenant_nets_ids = []
         for tenant_name, tenant in self.deleted_tenants:
             undeleted_net_ids_list = \
@@ -160,6 +161,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
     @unittest.skip("Disabled: orphan VMs don't migrate because tenant is "
                    "specified in filter.")
     def test_tenant_vm_exists_on_dst(self):
+        """Validate deleted tenant's VMs were migrated."""
         tenants_vms = []
         for tenant_name, tenant in self.deleted_tenants:
             non_migrated_vms = self._tenant_vm_exists_on_dst(tenant['vms'])
@@ -174,6 +176,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_tenants_volumes_on_dst(self):
+        """Validate deleted tenant's volumes were migrated."""
         undeleted_volumes = []
         for tenant_name, tenant in self.deleted_tenants:
 
@@ -190,6 +193,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_tenant_key_exists_on_dst(self):
+        """Validate deleted tenant's keypairs were migrated."""
         unused_keypairs = []
         for tenant_name, tenant in self.deleted_tenants:
             migrated_keys = \
@@ -214,6 +218,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_tenant_flavors_exist_on_dst(self):
+        """Validate deleted tenant's flavors were migrated."""
         unused_flavors = []
         for tenant_name, tenant in self.deleted_tenants:
 
@@ -234,6 +239,7 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
     @unittest.skip("Disabled: orphan subnets don't migrate because tenant is "
                    "specified in filter.")
     def test_subnets_exist_on_dst(self):
+        """Validate deleted tenant's subnets were migrated."""
         tenants_subnets = []
         for tenant_name, tenant in self.deleted_tenants:
             all_subnets = self.dst_cloud.neutronclient.list_subnets()
