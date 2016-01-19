@@ -102,8 +102,8 @@ class ColdEvacuateTestCase(test.TestCase):
         server.status = 'VERIFY_RESIZE'
         services = [
             s for s in self._services.values()
-            if s.status == 'enabled' and s.binary == 'nova-compute'
-            and s.host != getattr(s, cold_evacuate.INSTANCE_HOST_ATTRIBUTE)]
+            if s.status == 'enabled' and s.binary == 'nova-compute' and
+            s.host != getattr(s, cold_evacuate.INSTANCE_HOST_ATTRIBUTE)]
         # concatenate all host names to fail test when there is any choice
 
         setattr(server, cold_evacuate.INSTANCE_HOST_ATTRIBUTE,

@@ -27,6 +27,7 @@ OPENSTACK_RELEASES = {'192.168.1.2': 'grizzly',
                       '192.168.1.3': 'icehouse',
                       '192.168.1.8': 'juno'}
 
+
 class BasePrerequisites(object):
 
     def __init__(self, config, configuration_ini, cloud_prefix='SRC'):

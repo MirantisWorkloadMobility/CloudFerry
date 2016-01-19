@@ -406,8 +406,8 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             for src_router in src_routers:
                 if src_router['name'] == dst_router['name']:
                     src_ports = self.src_cloud.neutronclient.list_ports(
-                        retrieve_all=True, **{'device_id': src_router['id']})\
-                        ['ports']
+                        retrieve_all=True,
+                        **{'device_id': src_router['id']})['ports']
                     self.validate_network_name_in_port_lists(
                         src_ports=src_ports, dst_ports=dst_ports)
 
