@@ -106,14 +106,13 @@ class RollbackScenarioGeneration(object):
         self._insert_break_point(data, random_step)
         print('\n\nBreak point was set after:\n{}, index: {}\n\n'.format(
             random_step, list_of_steps.index(random_step)))
-        try:
-            assert(self._find_break_point(migration_data,
-                                          self.exception_task.keys()[0])
-                   == self.exception_task.values())
+        break_point = self._find_break_point(migration_data,
+                                             self.exception_task.keys()[0])
+        if break_point == self.exception_task.values():
             self._dump_into_file(self.full_path, migration_data)
-        except Exception as e:
-            print('Integration of failure step into migration scenario failed '
-                  'with following error: \n\n{}'.format(e))
+        else:
+            print('Integration of failure step into migration scenario failed')
+
 
 if __name__ == '__main__':
     rollback = RollbackScenarioGeneration()

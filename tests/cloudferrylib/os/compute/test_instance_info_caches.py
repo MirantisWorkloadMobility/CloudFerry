@@ -39,8 +39,8 @@ class InstanceInfoCachesTestCase(test.TestCase):
     def test_get_network_info(self, mock_loads):
         mock_loads.return_value = 'fake'
         with mock.patch.object(
-            self.instance_info_caches, 'get_info_caches',
-            return_value={'network_info': 'fake_info_caches'}) as m:
+                self.instance_info_caches, 'get_info_caches',
+                return_value={'network_info': 'fake_info_caches'}) as m:
             res = self.instance_info_caches.get_network_info('fake_id')
             self.assertEqual('fake', res)
             m.assert_called_once_with('fake_id')

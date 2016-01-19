@@ -183,8 +183,8 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
                             i['tenant_id'] == self.dst_tenant_id]
 
         if not sg_new:
-            if not any(d['port_range_max'] == 22
-                       and d['direction'] == 'ingress'
+            if not any(d['port_range_max'] == 22 and
+                       d['direction'] == 'ingress'
                        for d in sec_group['security_group_rules']):
                 self.dst_cloud.create_security_group_rule(
                     sec_group['id'], self.dst_tenant_id,
@@ -288,8 +288,8 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         vm.add_floating_ip(self.float_ip_address)
         if not self.wait_service_on_vm_to_be_ready(
                 TIMEOUT, self.float_ip_address, 22):
-            msg = 'Timeout of {tmout} seconds for service port {service_port}' \
-                  ' to be accessible by ip {fip} of vm {vmid}'
+            msg = ('Timeout of {tmout} seconds for service port {service_port}'
+                   ' to be accessible by ip {fip} of vm {vmid}')
             self.fail(msg.format(tmout=TIMEOUT,
                                  service_port=22,
                                  fip=self.float_ip_address,
@@ -317,8 +317,8 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         vm.add_floating_ip(self.float_ip_address)
         if not self.wait_service_on_vm_to_be_ready(
                 TIMEOUT, self.float_ip_address, 22):
-            msg = 'Timeout of {tmout} seconds for service port {service_port}' \
-                  'to be accessible by ip {fip} of vm {vmid}'
+            msg = ('Timeout of {tmout} seconds for service port {service_port}'
+                   'to be accessible by ip {fip} of vm {vmid}')
             self.fail(msg.format(tmout=TIMEOUT,
                                  service_port=22,
                                  fip=self.float_ip_address,

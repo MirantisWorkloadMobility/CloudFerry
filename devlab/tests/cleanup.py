@@ -22,6 +22,7 @@ from novaclient import exceptions as nv_exceptions
 from base import BasePrerequisites
 from test_exceptions import NotFound
 
+
 class CleanEnv(BasePrerequisites):
 
     def clean_vms(self):

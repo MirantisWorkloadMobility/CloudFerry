@@ -113,8 +113,8 @@ class FunctionalTest(unittest.TestCase):
 
         for tenant in config.tenants:
             fips = [fip for user in config.users
-                    if tenant['name'] == user.get('tenant') and user['enabled']
-                    and not user.get('deleted')
+                    if tenant['name'] == user.get('tenant') and
+                    user['enabled'] and not user.get('deleted')
                     for fip in get_fips(user)]
             return set(fips)
 
@@ -155,7 +155,7 @@ class FunctionalTest(unittest.TestCase):
                 all_flavors += [flavor for flavor in tenant['flavors']]
         for flavor in all_flavors:
             if filter_only_private:
-                if flavor.get('is_public') == False:
+                if flavor.get('is_public') is False:
                     flavors.append(flavor['name'])
             elif 'is_public' not in flavor or flavor.get('is_public'):
                 flavors.append(flavor['name'])

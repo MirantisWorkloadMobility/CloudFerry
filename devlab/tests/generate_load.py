@@ -83,6 +83,10 @@ def get_dict_from_config_file(config_file):
     return conf_dict
 
 
+def is_flavor_public(flavor):
+    return flavor.get('is_public', True)
+
+
 class Prerequisites(BasePrerequisites):
 
     def __init__(self, config, configuration_ini, cloud_prefix='SRC'):
@@ -295,7 +299,7 @@ class Prerequisites(BasePrerequisites):
     def create_flavors(self):
         for flavor in self.config.flavors:
             fl = self.novaclient.flavors.create(**flavor)
-            if flavor.get('is_public') == False:
+            if not is_flavor_public(flavor):
                 self.novaclient.flavor_access.add_tenant_access(
                     flavor=fl.id,
                     tenant=self.get_tenant_id(self.tenant))
@@ -303,7 +307,7 @@ class Prerequisites(BasePrerequisites):
             if tenant.get('flavors'):
                 for flavor in tenant['flavors']:
                     fl = self.novaclient.flavors.create(**flavor)
-                    if flavor.get('is_public') == False:
+                    if not is_flavor_public(flavor):
                         self.novaclient.flavor_access.add_tenant_access(
                             flavor=fl.id,
                             tenant=self.get_tenant_id(tenant['name']))
