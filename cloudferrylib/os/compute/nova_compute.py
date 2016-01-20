@@ -23,7 +23,9 @@ from novaclient.v1_1 import client as nova_client
 from novaclient import exceptions as nova_exc
 
 from cloudferrylib.base import compute
+from cloudferrylib.base import exception
 from cloudferrylib.os.compute import instances
+from cloudferrylib.os.compute import instance_info_caches
 from cloudferrylib.os.compute import cold_evacuate
 from cloudferrylib.os.compute import server_groups
 from cloudferrylib.os.identity import keystone
@@ -31,7 +33,6 @@ from cloudferrylib.utils import log
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import node_ip
 from cloudferrylib.utils import proxy_client
-from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils as utl
 
 LOG = log.getLogger(__name__)
@@ -93,7 +94,7 @@ class RandomSchedulerVmDeployer(object):
 
         try:
             return self.nc.deploy_instance(create_params, client_conf)
-        except timeout_exception.TimeoutException:
+        except exception.TimeoutException:
             az = instance['availability_zone']
             hosts = self.nc.get_compute_hosts(availability_zone=az)
             random.seed()
@@ -107,7 +108,7 @@ class RandomSchedulerVmDeployer(object):
                          create_params.get('availability_zone', 'UNKNOWN'))
                 try:
                     return self.nc.deploy_instance(create_params, client_conf)
-                except timeout_exception.TimeoutException:
+                except exception.TimeoutException:
                     pass
 
         message = ("Unable to schedule VM '{vm}' on any of available compute "
@@ -128,6 +129,8 @@ class NovaCompute(compute.Compute):
         self.mysql_connector = cloud.mysql_connector('nova')
         # List of instance IDs which failed to create
         self._failed_instances = []
+        self.instance_info_caches = instance_info_caches.InstanceInfoCaches(
+            self.get_db_connection())
 
     @property
     def nova_client(self):
@@ -646,7 +649,7 @@ class NovaCompute(compute.Compute):
                 self.wait_for_status(new_id, self.get_status, 'active',
                                      timeout=conf.migrate.boot_timeout,
                                      stop_statuses=[ERROR])
-            except timeout_exception.TimeoutException:
+            except exception.TimeoutException:
                 LOG.warning("Failed to create instance '%s'", new_id)
                 self._failed_instances.append(new_id)
                 raise
@@ -863,7 +866,7 @@ class NovaCompute(compute.Compute):
             try:
                 reduce(lambda res, f: f(instance), map_status[curr][will],
                        None)
-            except timeout_exception.TimeoutException:
+            except exception.TimeoutException:
                 LOG.warning("Failed to change state from '%s' to '%s' for VM "
                             "'%s'", curr, will, instance.name)
 
@@ -921,11 +924,15 @@ class NovaCompute(compute.Compute):
         return self.nova_client.servers.get(res_id).status
 
     def get_networks(self, instance):
-        network_resource = self.cloud.resources.get('network')
-        if network_resource is not None:
-            return network_resource.get_instance_network_info(instance.id)
-        raise RuntimeError("Can't get network interface info without "
-                           "network resource")
+        network_resource = self.cloud.resources[utl.NETWORK_RESOURCE]
+        interfaces = network_resource.get_instance_network_info(
+            instance.id)
+        if self.config.migrate.keep_network_interfaces_order:
+            keys = (self.instance_info_caches.
+                    enumerate_addresses(instance.id))
+            interfaces = sorted(interfaces,
+                                key=lambda i: keys[i['mac_address']])
+        return interfaces
 
     def attach_volume_to_instance(self, instance, volume):
         self.nova_client.volumes.create_server_volume(

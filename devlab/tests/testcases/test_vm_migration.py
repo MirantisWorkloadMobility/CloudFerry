@@ -16,11 +16,11 @@ import json
 from nose.plugins.attrib import attr
 import unittest
 
-import functional_test
-import config
+from tests.functional_test import FunctionalTest
+import tests.config as config
 
 
-class VmMigration(functional_test.FunctionalTest):
+class VmMigration(FunctionalTest):
 
     def setUp(self):
         src_vms = self.filter_vms()

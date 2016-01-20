@@ -25,3 +25,11 @@ class AbortMigrationError(RuntimeError):
     """Non-recoverable exception which must be used in cases where migration
     process MUST be aborted"""
     pass
+
+
+class TimeoutException(Exception):
+    def __init__(self, status_obj, exp_status, msg):
+        self.status_obj = status_obj
+        self.exp_status = exp_status
+        self.msg = msg
+        super(TimeoutException, self).__init__()

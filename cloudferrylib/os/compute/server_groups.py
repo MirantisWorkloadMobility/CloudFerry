@@ -183,7 +183,8 @@ class ServerGroupsHandler(compute.Compute):
                  server_group['tenant'], server_group['name'])
 
         try:
-            with proxy_client.expect_exception(keystone.ks_exceptions.NotFound):
+            with proxy_client.expect_exception(
+                    keystone.ks_exceptions.NotFound):
                 tenant_id = self.identity.get_tenant_id_by_name(
                     server_group["tenant"])
         except keystone.ks_exceptions.NotFound:

@@ -332,17 +332,25 @@ class KeystoneIdentity(identity.Identity):
 
             tenants_required_by_resource = set()
             for r in resources_with_public_objects:
-                for t in r.required_tenants():
+                for t in r.required_tenants(self.filter_tenant_id):
+                    LOG.info('Tenant %s is required by %s', t,
+                             r.__class__.__name__)
                     tenants_required_by_resource.add(t)
+            tenant_ids = [self.filter_tenant_id]
             for tenant_id in tenants_required_by_resource:
+                if tenant_id in tenant_ids:
+                    continue
+
                 tenant = self.try_get_tenant_by_id(tenant_id)
 
                 # try_get_tenant_by_id may return config.cloud.tenant value
-                if tenant.id not in result:
+                if tenant.id not in tenant_ids:
+                    tenant_ids.append(tenant.id)
                     result.append(tenant)
         else:
             result = ks_tenants.list()
-        LOG.info("List of tenants: %s", ", ".join([t.name for t in result]))
+        LOG.info("List of tenants: %s", ", ".join(['%s (%s)' % (t.name, t.id)
+                                                   for t in result]))
         return result
 
     def get_users_list(self):
@@ -717,7 +725,8 @@ class KeystoneIdentity(identity.Identity):
                         with proxy_client.expect_exception(
                                 ks_exceptions.Conflict):
                             self.keystone_client.roles.add_user_role(
-                                _user['meta']['new_id'], roles_id[role['name']],
+                                _user['meta']['new_id'],
+                                roles_id[role['name']],
                                 _tenant['meta']['new_id'])
                     except ks_exceptions.Conflict:
                         LOG.info("Role '%s' for user '%s' in tenant '%s' "

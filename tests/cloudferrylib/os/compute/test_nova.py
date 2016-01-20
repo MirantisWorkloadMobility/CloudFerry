@@ -19,8 +19,8 @@ import mock
 from novaclient.v1_1 import client as nova_client
 from oslotest import mockpatch
 
+from cloudferrylib.base import exception
 from cloudferrylib.os.compute import nova_compute
-from cloudferrylib.utils import timeout_exception
 from cloudferrylib.utils import utils
 
 from tests import test
@@ -37,12 +37,13 @@ FAKE_CONFIG = utils.ext_dict(
     mysql=utils.ext_dict({'host': '1.1.1.1'}),
     migrate=utils.ext_dict({'migrate_quotas': True,
                             'retry': '7',
-                            'time_wait': 5}))
+                            'time_wait': 5,
+                            'keep_network_interfaces_order': True}))
 
 
-class NovaComputeTestCase(test.TestCase):
+class BaseNovaComputeTestCase(test.TestCase):
     def setUp(self):
-        super(NovaComputeTestCase, self).setUp()
+        super(BaseNovaComputeTestCase, self).setUp()
 
         self.mock_client = mock.MagicMock()
         self.nc_patch = mockpatch.PatchObject(nova_client, 'Client',
@@ -54,6 +55,7 @@ class NovaComputeTestCase(test.TestCase):
         self.fake_cloud = mock.Mock()
         self.fake_cloud.resources = dict(identity=self.identity_mock)
         self.fake_cloud.position = 'src'
+        self.fake_cloud.config = FAKE_CONFIG
 
         with mock.patch(
                 'cloudferrylib.os.compute.nova_compute.mysql_connector'):
@@ -71,6 +73,8 @@ class NovaComputeTestCase(test.TestCase):
 
         self.fake_tenant_quota_0 = mock.Mock()
 
+
+class NovaComputeTestCase(BaseNovaComputeTestCase):
     def test_get_nova_client(self):
         # To check self.mock_client call only from this test method
         self.mock_client.reset_mock()
@@ -211,8 +215,47 @@ class NovaComputeTestCase(test.TestCase):
             user_id=None,
             instances='new_fake_value')
 
+    def _test_get_networks(self, instance_network_info,
+                           keep_network_interfaces_order):
+        instance = mock.Mock()
+        instance.id = 'fake_instance_id'
+        network_resource = mock.Mock()
+        network_resource.get_instance_network_info.\
+            return_value = instance_network_info
+        self.nova_client.cloud.resources = {
+            utils.NETWORK_RESOURCE: network_resource}
+        self.nova_client.config.migrate.\
+            keep_network_interfaces_order = keep_network_interfaces_order
+        res = self.nova_client.get_networks(instance)
+        network_resource.get_instance_network_info.assert_called_once_with(
+            'fake_instance_id')
+        return res
 
-class ComputeHostsTestCase(NovaComputeTestCase):
+    def test_get_networks_not_sorted(self):
+        res = self._test_get_networks('fake', False)
+        self.assertEqual('fake', res)
+
+    @mock.patch('cloudferrylib.os.compute.instance_info_caches.'
+                'InstanceInfoCaches.enumerate_addresses')
+    def test_get_networks_with_sorting(self, mock_enumerate_addresses):
+        unsorted_interfaces = [{'mac_address': 'fake_mac_1'},
+                               {'mac_address': 'fake_mac_3'},
+                               {'mac_address': 'fake_mac_2'}]
+        sorted_interfaces = [{'mac_address': 'fake_mac_1'},
+                             {'mac_address': 'fake_mac_2'},
+                             {'mac_address': 'fake_mac_3'}]
+        enumerated_addresses = {'fake_mac_1': 0,
+                                'fake_mac_2': 1,
+                                'fake_mac_3': 2}
+        mock_enumerate_addresses.return_value = enumerated_addresses
+        res = self._test_get_networks(unsorted_interfaces, True)
+        for i, interface in enumerate(res):
+            self.assertEqual(sorted_interfaces[i]['mac_address'],
+                             interface['mac_address'])
+        mock_enumerate_addresses.assert_called_once_with('fake_instance_id')
+
+
+class ComputeHostsTestCase(BaseNovaComputeTestCase):
     @classmethod
     def _host(cls, name, up=True, enabled=True):
         h = mock.Mock()
@@ -340,7 +383,7 @@ class DeployInstanceWithManualScheduling(test.TestCase):
 
         nc = mock.Mock()
         nc.get_compute_hosts.return_value = compute_hosts
-        nc.deploy_instance.side_effect = timeout_exception.TimeoutException(
+        nc.deploy_instance.side_effect = exception.TimeoutException(
             None, None, None)
 
         deployer = nova_compute.RandomSchedulerVmDeployer(nc)
@@ -497,6 +540,8 @@ class NovaClientTestCase(test.TestCase):
         config.cloud.insecure = insecure
         config.cloud.cacert = cacert
 
+        cloud.position = 'src'
+
         n = nova_compute.NovaCompute(config, cloud)
         n.get_client()
 
@@ -522,6 +567,8 @@ class NovaClientTestCase(test.TestCase):
         config.cloud.password = password
         config.cloud.insecure = insecure
         config.cloud.cacert = cacert
+
+        cloud.position = 'src'
 
         n = nova_compute.NovaCompute(config, cloud)
         n.get_client()

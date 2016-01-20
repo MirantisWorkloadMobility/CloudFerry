@@ -169,13 +169,19 @@ class NeutronNetwork(network.Network):
     def create_quota(self, tenant_id, quota):
         return self.neutron_client.update_quota(tenant_id, quota)
 
-    def required_tenants(self):
-        tenant_ids = []
+    def required_tenants(self, filter_tenant_id=None):
+        old_filter_tanant_id = self.filter_tenant_id
+        self.filter_tenant_id = filter_tenant_id
+
+        tenant_ids = set()
         for shared_net in self.get_shared_networks_raw():
-            tenant_ids.append(shared_net['tenant_id'])
+            tenant_ids.add(shared_net['tenant_id'])
         for router in self.get_routers_raw():
-            tenant_ids.append(router['tenant_id'])
-        return list(set(tenant_ids))
+            tenant_ids.add(router['tenant_id'])
+
+        self.filter_tenant_id = old_filter_tanant_id
+
+        return list(tenant_ids)
 
     def deploy(self, info):
         """
@@ -265,7 +271,7 @@ class NeutronNetwork(network.Network):
                 'ip_addresses': [x['ip_address'] for x in port['fixed_ips']],
                 'mac_address': port['mac_address'],
                 'floatingip': self.get_port_floating_ip(port['id']),
-                'allowed_address_pairs': port.get('allowed_address_pairs'),
+                'allowed_address_pairs': port.get('allowed_address_pairs', []),
             })
         return ports
 

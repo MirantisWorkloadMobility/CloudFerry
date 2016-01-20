@@ -24,10 +24,10 @@ Basically two dictionaries are being compared:
 import os
 import yaml
 
-import config
-import functional_test
-import utils
-from data_collector import DataCollector
+import tests.config as config
+import tests.functional_test as functional_test
+import tests.utils as utils
+from tests.data_collector import DataCollector
 
 
 class RollbackVerification(functional_test.FunctionalTest):

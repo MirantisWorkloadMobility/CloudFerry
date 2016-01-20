@@ -68,7 +68,7 @@ docker build --build-arg cf_commit_or_branch=origin/master -t <username>/cf-in-d
 
 ## Container running
 ```
-docker -it <username>/cf-in-docker
+docker run -it <username>/cf-in-docker
 ```
 
 ## Saving and loading the container files

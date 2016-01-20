@@ -1,3 +1,17 @@
+# Copyright 2015 Mirantis Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 INVALID_STATUSES = ['creating', 'error', 'deleting', 'error_deleting']
 
 img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
@@ -142,7 +156,8 @@ tenants = [
           'volume_type': 'nfs1',
           'server_to_attach': 'tn1server1', 'device': '/dev/vdb'},
          {'display_name': 'tn1_volume2', 'size': 1,
-          'volume_type': 'nfs2'}
+          'volume_type': 'nfs2', 'metadata': {'tenant_data': 'tenant_rocks',
+                                              'enabled': "True", 'exists': ""}}
          ],
      'cinder_snapshots': [
          # Commented because of unimplemented error in nfs driver for grizzly.
@@ -353,10 +368,11 @@ networks = [
      },
     {'name': 'shared_net', 'admin_state_up': True, 'shared': True,
      'router:external': True, 'real_network': True,
+     'provider:physical_network': 'physnet1', 'provider:network_type': 'flat',
      'subnets': [
          {'cidr': '192.168.1.0/24', 'ip_version': 4, 'name': 'external_subnet',
-          'set_as_gateway_for_routers': ['ext_router', 'tn1_router',
-                                         'tn2_router'],
+          'set_as_gateway_for_routers': {'ext_router': {'enable_snat': False},
+                                         'tn1_router': {}, 'tn2_router': {}},
           'allocation_pools': [
               {'start': '192.168.1.100', 'end': '192.168.1.254'}]
           }]
@@ -469,7 +485,7 @@ data. MD5 of file store in separate file in the same directory with name
 cinder_volumes = [
     {'display_name': 'cinder_volume1', 'size': 1, 'volume_type': 'nfs1'},
     {'display_name': 'cinder_volume2', 'size': 1,
-     'volume_type': 'nfs2',
+     'volume_type': 'nfs2',  'metadata': {'data': 'nope', 'enabled': "False"},
      'server_to_attach': 'server2', 'device': '/dev/vdb'},
     {'display_name': 'cinder_volume3', 'size': 1,
      'user': 'test_volume_migration'}

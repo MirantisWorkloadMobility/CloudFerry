@@ -12,13 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from fabric.api import sudo as fab_sudo
-from fabric.api import run
-from fabric.api import settings
+from fabric import api
 
 import cfglib
 from cloudferrylib.utils import log
-from cloudferrylib.utils.utils import forward_agent
+from cloudferrylib.utils import utils
 
 LOG = log.getLogger(__name__)
 
@@ -29,7 +27,7 @@ class RemoteExecutionError(RuntimeError):
 
 class RemoteRunner(object):
     def __init__(self, host, user, password=None, sudo=False, key=None,
-                 ignore_errors=False):
+                 ignore_errors=False, timeout=None):
         self.host = host
         if key is None:
             key = cfglib.CONF.migrate.key_filename
@@ -38,6 +36,7 @@ class RemoteRunner(object):
         self.sudo = sudo
         self.key = key
         self.ignore_errors = ignore_errors
+        self.timeout = timeout
 
     def run(self, cmd, **kwargs):
         abort_exception = None
@@ -49,21 +48,22 @@ class RemoteRunner(object):
 
         ssh_attempts = cfglib.CONF.migrate.ssh_connection_attempts
 
-        with settings(warn_only=self.ignore_errors,
-                      host_string=self.host,
-                      user=self.user,
-                      password=self.password,
-                      abort_exception=abort_exception,
-                      reject_unkown_hosts=False,
-                      combine_stderr=False,
-                      connection_attempts=ssh_attempts):
-            with forward_agent(self.key):
+        with api.settings(warn_only=self.ignore_errors,
+                          host_string=self.host,
+                          user=self.user,
+                          password=self.password,
+                          abort_exception=abort_exception,
+                          reject_unkown_hosts=False,
+                          combine_stderr=False,
+                          connection_attempts=ssh_attempts,
+                          command_timeout=self.timeout):
+            with utils.forward_agent(self.key):
                 LOG.debug("running '%s' on '%s' host as user '%s'",
                           cmd, self.host, self.user)
                 if self.sudo and self.user != 'root':
-                    return fab_sudo(cmd)
+                    return api.sudo(cmd)
                 else:
-                    return run(cmd)
+                    return api.run(cmd)
 
     def run_ignoring_errors(self, cmd, **kwargs):
         ignore_errors_original = self.ignore_errors
@@ -83,5 +83,10 @@ class RemoteRunner(object):
                 self.run(cmd)
                 done = True
             except RemoteExecutionError as e:
+                LOG.debug('RemoteExecutionError: %s; attempt #%d of %d',
+                          e,
+                          attempts,
+                          cfglib.CONF.migrate.ssh_connection_attempts,
+                          exc_info=True)
                 if attempts >= cfglib.CONF.migrate.ssh_connection_attempts:
-                    raise e
+                    raise

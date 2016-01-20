@@ -183,8 +183,8 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
                     {tenant_name: tenant_undeleted_volumes})
 
         if undeleted_volumes:
-            msg = 'Tenant\'s cinder volumes with ids {0} exist on destination,'\
-                  ' but should be deleted!'
+            msg = ("Tenant's cinder volumes with ids {0} exist on "
+                   "destination, but should be deleted!")
             self.fail(msg.format(undeleted_volumes))
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])

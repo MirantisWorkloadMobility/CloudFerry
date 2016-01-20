@@ -113,8 +113,8 @@ class FunctionalTest(unittest.TestCase):
 
         for tenant in config.tenants:
             fips = [fip for user in config.users
-                    if tenant['name'] == user.get('tenant') and user['enabled']
-                    and not user.get('deleted')
+                    if tenant['name'] == user.get('tenant') and
+                    user['enabled'] and not user.get('deleted')
                     for fip in get_fips(user)]
             return set(fips)
 
@@ -155,7 +155,7 @@ class FunctionalTest(unittest.TestCase):
                 all_flavors += [flavor for flavor in tenant['flavors']]
         for flavor in all_flavors:
             if filter_only_private:
-                if flavor.get('is_public') == False:
+                if flavor.get('is_public') is False:
                     flavors.append(flavor['name'])
             elif 'is_public' not in flavor or flavor.get('is_public'):
                 flavors.append(flavor['name'])
@@ -184,6 +184,30 @@ class FunctionalTest(unittest.TestCase):
         opts = {'search_opts': {'all_tenants': 1}}
         return [i for i in self.src_cloud.cinderclient.volumes.list(**opts)
                 if i.display_name in volumes_names]
+
+    def filter_health_monitors(self):
+        hm = self.src_cloud.neutronclient.list_health_monitors()
+        final_hm = [m for m in hm['health_monitors']
+                    if self.src_cloud.tenant_exists(tenant_id=m['tenant_id'])]
+        return {'health_monitors': final_hm}
+
+    def filter_pools(self):
+        pools = self.src_cloud.neutronclient.list_pools()['pools']
+        final_p = [p for p in pools
+                   if self.src_cloud.tenant_exists(tenant_id=p['tenant_id'])]
+        return {'pools': final_p}
+
+    def filter_lbaas_members(self):
+        members = self.src_cloud.neutronclient.list_members()['members']
+        final_m = [m for m in members
+                   if self.src_cloud.tenant_exists(tenant_id=m['tenant_id'])]
+        return {'members': final_m}
+
+    def filter_vips(self):
+        vips = self.src_cloud.neutronclient.list_vips()['vips']
+        final_v = [vip for vip in vips
+                   if self.src_cloud.tenant_exists(tenant_id=vip['tenant_id'])]
+        return {'vips': final_v}
 
     def _get_neutron_resources(self, res, names):
         _list = getattr(self.src_cloud.neutronclient, 'list_' + res)()
