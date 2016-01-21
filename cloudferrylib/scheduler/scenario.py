@@ -90,7 +90,7 @@ class Scenario(object):
                         tasks[name] = tasks[name] | tasks[task]
             if not net and value:
                 net = elem
-            elif value:
+            elif value and elem:
                 net = net >> elem
         return net
 
