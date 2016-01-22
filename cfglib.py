@@ -210,6 +210,23 @@ migrate_opts = [
                      "instead of default INFO level)."),
     cfg.BoolOpt('keep_network_interfaces_order', default=True,
                 help="Keep the order of network interfaces of instances."),
+    cfg.IntOpt('num_processes_for_volume_migration', default=5,
+               help="Defines number of parallel processes for cinder volume "
+                    "migration process. Does not parallelize migration of "
+                    "other resources."),
+    cfg.StrOpt('availability_zone_map_file',
+               default='configs/availability_zone_mapping.yaml',
+               help='Allows specifying map between source and destination '
+                    'availability zones. Mapping is used to provision objects '
+                    'in correct availability zones in case source cloud zones '
+                    'are not present in destination.'),
+    cfg.StrOpt('local_sudo_password', default=None,
+               help='Password to be used for sudo command if needed on the '
+                    'local host'),
+    cfg.IntOpt('storage_backend_timeout', default=300,
+               help='Time to wait for cinder volume backend to complete '
+                    'typical action, like create or delete simple volume. '
+                    'Value is in seconds.'),
     cfg.BoolOpt('keep_usage_quotas_inst', default=True,
                 help="Keep the usage quotas for instances."),
     cfg.BoolOpt('skip_orphaned_keypairs', default=True,
@@ -300,7 +317,7 @@ src_storage_opts = [
     cfg.StrOpt('service', default='cinder',
                help='name service for storage'),
     cfg.StrOpt('backend', default='iscsi',
-               help='backend for storage'),
+               help='Cinder volume backend. Possible values: nfs, iscsi-vmax'),
     cfg.StrOpt('host', default=None,
                help='storage node ip address'),
     cfg.StrOpt('db_host', default=None,
@@ -319,9 +336,6 @@ src_storage_opts = [
                help='mode transporting volumes GLANCE or SSH'),
     cfg.StrOpt('disk_format', default='qcow2',
                help='convert volume'),
-    cfg.StrOpt('volume_name_template', default='volume-',
-               help='template for creating names of volumes '
-                    'on storage backend'),
     cfg.StrOpt('rbd_pool', default='volumes',
                help='name of pool for volumes in Ceph RBD storage'),
     cfg.StrOpt('snapshot_name_template', default='snapshot-',
@@ -329,6 +343,34 @@ src_storage_opts = [
                     'on storage backend'),
     cfg.StrOpt('conf', default='/etc/cinder/cinder.conf',
                help="Path to cinder config file"),
+    cfg.StrOpt('vmax_ip', default=None,
+               help='IP address or hostname of EMC VMAX storage. Used with '
+                    '"vmax" backend'),
+    cfg.StrOpt('vmax_port', default=None,
+               help='IP port of EMC VMAX storage. Used with "vmax" backend'),
+    cfg.StrOpt('vmax_user', default=None,
+               help='Username to access EMC VMAX APIs. Used with "vmax" '
+                    'backend'),
+    cfg.StrOpt('vmax_password', default=None,
+               help='Pasword required to access EMC VMAX APIs. Used with '
+                    '"vmax" backend'),
+    cfg.ListOpt('vmax_port_groups', default=None,
+                help='Port group used for EMC VMAX'),
+    cfg.StrOpt('vmax_fast_policy', default=None,
+               help='Fast policy for EMC VMAX'),
+    cfg.StrOpt('vmax_pool_name', default=None,
+               help='Pool name for EMC VMAX'),
+    cfg.StrOpt('volume_name_template', default='volume-%s',
+               help="Represents volume_name_template cinder config value. "
+                    "Volume files will be stored following the pattern."),
+    cfg.StrOpt('iscsi_my_ip', default=None,
+               help="Local host IP address which is used to connect to iSCSI "
+                    "target"),
+    cfg.ListOpt('nfs_mount_point_bases', default=['/var/lib/cinder'],
+                help="Represents nfs_mount_point_base cinder config option. "
+                     "Defines list of paths where volume files are created."),
+    cfg.StrOpt('initiator_name', default=None,
+               help="InitiatorName from /etc/iscsi/initiatorname.iscsi")
 ]
 
 src_image = cfg.OptGroup(name='src_image',
@@ -483,7 +525,7 @@ dst_storage_opts = [
     cfg.StrOpt('service', default='cinder',
                help='name service for storage'),
     cfg.StrOpt('backend', default='iscsi',
-               help='backend for storage'),
+               help='Cinder volume backend. Possible values: nfs, iscsi-vmax'),
     cfg.StrOpt('host', default=None,
                help='storage node ip address'),
     cfg.StrOpt('db_host', default=None,
@@ -502,9 +544,6 @@ dst_storage_opts = [
                help='mode transporting volumes GLANCE or SSH'),
     cfg.StrOpt('disk_format', default='qcow2',
                help='convert volume'),
-    cfg.StrOpt('volume_name_template', default='volume-',
-               help='template for creating names of volumes '
-                    'on storage backend'),
     cfg.StrOpt('rbd_pool', default='volumes',
                help='name of pool for volumes in Ceph RBD storage'),
     cfg.StrOpt('snapshot_name_template', default='snapshot-',
@@ -512,6 +551,34 @@ dst_storage_opts = [
                     'on storage backend'),
     cfg.StrOpt('conf', default='/etc/cinder/cinder.conf',
                help="Path to cinder config file"),
+    cfg.StrOpt('vmax_ip', default=None,
+               help='IP address or hostname of EMC VMAX storage. Used with '
+                    '"vmax" backend'),
+    cfg.StrOpt('vmax_port', default=None,
+               help='IP port of EMC VMAX storage. Used with "vmax" backend'),
+    cfg.StrOpt('vmax_user', default=None,
+               help='Username to access EMC VMAX APIs. Used with "vmax" '
+                    'backend'),
+    cfg.StrOpt('vmax_password', default=None,
+               help='Pasword required to access EMC VMAX APIs. Used with '
+                    '"vmax" backend'),
+    cfg.ListOpt('vmax_port_groups', default=None,
+                help='Port group used for EMC VMAX'),
+    cfg.StrOpt('vmax_fast_policy', default=None,
+               help='Fast policy for EMC VMAX'),
+    cfg.StrOpt('vmax_pool_name', default=None,
+               help='Pool name for EMC VMAX'),
+    cfg.StrOpt('volume_name_template', default='volume-%s',
+               help="Represents volume_name_template cinder config value. "
+                    "Volume files will be stored following the pattern."),
+    cfg.StrOpt('iscsi_my_ip', default=None,
+               help="Local host IP address which is used to connect to iSCSI "
+                    "target"),
+    cfg.ListOpt('nfs_mount_point_bases', default=['/var/lib/cinder'],
+                help="Represents nfs_mount_point_base cinder config option. "
+                     "Defines list of paths where volume files are created."),
+    cfg.StrOpt('initiator_name', default=None,
+               help="InitiatorName from /etc/iscsi/initiatorname.iscsi")
 ]
 
 dst_image = cfg.OptGroup(name='dst_image',

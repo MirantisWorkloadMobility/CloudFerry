@@ -34,7 +34,7 @@ def run(cmd, capture_output=True):
         LOG.debug("Running '%s' locally", cmd)
         return api.local(cmd, capture=capture_output)
     except SystemExit as e:
-        LOG.warning("Command '%s' failed with '%s'", cmd, e.message)
+        LOG.debug("Command '%s' failed with '%s'", cmd, e.message)
         raise LocalExecutionFailed(e.message, e.code)
 
 
@@ -48,3 +48,25 @@ def sudo(cmd, sudo_password=None, capture_output=True):
     else:
         sudo_cmd = "sudo {cmd}".format(cmd=cmd)
     return run(sudo_cmd, capture_output=capture_output)
+
+
+def run_ignoring_errors(cmd):
+    """Suppresses all command execution errors
+    :returns: (retcode, output) pair
+    """
+    try:
+        output = run(cmd, capture_output=True)
+        return 0, output
+    except LocalExecutionFailed as e:
+        return e.code, e.message
+
+
+def sudo_ignoring_errors(cmd, sudo_password=None):
+    """Suppresses all command execution errors
+    :returns: (retcode, output) pair
+    """
+    try:
+        output = sudo(cmd, capture_output=True, sudo_password=sudo_password)
+        return 0, output
+    except LocalExecutionFailed as e:
+        return e.code, e.message

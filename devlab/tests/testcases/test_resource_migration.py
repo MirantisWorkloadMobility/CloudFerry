@@ -230,7 +230,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             parameter='description')
 
     @unittest.skipIf(functional_test.get_option_from_config_ini(
-            option='keep_affinity_settings') == 'False',
+        option='keep_affinity_settings') == 'False',
         'Keep affinity settings disabled in CloudFerry config')
     @attr(migrated_tenant=['tenant1', 'tenant2', 'tenant4'])
     def test_migrate_nova_server_groups(self):
@@ -540,7 +540,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             search_opts={'all_tenants': 1})
 
         def ignore_default_metadata(volumes):
-            default_keys = ('readonly', 'attached_mode')
+            default_keys = ('readonly', 'attached_mode', 'src_volume_id')
             for vol in volumes:
                 for default_key in default_keys:
                     if default_key in vol.metadata:
@@ -753,7 +753,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                       fips=pprint.pformat(missing_fips)))
 
     @unittest.skipIf(functional_test.get_option_from_config_ini(
-            option='change_router_ips') == 'False',
+        option='change_router_ips') == 'False',
         'Change router ips disabled in CloudFerry config')
     def test_ext_router_ip_changed(self):
         """Validate router IPs were changed after migration."""

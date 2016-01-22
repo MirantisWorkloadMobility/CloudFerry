@@ -21,6 +21,8 @@ from fabric import state
 
 import cfglib
 
+from cloudferrylib.utils import remote_runner
+
 
 LOG = logging.getLogger(__name__)
 CONF = cfglib.CONF
@@ -76,6 +78,15 @@ class RemoteDir(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         remote_rm(self.runner, self.dirname, recursive=True,
                   ignoring_errors=True)
+
+
+def is_installed(runner, cmd):
+    try:
+        is_installed_cmd = "type {cmd} >/dev/null 2>&1".format(cmd=cmd)
+        runner.run(is_installed_cmd)
+        return True
+    except remote_runner.RemoteExecutionError:
+        return False
 
 
 class RemoteStdout(object):

@@ -46,6 +46,7 @@ class Cloud(object):
                                       snapshot=utils.ext_dict(),
                                       mysql=utils.ext_dict(),
                                       rabbit=utils.ext_dict(),
+                                      storage=utils.ext_dict(),
                                       initial_check=utils.ext_dict())
 
         cloud_config['migrate'].update(config.migrate)
@@ -55,6 +56,7 @@ class Cloud(object):
         cloud_config['mysql'].update(getattr(config, position + '_mysql'))
         cloud_config['rabbit'].update(getattr(config, position + '_rabbit'))
         cloud_config['snapshot'].update(config.snapshot)
+        cloud_config['storage'].update(getattr(config, position + '_storage'))
         cloud_config['initial_check'].update(config.initial_check)
 
         return cloud_config

@@ -176,105 +176,12 @@ class TransportVolumes(CinderDatabaseInteraction):
         self.get_resource().deploy(data)
 
 
-class WriteVolumesDb(CinderDatabaseInteraction):
-
-    """
-    Copy volumes.
-
-    Work via transfer engine, can handle big files
-    and resume after errors.
-
-    """
-
-    def __init__(self, *args, **kwargs):
-        super(WriteVolumesDb, self).__init__(*args, **kwargs)
-        self.cp_volumes = CopyVolumes(self.cfg, self.src_cloud, self.dst_cloud)
-
-    @staticmethod
-    def _default_quota_usages(quota_usages, quotas):
-        def existed_usage(q):
-            return [u for u in quota_usages
-                    if u['project_id'] == q['project_id'] and
-                    u['resource'] == q['resource']]
-
-        def _quota_usage(q):
-            return {
-                'resource': q['resource'],
-                'project_id': q['project_id'],
-                'in_use': 0,
-                'reserved': 0,
-            }
-        return [_quota_usage(q) for q in quotas
-                if q['resource'] in QUOTA_RESOURCES and
-                not existed_usage(q)]
-
-    @staticmethod
-    def _recalculate_quota_usages(quota_usages, volumes):
-        for u in quota_usages:
-            if u['resource'] in QUOTA_RESOURCES:
-                u['in_use'] = 0
-
-        for v in volumes:
-            for res in QUOTA_RESOURCES:
-                u = [q for q in quota_usages
-                     if q['project_id'] == v['project_id'] and
-                     q['resource'] == res]
-                if res == 'volumes':
-                    add = 1
-                elif res == 'gigabytes':
-                    add = v.get('size', 0)
-
-                if u:
-                    u[0]['in_use'] += add
-                else:
-                    u = {'resource': res,
-                         'project_id': v['project_id'],
-                         'in_use': add,
-                         'reserved': 0}
-                    quota_usages.append(u)
-        return quota_usages
-
-    def fix_quota_usages(self, data):
-        """Re-calculate quota usages.
-
-        :return: dict
-
-        """
-        volumes = data.get('volumes', [])
-        quotas = data.get('quotas', [])
-        quota_usages = data.get('quota_usages', [])
-
-        quota_usages.extend(self._default_quota_usages(quota_usages, quotas))
-
-        quota_usages = self._recalculate_quota_usages(quota_usages, volumes)
-
-        data['quota_usages'] = quota_usages
-        if quotas:
-            data['quotas'] = quotas
-        return data
-
-    def run(self, *args, **kwargs):
-        """Run WriteVolumesDb Action.
-
-        :return: dict
-
-        """
-
-        data = self.cp_volumes.run()
-
-        res = self.dst_cloud.resources.get(utils.STORAGE_RESOURCE)
-        res.deploy(data)
-        data = self.fix_quota_usages(res.reread())
-        res.deploy({'quota_usages': data['quota_usages']})
-        return data
-
-
 class CopyVolumes(object):
 
     """
     Copy volumes from NFS backend(s) to NFS backend(s).
 
-    Work via transfer engine, can handle big files
+    Work via rsync, can handle big files
     and resume after errors.
 
     """
@@ -319,7 +226,7 @@ class CopyVolumes(object):
         """
         LOG.info('Start volumes migration process.')
         for position in self.clouds:
-            self.data[position] = self.clouds[position][RES].read_db_info()
+            self.data[position] = self.clouds[position][RES].read_info()
 
         self._skip_existing_volumes()
 
