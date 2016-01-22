@@ -39,7 +39,7 @@ class RollbackVerification(functional_test.FunctionalTest):
 
         path = 'devlab/tests'
         file_name = config.rollback_params['data_file_names']['PRE']
-        pre_file_path = os.path.join(data_collector.main_folder, path,
+        pre_file_path = os.path.join(data_collector.utils.main_folder, path,
                                      file_name)
         with open(pre_file_path, "r") as f:
             self.pre_data = yaml.load(f)
