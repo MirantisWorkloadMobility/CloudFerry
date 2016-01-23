@@ -20,7 +20,7 @@ from functools import wraps
 LOG = logging.getLogger(__name__)
 
 
-UNLIMITED = None
+UNLIMITED = object()
 
 
 class RetryError(RuntimeError):

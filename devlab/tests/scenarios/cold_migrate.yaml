@@ -115,3 +115,4 @@ process:
   - verify:
       - verify_vms: True
       - remove_failed_instances: True
+      - remove_bbcp: True

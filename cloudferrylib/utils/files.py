@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import logging
 import math
 import os
@@ -35,33 +36,30 @@ class RemoteSymlink(object):
         if self.target is None:
             return
 
-        cmd = "ln --symbolic {file} {symlink_name}".format(
-            file=self.target, symlink_name=self.symlink)
-        self.runner.run(cmd)
+        cmd = "ln --symbolic {file} {symlink_name}"
+        self.runner.run(cmd, file=self.target, symlink_name=self.symlink)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.target is None:
             return
-
-        self.runner.run_ignoring_errors(_unlink(self.symlink))
+        remote_rm(self.runner, self.symlink, ignoring_errors=True)
         return self
 
 
 class RemoteTempFile(object):
     def __init__(self, runner, filename, text):
         self.runner = runner
-        self.filename = os.path.join('/tmp', '{}'.format(filename))
+        self.filename = os.path.join('/tmp', filename)
         self.text = text
 
     def __enter__(self):
-        cmd = "echo '{text}' > {file}".format(text=self.text,
-                                              file=self.filename)
-        self.runner.run(cmd)
+        cmd = "echo '{text}' > {filename}"
+        self.runner.run(cmd, text=self.text, filename=self.filename)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.runner.run_ignoring_errors(_unlink(self.filename))
+        remote_rm(self.runner, self.filename, ignoring_errors=True)
         return self
 
 
@@ -71,62 +69,13 @@ class RemoteDir(object):
         self.dirname = dirname
 
     def __enter__(self):
-        cmd = "mkdir -p {dir}".format(dir=self.dirname)
-        self.runner.run(cmd)
+        cmd = "mkdir -p {dir}"
+        self.runner.run(cmd, dir=self.dirname)
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.runner.run_ignoring_errors(_unlink_dir(self.dirname))
-
-
-class GetTempDir(object):
-    def __init__(self, runner, prefix):
-        self.runner = runner
-        self.prefix = prefix
-
-    def get(self):
-        cmd = "mktemp -udt %s_XXXX" % self.prefix
-        return self.runner.run(cmd)
-
-
-def _unlink(filename):
-    return "rm -f {file}".format(file=filename)
-
-
-def _unlink_dir(dirname):
-    if len(dirname) > 1:
-        return "rm -rf {dir}".format(dir=dirname)
-    else:
-        raise RuntimeError('Wrong dirname %s, stopping' % dirname)
-
-
-class RemoteTempDir(object):
-    """Creates remote temp dir using `mktemp` and removes it on scope exit"""
-
-    def __init__(self, runner):
-        self.runner = runner
-        self.created_dir = None
-
-    def __enter__(self):
-        create_temp_dir = 'mktemp -d'
-        self.created_dir = self.runner.run(create_temp_dir)
-        if self.runner.sudo and self.runner.user != 'root':
-            chown_created_dir_cmd = 'chown {user} {directory}'.format(
-                user=self.runner.user, directory=self.created_dir)
-            self.runner.run(chown_created_dir_cmd)
-        return self.created_dir
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        remove_dir = 'rm -rf {dir}'.format(dir=self.created_dir)
-        self.runner.run_ignoring_errors(remove_dir)
-
-
-def remote_file_size(runner, path):
-    return int(runner.run('stat --printf="%s" {path}', path=path))
-
-
-def remote_file_size_mb(runner, path):
-    return int(math.ceil(remote_file_size(runner, path) / (1024.0 * 1024.0)))
+        remote_rm(self.runner, self.dirname, recursive=True,
+                  ignoring_errors=True)
 
 
 class RemoteStdout(object):
@@ -164,3 +113,50 @@ class RemoteStdout(object):
             self.stderr.close()
         if all((exc_type, exc_val, exc_tb)):
             raise exc_type, exc_val, exc_tb
+
+
+def remote_file_size(runner, path):
+    return int(runner.run('stat --printf="%s" {path}', path=path))
+
+
+def remote_file_size_mb(runner, path):
+    return int(math.ceil(remote_file_size(runner, path) / (1024.0 * 1024.0)))
+
+
+def remote_md5_sum(runner, path):
+    get_md5 = "md5sum {path} | awk '{{ print $1 }}'"
+    return runner.run(get_md5, path=path)
+
+
+def remote_rm(runner, path, recursive=False, ignoring_errors=False):
+    options = 'f'
+    if recursive:
+        options += 'r'
+    cmd = "rm -{options} {path}"
+    run = runner.run_ignoring_errors if ignoring_errors else runner.run
+    run(cmd, options=options, path=path)
+
+
+def remote_gzip(runner, path):
+    cmd = "gzip -f {path}"
+    runner.run(cmd, path=path)
+    return path + ".gz"
+
+
+def remote_split_file(runner, input, output, start, block_size):
+    cmd = ("dd if={input} of={output} skip={start} bs={block_size}M "
+           "count=1")
+    runner.run(cmd, input=input, output=output, block_size=block_size,
+               start=start)
+
+
+def remote_unzip(runner, path):
+    cmd = "gzip -f -d {path}"
+    runner.run(cmd, path=path)
+
+
+def remote_join_file(runner, dest_file, part, start, block_size):
+    cmd = ("dd if={part} of={dest} seek={start} bs={block_size}M "
+           "count=1")
+    runner.run(cmd, part=part, dest=dest_file, start=start,
+               block_size=block_size)

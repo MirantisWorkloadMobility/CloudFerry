@@ -13,21 +13,29 @@
 # limitations under the License.
 
 
-class OutOfResources(Exception):
+class CFBaseException(RuntimeError):
+    message = ''
+
+    def __init__(self, message=None, **kwargs):
+        message = message or self.message
+        super(CFBaseException, self).__init__(message.format(**kwargs))
+
+
+class OutOfResources(CFBaseException):
     pass
 
 
-class ImageDownloadError(Exception):
+class ImageDownloadError(CFBaseException):
     pass
 
 
-class AbortMigrationError(RuntimeError):
+class AbortMigrationError(CFBaseException):
     """Non-recoverable exception which must be used in cases where migration
     process MUST be aborted"""
     pass
 
 
-class TimeoutException(Exception):
+class TimeoutException(RuntimeError):
     def __init__(self, status_obj, exp_status, msg):
         self.status_obj = status_obj
         self.exp_status = exp_status

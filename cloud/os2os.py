@@ -16,20 +16,15 @@
 import cloud
 import cloud_ferry
 from cloudferrylib.base import migration
-from cloudferrylib.scheduler import scheduler
-from cloudferrylib.scheduler import namespace
-from cloudferrylib.scheduler import cursor
+from cloudferrylib.os.compute import nova_compute
+from cloudferrylib.os.identity import keystone
 from cloudferrylib.os.image import glance_image
 from cloudferrylib.os.network import neutron
-from cloudferrylib.os.identity import keystone
-from cloudferrylib.os.compute import nova_compute
 from cloudferrylib.os.object_storage import swift_storage
+from cloudferrylib.scheduler import cursor
+from cloudferrylib.scheduler import namespace
+from cloudferrylib.scheduler import scheduler
 from cloudferrylib.utils import utils as utl
-from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
-from cloudferrylib.utils.drivers import ssh_ceph_to_file
-from cloudferrylib.utils.drivers import ssh_file_to_file
-from cloudferrylib.utils.drivers import ssh_file_to_ceph
-from cloudferrylib.utils.drivers import copy_engine
 
 
 class OS2OSFerry(cloud_ferry.CloudFerry):
@@ -59,12 +54,6 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
             'src_cloud': self.src_cloud,
             'dst_cloud': self.dst_cloud,
             'cfg': self.config,
-            'SSHCephToCeph': ssh_ceph_to_ceph.SSHCephToCeph,
-            'SSHCephToFile': ssh_ceph_to_file.SSHCephToFile,
-            'SSHFileToFile': ssh_file_to_file.SSHFileToFile,
-            'SSHFileToCeph': ssh_file_to_ceph.SSHFileToCeph,
-            'CopyFilesBetweenComputeHosts':
-                copy_engine.CopyFilesBetweenComputeHosts,
         }
         self.scenario = None
 

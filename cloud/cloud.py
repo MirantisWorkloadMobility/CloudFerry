@@ -35,6 +35,7 @@ class Cloud(object):
 
         self.cloud_config = self.make_cloud_config(self.config, self.position)
         self.init_resources(self.cloud_config)
+        self.hosts_with_bbcp = set()
 
     @staticmethod
     def make_cloud_config(config, position):

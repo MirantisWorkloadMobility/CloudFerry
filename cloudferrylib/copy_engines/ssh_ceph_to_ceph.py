@@ -12,30 +12,29 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import logging
 
-from fabric.api import env
-from fabric.api import settings
+from fabric import api
 
+from cloudferrylib.copy_engines import base
 from cloudferrylib.utils import cmd_cfg
-from cloudferrylib.utils import driver_transporter
-from cloudferrylib.utils import log
 from cloudferrylib.utils import rbd_util
 from cloudferrylib.utils import utils
 
+LOG = logging.getLogger(__name__)
 
-LOG = log.getLogger(__name__)
 
-
-class SSHCephToCeph(driver_transporter.DriverTransporter):
-    def transfer(self, data, snapshot=None, snapshot_type=1):
-        host_src = (data.get('host_src') if data.get('host_src')
-                    else self.src_cloud.cloud_config.cloud.ssh_host)
-        host_dst = (data.get('host_dst') if data.get('host_dst')
-                    else self.dst_cloud.cloud_config.cloud.ssh_host)
-        with (settings(host_string=host_src,
-                       connection_attempts=env.connection_attempts),
-              utils.forward_agent(env.key_filename)):
-
+class SSHCephToCeph(base.BaseCopier):
+    def transfer(self, data,  # pylint: disable=arguments-differ
+                 snapshot=None,
+                 snapshot_type=1):
+        host_src = data.get('host_src',
+                            self.src_cloud.cloud_config.cloud.ssh_host)
+        host_dst = data.get('host_dst',
+                            self.dst_cloud.cloud_config.cloud.ssh_host)
+        with api.settings(host_string=host_src,
+                          connection_attempts=api.env.connection_attempts), \
+                utils.forward_agent(api.env.key_filename):
             rbd_import_diff = rbd_util.RbdUtil.rbd_import_diff_cmd
             ssh_cmd = cmd_cfg.ssh_cmd
             ssh_rbd_import_diff = ssh_cmd(host_dst, rbd_import_diff)
