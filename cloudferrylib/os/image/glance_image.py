@@ -25,20 +25,18 @@ from fabric.api import settings
 from glanceclient import client as glance_client
 from glanceclient import exc as glance_exceptions
 from glanceclient.v1.images import CREATE_PARAMS
-
 from keystoneclient import exceptions as keystone_exceptions
 
 from cloudferrylib.base import exception
 from cloudferrylib.base import image
-from cloudferrylib.utils import filters
-from cloudferrylib.utils import sizeof_format
 from cloudferrylib.os.image import filters as glance_filters
-from cloudferrylib.utils import file_like_proxy
+from cloudferrylib.utils import file_proxy
+from cloudferrylib.utils import filters
 from cloudferrylib.utils import log
 from cloudferrylib.utils import proxy_client
-from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import remote_runner
-
+from cloudferrylib.utils import sizeof_format
+from cloudferrylib.utils import utils as utl
 
 LOG = log.getLogger(__name__)
 
@@ -180,6 +178,16 @@ class GlanceImage(image.Image):
         self.filter_tenant_id = old_filter_tanant_id
 
         return list(tenants)
+
+    def get_image_raw(self, image_id):
+        return self.glance_client.images.get(image_id)
+
+    def image_exists(self, image_id):
+        try:
+            self.get_image_raw(image_id)
+            return True
+        except glance_exceptions.HTTPNotFound:
+            return False
 
     def get_image_list(self):
         images = self.glance_client.images.list(filters={"is_public": None})
@@ -473,11 +481,14 @@ class GlanceImage(image.Image):
                     LOG.warning("re-creating image %s from original source "
                                 "URL", img["id"])
                     if meta['img_loc'] is not None:
-                        self.glance_img_create(
-                            img['name'],
-                            img['disk_format'] or "qcow2",
-                            meta['img_loc']
+                        self.create_image(
+                            id=img['id'],
+                            name=img['name'],
+                            disk_format=img['disk_format'] or "qcow2",
+                            location=meta['img_loc'],
+                            container_format=img['container_format'] or 'bare',
                         )
+
                         recreated_image = utl.ext_dict(
                             name=img["name"]
                         )
@@ -497,10 +508,13 @@ class GlanceImage(image.Image):
                 # and then - delete from database
 
                 try:
-                    data_proxy = file_like_proxy.FileLikeProxy(
-                        img, self.config['migrate']['speed_limit'])
+                    file_obj = img['resource'].get_ref_image(img['id'])
+                    data_proxy = file_proxy.FileProxy(
+                        file_obj,
+                        name="image %s ('%s')" % (img['name'], img['id']))
 
                     created_image = self.create_image(
+                        id=img['id'],
                         name=img['name'],
                         container_format=(img['container_format'] or "bare"),
                         disk_format=(img['disk_format'] or "qcow2"),
@@ -597,11 +611,3 @@ class GlanceImage(image.Image):
                 out = json.loads(
                     run("rbd -p images info %s --format json" % image_id))
                 image_from_glance.update(size=out["size"])
-
-    def glance_img_create(self, img_name, img_format, file_path):
-        cfg = self.cloud.cloud_config.cloud
-        cmd = image.glance_image_create_cmd(cfg, img_name, img_format,
-                                            file_path)
-        out = self.runner.run(cmd)
-        image_id = out.split("|")[2].replace(' ', '')
-        return image_id

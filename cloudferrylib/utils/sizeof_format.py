@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import re
+
 UNITS = ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z']
+RE_SIZE = re.compile(r'(?P<number>\d+)(?P<unit>.*)')
 
 
 def sizeof_fmt(num, unit='', suffix='B'):
@@ -29,3 +32,21 @@ def sizeof_fmt(num, unit='', suffix='B'):
             return "%3.1f%s%s" % (num, unit, suffix)
         num /= 1024.
     return "%.1f%s%s" % (num, 'Y', suffix)
+
+
+def parse_size(size):
+    if isinstance(size, (int, long)):
+        return max((0, size))
+    if isinstance(size, basestring):
+        size = size.upper()
+        if size == 'OFF':
+            return 0
+        else:
+            m = RE_SIZE.match(size)
+            if m:
+                try:
+                    p = UNITS.index(m.group('unit')[:1])
+                except ValueError:
+                    p = 0
+                return (int(m.group('number')) * 1024 ** p)
+    return 0

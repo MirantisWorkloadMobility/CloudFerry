@@ -45,6 +45,7 @@ class ConvertComputeToImage(action.Action):
         image_info = {utl.IMAGES_TYPE: {}}
         images_body = image_info[utl.IMAGES_TYPE]
         image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
+        dst_image_resource = self.dst_cloud.resources[utl.IMAGE_RESOURCE]
         storage_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
         compute_ignored_images = {}
         missing_images = {}
@@ -59,7 +60,7 @@ class ConvertComputeToImage(action.Action):
             else:
                 image_id = _instance['image_id']
             # TODO: Case when image is None
-            if image_id:
+            if image_id and not dst_image_resource.image_exists(image_id):
                 if image_id in images_body:
                     images_body[image_id][utl.META_INFO][
                         utl.INSTANCE_BODY].append(instance)

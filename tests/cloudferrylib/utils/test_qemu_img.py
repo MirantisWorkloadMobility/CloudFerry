@@ -13,14 +13,53 @@
 # limitations under the License.
 
 import mock
-from mock import patch
 
 from cloudferrylib.utils import qemu_img
 
 from tests import test
 
 
-class QemuImgInfoBackingFileParserTestCase(test.TestCase):
+class FakeQemuImgInfoParser(qemu_img.QemuImgInfoParser):
+    def parse(self, img_info_output):
+        return img_info_output
+
+
+class QemuImgInfoParserTestCase(test.TestCase):
+    def setUp(self):
+        super(QemuImgInfoParserTestCase, self).setUp()
+        self.info = {'format': 'fake_format',
+                     'backing-filename': 'fake_filename'}
+        self.parser = FakeQemuImgInfoParser(self.info)
+
+    def test_info(self):
+        self.assertEqual(self.info, self.parser.info)
+
+    def test_backing_filename(self):
+        self.assertEqual('fake_filename', self.parser.backing_filename)
+
+    def test_none_backing_filename(self):
+        del(self.parser.info['backing-filename'])
+        self.assertIsNone(self.parser.backing_filename)
+
+    def test_format(self):
+        self.assertEqual('fake_format', self.parser.format)
+
+
+class JsonQemuImgInfoParserTestCase(test.TestCase):
+    def setUp(self):
+        super(JsonQemuImgInfoParserTestCase, self).setUp()
+        m = mock.patch('json.loads', return_value='fake')
+        self.loads = m.start()
+        self.addCleanup(m.stop)
+        self.parser = qemu_img.JsonQemuImgInfoParser('fake_output')
+
+    def test_parse(self):
+        self.loads.assert_called_once_with('fake_output')
+        self.assertEqual('fake', self.parser.info)
+
+
+class TextQemuImgInfoParserTestCase(test.TestCase):
+
     def test_backing_file_without_actual_path_gets_parsed(self):
         expected_backing_file = '/path/to/backing/file'
 
@@ -36,7 +75,8 @@ class QemuImgInfoBackingFileParserTestCase(test.TestCase):
             lazy refcounts: false
         """.format(backing_file=expected_backing_file)
 
-        actual = qemu_img.QemuImgInfoParser(qemu_img_output).backing_file()
+        actual = (qemu_img.TextQemuImgInfoParser(qemu_img_output).
+                  backing_filename)
 
         self.assertEqual(expected_backing_file, actual)
 
@@ -56,7 +96,8 @@ class QemuImgInfoBackingFileParserTestCase(test.TestCase):
             lazy refcounts: false
         """.format(backing_file=expected_backing_file, actual_path=actual_path)
 
-        actual = qemu_img.QemuImgInfoParser(qemu_img_output).backing_file()
+        actual = (qemu_img.TextQemuImgInfoParser(qemu_img_output).
+                  backing_filename)
 
         self.assertEqual(expected_backing_file, actual)
 
@@ -67,7 +108,8 @@ class QemuImgInfoBackingFileParserTestCase(test.TestCase):
         to test
         """
 
-        actual = qemu_img.QemuImgInfoParser(unexpected_output).backing_file()
+        actual = (qemu_img.TextQemuImgInfoParser(unexpected_output).
+                  backing_filename)
 
         self.assertIsNone(actual)
 
@@ -87,13 +129,14 @@ class QemuImgInfoBackingFileParserTestCase(test.TestCase):
             lazy refcounts: false
         """.format(backing_file=expected_backing_file, actual_path=actual_path)
 
-        actual = qemu_img.QemuImgInfoParser(qemu_img_output).backing_file()
+        actual = (qemu_img.TextQemuImgInfoParser(qemu_img_output).
+                  backing_filename)
 
         self.assertEqual(expected_backing_file, actual)
 
 
 class QemuImgCommandsTestCase(test.TestCase):
-    @patch("cloudferrylib.utils.remote_runner.RemoteRunner")
+    @mock.patch("cloudferrylib.utils.qemu_img.QemuImg.execute")
     def test_backing_file_returns_none_if_not_available(self, _):
         cloud = mock.Mock()
         config = mock.Mock()
@@ -104,8 +147,8 @@ class QemuImgCommandsTestCase(test.TestCase):
         backing_file = qi.detect_backing_file(ephemeral, host)
         self.assertIsNone(backing_file)
 
-    @patch("cloudferrylib.utils.remote_runner.RemoteRunner.run")
-    def test_backing_file_returned_for_good_ephemeral(self, runner):
+    @mock.patch("cloudferrylib.utils.qemu_img.QemuImg.execute")
+    def test_backing_file_returned_for_good_ephemeral(self, mock_execute):
         cloud = mock.Mock()
         config = mock.Mock()
         host = "host1"
@@ -113,7 +156,7 @@ class QemuImgCommandsTestCase(test.TestCase):
         expected_backing = "/path/to/backing/file"
 
         # dict is based on the actual output of qemu-img utility
-        runner.return_value = """{{
+        mock_execute.return_value = """{{
             "virtual-size": 1073741824,
             "filename": "disk",
             "cluster-size": 65536,
