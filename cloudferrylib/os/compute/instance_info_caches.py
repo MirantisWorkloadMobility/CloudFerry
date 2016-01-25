@@ -13,6 +13,11 @@
 # limitations under the License.
 
 import json
+import pprint
+
+from cloudferrylib.utils import log
+
+LOG = log.getLogger(__name__)
 
 
 class InstanceInfoCaches(object):
@@ -52,4 +57,6 @@ class InstanceInfoCaches(object):
         :return: Dictionary with mac address: position
         """
         network_info = self.get_network_info(instance_id)
+        LOG.debug('Network info of instance %s: %s', instance_id,
+                  pprint.pformat(network_info))
         return {v['address']: i for i, v in enumerate(network_info)}

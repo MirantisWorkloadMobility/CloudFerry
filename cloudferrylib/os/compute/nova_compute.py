@@ -930,8 +930,14 @@ class NovaCompute(compute.Compute):
         if self.config.migrate.keep_network_interfaces_order:
             keys = (self.instance_info_caches.
                     enumerate_addresses(instance.id))
-            interfaces = sorted(interfaces,
-                                key=lambda i: keys[i['mac_address']])
+            try:
+                interfaces = sorted(interfaces,
+                                    key=lambda i: keys[i['mac_address']])
+            except KeyError:
+                LOG.warning("instance_info_caches table does not contain "
+                            "information for instance '%s' (%s). CF cannot "
+                            "keep the order of network interfaces.",
+                            instance.name, instance.id)
         return interfaces
 
     def attach_volume_to_instance(self, instance, volume):
