@@ -29,7 +29,7 @@ class CheckConfigQuotaNeutron(action.Action):
         src_cloud = self.src_cloud
         dst_cloud = self.dst_cloud
         network_src = src_cloud.resources[utl.NETWORK_RESOURCE]
-        identity_dst = src_cloud.resources[utl.IDENTITY_RESOURCE]
+        identity_dst = dst_cloud.resources[utl.IDENTITY_RESOURCE]
         network_dst = dst_cloud.resources[utl.NETWORK_RESOURCE]
         tenants_src = self.get_src_tenants()
         list_quotas = network_src.list_quotas()
