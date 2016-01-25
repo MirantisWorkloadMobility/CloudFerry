@@ -69,7 +69,8 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
-                                      'provider:segmentation_id': None}],
+                                      'provider:segmentation_id': None,
+                                      'router:external': False}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
@@ -86,7 +87,8 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
-                                      'provider:segmentation_id': None}],
+                                      'provider:segmentation_id': None,
+                                      'router:external': False}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
@@ -97,11 +99,13 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
-                                      'provider:segmentation_id': None}],
+                                      'provider:segmentation_id': None,
+                                      'router:external': False}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id2',
-                                     'id': 'sub2'}],
+                                     'id': 'sub2',
+                                     'external': False}],
                         'floating_ips': []}
         self.get_action(src_net_info, dst_net_info).run()
 
@@ -110,7 +114,8 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
-                                      'provider:segmentation_id': None}],
+                                      'provider:segmentation_id': None,
+                                      'router:external': False}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
@@ -126,11 +131,13 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
-                                      'provider:segmentation_id': None}],
+                                      'provider:segmentation_id': None,
+                                      'router:external': False}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id2',
-                                     'id': 'sub2'}],
+                                     'id': 'sub2',
+                                     'external': False}],
                         'floating_ips': []}
         self.get_action(src_net_info, dst_net_info).run()
 
@@ -139,7 +146,8 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
-                                      'provider:segmentation_id': None}],
+                                      'provider:segmentation_id': None,
+                                      'router:external': False}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'id1',
@@ -151,11 +159,13 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
-                                      'provider:segmentation_id': None}],
+                                      'provider:segmentation_id': None,
+                                      'router:external': False}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 3,
                                      'network_id': 'id2',
-                                     'id': 'sub2'}],
+                                     'id': 'sub2',
+                                     'external': False}],
                         'floating_ips': []}
         action = self.get_action(src_net_info, dst_net_info)
         self.assertRaises(exception.AbortMigrationError, action.run)
@@ -165,7 +175,8 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
-                                      'provider:segmentation_id': None}],
+                                      'provider:segmentation_id': None,
+                                      'router:external': False}],
                         'subnets': [{'cidr': '10.0.0.0/28',
                                      'res_hash': 2,
                                      'network_id': 'id1',
@@ -176,11 +187,13 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
-                                      'provider:segmentation_id': None}],
+                                      'provider:segmentation_id': None,
+                                      'router:external': False}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 3,
                                      'network_id': 'id2',
-                                     'id': 'sub2'}],
+                                     'id': 'sub2',
+                                     'external': False}],
                         'floating_ips': []}
         action = self.get_action(src_net_info, dst_net_info)
         self.assertRaises(exception.AbortMigrationError, action.run)
@@ -190,7 +203,8 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'gre',
-                                      'provider:segmentation_id': 200}],
+                                      'provider:segmentation_id': 200,
+                                      'router:external': False}],
                         'subnets': [],
                         'floating_ips': []}
 
@@ -205,7 +219,8 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'gre',
-                                      'provider:segmentation_id': 200}],
+                                      'provider:segmentation_id': 200,
+                                      'router:external': False}],
                         'subnets': [],
                         'floating_ips': []}
 
@@ -213,7 +228,8 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'gre',
-                                      'provider:segmentation_id': 200}],
+                                      'provider:segmentation_id': 200,
+                                      'router:external': False}],
                         'subnets': [],
                         'floating_ips': []}
 
@@ -331,7 +347,8 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
-                                      'provider:segmentation_id': None}],
+                                      'provider:segmentation_id': None,
+                                      'router:external': True}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'fake_network_id',
@@ -348,7 +365,8 @@ class CheckNetworksTestCase(test.TestCase):
                                       'res_hash': 1,
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
-                                      'provider:segmentation_id': None}],
+                                      'provider:segmentation_id': None,
+                                      'router:external': False}],
                         'subnets': [{'cidr': '10.0.0.0/24',
                                      'res_hash': 2,
                                      'network_id': 'fake_network_id',
@@ -360,3 +378,123 @@ class CheckNetworksTestCase(test.TestCase):
 
         action = self.get_action(src_net_info, src_compute_info=src_cmp_info)
         self.assertRaises(exception.AbortMigrationError, action.run)
+
+    def test_allocation_pools_overlap(self):
+        src_net_info = {'networks': [{'id': 'id1',
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None,
+                                      'router:external': True}],
+                        'subnets': [{'cidr': '1.1.1.1/24',
+                                     'res_hash': 2,
+                                     'network_id': 'id1',
+                                     'id': 'sub1',
+                                     'external': True,
+                                     'allocation_pools': [
+                                         {'start': '1.1.1.2',
+                                          'end': '1.1.1.10'},
+                                         {'start': '1.1.1.20',
+                                          'end': '1.1.1.30'}]
+                                     }],
+                        'floating_ips': []}
+
+        dst_net_info = {'networks': [{'id': 'id2',
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None,
+                                      'router:external': True}],
+                        'subnets': [{'cidr': '1.1.1.1/25',
+                                     'res_hash': 3,
+                                     'network_id': 'id2',
+                                     'id': 'sub2',
+                                     'external': True,
+                                     'allocation_pools': [
+                                         {'start': '1.1.1.5',
+                                          'end': '1.1.1.15'}]
+                                     }],
+                        'floating_ips': []}
+
+        action = self.get_action(src_net_info, dst_net_info)
+        self.assertRaises(exception.AbortMigrationError, action.run)
+
+    def test_allocation_pools_no_overlap(self):
+        src_net_info = {'networks': [{'id': 'id1',
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None,
+                                      'router:external': True}],
+                        'subnets': [{'cidr': '1.1.1.1/24',
+                                     'res_hash': 2,
+                                     'network_id': 'id1',
+                                     'id': 'sub1',
+                                     'external': True,
+                                     'allocation_pools': [
+                                         {'start': '1.1.1.100',
+                                          'end': '1.1.1.200'}]
+                                     }],
+                        'floating_ips': []}
+
+        dst_net_info = {'networks': [{'id': 'id2',
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None,
+                                      'router:external': True}],
+                        'subnets': [{'cidr': '1.1.1.1/25',
+                                     'res_hash': 3,
+                                     'network_id': 'id2',
+                                     'id': 'sub2',
+                                     'external': True,
+                                     'allocation_pools': [
+                                         {'start': '1.1.1.2',
+                                          'end': '1.1.1.10'},
+                                         {'start': '1.1.1.20',
+                                          'end': '1.1.1.30'}]
+                                     }],
+                        'floating_ips': []}
+
+        self.get_action(src_net_info, dst_net_info).run()
+
+    def test_allocation_pools_same_network_and_subnet(self):
+        src_net_info = {'networks': [{'id': 'id1',
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None,
+                                      'router:external': True}],
+                        'subnets': [{'cidr': '1.1.1.1/25',
+                                     'res_hash': 3,
+                                     'network_id': 'id1',
+                                     'id': 'sub1',
+                                     'external': True,
+                                     'allocation_pools': [
+                                         {'start': '1.1.1.2',
+                                          'end': '1.1.1.10'},
+                                         {'start': '1.1.1.20',
+                                          'end': '1.1.1.30'}]
+                                     }],
+                        'floating_ips': []}
+
+        dst_net_info = {'networks': [{'id': 'id2',
+                                      'res_hash': 1,
+                                      "provider:physical_network": None,
+                                      'provider:network_type': 'local',
+                                      'provider:segmentation_id': None,
+                                      'router:external': True}],
+                        'subnets': [{'cidr': '1.1.1.1/25',
+                                     'res_hash': 3,
+                                     'network_id': 'id2',
+                                     'id': 'sub2',
+                                     'external': True,
+                                     'allocation_pools': [
+                                         {'start': '1.1.1.2',
+                                          'end': '1.1.1.10'},
+                                         {'start': '1.1.1.20',
+                                          'end': '1.1.1.30'}]
+                                     }],
+                        'floating_ips': []}
+
+        self.get_action(src_net_info, dst_net_info).run()

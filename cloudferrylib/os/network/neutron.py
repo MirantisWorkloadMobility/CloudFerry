@@ -13,6 +13,7 @@
 # limitations under the License.
 
 
+import copy
 import pprint
 
 import ipaddr
@@ -388,11 +389,9 @@ class NeutronNetwork(network.Network):
         get_tenant_name = identity_res.get_tenants_func()
 
         subnets = []
-        subnets_hash = []
         for subnet in net['subnets']:
             snet = self.convert_subnets(subnet, cloud)
             subnets.append(snet)
-            subnets_hash.append(snet['res_hash'])
 
         result = {
             'name': net['name'],
@@ -406,7 +405,6 @@ class NeutronNetwork(network.Network):
             'provider:physical_network': net['provider:physical_network'],
             'provider:network_type': net['provider:network_type'],
             'provider:segmentation_id': net['provider:segmentation_id'],
-            'subnets_hash': subnets_hash,
             'meta': {},
         }
 
@@ -417,8 +415,7 @@ class NeutronNetwork(network.Network):
                                              'router:external',
                                              'admin_state_up',
                                              'provider:physical_network',
-                                             'provider:network_type',
-                                             'subnets_hash')
+                                             'provider:network_type')
         result['res_hash'] = res_hash
         return result
 
@@ -431,6 +428,8 @@ class NeutronNetwork(network.Network):
         networks_list = network_res.get_networks_list()
         net = get_network_from_list_by_id(snet['network_id'], networks_list)
 
+        cidr = str(netaddr.IPNetwork(snet['cidr']).cidr)
+
         result = {
             'name': snet['name'],
             'id': snet['id'],
@@ -438,7 +437,7 @@ class NeutronNetwork(network.Network):
             'allocation_pools': snet['allocation_pools'],
             'gateway_ip': snet['gateway_ip'],
             'ip_version': snet['ip_version'],
-            'cidr': snet['cidr'],
+            'cidr': cidr,
             'network_name': net['name'],
             'external': net['router:external'],
             'network_id': snet['network_id'],
@@ -452,6 +451,7 @@ class NeutronNetwork(network.Network):
                                                  'ip_version',
                                                  'gateway_ip',
                                                  'cidr',
+                                                 'allocation_pools',
                                                  'tenant_name',
                                                  'network_name')
 
@@ -1134,6 +1134,9 @@ class NeutronNetwork(network.Network):
         existing_networks = self.get_networks()
         existing_nets_hashlist = (
             [existing_net['res_hash'] for existing_net in existing_networks])
+        existing_subnets = self.get_subnets()
+        existing_subnets_hashlist = (
+            [exist_subnet['res_hash'] for exist_subnet in existing_subnets])
 
         # we need to handle duplicates in segmentation ids
         dst_seg_ids = get_segmentation_ids_from_net_list(existing_networks)
@@ -1141,10 +1144,15 @@ class NeutronNetwork(network.Network):
         for src_net in networks:
             # Check network for existence on destination cloud
             if src_net['res_hash'] in existing_nets_hashlist:
-                LOG.info("DST cloud already has the same network "
-                         "with name '%s' in tenant '%s'",
-                         src_net['name'], src_net['tenant_name'])
-                continue
+                # Check all network's subnets for existence on DST cloud
+                for subnet in src_net['subnets']:
+                    if subnet['res_hash'] not in existing_subnets_hashlist:
+                        break
+                else:
+                    LOG.info("DST cloud already has the same network "
+                             "with name '%s' in tenant '%s'",
+                             src_net['name'], src_net['tenant_name'])
+                    continue
 
             LOG.debug("Trying to create network '%s'", src_net['name'])
             tenant_id = identity.get_tenant_id_by_name(src_net['tenant_name'])
@@ -1456,15 +1464,16 @@ class NeutronNetwork(network.Network):
 
     @staticmethod
     def get_resource_hash(neutron_resource, *args):
+        net_res = copy.deepcopy(neutron_resource)
         list_info = list()
         for arg in args:
-            if not isinstance(neutron_resource[arg], list):
-                if arg == 'cidr':
-                    cidr = str(netaddr.IPNetwork(neutron_resource[arg]).cidr)
-                    neutron_resource[arg] = cidr
-                list_info.append(neutron_resource[arg])
+            if not isinstance(net_res[arg], list):
+                list_info.append(net_res[arg])
             else:
-                for argitem in neutron_resource[arg]:
+                if arg == 'allocation_pools':
+                    pools = net_res[arg]
+                    net_res[arg] = [ip for pl in pools for ip in pl.values()]
+                for argitem in net_res[arg]:
                     if isinstance(argitem, basestring):
                         argitem = argitem.lower()
                     list_info.append(argitem)
