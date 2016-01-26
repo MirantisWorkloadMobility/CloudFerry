@@ -57,10 +57,11 @@ class AddAdminUserToNonAdminTenant(object):
         """
 
         self.keystone = keystone
-        try:
-            with proxy_client.expect_exception(ks_exceptions.NotFound):
-                self.tenant = self.keystone.tenants.find(name=tenant)
-        except ks_exceptions.NotFound:
+        for some_tenant in self.keystone.tenants.list():
+            if some_tenant.name.lower() == tenant.lower():
+                self.tenant = some_tenant
+                break
+        else:
             self.tenant = self.keystone.tenants.find(id=tenant)
         self.user = self.keystone.users.find(name=admin_user)
         self.role = self.keystone.roles.find(name=member_role)
@@ -273,17 +274,18 @@ class KeystoneIdentity(identity.Identity):
 
         return func
 
+    def get_tenant_by_name(self, name):
+        """Search tenant by name case-insensitively"""
+        name_lower = name.lower()
+        for tenant in self.keystone_client.tenants.list():
+            if tenant.name.lower() == name_lower:
+                return tenant
+        raise ks_exceptions.NotFound(
+            404, 'Couldn\'t find tenant "%s"' % name)
+
     def get_tenant_id_by_name(self, name):
         """ Getting tenant ID by name from keystone. """
-
-        return self.keystone_client.tenants.find(name=name).id
-
-    def get_tenant_by_name(self, tenant_name):
-        """ Getting tenant by name from keystone. """
-
-        for tenant in self.get_tenants_list():
-            if tenant.name == tenant_name:
-                return tenant
+        return self.get_tenant_by_name(name).id
 
     def try_get_tenant_by_id(self, tenant_id, default=None):
         """Returns `keystoneclient.tenants.Tenant` object based on tenant ID
@@ -296,7 +298,7 @@ class KeystoneIdentity(identity.Identity):
                 return tenants.get(tenant_id)
         except ks_exceptions.NotFound:
             if default is None:
-                return tenants.find(name=self.config.cloud.tenant)
+                return self.get_tenant_by_name(self.config.cloud.tenant)
             else:
                 return tenants.find(id=default)
 
@@ -405,8 +407,7 @@ class KeystoneIdentity(identity.Identity):
         if resource_type not in self.defaults:
             if resource_type == utl.TENANTS_TYPE:
                 self.defaults[resource_type] = \
-                    self.keystone_client.tenants.find(
-                        name=self.config.cloud.tenant)
+                    self.get_tenant_by_name(self.config.cloud.tenant)
             elif resource_type == utl.USERS_TYPE:
                 self.defaults[resource_type] = \
                     self.keystone_client.users.find(
@@ -446,7 +447,7 @@ class KeystoneIdentity(identity.Identity):
                     tenant_name=tenant_name, description=description,
                     enabled=enabled)
         except ks_exceptions.Conflict:
-            return self.keystone_client.tenants.find(name=tenant_name)
+            return self.get_tenant_by_name(tenant_name)
 
     def create_user(self, name, password=None, email=None, tenant_id=None,
                     enabled=True):
