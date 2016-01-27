@@ -16,6 +16,7 @@
 import copy
 
 from cloudferrylib.base.action import action
+from cloudferrylib.os.network import network_utils
 from cloudferrylib.utils import utils as utl
 
 
@@ -30,16 +31,9 @@ class AssociateFloatingip(action.Action):
 
     def run(self, info=None, **kwargs):
         if self.cfg.migrate.keep_floatingip:
-            info_compute = copy.deepcopy(info)
             network_resource = self.cloud.resources[utl.NETWORK_RESOURCE]
+            network_utils.associate_floatingip(info, network_resource)
 
-            instance = info_compute[utl.INSTANCES_TYPE].values()[0]
-            networks_info = instance[utl.INSTANCE_BODY].get('nics', [])
-            for net in networks_info:
-                fip = net.get('floatingip')
-                if fip is not None:
-                    network_resource.update_floatingip(
-                        fip['dst_floatingip_id'], fip['dst_port_id'])
         return {}
 
 
