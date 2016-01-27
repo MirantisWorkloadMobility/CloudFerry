@@ -23,6 +23,7 @@ import tests.config as config
 class VmMigration(FunctionalTest):
 
     def setUp(self):
+        super(VmMigration, self).setUp()
         src_vms = self.filter_vms()
         if not src_vms:
             self.skipTest("Nothing to migrate - source vm list is empty")

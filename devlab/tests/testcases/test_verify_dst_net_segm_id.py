@@ -22,6 +22,7 @@ TEST_TENANT_NETWORKS = ['tenantnet4_segm_id_cidr1',
 class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
 
     def setUp(self):
+        super(VerifyDstCloudFunctionality, self).setUp()
         # take all segmentation ids on source and destination
         self.src_cloud.switch_user(user=self.src_cloud.username,
                                    password=self.src_cloud.password,

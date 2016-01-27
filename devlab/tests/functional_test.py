@@ -35,8 +35,9 @@ def suppress_dependency_logging():
 
 
 class FunctionalTest(unittest.TestCase):
-    def __init__(self, *args, **kwargs):
-        super(FunctionalTest, self).__init__(*args, **kwargs)
+
+    def setUp(self):
+        super(FunctionalTest, self).setUp()
         suppress_dependency_logging()
         if not config_ini:
             raise ConfFileError('Configuration file parameter'

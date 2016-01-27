@@ -21,6 +21,7 @@ import unittest
 class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
 
     def setUp(self):
+        super(VerifyDstDeletedTenantResources, self).setUp()
         self.dst_cloud.switch_user(user=self.dst_cloud.username,
                                    password=self.dst_cloud.password,
                                    tenant=self.dst_cloud.tenant)
