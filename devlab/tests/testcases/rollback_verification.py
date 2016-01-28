@@ -45,6 +45,7 @@ class RollbackVerification(functional_test.FunctionalTest):
             self.pre_data = yaml.load(f)
 
     def test_verify_rollback(self):
+        """Validate rollback actions run successfuly."""
         self.maxDiff = None
         msg = 'Comparing "{0}-{1}" resources...'
         for cloud in self.data_after:

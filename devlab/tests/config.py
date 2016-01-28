@@ -15,20 +15,19 @@
 INVALID_STATUSES = ['creating', 'error', 'deleting', 'error_deleting']
 
 img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
-# username and password for ssh access for cirros image
 username_for_ssh = 'cirros'
+"""Username for ssh access for cirros image"""
 password_for_ssh = 'cubswin:)'
+"""Password for ssh access for cirros image"""
 
-# Path to CloudFerry config relative to the root folder
 cloud_ferry_conf = 'configuration.ini'
-
+"""Path to CloudFerry config relative to the root folder"""
 ssh_check_user = 'cirros'
 ssh_vm_shell = '/bin/sh -c'
 
-# Path to store filter files
 filters_file_naming_template = 'filter_{tenant_name}.yaml'
+"""Path to store filter files"""
 
-# Users to create/delete
 users = [
     {'name': 'user1', 'password': 'passwd1', 'email': 'mail@example.com',
      'tenant': 'tenant1', 'enabled': True},
@@ -50,17 +49,17 @@ users = [
     {'name': 'user8', 'password': 'passwd', 'email': 'tenant3@example.com',
      'tenant': 'tenant3', 'enabled': True}
 ]
+"""Users to create/delete"""
 
 user_tenant_roles = [
     {'user1': [{'tenant': 'tenant1', 'role': 'SomeRole'}]}
 ]
 
-# Roles to create/delete
 roles = [
     {'name': 'SomeRole'}, {'name': 'SecondRole'}
 ]
+"""Roles to create/delete"""
 
-# Tenants to create/delete
 tenants = [
     {'name': 'tenant1', 'description': 'None', 'enabled': True,
      'quota': {'instances': '20', 'cores': '19', 'ram': '52199',
@@ -314,8 +313,8 @@ tenants = [
      'cinder_snapshots': []
      }
 ]
+"""Tenants to create/delete"""
 
-# Images to create/delete
 images = [
     {'name': 'image1', 'copy_from': img_url, 'is_public': True},
     {'name': 'image2', 'copy_from': img_url, 'container_format': 'bare',
@@ -333,20 +332,20 @@ images = [
     {'name': 'broken_image', 'copy_from': img_url, 'disk_format': 'qcow2',
      'container_format': 'bare', 'broken': True}
 ]
+"""Images to create/delete"""
 
-# Create zero image, without any parameters.
 create_zero_image = True
-# Images not to be migrated:
+"""Create zero image, without any parameters"""
 images_not_included_in_filter = ['image5']
+"""Images not to be migrated"""
 
-# Instances not to be included in filter:
 vms_not_in_filter = ['not_in_filter']
+"""Instances not to be included in filter"""
 
-# Images that should have few specific members:
 members = ['tenant1']
+"""Images that should have few specific members"""
 img_to_add_members = ['image3', 'image4', 'image6']
 
-# Flavors to create/delete
 flavors = [
     {'name': 'flavorname1', 'disk': '1', 'ram': '64', 'vcpus': '1'},
     {'name': 'flavorname3', 'disk': '10', 'ram': '32', 'vcpus': '1',
@@ -354,10 +353,8 @@ flavors = [
     {'name': 'flavorname2', 'disk': '2', 'ram': '48', 'vcpus': '2'},
     {'name': 'del_flvr', 'disk': '1', 'ram': '64', 'vcpus': '1'}
 ]
+"""Flavors to create/delete"""
 
-# Networks to create/delete
-# Only one gateway can be assigned to router. If two networks have the same
-# router in 'routers_to_connect', gateway set for last networks (updating)
 networks = [
     {'name': 'mynetwork1', 'admin_state_up': True,
      'subnets': [
@@ -378,6 +375,9 @@ networks = [
           }]
      }
 ]
+"""Networks to create/delete. Only one gateway can be assigned to router.
+If two networks have the same router in 'routers_to_connect', gateway set for
+last networks (updating)"""
 pools = [
     {
         'name': "pool1",
@@ -440,11 +440,10 @@ dst_networks = [
          ]
      }]
 
-# Server groups to create
 server_groups = [
     {'name': 'admin_server_group', 'policies': ['anti-affinity']}
 ]
-# VM's to create/delete
+"""Server groups to create"""
 vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'server2', 'image': 'image2', 'flavor': 'flavorname1'},
@@ -458,7 +457,7 @@ vms = [
     {'name': 'server8', 'image': 'broken_image', 'flavor': 'flavorname1',
      'server_group': 'admin_server_group'}
 ]
-
+"""VM's to create/delete"""
 vms_from_volumes = [
     {'name': 'server_from_volume', 'flavor': 'flavorname1',
      'volume': 'volume_from_image'}
@@ -470,18 +469,12 @@ routers = [
      }
 ]
 
-# VM's snapshots to create/delete
 snapshots = [
     {'server': 'server2', 'image_name': 'asdasd'}
 ]
+"""VM's snapshots to create/delete"""
 
-'''
-Cinder images to create/delete
-To write some date, use "write_to_file" parameter. Now only string could be
-written into the file. Make sure volume is attached to the server, before write
-data. MD5 of file store in separate file in the same directory with name
-"${filename}_md5".
-'''
+
 cinder_volumes = [
     {'display_name': 'cinder_volume1', 'size': 1, 'volume_type': 'nfs1'},
     {'display_name': 'cinder_volume2', 'size': 1,
@@ -490,19 +483,23 @@ cinder_volumes = [
     {'display_name': 'cinder_volume3', 'size': 1,
      'user': 'test_volume_migration'}
 ]
+"""Cinder images to create/delete.
+To write some date, use "write_to_file" parameter. Now only string could be
+written into the file. Make sure volume is attached to the server, before write
+data. MD5 of file store in separate file in the same directory with name
+"${filename}_md5"."""
 
 cinder_volumes_from_images = [
     {'display_name': 'volume_from_image', 'size': 1, 'image': 'image1',
      'volume_type': 'nfs1'}
 ]
 
-# Cinder snapshots to create/delete
 cinder_snapshots = [
     # Commented because of unimplemented error in nfs driver for grizzly.
     # {'display_name': 'snapsh1', 'volume_id': 'cinder_volume1'}
 ]
+"""Cinder snapshots to create/delete"""
 
-# Emulate different VM states
 vm_states = [
     {'name': 'server1', 'state': 'error'},
     {'name': 'server2', 'state': 'stop'},
@@ -517,16 +514,14 @@ vm_states = [
     {'name': 'tn2server1', 'state': 'active'},
     {'name': 'tn4server1', 'state': 'active'}
 ]
+"""Emulate different VM states"""
 
-# Client's versions
 NOVA_CLIENT_VERSION = '1.1'
 GLANCE_CLIENT_VERSION = '1'
 NEUTRON_CLIENT_VERSION = '2.0'
 CINDER_CLIENT_VERSION = '1'
+"""Client's versions"""
 
-
-# Keypairs to create/delete
-# Connected to user's list
 keypairs = [
     {'name': 'key1', 'user': 'user1', 'public_key':
         'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCn4vaa1MvLLIQM9G2i9eo2OWoW66i7'
@@ -556,6 +551,7 @@ keypairs = [
         'pdWfvGbMh6ywyGAMxNRHi7JyaFoMATLqHYy/w+9EHkNqKaFtICw5RhNG6zEGCAnHuRz+g'
         'nvvEOaVHY7En0PlSL2tqAmT7a8m98T8zS1w1uNeed4WXI8gWofOFlzyB5e1l5v/e4ANwg'
         '9jlzyyPa4i+rAfBSyg1wR02cRnEgejvPzrn user8@grizzly'}]
+"""Keypairs to create/delete, connected to user's list"""
 
 private_key = {
     'name': 'key2',
@@ -589,7 +585,6 @@ private_key = {
 
 dst_prv_key_path = '~/.ssh/id_rsa'
 
-# Parameters required for rollback verification procedure:
 rollback_params = {'data_file_names': {'PRE': 'data_before_migration.yaml',
                                        'POST': 'data_after_migration.yaml'},
 
@@ -601,3 +596,4 @@ rollback_params = {'data_file_names': {'PRE': 'data_before_migration.yaml',
                                   'Glance': ['images', 'members'],
                                   'Cinder': ['volume_snapshots', 'volumes',
                                              'quotas']}}
+"""Parameters required for rollback verification procedure"""

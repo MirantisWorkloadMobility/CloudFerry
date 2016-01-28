@@ -29,9 +29,12 @@ def suppress_dependency_logging():
                        'requests.packages.urllib3.connectionpool',
                        'glanceclient.common.http',
                        'paramiko.transport']
-
     for l in suppressed_logs:
         logging.getLogger(l).setLevel(logging.WARNING)
+
+
+def get_option_from_config_ini(option, section='migrate'):
+    return config_ini.get(section, {}).get(option, 'False')
 
 
 class FunctionalTest(unittest.TestCase):
@@ -50,8 +53,8 @@ class FunctionalTest(unittest.TestCase):
         self.dst_cloud = Prerequisites(cloud_prefix='DST',
                                        configuration_ini=config_ini,
                                        config=config)
-        self.filtering_utils = utils.FilteringUtils(
-            config_ini['migrate']['filter_path'])
+        self.filtering_utils = utils.FilteringUtils(get_option_from_config_ini(
+                'filter_path'))
         self.migration_utils = utils.MigrationUtils(config)
 
     def filter_networks(self):
