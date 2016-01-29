@@ -509,7 +509,8 @@ class GlanceImage(image.Image):
                     file_obj = img['resource'].get_ref_image(img['id'])
                     data_proxy = file_proxy.FileProxy(
                         file_obj,
-                        name="image %s ('%s')" % (img['name'], img['id']))
+                        name="image %s ('%s')" % (img['name'], img['id']),
+                        size=img['size'])
 
                     created_image = self.create_image(
                         id=img['id'],

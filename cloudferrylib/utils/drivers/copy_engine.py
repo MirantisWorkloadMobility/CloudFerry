@@ -13,8 +13,8 @@
 # limitations under the License.
 
 
-import os
 import math
+import os
 
 from cloudferrylib.utils import driver_transporter
 from cloudferrylib.utils import files
@@ -22,20 +22,11 @@ from cloudferrylib.utils import log
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import ssh_util
 
-
 LOG = log.getLogger(__name__)
 
 
 class FileCopyFailure(RuntimeError):
     pass
-
-
-def remote_file_size(runner, path):
-    return int(runner.run('stat --printf="%s" {path}'.format(path=path)))
-
-
-def remote_file_size_mb(runner, path):
-    return int(math.ceil(remote_file_size(runner, path) / (1024.0 * 1024.0)))
 
 
 def remote_md5_sum(runner, path):
@@ -180,7 +171,7 @@ class ScpCopier(driver_transporter.DriverTransporter):
                                                 password=dst_password,
                                                 sudo=True)
 
-        file_size = remote_file_size_mb(src_runner, src_path)
+        file_size = files.remote_file_size_mb(src_runner, src_path)
 
         partial_files = []
 
