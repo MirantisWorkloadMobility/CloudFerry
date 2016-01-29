@@ -162,7 +162,7 @@ class GlanceImage(image.Image):
         )
 
     def required_tenants(self, filter_tenant_id=None):
-        old_filter_tanant_id = self.filter_tenant_id
+        old_filter_tenant_id = self.filter_tenant_id
         self.filter_tenant_id = filter_tenant_id
 
         tenants = set()
@@ -175,7 +175,7 @@ class GlanceImage(image.Image):
                 tenant_id = self.identity_client.get_tenant_id_by_name(name)
                 tenants.add(tenant_id)
 
-        self.filter_tenant_id = old_filter_tanant_id
+        self.filter_tenant_id = old_filter_tenant_id
 
         return list(tenants)
 
@@ -192,9 +192,7 @@ class GlanceImage(image.Image):
     def get_image_list(self):
         images = self.glance_client.images.list(filters={"is_public": None})
 
-        filtering_enabled = self.cloud.position == 'src'
-
-        if filtering_enabled:
+        if self.cloud.position == 'src':
             for f in self.get_image_filter().get_filters():
                 images = ifilter(f, images)
             images = [i for i in images]

@@ -43,6 +43,11 @@ class FilterYaml(object):
         images = fy.get('images', {})
         return images.get('images_list', [])
 
+    def is_public_and_member_images_filtered(self):
+        fy = self.get_filter_yaml()
+        images = fy.get('images', {})
+        return images.get('exclude_public_and_members', False)
+
     def get_volume_ids(self):
         fy = self.get_filter_yaml()
         volumes = fy.get('volumes', {})
