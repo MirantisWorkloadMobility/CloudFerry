@@ -168,8 +168,9 @@ class NeutronTestCase(test.TestCase):
             password='fake_password',
             tenant_name='fake_tenant',
             auth_url='http://1.1.1.1:35357/v2.0/',
-            ca_cert='',
-            insecure=False
+            cacert='',
+            insecure=False,
+            region_name=None
         )
         self.assertEqual(self.neutron_mock_client(), client)
 
@@ -973,7 +974,7 @@ class NeutronClientTestCase(test.TestCase):
             password=password,
             auth_url=auth_url,
             username=user,
-            ca_cert=cacert,
+            cacert=cacert,
             insecure=insecure
         )
 
@@ -1004,6 +1005,7 @@ class NeutronClientTestCase(test.TestCase):
             password=password,
             auth_url=auth_url,
             username=user,
-            ca_cert=cacert,
-            insecure=insecure
+            cacert=cacert,
+            insecure=insecure,
+            region_name=None
         )
