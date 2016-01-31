@@ -23,6 +23,7 @@ import tests.config as config
 class VmMigration(FunctionalTest):
 
     def setUp(self):
+        super(VmMigration, self).setUp()
         src_vms = self.filter_vms()
         if not src_vms:
             self.skipTest("Nothing to migrate - source vm list is empty")
@@ -45,6 +46,8 @@ class VmMigration(FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_vms_not_in_filter_stay_active_on_src(self):
+        """Validate VMs which not icluded in filter stays active on SRC cloud.
+        """
         original_states = self.before_migr_states
         for vm in config.vms_not_in_filter:
             vm_list = [x for x in self.src_cloud.novaclient.servers.list(
@@ -56,6 +59,7 @@ class VmMigration(FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_vm_not_in_filter_did_not_migrate(self):
+        """Validate VMs not included in filter file weren't migrated."""
         dst_vms = [x.name for x in self.dst_cloud.novaclient.servers.list(
                    search_opts={'all_tenants': 1})]
         for vm in config.vms_not_in_filter:
@@ -65,6 +69,7 @@ class VmMigration(FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_cold_migrate_vm_state(self):
+        """Validate VMs were cold migrated with correct states."""
         original_states = self.before_migr_states
         for vm_name in original_states.keys():
             if vm_name in config.vms_not_in_filter:
@@ -87,6 +92,7 @@ class VmMigration(FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_cold_migrate_vm_ip(self):
+        """Validate VMs were cold migrated with correct IPs."""
         src_vms = self.filter_vms[0]
         for src_vm, vm_index in zip(src_vms, self.dst_vm_indexes):
             for src_net in src_vm.addresses:
@@ -99,6 +105,7 @@ class VmMigration(FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_cold_migrate_vm_security_groups(self):
+        """Validate VMs were cold migrated with correct security groups."""
         src_vms = self.filter_vms[0]
         for src_vm, vm_index in zip(src_vms, self.dst_vm_indexes):
             dst_sec_group_names = [x['name'] for x in
@@ -108,6 +115,7 @@ class VmMigration(FunctionalTest):
 
     @unittest.skip("Temporarily disabled: image's id changes after migrating")
     def test_cold_migrate_vm_image_id(self):
+        """Validate VMs were cold migrated with correct image ids."""
         src_vms = self.filter_vms[0]
         for src_vm, vm_index in zip(src_vms, self.dst_vm_indexes):
             self.assertTrue(src_vm.image.id ==

@@ -14,7 +14,10 @@
 #    under the License.
 
 import mock
+
 from oslotest import base
+
+import cfglib
 
 
 class TestCase(base.BaseTestCase):
@@ -23,3 +26,9 @@ class TestCase(base.BaseTestCase):
     def setUp(self):
         super(TestCase, self).setUp()
         self.addCleanup(mock.patch.stopall)
+        self.cfg = cfglib.CONF
+        self.addCleanup(self.cfg.reset)
+        cfglib.init_config()
+
+    def assertIsZero(self, observed, message=''):
+        self.assertEqual(0, observed, message)

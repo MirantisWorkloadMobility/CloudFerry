@@ -29,6 +29,7 @@ class GroupProcedureVerification(functional_test.FunctionalTest):
         """
         SetUp method.
         """
+        super(GroupProcedureVerification, self).setUp()
         self.main_folder = os.path.dirname(os.path.dirname(os.getcwd()))
         # TODO:
         #  Using relative paths is a bad practice, unfortunately this is the
@@ -36,6 +37,7 @@ class GroupProcedureVerification(functional_test.FunctionalTest):
         #  Should be fixed by implementing proper package module for Cloud
         #  Ferry.
         self.conf_path = 'devlab/tests'
+        self.TENANT_ID_LENGTH = 32
         dst_ip = self._get_ip_from_url(self.dst_cloud.auth_url)
         src_ip = self._get_ip_from_url(self.src_cloud.auth_url)
         cmd_no_path = './../../devlab/provision/generate_config.sh' \
@@ -161,7 +163,7 @@ class GroupProcedureVerification(functional_test.FunctionalTest):
         for key in self.pre_conf_dict.keys():
             if self.pre_conf_dict[key][0] == 'tenant':
                 for tenant in self.post_conf_dict.keys():
-                    if len(tenant) == 32:
+                    if len(tenant) == self.TENANT_ID_LENGTH:
                         for vm in self.post_conf_dict[tenant]:
                             index = self._get_index(vm)
                             self.assertEqual(tenant, self.src_vms[index]
@@ -171,17 +173,20 @@ class GroupProcedureVerification(functional_test.FunctionalTest):
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_grouping_by_network(self):
+        """Validate grouping were made by network."""
         self.src_vms_info_generator('network')
         self.network_verification_scenario()
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_grouping_by_tenant(self):
+        """Validate grouping were made by tenant."""
         self.src_vms_info_generator('tenant')
         self.tenant_verification_scenario()
 
     @unittest.skip('Grouping procedure is not filtering VMs by state. VMs in '
                    'Error state are being grouped too.')
     def test_verify_vm_status_filtering_during_grouping(self):
+        """Validate VMs status were filtered during grouping."""
         self.src_vms_info_generator('tenant')
         self.src_vms = [vm for vm in self.src_vms if vm['status'] != 'ERROR']
         self.network_verification_scenario(verify_vm_state=True)

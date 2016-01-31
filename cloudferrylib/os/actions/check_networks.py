@@ -16,6 +16,7 @@
 import collections
 
 import ipaddr
+import netaddr
 
 from cloudferrylib.base import exception
 from cloudferrylib.base.action import action
@@ -42,7 +43,7 @@ class CheckNetworks(action.Action):
 
     def run(self, **kwargs):
         LOG.debug("Checking networks...")
-        overlapped_resources = {}
+        overlapping_resources = {}
 
         src_net = self.src_cloud.resources[utils.NETWORK_RESOURCE]
         dst_net = self.dst_cloud.resources[utils.NETWORK_RESOURCE]
@@ -61,32 +62,42 @@ class CheckNetworks(action.Action):
 
         # Check subnets and segmentation IDs overlap
         LOG.info("Check networks overlapping...")
-        nets_overlapped_subnets, nets_overlapped_seg_ids = (
-            src_net_info.get_overlapped_networks(dst_net_info))
-        if nets_overlapped_subnets:
-            overlapped_resources.update(
-                {'networks_with_overlapped_subnets': nets_overlapped_subnets})
-        if nets_overlapped_seg_ids:
+        nets_overlapping_subnets, nets_overlapping_seg_ids = (
+            src_net_info.get_overlapping_networks(dst_net_info))
+        if nets_overlapping_subnets:
+            overlapping_resources.update(
+                {'networks_with_overlapping_subnets':
+                    nets_overlapping_subnets})
+        if nets_overlapping_seg_ids:
             LOG.warning("Networks with segmentation IDs overlapping:\n%s",
-                        nets_overlapped_seg_ids)
+                        nets_overlapping_seg_ids)
+
+        # Check external subnets overlap
+        LOG.info("Check external subnets overlapping...")
+        overlapping_external_subnets = (
+            src_net_info.get_overlapping_external_subnets(dst_net_info))
+        if overlapping_external_subnets:
+            overlapping_resources.update(
+                {"overlapping_external_subnets": overlapping_external_subnets})
 
         # Check floating IPs overlap
         LOG.info("Check floating IPs overlapping...")
-        floating_ips = src_net_info.list_overlapped_floating_ips(dst_net_info)
+        floating_ips = src_net_info.list_overlapping_floating_ips(dst_net_info)
         if floating_ips:
-            overlapped_resources.update(
-                {'overlapped_floating_ips': floating_ips})
+            overlapping_resources.update(
+                {'overlapping_floating_ips': floating_ips})
 
         # Check VMs spawned directly in external network
         LOG.info("Check VMs spawned directly in external networks...")
         devices = src_net_info.get_devices_from_external_networks()
         vms_list = src_compute_info.list_vms_in_external_network(devices)
         if vms_list:
-            overlapped_resources.update({'vms_in_external_network': vms_list})
+            overlapping_resources.update({'vms_in_external_network': vms_list})
 
-        # Print LOG message with all overlapped stuff and abort migration
-        if overlapped_resources:
-            LOG.critical('Network overlapping list:\n%s', overlapped_resources)
+        # Print LOG message with all overlapping stuff and abort migration
+        if overlapping_resources:
+            LOG.critical('Network overlapping list:\n%s',
+                         overlapping_resources)
             raise exception.AbortMigrationError(
                 "There is a number of overlapping Network resources, so "
                 "migration process can not be continued. Resolve it please and"
@@ -108,8 +119,8 @@ class ComputeInfo(object):
         :return list:
         """
         if not devices:
-            LOG.debug('There are no external networks on the SRC cloud. '
-                      'Finishing check.')
+            LOG.debug('There are no any devices in external networks on the '
+                      'SRC cloud. Finishing check.')
             return []
 
         return list(self.instances & devices)
@@ -163,7 +174,7 @@ class NetworkInfo(object):
         return {port['device_id'] for port in self.ports
                 if port['network_id'] in networks_ids}
 
-    def list_overlapped_floating_ips(self, dst_info):
+    def list_overlapping_floating_ips(self, dst_info):
         """
         Get list of Floating IPs, that overlap with the DST.
 
@@ -188,26 +199,76 @@ class NetworkInfo(object):
 
         return floating_ips_list
 
-    def get_overlapped_networks(self, dst_info):
+    def get_overlapping_external_subnets(self, dst_info):
+        """
+        Get lists of subnets, that overlap with the DST.
+
+        :param dst_info: NetworkInfo instance of DST cloud
+
+        :return list of dicts: Overlapping subnets in format:
+                                [{'src_subnet': <src_subnet_id>,
+                                'dst_subnet': <dst_subnet_id>}, ...]
+        """
+
+        src_ext_subnets = [snet for snet in self.subnets if snet['external']]
+        dst_ext_subnets = [sub for sub in dst_info.subnets if sub['external']]
+
+        overlapping_external_subnets = []
+
+        for src_subnet in src_ext_subnets:
+            for dst_subnet in dst_ext_subnets:
+                LOG.debug("SRC subnet: '%s', DST subnet: '%s'",
+                          src_subnet['id'], dst_subnet['id'])
+                if src_subnet['res_hash'] == dst_subnet['res_hash']:
+                    src_net = self.by_id[src_subnet['network_id']]
+                    dst_net = dst_info.by_id[dst_subnet['network_id']]
+                    if check_equal_networks(src_net, dst_net):
+                        LOG.debug("We have the same subnet on DST by hash")
+                        continue
+
+                cidr_overlap = cidr_overlapping(src_subnet['cidr'],
+                                                dst_subnet['cidr'])
+                if not cidr_overlap:
+                    LOG.debug("CIDRs do not overlap")
+                    continue
+                pools_overlap = allocation_pools_overlapping(
+                    src_subnet['allocation_pools'],
+                    dst_subnet['allocation_pools'])
+                if not pools_overlap:
+                    LOG.debug("Allocation pools do not overlap")
+                    continue
+                overlap = {'src_subnet': src_subnet['id'],
+                           'dst_subnet': dst_subnet['id']}
+                LOG.warning("Allocation pool of subnet '%s' on SRC overlaps "
+                            "with allocation pool of subnet '%s' on DST.",
+                            src_subnet['id'], dst_subnet['id'])
+                overlapping_external_subnets.append(overlap)
+
+        return overlapping_external_subnets
+
+    def get_overlapping_networks(self, dst_info):
         """
         Get lists of networks, that overlap with the DST.
 
         :param dst_info: NetworkInfo instance of DST cloud
 
-        :return nets_with_overlapped_subnets, nets_with_overlapped_seg_ids:
-            Tuple of lists with overlapped networks IDs.
-             1. List of networks IDs with overlapped subnets;
-             2. List of networks IDs with overlapped segmentation IDs.
+        :return nets_with_overlapping_subnets, nets_with_overlapping_seg_ids:
+            Tuple of lists with overlapping networks IDs.
+             1. List of networks IDs with overlapping subnets;
+             2. List of networks IDs with overlapping segmentation IDs.
         """
 
         dst_net_info = dst_info.networks_info
         dst_seg_ids = neutron.get_segmentation_ids_from_net_list(dst_net_info)
-        nets_with_overlapped_subnets = []
-        nets_with_overlapped_seg_ids = []
+        nets_with_overlapping_subnets = []
+        nets_with_overlapping_seg_ids = []
 
         for network in self.get_networks():
             dst_net = dst_info.by_hash.get(network.hash)
             if dst_net:
+                if dst_net.external:
+                    # Skip external network due to it's checking later
+                    continue
                 # Current network matches with network on DST
                 # Have the same networks on SRC and DST
                 LOG.debug("SRC network: '%s', DST network: '%s'",
@@ -215,7 +276,7 @@ class NetworkInfo(object):
                 try:
                     network.check_network_overlapping(dst_net)
                 except exception.AbortMigrationError:
-                    nets_with_overlapped_subnets.append(network.id)
+                    nets_with_overlapping_subnets.append(network.id)
             else:
                 # Current network does not match with any network on DST
                 # Check Segmentation ID overlapping with DST
@@ -228,12 +289,13 @@ class NetworkInfo(object):
                         network.network_type, network.seg_id)
                     overlap = {'src_net_id': network.id,
                                'dst_net_id': dst_network.id}
-                    nets_with_overlapped_seg_ids.append(overlap)
+                    nets_with_overlapping_seg_ids.append(overlap)
 
-        # remove duplicates, cause 1 net may have several overlapped subnets
-        nets_with_overlapped_subnets = list(set(nets_with_overlapped_subnets))
+        # remove duplicates, cause 1 net may have several overlapping subnets
+        nets_with_overlapping_subnets = list(
+            set(nets_with_overlapping_subnets))
 
-        return nets_with_overlapped_subnets, nets_with_overlapped_seg_ids
+        return nets_with_overlapping_subnets, nets_with_overlapping_seg_ids
 
 
 class Network(object):
@@ -244,6 +306,7 @@ class Network(object):
         self.id = info['id']
         self.hash = info['res_hash']
 
+        self.external = self.info['router:external']
         self.network_type = self.info['provider:network_type']
         self.seg_id = self.info["provider:segmentation_id"]
 
@@ -270,10 +333,8 @@ class Network(object):
         return subnet['res_hash'] in self.subnets_hash
 
     def get_overlapping_subnet(self, subnet):
-        cidr = ipaddr.IPNetwork(subnet['cidr'])
         for self_subnet in self.subnets:
-            self_cidr = ipaddr.IPNetwork(self_subnet['cidr'])
-            if cidr.Contains(self_cidr) or self_cidr.Contains(cidr):
+            if cidr_overlapping(self_subnet['cidr'], subnet['cidr']):
                 return self_subnet['id']
 
     def check_segmentation_id_overlapping(self, dst_seg_ids):
@@ -290,7 +351,7 @@ class Network(object):
             message = ("Segmentation ID '%s' (network type = '%s', "
                        "network ID = '%s') is already busy on the destination "
                        "cloud.") % (self.seg_id, self.network_type, self.id)
-            LOG.error(message)
+            LOG.warning(message)
             raise exception.AbortMigrationError(message)
 
 
@@ -335,3 +396,90 @@ class FloatingIp(object):
                        self.address)
             LOG.error(message)
             raise exception.AbortMigrationError(message)
+
+
+def cidr_overlapping(src_cidr, dst_cidr):
+    """
+    Check for subnets CIDRs overlap.
+
+    :param src_cidr : SRC subnet's CIDR (f.e. '192.168.1.0/24')
+    :param dst_cidr: DST subnet's CIDR (f.e. '192.168.1.0/24')
+
+    :return bool: Whether CIDRs overlap or not.
+    """
+
+    src_net = ipaddr.IPNetwork(src_cidr)
+    dst_net = ipaddr.IPNetwork(dst_cidr)
+
+    return src_net.overlaps(dst_net)
+
+
+def convert_allocation_pools_to_ip_set(allocation_pools):
+    """
+    Convert allocation pool to ip set.
+
+    :param allocation_pools: Subnet's allocation pool (f.e.:
+                               [{'start': '2.2.2.2', 'end': '2.2.2.10'},
+                               {'start': '2.2.2.20', 'end': '2.2.2.30'}, ...])
+
+    :return: netaddr.ip.sets.IPSet instance
+    """
+
+    ranges = [pool.values() for pool in allocation_pools]
+    for count, pool in enumerate(ranges):
+        ranges[count] = [netaddr.IPAddress(ip) for ip in pool]
+        ranges[count].sort()
+
+    ip_ranges = [netaddr.IPRange(*r) for r in ranges]
+    ip_sets = [netaddr.IPSet(r) for r in ip_ranges]
+
+    result_set = reduce(lambda res, ip_set: res.union(ip_set), ip_sets)
+
+    return result_set
+
+
+def allocation_pools_overlapping(src_pools, dst_pools):
+    """
+    Check for subnets allocation pools overlap.
+
+    :param src_pools : SRC subnet's allocation pools
+    :param dst_pools: DST subnet's allocation pools
+
+    Allocation pools format the same as from the Neutron's result:
+    [{'start': '2.2.2.2', 'end': '2.2.2.10'},
+    {'start': '2.2.2.20', 'end': '2.2.2.30'}, ...]
+
+    :return bool: Whether allocation pools overlap or not.
+    """
+
+    src_ip_set = convert_allocation_pools_to_ip_set(src_pools)
+    dst_ip_set = convert_allocation_pools_to_ip_set(dst_pools)
+
+    overlap = src_ip_set & dst_ip_set
+
+    if not overlap:
+        return False
+
+    return True
+
+
+def check_equal_networks(src_network, dst_network):
+    """
+    Check if 2 networks are equal.
+
+    Networks are equal when they have the same hash and all hashes of their
+    subnets are equal too.
+
+    :param src_network: Network instance from source cloud
+    :param dst_network: Network instance from destination cloud
+
+    :return bool: Whether networks are equal or not.
+    """
+
+    networks_are_equal = (src_network.hash == dst_network.hash and
+                          src_network.subnets_hash == dst_network.subnets_hash)
+
+    if networks_are_equal:
+        return True
+
+    return False

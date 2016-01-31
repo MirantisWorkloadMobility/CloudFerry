@@ -49,10 +49,12 @@ class BaseScheduler(object):
 
     def event_start_task(self, task):
         api.env.current_task = task
+        LOG.info("Start task '%s'", task)
         return True
 
     def event_end_task(self, task):
         api.env.current_task = None
+        LOG.info("End task '%s'", task)
         return True
 
     def event_error_task(self, task, e):
