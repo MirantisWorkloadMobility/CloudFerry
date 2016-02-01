@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import logging
 import time
 import timeit
 import random
@@ -29,6 +30,8 @@ from jinja2 import Environment, FileSystemLoader
 from fabric.api import run, settings, local, env, sudo
 from fabric.context_managers import hide
 import yaml
+
+LOG = logging.getLogger(__name__)
 
 ISCSI = "iscsi"
 CEPH = "ceph"
@@ -438,7 +441,10 @@ def libvirt_instance_exists(libvirt_name, init_host, compute_host, ssh_user,
                   connection_attempts=env.connection_attempts,
                   warn_only=True,
                   quiet=True):
-        out = sudo('virsh domid %s' % libvirt_name)
+        command = 'virsh domid %s' % libvirt_name
+        LOG.debug('[%s] Running command %s', compute_host, command)
+        out = sudo(command)
+        LOG.debug('[%s] Result of running %s: %s', compute_host, command, out)
         return out.succeeded
 
 
@@ -449,7 +455,10 @@ def get_libvirt_block_info(libvirt_name, init_host, compute_host, ssh_user,
                   password=ssh_sudo_password,
                   gateway=init_host,
                   connection_attempts=env.connection_attempts):
-        out = sudo("virsh domblklist %s" % libvirt_name)
+        command = "virsh domblklist %s" % libvirt_name
+        LOG.debug('[%s] Running command %s', compute_host, command)
+        out = sudo(command)
+        LOG.debug('[%s] Result of running %s: %s', compute_host, command, out)
         libvirt_output = out.split()
     return libvirt_output
 

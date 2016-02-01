@@ -61,9 +61,12 @@ class RemoteRunner(object):
                 LOG.debug("running '%s' on '%s' host as user '%s'",
                           cmd, self.host, self.user)
                 if self.sudo and self.user != 'root':
-                    return api.sudo(cmd)
+                    result = api.sudo(cmd)
                 else:
-                    return api.run(cmd)
+                    result = api.run(cmd)
+                LOG.debug('[%s] Command "%s" result: %s',
+                          self.host, cmd, result)
+                return result
 
     def run_ignoring_errors(self, cmd, **kwargs):
         ignore_errors_original = self.ignore_errors
