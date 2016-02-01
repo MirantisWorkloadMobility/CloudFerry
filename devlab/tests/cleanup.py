@@ -14,13 +14,19 @@
 
 import itertools
 import time
+import logging
+from logging.config import dictConfig
 
 from keystoneclient import exceptions as ks_exceptions
 from neutronclient.common import exceptions as nt_exceptions
 from novaclient import exceptions as nv_exceptions
 
 from base import BasePrerequisites
+import config as conf
 from test_exceptions import NotFound
+
+dictConfig(conf.logging_configuration)
+LOG = logging.getLogger(__name__)
 
 
 class CleanEnv(BasePrerequisites):
@@ -35,7 +41,7 @@ class CleanEnv(BasePrerequisites):
                 continue
             vms_ids.append(vm.id)
             self.novaclient.servers.delete(vm.id)
-            print('VM "%s" has been deleted' % vm.name)
+            LOG.info('VM "%s" has been deleted',  vm.name)
         self.wait_vms_deleted()
 
     def wait_vms_deleted(self, tenant_id=None):
@@ -73,7 +79,7 @@ class CleanEnv(BasePrerequisites):
                 continue
             self.cinderclient.volumes.delete(
                 self.get_volume_id(volume.display_name))
-            print('Volume "%s" has been deleted' % volume.display_name)
+            LOG.info('Volume "%s" has been deleted', volume.display_name)
 
     def clean_flavors(self):
         flavors_names = [flavor['name'] for flavor in self.config.flavors]
@@ -85,7 +91,7 @@ class CleanEnv(BasePrerequisites):
             if flavor.name not in flavors_names:
                 continue
             self.novaclient.flavors.delete(self.get_flavor_id(flavor.name))
-            print('Flavor "%s" has been deleted' % flavor.name)
+            LOG.info('Flavor "%s" has been deleted', flavor.name)
 
     def clean_images(self):
         all_images = self.migration_utils.get_all_images_from_config()
@@ -95,7 +101,7 @@ class CleanEnv(BasePrerequisites):
             if image.name not in images_names:
                 continue
             self.glanceclient.images.delete(self.get_image_id(image.name))
-            print('Image "%s" has been deleted' % image.name)
+            LOG.info('Image "%s" has been deleted', image.name)
 
     def clean_snapshots(self):
         snaps_names = [snapshot['image_name']
@@ -105,7 +111,7 @@ class CleanEnv(BasePrerequisites):
                 continue
             self.glanceclient.images.delete(
                 self.get_image_id(snapshot.name))
-            print('Snapshot "%s" has been deleted' % snapshot.name)
+            LOG.info('Snapshot "%s" has been deleted', snapshot.name)
 
     def clean_networks(self):
         nets = self.config.networks
@@ -119,7 +125,7 @@ class CleanEnv(BasePrerequisites):
             net_id = self.get_net_id(network['name'])
             self.clean_network_ports(net_id)
             self.neutronclient.delete_network(net_id)
-            print('Network "%s" has been deleted' % network['name'])
+            LOG.info('Network "%s" has been deleted', network['name'])
 
     def delete_port(self, port):
         port_owner = port['device_owner']
@@ -161,16 +167,16 @@ class CleanEnv(BasePrerequisites):
             router_id = self.get_router_id(router['name'])
             self.clean_router_ports(router_id)
             self.neutronclient.delete_router(router_id)
-            print('Router "%s" has been deleted' % router['name'])
+            LOG.info('Router "%s" has been deleted', router['name'])
 
     def clean_fips(self):
         floatingips = self.neutronclient.list_floatingips()['floatingips']
         for ip in floatingips:
             try:
                 self.neutronclient.delete_floatingip(ip['id'])
-            except nt_exceptions.NeutronClientException as e:
-                print "Ip %s failed to delete: %s" % (
-                    ip['floating_ip_address'], repr(e))
+            except nt_exceptions.NeutronClientException:
+                LOG.warning("Ip %s failed to delete:",
+                            ip['floating_ip_address'], exc_info=True)
 
     def clean_security_groups(self):
         sgs = self.neutronclient.list_security_groups()['security_groups']
@@ -178,10 +184,9 @@ class CleanEnv(BasePrerequisites):
             try:
                 self.neutronclient.delete_security_group(self.get_sg_id(
                     sg['name']))
-            except (nt_exceptions.NeutronClientException,
-                    NotFound) as e:
-                print "Security group %s failed to delete: %s" % (sg['name'],
-                                                                  repr(e))
+            except (nt_exceptions.NeutronClientException, NotFound):
+                LOG.warning("Security group %s failed to delete:",
+                            sg['name'], exc_info=True)
 
     def clean_roles(self):
         roles_names = [role['name'] for role in self.config.roles]
@@ -189,7 +194,7 @@ class CleanEnv(BasePrerequisites):
             if role.name not in roles_names:
                 continue
             self.keystoneclient.roles.delete(self.get_role_id(role.name))
-            print('Role "%s" has been deleted' % role.name)
+            LOG.info('Role "%s" has been deleted', role.name)
 
     def clean_keypairs(self):
         def delete_user_keypairs(_user):
@@ -217,7 +222,7 @@ class CleanEnv(BasePrerequisites):
             if user.name not in users_names:
                 continue
             self.keystoneclient.users.delete(self.get_user_id(user.name))
-            print('User "%s" has been deleted' % user.name)
+            LOG.info('User "%s" has been deleted', user.name)
 
     def clean_tenants(self):
         tenants_names = [tenant['name'] for tenant in self.config.tenants]
@@ -225,7 +230,7 @@ class CleanEnv(BasePrerequisites):
             if tenant.name not in tenants_names:
                 continue
             self.keystoneclient.tenants.delete(self.get_tenant_id(tenant.name))
-            print('Tenant "%s" has been deleted' % tenant.name)
+            LOG.info('Tenant "%s" has been deleted', tenant.name)
 
     def clean_cinder_snapshots(self):
         snapshots = self.config.cinder_snapshots
@@ -240,7 +245,7 @@ class CleanEnv(BasePrerequisites):
                 continue
             self.cinderclient.volume_snapshots.delete(
                 self.get_volume_snapshot_id(snapshot.display_name))
-            print('Snapshot "%s" has been deleted' % snapshot.display_name)
+            LOG.info('Snapshot "%s" has been deleted', snapshot.display_name)
 
     def clean_namespaces(self):
         ip_addr = self.get_vagrant_vm_ip()
@@ -259,7 +264,7 @@ class CleanEnv(BasePrerequisites):
         for pool in self.neutronclient.list_pools()['pools']:
             if pool['name'] in pools_names:
                 self.neutronclient.delete_pool(pool['id'])
-                print('LBaaS pool "%s" has been deleted' % pool['name'])
+                LOG.info('LBaaS pool "%s" has been deleted', pool['name'])
 
     def clean_lb_vips(self):
         vips = getattr(self.config, 'vips', [])
@@ -270,7 +275,7 @@ class CleanEnv(BasePrerequisites):
         for vip in self.neutronclient.list_vips()['vips']:
             if vip['name'] in vips_names:
                 self.neutronclient.delete_vip(vip['id'])
-                print('LBaaS vip "%s" has been deleted' % vip['name'])
+                LOG.info('LBaaS vip "%s" has been deleted', vip['name'])
 
     def clean_lb_members(self):
         members = getattr(self.config, 'lb_members', [])
@@ -282,7 +287,7 @@ class CleanEnv(BasePrerequisites):
             if member['address'] in member_address:
                 self.neutronclient.delete_member(member['id'])
                 msg = 'LBaaS member for tenant "%s" has been deleted'
-                print(msg % member['tenant_id'])
+                LOG.info(msg, member['tenant_id'])
 
     def clean_lbaas_health_monitors(self):
         def check_tenant(tenant_id):
@@ -301,7 +306,7 @@ class CleanEnv(BasePrerequisites):
                     hm['tenant_id']):
                 self.neutronclient.delete_health_monitor(hm['id'])
                 msg = 'LBaaS health monitor for tenant "%s" has been deleted'
-                print(msg % hm['tenant_id'])
+                LOG.info(msg, hm['tenant_id'])
 
     def clean_server_groups(self):
         server_group_from_config = self.config.server_groups
