@@ -107,6 +107,12 @@ class GlanceFilters(filters.CFFilters):
         is_member = member_filter(self.glance_client,
                                   self.filter_yaml.get_tenant())
 
-        return [lambda i: (is_public(i) or
+        if self.filter_yaml.is_public_and_member_images_filtered():
+            return [lambda i: (is_tenant(i) and
+                               is_image_id(i) and
+                               is_datetime(i))]
+        else:
+            return [
+                lambda i: (is_public(i) or
                            is_member(i) or
                            is_tenant(i) and is_image_id(i) and is_datetime(i))]
