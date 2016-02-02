@@ -55,12 +55,14 @@ def get_flavors_vms_and_nodes(conf):
     password = src['password']
     tenant = src['tenant']
     auth_url = src['auth_url']
+    region = src.get('region')
 
     dst_comp = conf['dst_compute']
     core_ratio = dst_comp['cpu_allocation_ratio']
     ram_ratio = dst_comp['ram_allocation_ratio']
 
-    cli = client.Client(2, username, password, tenant, auth_url)
+    cli = client.Client(2, username, password, tenant, auth_url,
+                        region_name=region)
     servers = cli.servers.list(search_opts={"all_tenants": True})
     nova_flavors = cli.flavors.list()
 

@@ -483,7 +483,8 @@ class KeystoneClientTestCase(test.TestCase):
             auth_url=auth_url,
             username=user,
             cacert=cacert,
-            insecure=insecure
+            insecure=insecure,
+            region_name=None
         )
 
 

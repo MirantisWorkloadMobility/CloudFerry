@@ -230,19 +230,15 @@ class KeystoneIdentity(identity.Identity):
         :return: OpenStack Keystone Client instance
         """
 
-        kwargs = {
-            "username": self.config.cloud.user,
-            "password": self.config.cloud.password,
-            "tenant_name": self.config.cloud.tenant,
-            "auth_url": self.config.cloud.auth_url,
-            "cacert": self.config.cloud.cacert,
-            "insecure": self.config.cloud.insecure
-        }
-
-        if self.config.cloud.region:
-            kwargs["region_name"] = self.config.cloud.region
-
-        return keystone_client.Client(**kwargs)
+        return keystone_client.Client(
+            username=self.config.cloud.user,
+            password=self.config.cloud.password,
+            tenant_name=self.config.cloud.tenant,
+            auth_url=self.config.cloud.auth_url,
+            cacert=self.config.cloud.cacert,
+            insecure=self.config.cloud.insecure,
+            region_name=self.config.cloud.region
+        )
 
     def get_endpoint_by_service_type(self, service_type, endpoint_type):
         """Getting endpoint URL by service type.
@@ -253,15 +249,11 @@ class KeystoneIdentity(identity.Identity):
         :return: String endpoint of specified OpenStack service
         """
 
-        kwargs = {
-            "service_type": service_type,
-            "endpoint_type": endpoint_type
-        }
-
-        if self.config.cloud.region:
-            kwargs['region_name'] = self.config.cloud.region
-
-        return self.keystone_client.service_catalog.url_for(**kwargs)
+        return self.keystone_client.service_catalog.url_for(
+            service_type=service_type,
+            endpoint_type=endpoint_type,
+            region_name=self.config.cloud.region
+        )
 
     def get_tenants_func(self, return_default_tenant=True):
         default_tenant = self.config.cloud.tenant \

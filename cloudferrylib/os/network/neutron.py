@@ -57,19 +57,16 @@ class NeutronNetwork(network.Network):
         return self.proxy(self.get_client(), self.config)
 
     def get_client(self):
-        kwargs = {
-            "username": self.config.cloud.user,
-            "password": self.config.cloud.password,
-            "tenant_name": self.config.cloud.tenant,
-            "auth_url": self.config.cloud.auth_url,
-            "ca_cert": self.config.cloud.cacert,
-            "insecure": self.config.cloud.insecure
-        }
 
-        if self.config.cloud.region:
-            kwargs["region_name"] = self.config.cloud.region
-
-        return neutron_client.Client(**kwargs)
+        return neutron_client.Client(
+            username=self.config.cloud.user,
+            password=self.config.cloud.password,
+            tenant_name=self.config.cloud.tenant,
+            auth_url=self.config.cloud.auth_url,
+            cacert=self.config.cloud.cacert,
+            insecure=self.config.cloud.insecure,
+            region_name=self.config.cloud.region
+        )
 
     def read_info(self, **kwargs):
 

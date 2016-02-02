@@ -41,7 +41,8 @@ FAKE_CONFIG = utils.ext_dict(
                           'host': '1.1.1.1',
                           'auth_url': 'http://1.1.1.1:35357/v2.0/',
                           'cacert': '',
-                          'insecure': False}),
+                          'insecure': False,
+                          'region': None}),
     migrate=utils.ext_dict({'speed_limit': '10MB',
                             'retry': '7',
                             'time_wait': 5,
@@ -167,7 +168,8 @@ class CinderDatabaseTestCase(test.TestCase):
         self.mock_client.assert_called_once_with('fake_user', 'fake_password',
                                                  'fake_tenant',
                                                  'http://1.1.1.1:35357/v2.0/',
-                                                 cacert='', insecure=False)
+                                                 cacert='', insecure=False,
+                                                 region_name=None)
         self.assertEqual(self.mock_client(), client)
 
     def test_read_db_info(self):

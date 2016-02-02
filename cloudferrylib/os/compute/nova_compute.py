@@ -145,17 +145,18 @@ class NovaCompute(compute.Compute):
     def get_client(self, params=None):
         """Getting nova client. """
 
-        params = self.config if not params else params
+        params = params or self.config
 
-        client_args = [params.cloud.user, params.cloud.password,
-                       params.cloud.tenant, params.cloud.auth_url]
+        client = nova_client.Client(
+            params.cloud.user,
+            params.cloud.password,
+            params.cloud.tenant,
+            params.cloud.auth_url,
+            cacert=params.cloud.cacert,
+            insecure=params.cloud.insecure,
+            region_name=params.cloud.region
+        )
 
-        client_kwargs = {"cacert": params.cloud.cacert,
-                         "insecure": params.cloud.insecure}
-        if params.cloud.region:
-            client_kwargs["region_name"] = params.cloud.region
-
-        client = nova_client.Client(*client_args, **client_kwargs)
         LOG.debug("Authenticating as '%s' in tenant '%s' for Nova client "
                   "authorization...",
                   params.cloud.user, params.cloud.tenant)
