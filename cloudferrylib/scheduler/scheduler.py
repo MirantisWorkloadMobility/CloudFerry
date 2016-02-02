@@ -53,8 +53,8 @@ class BaseScheduler(object):
         return True
 
     def event_end_task(self, task):
-        api.env.current_task = None
         LOG.info("End task '%s'", task)
+        api.env.current_task = None
         return True
 
     def event_error_task(self, task, e):
