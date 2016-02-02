@@ -41,6 +41,12 @@ class CheckCloud(action.Action):
     def create_tenant(self, ks_client, tenant_name):
         LOG.info("Creating %s tenant.", tenant_name)
         tenant_id = ks_client.create_tenant(tenant_name)
+        username = ks_client.config.cloud.user
+        keystone_client = ks_client.keystone_client
+        keystone_client.roles.add_user_role(
+            user=keystone_client.users.find(name=username),
+            role=keystone_client.roles.find(name='admin'),
+            tenant=tenant_id)
         try:
             yield tenant_id
         finally:
@@ -92,11 +98,14 @@ class CheckCloud(action.Action):
     @contextlib.contextmanager
     def create_volume(self, cn_client, volume_info):
         LOG.info("Creating %s volume.", volume_info['display_name'])
-        volume = cn_client.create_volume(**volume_info)
+        tenant = volume_info.pop('tenant')
+        client = cn_client.get_client(tenant=tenant)
+        volume = client.volumes.create(**volume_info)
         try:
             yield
         finally:
             LOG.info("Deleting %s volume.", volume_info['display_name'])
+            self.wait_for_volume_to_become_available(cn_client, volume.id)
             cn_client.delete_volume(volume.id)
 
     @contextlib.contextmanager
@@ -126,7 +135,22 @@ class CheckCloud(action.Action):
                 time.sleep(delay)
                 delay *= 2
         except nova_exc.NotFound:
-            LOG.info("Instance successfuly deleted.")
+            LOG.info("Instance successfully deleted.")
+
+    @classmethod
+    def wait_for_volume_to_become_available(cls, cn_client, volume_id,
+                                            timeout=600):
+        time_slept = 0
+        delay = 30
+        while timeout > time_slept:
+            volume = cn_client.get_volume_by_id(volume_id)
+            if volume.status in ('available', 'error'):
+                LOG.info("Volume in %s state, done waiting.", volume.status)
+                break
+            LOG.info("Volume in %s state, waiting %s sec",
+                     volume.status, delay)
+            time.sleep(delay)
+            time_slept += delay
 
     def run(self, **kwargs):
         """Check write access to cloud."""
@@ -206,7 +230,8 @@ class CheckCloud(action.Action):
             'display_description': None,
             'size': 1,
             'display_name': 'volume_%s' % unique,
-            'volume_type': None
+            'volume_type': None,
+            'tenant': tenant_name
         }
 
         try:
