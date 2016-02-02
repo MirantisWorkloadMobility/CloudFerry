@@ -37,11 +37,8 @@ def configure_logging():
     with open(cfglib.CONF.migrate.log_config, 'r') as f:
         config.dictConfig(yaml.load(f))
     if cfglib.CONF.migrate.debug:
-        logger = logging.getLogger()
-        for handler in logger.handlers:
-            if handler.name == 'console':
-                handler.setLevel(logging.DEBUG)
-                break
+        logger = logging.getLogger('cloudferrylib')
+        logger.setLevel(logging.DEBUG)
 
 
 class RunRotatingFileHandler(handlers.RotatingFileHandler):
@@ -91,7 +88,7 @@ class CurrentTaskFilter(logging.Filter):
 
     def filter(self, record):
         current_task = self.name_format % {
-            'name': api.env.current_task or '',
+            'name': api.env.current_task or '<NoTask>',
         }
         record.current_task = current_task
         return True

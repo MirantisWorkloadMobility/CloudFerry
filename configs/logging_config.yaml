@@ -3,9 +3,19 @@ disable_existing_loggers: False
 formatters:
   simple:
     format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-  colored:
+  info_colored:
     (): colorlog.ColoredFormatter
     format: '%(log_color)s%(levelname)-8s%(reset)s %(current_task)s %(asctime)s %(message)s'
+    datefmt: '%m-%d %H:%M:%S'
+    log_colors:
+      DEBUG: green
+      INFO: cyan
+      WARNING: yellow
+      ERROR: red
+      CRITICAL: purple
+  debug_colored:
+    (): colorlog.ColoredFormatter
+    format: '%(log_color)s%(levelname)-8s%(reset)s %(current_task)s [%(name)s; %(pathname)s:%(lineno)s] %(asctime)s %(message)s'
     datefmt: '%m-%d %H:%M:%S'
     log_colors:
       DEBUG: green
@@ -34,15 +44,15 @@ handlers:
     formatter: console_colored
     stream: ext://sys.stdout
     filters: [show_current_task]
-    level: INFO
+    level: DEBUG
   debug:
     backupCount: 20
     class: cloudferrylib.utils.log.RunRotatingFileHandler
     encoding: utf-8
     filename: 'debug-%(scenario)s-%(date)s.log'
     date_format: '%F-%H-%M-%S'
-    formatter: colored
-    level: DEBUG
+    formatter: debug_colored
+    level: NOTSET
     maxBytes: 10485760
     filters: [show_current_task]
   info:
@@ -51,32 +61,15 @@ handlers:
     encoding: utf-8
     filename: 'info-%(scenario)s-%(date)s.log'
     date_format: '%F-%H-%M-%S'
-    formatter: colored
+    formatter: info_colored
     level: INFO
     maxBytes: 10485760
     filters: [show_current_task]
-#  error:
-#    backupCount: 20
-#    class: cloudferrylib.utils.log.RunRotatingFileHandler
-#    encoding: utf-8
-#    filename: 'error-%(scenario)s-%(date)s.log'
-#    date_format: '%F-%H-%M-%S'
-#    formatter: colored
-#    level: ERROR
-#    maxBytes: 10485760
-#    filters: [show_current_task]
 loggers:
-  paramiko.transport:
-    level: WARNING
-    handlers: [console, info, debug]
-  glanceclient.common.http:
-    level: WARNING
-    handlers: [console, info, debug]
-  requests.packages.urllib3.connectionpool:
-    level: WARNING
-    handlers: [console, info, debug]
+  cloudferrylib:
+    level: INFO
+    handlers: [console, info]
 
 root:
-  # level must be debug
-  level: DEBUG
-  handlers: [console, debug, info]
+  level: NOTSET
+  handlers: [debug]
