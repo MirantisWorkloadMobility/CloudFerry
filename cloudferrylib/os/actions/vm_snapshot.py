@@ -92,36 +92,33 @@ class VmRestore(VmSnapshotBasic):
         LOG.debug("restoring vms from snapshot")
         snapshot_from_namespace = kwargs.get(self.namespace_variable)
         compute = self.get_compute_resource()
+        position = self.cloud.position
         vm_id_targets = ('src_id', 'dst_id') \
-            if self.cloud.position == 'src' else ('dst_id', 'src_id')
-        vms_succesed = {}
+            if position == 'src' else ('dst_id', 'src_id')
+        vms_succeeded = {}
         if rollback_vars:
             vms = rollback_vars.get('vms', [])
-            vms_succesed = {pair_vms[vm_id_targets[0]]: pair_vms[
+            vms_succeeded = {pair_vms[vm_id_targets[0]]: pair_vms[
                 vm_id_targets[1]] for pair_vms in vms}
         for vm in self.get_list_of_vms():
-            if vm.id in vms_succesed:
+            if vm.id in vms_succeeded:
                 LOG.debug("Successfully copied instances")
-                if self.cloud.position == 'src':
+                if position == 'src':
                     LOG.debug("SRC ID %s", vm.id)
-                    LOG.debug("DST ID %s", vms_succesed[vm.id])
+                    LOG.debug("DST ID %s", vms_succeeded[vm.id])
                 else:
-                    LOG.debug("SRC ID %s", vms_succesed[vm.id])
+                    LOG.debug("SRC ID %s", vms_succeeded[vm.id])
                     LOG.debug("DST ID %s", vm.id)
                 continue
             if vm.id not in snapshot_from_namespace:
-                # delete this vm - we don't have its id in snapshot data
-                LOG.debug("vm {vm} will be deleted on {location}".format(
-                    vm=vm.id,
-                    location=self.cloud.position))
-                compute.delete_vm_by_id(vm.id)
+                if position == 'dst':
+                    # delete this vm - we don't have its id in snapshot data
+                    LOG.debug("VM %s will be deleted on %s", vm.id, position)
+                    compute.delete_vm_by_id(vm.id)
             elif vm.status != snapshot_from_namespace.get(vm.id):
-                LOG.debug("status of {vm} is changed from {original}"
-                          " to {new} on {location}".format(
-                              vm=vm.id,
-                              original=vm.status,
-                              new=snapshot_from_namespace.get(vm.id),
-                              location=self.cloud.position))
+                LOG.debug("Status of %s is changed from %s to %s on %s",
+                          vm.id, vm.status, snapshot_from_namespace.get(vm.id),
+                          position)
                 # reset status of vm
                 compute.change_status(
                     snapshot_from_namespace.get(vm.id),
