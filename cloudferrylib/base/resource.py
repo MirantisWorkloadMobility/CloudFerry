@@ -33,7 +33,7 @@ class Resource(object):
     def read_info(self, opts=None):
         pass
 
-    def deploy(self, *args):
+    def deploy(self, *args, **kwargs):
         pass
 
     def save(self):

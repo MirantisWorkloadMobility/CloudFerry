@@ -60,7 +60,7 @@ class GlanceImageProgessMigrationView(object):
                 dst_image = dst_images.get(image_key)
                 if dst_image:
                     self.num_migrated += 1
-                    self.migrated_size += dst_image.size
+                    self.migrated_size += dst_image.size or 0
                     self.list_migrated.append('%s (%s)' % (dst_image.name,
                                                            dst_image.id))
                     continue
@@ -196,14 +196,23 @@ class GlanceImage(image.Image):
             for f in self.get_image_filter().get_filters():
                 images = ifilter(f, images)
             images = [i for i in images]
-
             LOG.info("Filtered images: %s",
-                     ", ".join((str(i.name) for i in images)))
+                     ", ".join(('%s (%s)' % (i.name, i.id) for i in images)))
 
         return images
 
     def create_image(self, **kwargs):
-        return self.glance_client.images.create(**kwargs)
+        try:
+            return self.glance_client.images.create(**kwargs)
+        except glance_exceptions.HTTPConflict:
+            image_id = kwargs.pop('id', None)
+            if image_id is not None:
+                LOG.warning("Image ID will not be kept for source image "
+                            "'%(name)s' (%(id)s), image ID is already present "
+                            "in destination (perhaps was deleted previously).",
+                            {'name': kwargs.get('name'), 'id': image_id})
+                return self.glance_client.images.create(**kwargs)
+            raise
 
     def delete_image(self, image_id):
         # Change protected property to false before delete
@@ -415,7 +424,7 @@ class GlanceImage(image.Image):
         return migrated.identical(src_image['owner'], dst_image['owner'],
                                   resource_type=utl.TENANTS_TYPE)
 
-    def deploy(self, info):
+    def deploy(self, info, *args, **kwargs):
         LOG.info("Glance images deployment started...")
         info = copy.deepcopy(info)
         created_images = []
