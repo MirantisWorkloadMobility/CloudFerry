@@ -12,17 +12,17 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import tests.config as config
-from tests.test_exceptions import NotFound
-import tests.functional_test as functional_test
-
 import itertools
-from nose.plugins.attrib import attr
 import pprint
 import unittest
 
 from fabric.api import run, settings
 from fabric.network import NetworkError
+from nose.plugins.attrib import attr
+
+import devlab.tests.config as config
+import devlab.tests.functional_test as functional_test
+from devlab.tests.test_exceptions import NotFound
 
 NET_NAMES_TO_OMIT = ['tenantnet4_segm_id_cidr1',
                      'tenantnet4_segm_id_cidr2']
@@ -375,8 +375,8 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         """Validate networks were migrated with correct parameters.
 
         :param name:
-        :param provider\:network_type:
-        :param provider\:segmentation_id:"""
+        :param provider\\:network_type:
+        :param provider\\:segmentation_id:"""
         src_nets = self.filter_networks()
         dst_nets = self.dst_cloud.neutronclient.list_networks()
 
@@ -667,7 +667,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             qs = {}
             for t in tenants:
                 qs[t.name] = {'nova_q': {}, 'neutron_q': {}}
-                nova_quota = client.novaclient.quotas.get(t.id)._info
+                nova_quota = client.novaclient.quotas.get(t.id).to_dict()
                 for k, v in nova_quota.iteritems():
                     if k in src_nova_quota_keys and k != 'id':
                         qs[t.name]['nova_q'][k] = v
@@ -678,7 +678,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             return qs
 
         src_nova_quota_keys = self.src_cloud.novaclient.quotas.get(
-            self.src_cloud.keystoneclient.tenant_id)._info.keys()
+            self.src_cloud.keystoneclient.tenant_id).to_dict().keys()
         src_neutron_quota_keys = self.src_cloud.neutronclient.show_quota(
             self.src_cloud.keystoneclient.tenant_id)['quota'].keys()
 

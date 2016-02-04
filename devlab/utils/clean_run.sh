@@ -46,10 +46,10 @@ export DST_OS_PASSWORD=admin
 export DST_OS_AUTH_URL="http://$DST:5000/v2.0/"
 export DST_OS_IMAGE_ENDPOINT="http://$DST:9292"
 export DST_OS_NEUTRON_ENDPOINT="http://$DST:9696/"
+python devlab/generate_load.py --clean --env DST
+python devlab/generate_load.py --clean --env DST
+python devlab/generate_load.py --clean --env DST
 cd devlab
-cd tests && python generate_load.py --clean --env DST
-python generate_load.py --clean --env DST
-python generate_load.py --clean --env DST
 ssh root@$DST \
 "mysql -u $dst_mysql_user -p$dst_mysql_password cinder -e \"delete from cinder.volume_admin_metadata;
 delete from cinder.volumes;delete from cinder.reservations;delete from cinder.quota_usages;\""

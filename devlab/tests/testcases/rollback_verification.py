@@ -22,12 +22,13 @@ Basically two dictionaries are being compared:
 """
 
 import os
+
 import yaml
 
-import tests.config as config
-import tests.functional_test as functional_test
-import tests.utils as utils
-from tests.data_collector import DataCollector
+import devlab.tests.config as config
+import devlab.tests.functional_test as functional_test
+import devlab.tests.utils as utils
+from devlab.tests.data_collector import DataCollector
 
 
 class RollbackVerification(functional_test.FunctionalTest):

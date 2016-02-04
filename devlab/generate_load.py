@@ -12,23 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ConfigParser
 import argparse
 import itertools
-import time
 import json
+import logging
 import os
-import yaml
-import ConfigParser
+import time
+from logging.config import dictConfig
 
+import yaml
 from keystoneclient import exceptions as ks_exceptions
 from neutronclient.common import exceptions as nt_exceptions
 from novaclient import exceptions as nv_exceptions
 
-from base import BasePrerequisites
-from cleanup import CleanEnv
-import config as conf
-import logging
-from logging.config import dictConfig
+import devlab.tests.config as conf
+from devlab.tests import base
+from devlab.tests import cleanup
 
 dictConfig(conf.logging_configuration)
 LOG = logging.getLogger(__name__)
@@ -78,20 +78,11 @@ def retry_until_resources_created(resource_name):
     return actual_decorator
 
 
-def get_dict_from_config_file(config_file):
-    conf_dict = {}
-    for section in config_file.sections():
-        conf_dict[section] = {}
-        for option in config_file.options(section):
-            conf_dict[section][option] = config_file.get(section, option)
-    return conf_dict
-
-
 def is_flavor_public(flavor):
     return flavor.get('is_public', True)
 
 
-class Prerequisites(BasePrerequisites):
+class Prerequisites(base.BasePrerequisites):
 
     def __init__(self, config, configuration_ini, cloud_prefix='SRC'):
         super(Prerequisites, self).__init__(config,
@@ -101,7 +92,8 @@ class Prerequisites(BasePrerequisites):
         self.ext_net_id = None
         # object of Prerequisites for dst cloud
         self.dst_cloud = None
-        self.clean_tools = CleanEnv(config, configuration_ini, cloud_prefix)
+        self.clean_tools = cleanup.CleanEnv(config, configuration_ini,
+                                            cloud_prefix)
 
     @clean_if_exists
     def create_users(self, users=None):
@@ -296,7 +288,8 @@ class Prerequisites(BasePrerequisites):
                 self.get_tenant_id(tenant['name']))]
             file_path = self.config.filters_file_naming_template.format(
                 tenant_name=tenant['name'])
-            with open(file_path, "w+") as f:
+            file_path = base.get_abs_path(file_path)
+            with open(file_path, "w") as f:
                 yaml.dump(filter_dict, f, default_flow_style=False)
 
     @clean_if_exists
@@ -799,8 +792,9 @@ class Prerequisites(BasePrerequisites):
             vm_state = self.novaclient.servers.get(vm.id).status
             data[vm.name] = vm_state
 
-        file_name = 'pre_migration_vm_states.json'
-        with open(file_name, 'w') as outfile:
+        file_path = conf.pre_migration_vm_states_file
+        file_path = base.get_abs_path(file_path)
+        with open(file_path, 'w') as outfile:
             json.dump(data, outfile, sort_keys=True, indent=4,
                       ensure_ascii=False)
 
@@ -1043,7 +1037,7 @@ if __name__ == '__main__':
     _args = parser.parse_args()
     confparser = ConfigParser.ConfigParser()
     confparser.read(_args.cloudsconf)
-    cloudsconf = get_dict_from_config_file(confparser)
+    cloudsconf = base.get_dict_from_config_file(confparser)
 
     preqs = Prerequisites(config=conf, configuration_ini=cloudsconf,
                           cloud_prefix=_args.env)

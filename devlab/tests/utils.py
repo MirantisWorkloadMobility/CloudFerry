@@ -14,14 +14,14 @@
 
 import collections
 import os
-import yaml
-import config
 import time
 
+import yaml
 from fabric.api import run, settings, sudo, hide
 from fabric.network import NetworkError
 from neutronclient.common.exceptions import NeutronClientException
 
+import devlab.tests.config as config
 
 VM_ACCESSIBILITY_ATTEMPTS = 20
 
@@ -132,10 +132,10 @@ class MigrationUtils(object):
             username = self.config.username_for_ssh
         if password is None and key is None:
             password = self.config.password_for_ssh
-        with hide('everything'), settings(
-                host_string=ip_addr, user=username, password=password, key=key,
-                abort_on_prompts=True, connection_attempts=3,
-                disable_known_hosts=True, no_agent=True, warn_only=warn_only):
+        with settings(hide('everything'), host_string=ip_addr, user=username,
+                      password=password, key=key, abort_on_prompts=True,
+                      connection_attempts=3, disable_known_hosts=True,
+                      no_agent=True, warn_only=warn_only):
             try:
                 if use_sudo:
                     return sudo(cmd, shell=False)

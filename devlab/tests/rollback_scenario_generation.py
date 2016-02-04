@@ -21,9 +21,10 @@ method.
 
 import os
 import random
+
 import yaml
 
-import utils
+import devlab.tests.utils as utils
 
 
 class RollbackScenarioGeneration(object):
@@ -51,7 +52,7 @@ class RollbackScenarioGeneration(object):
                 return True
 
     def _get_list_of_tasks(self, search_dict):
-        for key, value in search_dict.iteritems():
+        for _, value in search_dict.iteritems():
             if self._verification(search_dict):
                 self.steps_list.append(search_dict)
             elif isinstance(value, list):
@@ -62,7 +63,7 @@ class RollbackScenarioGeneration(object):
         return self.steps_list
 
     def _insert_break_point(self, search_dict, field):
-        for key, value in search_dict.iteritems():
+        for _, value in search_dict.iteritems():
             if isinstance(value, dict):
                 if self._verification(value):
                     return

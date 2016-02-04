@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import tests.functional_test as functional_test
+import devlab.tests.functional_test as functional_test
 
 TEST_TENANT_NAME = 'tenant4'
 TEST_TENANT_NETWORKS = ['tenantnet4_segm_id_cidr1',

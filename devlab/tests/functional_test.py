@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import config
 import logging
 import unittest
-from generate_load import Prerequisites
-import utils
+
 from keystoneclient import exceptions as ks_exceptions
-from test_exceptions import ConfFileError
 from testconfig import config as config_ini
+
+import devlab.tests.config as config
+import devlab.tests.utils as utils
+from devlab import generate_load
+from devlab.tests import test_exceptions
 
 
 def suppress_dependency_logging():
@@ -43,16 +45,18 @@ class FunctionalTest(unittest.TestCase):
         super(FunctionalTest, self).setUp()
         suppress_dependency_logging()
         if not config_ini:
-            raise ConfFileError('Configuration file parameter'
-                                ' --tc-file is missing or '
-                                'the file has wrong format')
+            raise test_exceptions.ConfFileError('Configuration file parameter'
+                                                ' --tc-file is missing or '
+                                                'the file has wrong format')
 
-        self.src_cloud = Prerequisites(cloud_prefix='SRC',
-                                       configuration_ini=config_ini,
-                                       config=config)
-        self.dst_cloud = Prerequisites(cloud_prefix='DST',
-                                       configuration_ini=config_ini,
-                                       config=config)
+        self.src_cloud = generate_load.Prerequisites(
+                cloud_prefix='SRC',
+                configuration_ini=config_ini,
+                config=config)
+        self.dst_cloud = generate_load.Prerequisites(
+                cloud_prefix='DST',
+                configuration_ini=config_ini,
+                config=config)
         self.filtering_utils = utils.FilteringUtils(get_option_from_config_ini(
                 'filter_path'))
         self.migration_utils = utils.MigrationUtils(config)
@@ -181,10 +185,11 @@ class FunctionalTest(unittest.TestCase):
 
     def filter_volumes(self):
         volumes = config.cinder_volumes
-        [volumes.extend(i['cinder_volumes']) for i in config.tenants
-         if 'cinder_volumes' in i and not i.get('deleted')]
+        for tenant in config.tenants:
+            if 'cinder_volumes' in tenant and not tenant.get('deleted'):
+                volumes.extend(tenant['cinder_volumes'])
         volumes.extend(config.cinder_volumes_from_images)
-        volumes_names = [volume['display_name'] for volume in volumes]
+        volumes_names = [volume.get('display_name') for volume in volumes]
         opts = {'search_opts': {'all_tenants': 1}}
         return [i for i in self.src_cloud.cinderclient.volumes.list(**opts)
                 if i.display_name in volumes_names]
@@ -231,7 +236,9 @@ class FunctionalTest(unittest.TestCase):
 
     def get_vms_with_fip_associated(self):
         vms = config.vms
-        [vms.extend(i['vms']) for i in config.tenants if 'vms' in i]
+        for tenant in config.tenants:
+            if 'vms' in tenant:
+                vms.extend(tenant['vms'])
         return [vm['name'] for vm in vms if vm.get('fip')]
 
     def tenant_exists(self, keystone_client, tenant_id):

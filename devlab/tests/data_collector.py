@@ -14,11 +14,12 @@
 
 import ConfigParser
 import os
-import yaml
-import config as cfg
 
-import generate_load
-import utils
+import yaml
+
+import devlab.tests.config as cfg
+from devlab.tests import base
+import devlab.tests.utils as utils
 
 
 class DataCollector(object):
@@ -48,13 +49,14 @@ class DataCollector(object):
         confparser = ConfigParser.ConfigParser()
         confparser.read(os.path.join(self.utils.main_folder,
                                      config.cloud_ferry_conf))
-        self.config_ini = generate_load.get_dict_from_config_file(confparser)
+        self.config_ini = base.get_dict_from_config_file(confparser)
         self.config = config
 
     def chose_destination_cloud(self, destination):
-        self.cloud_info = generate_load.Prerequisites(
-            cloud_prefix=destination, config=self.config,
-            configuration_ini=self.config_ini)
+        self.cloud_info = base.BasePrerequisites(
+                cloud_prefix=destination,
+                config=self.config,
+                configuration_ini=self.config_ini)
 
     def nova_collector(self, destination, resources):
         """
