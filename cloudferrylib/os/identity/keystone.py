@@ -630,6 +630,7 @@ class KeystoneIdentity(identity.Identity):
     def _get_user_roles_cached(self):
         all_roles = {}
         if self.config.migrate.optimize_user_role_fetch:
+            LOG.debug('Fetching all roles for all tenants')
             res = self._get_roles_sql_request()
             for user_id, tenant_id, roles_field in res:
                 roles_ids = ast.literal_eval(roles_field)['roles']
@@ -639,6 +640,7 @@ class KeystoneIdentity(identity.Identity):
                     if tenant_id not in all_roles[user_id] \
                     else all_roles[user_id][tenant_id]
                 all_roles[user_id][tenant_id].extend(roles_ids)
+            LOG.debug('Done fetching all roles for all tenants')
 
         def _get_user_roles(user_id, tenant_id):
             if not self.config.migrate.optimize_user_role_fetch:
@@ -697,13 +699,14 @@ class KeystoneIdentity(identity.Identity):
         roles_id = {role.name: role.id for role in self.get_roles_list()}
         dst_users = {user.name: user.id for user in self.get_users_list()}
         dst_roles = {role.id: role.name for role in self.get_roles_list()}
+        get_user_roles = self._get_user_roles_cached()
         for _user in users:
             user = _user['user']
             if user['name'] not in dst_users:
                 continue
             for _tenant in tenants:
                 tenant = _tenant['tenant']
-                user_roles_objs = self._get_user_roles_cached()(
+                user_roles_objs = get_user_roles(
                     _user['meta']['new_id'],
                     _tenant['meta']['new_id'])
                 exists_roles = [dst_roles[role] if not hasattr(role,
