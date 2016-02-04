@@ -38,7 +38,9 @@ def configure_logging():
         config.dictConfig(yaml.load(f))
     if cfglib.CONF.migrate.debug:
         logger = logging.getLogger('cloudferrylib')
-        logger.setLevel(logging.DEBUG)
+        for handler in logger.handlers:
+            if handler.name == 'console':
+                handler.setLevel(logging.DEBUG)
 
 
 class RunRotatingFileHandler(handlers.RotatingFileHandler):
