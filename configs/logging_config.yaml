@@ -44,7 +44,7 @@ handlers:
     formatter: console_colored
     stream: ext://sys.stdout
     filters: [show_current_task]
-    level: DEBUG
+    level: INFO
   debug:
     backupCount: 20
     class: cloudferrylib.utils.log.RunRotatingFileHandler
@@ -67,7 +67,7 @@ handlers:
     filters: [show_current_task]
 loggers:
   cloudferrylib:
-    level: INFO
+    level: DEBUG
     handlers: [console, info]
 
 root:
