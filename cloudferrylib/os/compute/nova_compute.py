@@ -34,6 +34,7 @@ from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import node_ip
 from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import utils as utl
+from cloudferrylib.os.compute.usage_quota import UsageQuotaCompute
 
 LOG = log.getLogger(__name__)
 
@@ -710,13 +711,31 @@ class NovaCompute(compute.Compute):
         LOG.debug("Creating instance with args '%s'",
                   pprint.pformat(boot_args))
         created_instance = nclient.servers.create(**boot_args)
-
-        instances.update_user_ids_for_instance(self.mysql_connector,
-                                               created_instance.id,
-                                               kwargs['user_id'])
-
+        curr_user_id = created_instance.user_id
+        instance_user_id = kwargs['user_id']
+        LOG.debug("Current user id = '%s' for instance '%s'",
+                  curr_user_id, created_instance.id)
+        if curr_user_id != instance_user_id:
+            if self.config.migrate.keep_usage_quotas_inst:
+                LOG.debug("Fixing usage quota for user '%s' on '%s'",
+                          curr_user_id, instance_user_id)
+                db = self.mysql_connector
+                flavor_obj = nclient.flavors.get(boot_args['flavor'])
+                flavor = {
+                    'vcpus': flavor_obj.vcpus,
+                    'ram': flavor_obj.ram,
+                }
+                tenant_id = created_instance.tenant_id
+                UsageQuotaCompute.change_usage_quota_instance(db,
+                                                              flavor,
+                                                              curr_user_id,
+                                                              instance_user_id,
+                                                              tenant_id)
+            LOG.debug("Replacing current user on '%s'", instance_user_id)
+            instances.update_user_ids_for_instance(self.mysql_connector,
+                                                   created_instance.id,
+                                                   instance_user_id)
         LOG.debug("Created instance '%s'", created_instance.id)
-
         return created_instance.id
 
     def get_instances_list(self, detailed=True, search_opts=None, marker=None,

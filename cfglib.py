@@ -191,6 +191,8 @@ migrate_opts = [
                      "instead of default INFO level)."),
     cfg.BoolOpt('keep_network_interfaces_order', default=True,
                 help="Keep the order of network interfaces of instances."),
+    cfg.BoolOpt('keep_usage_quotas_inst', default=True,
+                help="Keep the usage quotas for instances.")
 ]
 
 mail = cfg.OptGroup(name='mail',
