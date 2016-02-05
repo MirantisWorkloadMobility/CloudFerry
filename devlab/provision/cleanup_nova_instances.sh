@@ -15,10 +15,10 @@ tables_to_remove=(
     instances
 )
 
-stop nova-compute
+service nova-compute stop
 
 for t in ${tables_to_remove[*]}; do
     mysql -uroot -psecret -e "delete from ${t}" nova
 done
 
-start nova-compute
+service nova-compute restart
