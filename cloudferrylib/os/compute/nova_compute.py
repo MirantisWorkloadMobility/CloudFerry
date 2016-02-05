@@ -265,6 +265,8 @@ class NovaCompute(compute.Compute):
 
         search_opts = kwargs.get('search_opts') or {}
         search_opts.update(all_tenants=True)
+        if self.filter_tenant_id:
+            search_opts.update(tenant_id=self.filter_tenant_id)
 
         info = {'instances': {}}
 
