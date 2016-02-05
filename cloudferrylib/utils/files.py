@@ -11,12 +11,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import logging
+import math
 import os
 
-from cloudferrylib.utils import log
+from fabric import api
+from fabric import state
+
+import cfglib
 
 
-LOG = log.getLogger(__name__)
+LOG = logging.getLogger(__name__)
+CONF = cfglib.CONF
 
 
 class RemoteSymlink(object):
@@ -113,3 +119,48 @@ class RemoteTempDir(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         remove_dir = 'rm -rf {dir}'.format(dir=self.created_dir)
         self.runner.run_ignoring_errors(remove_dir)
+
+
+def remote_file_size(runner, path):
+    return int(runner.run('stat --printf="%s" {path}', path=path))
+
+
+def remote_file_size_mb(runner, path):
+    return int(math.ceil(remote_file_size(runner, path) / (1024.0 * 1024.0)))
+
+
+class RemoteStdout(object):
+    def __init__(self, host, user, cmd, **kwargs):
+        self.host = host
+        self.user = user
+        if kwargs:
+            cmd = cmd.format(**kwargs)
+        self.cmd = cmd
+        self.stdin = None
+        self.stdout = None
+        self.stderr = None
+
+    def run(self):
+        with api.settings(
+                host_string=self.host,
+                user=self.user,
+                combine_stderr=False,
+                connection_attempts=CONF.migrate.ssh_connection_attempts,
+                reject_unkown_hosts=False,
+        ):
+            conn = state.connections[self.host]
+            return conn.exec_command(self.cmd)
+
+    def __enter__(self):
+        self.stdin, self.stdout, self.stderr = self.run()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.stdin:
+            self.stdin.close()
+        if self.stdout:
+            self.stdout.close()
+        if self.stderr:
+            self.stderr.close()
+        if all((exc_type, exc_val, exc_tb)):
+            raise exc_type, exc_val, exc_tb

@@ -1,4 +1,4 @@
-# Copyright (c) 2015 Mirantis Inc.
+# Copyright (c) 2016 Mirantis Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the License);
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import errno
 import mock
 import os
 
@@ -33,11 +32,8 @@ class GetFileSizeTestCase(test.TestCase):
                          file_obj.seek.mock_calls)
 
     def test_ioerror(self):
-        err = IOError()
-        err.errno = errno.ESPIPE
         file_obj = mock.Mock()
-        file_obj.tell.side_effect = (IOError, err)
-        self.assertRaises(IOError, file_proxy.get_file_size, file_obj)
+        file_obj.tell.side_effect = IOError
         self.assertIsNone(file_proxy.get_file_size(file_obj))
 
 

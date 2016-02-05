@@ -14,8 +14,6 @@
 
 import mock
 
-from fabric import state
-
 from cloudferrylib.os.actions import recreate_boot_image
 from cloudferrylib.utils import utils
 
@@ -113,12 +111,16 @@ class ReCreateBootImageTestCase(test.TestCase):
                                                    'fake_host_src',
                                                    'fake_path_src')
 
-    @mock.patch('fabric.state.connections', new={'fake_host': mock.Mock()})
+    @mock.patch('cloudferrylib.utils.remote_runner.RemoteRunner',
+                new=mock.Mock)
+    @mock.patch('cloudferrylib.utils.files.remote_file_size')
     @mock.patch('cloudferrylib.utils.file_proxy.FileProxy')
-    def test_restore_image(self, mock_file_proxy):
+    @mock.patch('cloudferrylib.utils.files.RemoteStdout')
+    def test_restore_image(self, mock_remote_stdout, mock_file_proxy,
+                           mock_remote_file_size):
+        mock_remote_file_size.return_value = 'fake_file_size'
         data = mock.Mock()
-        conn = state.connections['fake_host']
-        conn.open_sftp.return_value.open.return_value = data
+        mock_remote_stdout.return_value.__enter__.return_value.stdout = data
         qemu_img = mock.Mock()
         qemu_img.get_info.return_value.backing_filename = \
             'fake_backing_filename'
@@ -139,8 +141,6 @@ class ReCreateBootImageTestCase(test.TestCase):
             is_public=True,
             data=mock_file_proxy.return_value,
         )
-        conn.open_sftp.assert_called_once_with()
-        conn.open_sftp.return_value.open.assert_called_once_with(
-            'fake_backing_filename')
         mock_file_proxy.assert_called_once_with(data,
-                                                name='image fake_image_id')
+                                                name='image fake_image_id',
+                                                size='fake_file_size')

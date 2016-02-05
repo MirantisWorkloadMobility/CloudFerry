@@ -12,17 +12,15 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import contextlib
-
-from fabric import api
-from fabric import state
+import logging
 
 from cloudferrylib.base.action import action
-from cloudferrylib.utils import log
+from cloudferrylib.utils import files
 from cloudferrylib.utils import file_proxy
+from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import utils
 
-LOG = log.getLogger(__name__)
+LOG = logging.getLogger(__name__)
 
 
 class ReCreateBootImage(action.Action):
@@ -77,24 +75,24 @@ class ReCreateBootImage(action.Action):
 
         image_file_info = self.src_cloud.qemu_img.get_info(filename, host)
         image_resource = self.dst_cloud.resources[utils.IMAGE_RESOURCE]
-        with api.settings(
-            host_string=host,
-            user=self.cfg.src.ssh_user,
-            password=self.cfg.src.ssh_sudo_password,
-            combine_stderr=False
-        ):
-            conn = state.connections[host]
-            with contextlib.closing(conn.open_sftp()) as sftp:
-                filename = image_file_info.backing_filename
-                with contextlib.closing(sftp.open(filename)) as data:
-                    fp = file_proxy.FileProxy(data,
-                                              name='image %s' % image_id)
-                    new_image = image_resource.create_image(
-                        id=image_id,
-                        name='restored image %s from host %s' % (image_id,
-                                                                 host),
-                        container_format='bare',
-                        disk_format=image_file_info.format,
-                        is_public=True,
-                        data=fp)
-                    return new_image
+        runner = remote_runner.RemoteRunner(host,
+                                            self.cfg.src.ssh_user,
+                                            self.cfg.src.ssh_sudo_password,
+                                            True)
+        file_size = files.remote_file_size(runner, filename)
+        with files.RemoteStdout(
+                host, self.cfg.src.ssh_user,
+                'dd if={filename}',
+                filename=image_file_info.backing_filename) as f:
+            fp = file_proxy.FileProxy(f.stdout,
+                                      name='image %s' % image_id,
+                                      size=file_size)
+            new_image = image_resource.create_image(
+                id=image_id,
+                name='restored image %s from host %s' % (image_id,
+                                                         host),
+                container_format='bare',
+                disk_format=image_file_info.format,
+                is_public=True,
+                data=fp)
+            return new_image

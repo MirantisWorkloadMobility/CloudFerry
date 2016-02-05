@@ -1,4 +1,4 @@
-# Copyright (c) 2015 Mirantis Inc.
+# Copyright (c) 2016 Mirantis Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the License);
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import errno
 import os
 import time
 
@@ -38,18 +37,8 @@ def get_file_size(file_obj):
             size = file_obj.tell()
             file_obj.seek(curr)
             return size
-        except IOError as e:
-            if e.errno == errno.ESPIPE:
-                # Illegal seek. This means the file object
-                # is a pipe (e.g the user is trying
-                # to pipe image data to the client,
-                # echo testdata | bin/glance add blah...), or
-                # that file object is empty, or that a file-like
-                # object which doesn't support 'seek/tell' has
-                # been supplied.
-                return
-            else:
-                raise
+        except IOError:
+            return
 
 
 class ProgressView(object):
@@ -134,4 +123,6 @@ class FileProxy(object):
         return data
 
     def __getattr__(self, item):
+        if item == 'seek':
+            raise AttributeError()
         return getattr(self.file_obj, item)
