@@ -31,7 +31,10 @@ class CheckConfigQuotaNeutron(action.Action):
         network_src = src_cloud.resources[utl.NETWORK_RESOURCE]
         identity_dst = dst_cloud.resources[utl.IDENTITY_RESOURCE]
         network_dst = dst_cloud.resources[utl.NETWORK_RESOURCE]
-        tenants_src = self.get_src_tenants()
+
+        search_opts_tenant = kwargs.get('search_opts_tenant', {})
+        tenants_src = self.get_src_tenants(search_opts_tenant)
+
         list_quotas = network_src.list_quotas()
         tenants_without_quotas = self.get_tenants_without_quotas(tenants_src,
                                                                  list_quotas)
@@ -65,8 +68,10 @@ class CheckConfigQuotaNeutron(action.Action):
         quotas_ids_tenants = [quota["tenant_id"] for quota in list_quotas]
         return list(set(tenants_ids) - set(quotas_ids_tenants))
 
-    def get_src_tenants(self):
+    def get_src_tenants(self, search_opts):
         identity_src = self.src_cloud.resources[utl.IDENTITY_RESOURCE]
-        tenants = identity_src.get_tenants_list()
-        tenants_dict = {ten.id: ten.name for ten in tenants}
+        identity_info = identity_src.read_info(**search_opts)
+        tenants = identity_info['tenants']
+        tenants_dict = {ten['tenant']['id']: ten['tenant']['name'] for ten in
+                        tenants}
         return tenants_dict
