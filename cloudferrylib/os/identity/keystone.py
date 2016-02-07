@@ -230,19 +230,15 @@ class KeystoneIdentity(identity.Identity):
         :return: OpenStack Keystone Client instance
         """
 
-        kwargs = {
-            "username": self.config.cloud.user,
-            "password": self.config.cloud.password,
-            "tenant_name": self.config.cloud.tenant,
-            "auth_url": self.config.cloud.auth_url,
-            "cacert": self.config.cloud.cacert,
-            "insecure": self.config.cloud.insecure
-        }
-
-        if self.config.cloud.region:
-            kwargs["region_name"] = self.config.cloud.region
-
-        return keystone_client.Client(**kwargs)
+        return keystone_client.Client(
+            username=self.config.cloud.user,
+            password=self.config.cloud.password,
+            tenant_name=self.config.cloud.tenant,
+            auth_url=self.config.cloud.auth_url,
+            cacert=self.config.cloud.cacert,
+            insecure=self.config.cloud.insecure,
+            region_name=self.config.cloud.region
+        )
 
     def get_endpoint_by_service_type(self, service_type, endpoint_type):
         """Getting endpoint URL by service type.
@@ -253,15 +249,11 @@ class KeystoneIdentity(identity.Identity):
         :return: String endpoint of specified OpenStack service
         """
 
-        kwargs = {
-            "service_type": service_type,
-            "endpoint_type": endpoint_type
-        }
-
-        if self.config.cloud.region:
-            kwargs['region_name'] = self.config.cloud.region
-
-        return self.keystone_client.service_catalog.url_for(**kwargs)
+        return self.keystone_client.service_catalog.url_for(
+            service_type=service_type,
+            endpoint_type=endpoint_type,
+            region_name=self.config.cloud.region
+        )
 
     def get_tenants_func(self, return_default_tenant=True):
         default_tenant = self.config.cloud.tenant \
@@ -638,6 +630,7 @@ class KeystoneIdentity(identity.Identity):
     def _get_user_roles_cached(self):
         all_roles = {}
         if self.config.migrate.optimize_user_role_fetch:
+            LOG.debug('Fetching all roles for all tenants')
             res = self._get_roles_sql_request()
             for user_id, tenant_id, roles_field in res:
                 roles_ids = ast.literal_eval(roles_field)['roles']
@@ -647,6 +640,7 @@ class KeystoneIdentity(identity.Identity):
                     if tenant_id not in all_roles[user_id] \
                     else all_roles[user_id][tenant_id]
                 all_roles[user_id][tenant_id].extend(roles_ids)
+            LOG.debug('Done fetching all roles for all tenants')
 
         def _get_user_roles(user_id, tenant_id):
             if not self.config.migrate.optimize_user_role_fetch:
@@ -705,13 +699,14 @@ class KeystoneIdentity(identity.Identity):
         roles_id = {role.name: role.id for role in self.get_roles_list()}
         dst_users = {user.name: user.id for user in self.get_users_list()}
         dst_roles = {role.id: role.name for role in self.get_roles_list()}
+        get_user_roles = self._get_user_roles_cached()
         for _user in users:
             user = _user['user']
             if user['name'] not in dst_users:
                 continue
             for _tenant in tenants:
                 tenant = _tenant['tenant']
-                user_roles_objs = self._get_user_roles_cached()(
+                user_roles_objs = get_user_roles(
                     _user['meta']['new_id'],
                     _tenant['meta']['new_id'])
                 exists_roles = [dst_roles[role] if not hasattr(role,

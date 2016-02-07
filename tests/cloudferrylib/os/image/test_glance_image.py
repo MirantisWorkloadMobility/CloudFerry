@@ -89,13 +89,16 @@ class GlanceImageTestCase(test.TestCase):
             'protected': False,
             'size': 1024,
             'properties': {},
+            'deleted': False,
         }
         for k, w in values_dict.items():
             setattr(self.fake_image_1, k, w)
         self.fake_image_1.to_dict = mock.Mock(return_value=values_dict)
+        self.fake_image_1.deleted = False
 
         self.fake_image_2 = mock.Mock()
         self.fake_image_2.name = 'fake_image_name_2'
+        self.fake_image_2.deleted = False
 
         self.fake_input_info = {'images': {}}
 
@@ -113,7 +116,8 @@ class GlanceImageTestCase(test.TestCase):
                                               'size': 1024,
                                               'resource': self.image_mock,
                                               'members': {},
-                                              'properties': {}},
+                                              'properties': {},
+                                              'deleted': False},
                                     'meta': {'img_loc': None}}},
             'tags': {},
             'members': {}

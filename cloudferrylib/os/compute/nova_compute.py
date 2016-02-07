@@ -145,17 +145,18 @@ class NovaCompute(compute.Compute):
     def get_client(self, params=None):
         """Getting nova client. """
 
-        params = self.config if not params else params
+        params = params or self.config
 
-        client_args = [params.cloud.user, params.cloud.password,
-                       params.cloud.tenant, params.cloud.auth_url]
+        client = nova_client.Client(
+            params.cloud.user,
+            params.cloud.password,
+            params.cloud.tenant,
+            params.cloud.auth_url,
+            cacert=params.cloud.cacert,
+            insecure=params.cloud.insecure,
+            region_name=params.cloud.region
+        )
 
-        client_kwargs = {"cacert": params.cloud.cacert,
-                         "insecure": params.cloud.insecure}
-        if params.cloud.region:
-            client_kwargs["region_name"] = params.cloud.region
-
-        client = nova_client.Client(*client_args, **client_kwargs)
         LOG.debug("Authenticating as '%s' in tenant '%s' for Nova client "
                   "authorization...",
                   params.cloud.user, params.cloud.tenant)
@@ -301,9 +302,6 @@ class NovaCompute(compute.Compute):
                         compute_res.nova_client.volumes.get_server_volumes(
                             instance.id))]
 
-        is_ephemeral = compute_res.get_flavor_from_id(
-            instance.flavor['id'], include_deleted=True).ephemeral > 0
-
         is_ceph = cfg.compute.backend.lower() == utl.CEPH
         direct_transfer = cfg.migrate.direct_compute_transfer
 
@@ -343,6 +341,9 @@ class NovaCompute(compute.Compute):
             'host_dst': None
         }
 
+        flav_details = instances.get_flav_details(compute_res.mysql_connector,
+                                                  instance.id)
+        is_ephemeral = flav_details['ephemeral_gb'] > 0
         if is_ephemeral:
             ephemeral_path['path_src'] = utl.get_disk_path(
                 instance,
@@ -362,8 +363,6 @@ class NovaCompute(compute.Compute):
                 instance,
                 instance_block_info,
                 is_ceph_ephemeral=is_ceph)
-        flav_details = instances.get_flav_details(compute_res.mysql_connector,
-                                                  instance.id)
         flav_name = compute_res.get_flavor_from_id(instance.flavor['id'],
                                                    include_deleted=True).name
         flav_details.update({'name': flav_name})
@@ -930,8 +929,14 @@ class NovaCompute(compute.Compute):
         if self.config.migrate.keep_network_interfaces_order:
             keys = (self.instance_info_caches.
                     enumerate_addresses(instance.id))
-            interfaces = sorted(interfaces,
-                                key=lambda i: keys[i['mac_address']])
+            try:
+                interfaces = sorted(interfaces,
+                                    key=lambda i: keys[i['mac_address']])
+            except KeyError:
+                LOG.warning("instance_info_caches table does not contain "
+                            "information for instance '%s' (%s). CF cannot "
+                            "keep the order of network interfaces.",
+                            instance.name, instance.id)
         return interfaces
 
     def attach_volume_to_instance(self, instance, volume):

@@ -85,13 +85,13 @@ class CinderStorage(storage.Storage):
     def cinder_client(self):
         return self.proxy(self.get_client(self.config), self.config)
 
-    def get_client(self, params=None):
+    def get_client(self, params=None, tenant=None):
         params = params or self.config
 
         return cinder_client.Client(
             params.cloud.user,
             params.cloud.password,
-            params.cloud.tenant,
+            tenant or params.cloud.tenant,
             params.cloud.auth_url,
             cacert=params.cloud.cacert,
             insecure=params.cloud.insecure,
@@ -439,14 +439,17 @@ class CinderNFSStorage(CinderStorage):
         ]
 
     def get_client(self, params=None):
-        params = self.config if not params else params
+        params = params or self.config
+
         return cinder_client.Client(
             params.cloud.user,
             params.cloud.password,
             params.cloud.tenant,
             params.cloud.auth_url,
-            cacert=self.config.cloud.cacert,
-            insecure=self.config.cloud.insecure)
+            cacert=params.cloud.cacert,
+            insecure=params.cloud.insecure,
+            region_name=params.cloud.region
+        )
 
     def _filter_quotas_list(self, table_name, quotas):
         filtering_enabled = self.cloud.position == SRC

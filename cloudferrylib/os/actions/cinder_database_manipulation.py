@@ -16,14 +16,18 @@
 
 import abc
 import copy
-from cloudferrylib.base.action import action
-from cloudferrylib.base.exception import AbortMigrationError
-from cloudferrylib.utils import remote_runner
-from cloudferrylib.utils import log
-from cloudferrylib.utils import utils
+import os
+import time
+
 from fabric.context_managers import settings
 
-import os
+from cloudferrylib.base.action import action
+from cloudferrylib.base.exception import AbortMigrationError
+from cloudferrylib.views import cinder_storage_view
+from cloudferrylib.utils import log
+from cloudferrylib.utils import remote_runner
+from cloudferrylib.utils import sizeof_format
+from cloudferrylib.utils import utils
 
 LOG = log.getLogger(__name__)
 
@@ -315,6 +319,7 @@ class CopyVolumes(object):
         :return: dict
 
         """
+        LOG.info('Start volumes migration process.')
         for position in self.clouds:
             self.data[position] = self.clouds[position][RES].read_db_info()
 
@@ -326,17 +331,29 @@ class CopyVolumes(object):
         self.data[SRC] = self.fix_metadata(self.data[SRC])
 
         self.data[SRC] = _clean_data(self.data[SRC])
+        LOG.info('Volumes migration is completed.')
         return self.data[SRC]
 
     def _skip_existing_volumes(self):
+        LOG.info('Start compare existing volumes on the destination cloud. '
+                 'If volumes exist on the destination cloud, '
+                 'then skip migration for those volumes.')
         res = []
         dst_ids = [v['id'] for v in self.data[DST]['volumes']]
         for v in self.data[SRC]['volumes']:
             if v['id'] in dst_ids:
-                LOG.warning('Volume %s existing, skipping migration.', v['id'])
+                LOG.warning('Volume %s(%s) exists, skipping migration.',
+                            v.get('display_name', ''), v['id'])
             else:
                 res.append(v)
+                LOG.info('Volume %s(%s) does not exist on '
+                         'the destination cloud, will be migrated.',
+                         v.get('display_name', ''),
+                         v['id'])
         self.data[SRC]['volumes'] = res
+
+        LOG.info('All volumes on the source and '
+                 'destination cloud have been compared.')
 
     def fix_metadata(self, data):
         """Fix metadata table.
@@ -446,7 +463,7 @@ class CopyVolumes(object):
         cmd = (
             'rm -f %s'
         ) % filepath
-        LOG.info("Cleaning %s", filepath)
+        LOG.info("Delete volume %s", filepath)
         self.run_repeat_on_errors(cloud, cmd)
 
     def rsync_if_enough_space(self, size, src, dst):
@@ -455,9 +472,12 @@ class CopyVolumes(object):
         :return: True on success (or False otherwise)
 
         """
+        LOG.info('Calculate free space on the destination cloud.')
         dst_free_space = self.free_space(self.clouds[DST], dst)
         if dst_free_space > size:
             LOG.info("Enough space found on %s", dst)
+            LOG.info('Start copying volume.')
+
             err = self.run_rsync(src, dst)
             return not err
         LOG.warning("No enough space on %s", dst)
@@ -474,33 +494,47 @@ class CopyVolumes(object):
         ) % filepath
         return self._run_cmd(self.clouds[position], cmd)
 
-    def _rsync(self, src, dstpaths, volume):
+    def _rsync(self, src, dstpaths, volume, src_size):
         LOG.debug("Trying rsync file for volume: %s[%s]",
                   volume.get('display_name', None), volume['id'])
         dstfile = self.find_dir(DST, dstpaths, volume)
-        src_size = self.volume_size(self.clouds[SRC], src)
         LOG.debug("Source file size = %d", src_size)
         LOG.debug("Searching for space for volume: %s[%s]",
                   volume.get('display_name', None), volume['id'])
         if dstfile:
-            LOG.debug("File found on destination: %s", dstfile)
+            LOG.info("File found on destination: %s", dstfile)
             dst_size = self.volume_size(self.clouds[DST], dstfile)
             LOG.debug("Destination file (%s) size = %d", dstfile, dst_size)
             dst = os.path.dirname(dstfile)
 
+            LOG.info('Calculate and compare checksums volume on the source '
+                     'and on the destionation cloud.')
             if src_size == dst_size and \
                     self.checksum(SRC, src) == self.checksum(DST, dstfile):
-                LOG.info("Destination file %s is up-to-date", dstfile)
-                return dst
+                LOG.info("Destination file %s is up-to-date. "
+                         "Sizes and checksums are matched.", dstfile)
+                return dst, 0
+
+            LOG.info('Checksums are different. Start copying volume %s(%s)',
+                     volume.get('display_name', ''),
+                     volume['id'])
+            start_time = time.time()
             if self.rsync_if_enough_space(src_size - dst_size, src, dst):
-                return dst
+                elapsed_time = time.time() - start_time
+                return dst, elapsed_time
             else:
+                LOG.info('Copying volume %s(%s) failed. '
+                         'Volume will be deleted.',
+                         volume.get('display_name', ''),
+                         volume['id'])
                 self._clean(self.clouds[DST], dstfile)
 
         for dst in dstpaths:
+            start_time = time.time()
             res = self.rsync_if_enough_space(src_size, src, dst)
+            elapsed_time = time.time() - start_time
             if res:
-                return dst
+                return dst, elapsed_time
         raise AbortMigrationError('No space found for %s on %s' % (
             str(volume), str(dstpaths)))
 
@@ -716,13 +750,38 @@ class CopyVolumes(object):
                 return res
         return self.path_map[position][ALL]
 
+    def _volumes_size_map(self):
+        LOG.info('Calculate size of each volume.')
+        volumes_size_map = {}
+        for position in self.clouds:
+            for v in self.data[position]['volumes']:
+                volume_type_id = v.get('volume_type_id', None)
+                srcpaths = self._paths(position, volume_type_id)
+                src = self.find_dir(position, srcpaths, v)
+                vol_size = self.volume_size(self.clouds[position], src)
+                volumes_size_map[v['id']] = vol_size
+
+                LOG.info('Volume %s(%s) size is %s.',
+                         v.get('display_name', ''),
+                         v['id'],
+                         sizeof_format.sizeof_fmt(vol_size))
+        return volumes_size_map
+
     def _try_copy_volumes(self):
         vt_map = self._vt_map()
 
         failed = []
 
+        volumes_size_map = self._volumes_size_map()
+        view = cinder_storage_view.CinderStorageMigrationProgressView(
+            self.data[SRC]['volumes'],
+            self.data[DST]['volumes'],
+            volumes_size_map
+        )
+
+        view.show_stats()
         for v in self.data[SRC]['volumes']:
-            LOG.info('Migrating volume: %s(%s)',
+            LOG.info('Start migrate volume %s(%s)',
                      v.get('display_name', ''), v['id'])
 
             volume_type_id = v.get('volume_type_id', None)
@@ -750,15 +809,23 @@ class CopyVolumes(object):
                 raise AbortMigrationError(
                     'No SRC volume file found for %s[%s]'
                     % (v.get('display_name', None), v['id']))
-            LOG.info('Copying volume file: %s', str(src))
-            dst = self._rsync(src, dstpaths, v)
+            dst, elapsed_time = self._rsync(
+                src,
+                dstpaths,
+                v,
+                volumes_size_map[v['id']]
+            )
 
             if dst:
                 v['provider_location'] = self._dir_to_provider(dst)
                 vtid = self._provider_to_vtid(v['provider_location'])
                 v[HOST] = self._dst_host(vtid)
+                view.sync_migrated_volumes_info(v, elapsed_time)
             else:
                 failed.append(v)
+                view.sync_failed_volumes_info(v)
+
+            view.show_progress()
 
         if failed:
             LOG.error(

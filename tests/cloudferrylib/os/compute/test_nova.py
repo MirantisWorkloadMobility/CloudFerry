@@ -84,7 +84,8 @@ class NovaComputeTestCase(BaseNovaComputeTestCase):
         self.mock_client.assert_called_once_with('fake_user', 'fake_password',
                                                  'fake_tenant',
                                                  'http://1.1.1.1:35357/v2.0/',
-                                                 cacert='', insecure=False)
+                                                 cacert='', insecure=False,
+                                                 region_name=None)
         self.assertEqual(self.mock_client(), client)
 
     def test_create_instance(self):
@@ -574,4 +575,5 @@ class NovaClientTestCase(test.TestCase):
         n.get_client()
 
         n_client.assert_called_with(user, password, tenant, auth_url,
-                                    cacert=cacert, insecure=insecure)
+                                    cacert=cacert, insecure=insecure,
+                                    region_name=None)

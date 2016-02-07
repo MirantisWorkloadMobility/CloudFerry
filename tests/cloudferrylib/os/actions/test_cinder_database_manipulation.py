@@ -222,6 +222,7 @@ class WriteVolumesDbTest(test.TestCase):
                 {
                     "id": "vol-1",
                     "project_id": TN1['id'],
+                    "display_name": "cinder_vol1",
                 },
             ],
         }
@@ -310,12 +311,15 @@ class WriteVolumesDbTest(test.TestCase):
                 {"id": "vol-1",
                  "project_id": TN1['id'],
                  "size": 1,
+                 "display_name": "cinder_vol1",
                  },
                 {"id": "vol-2",
                  "project_id": TN1['id'],
+                 "display_name": "cinder_vol2",
                  },
                 {"id": "vol-3",
                  "project_id": TN1['id'],
+                 "display_name": "cinder_vol3",
                  },
             ]
         }
@@ -324,10 +328,12 @@ class WriteVolumesDbTest(test.TestCase):
                 {"id": "vol-2",
                  "project_id": DST_TN[TN1['id']],
                  "size": 2,
+                 "display_name": "cinder_vol2",
                  },
                 {"id": "vol-3",
                  "project_id": DST_TN[TN1['id']],
                  "size": 20,
+                 "display_name": "cinder_vol3",
                  },
             ]
         }
@@ -490,16 +496,19 @@ class WriteVolumesDbTest(test.TestCase):
                     "id": "vol-nfs1",
                     "volume_type_id": "nfs1_id",
                     "project_id": TN1['id'],
+                    "display_name": "cinder_vol1",
                 },
                 {
                     "id": "vol-nfs2",
                     "volume_type_id": "nfs2_id",
                     "project_id": TN1['id'],
+                    "display_name": "cinder_vol2",
                 },
                 {
                     "id": "vol-nfs3",
                     "volume_type_id": "nfs3_id",
                     "project_id": TN1['id'],
+                    "display_name": "cinder_vol3",
                 },
             ],
             "volume_types": [
@@ -651,6 +660,7 @@ class WriteVolumesDbTest(test.TestCase):
                 {
                     "id": "vol",
                     "project_id": TN1['id'],
+                    "display_name": "cinder_vol",
                 },
             ],
         }
@@ -730,6 +740,7 @@ class WriteVolumesDbTest(test.TestCase):
                 {
                     "id": "vol",
                     "project_id": TN1['id'],
+                    "display_name": "cinder_vol",
                 },
             ],
             "volume_metadata": [],
@@ -831,6 +842,7 @@ class WriteVolumesDbTest(test.TestCase):
             "volumes": [
                 {
                     "id": "vol",
+                    "display_name": "cinder_vol",
                 },
             ],
             "volume_metadata": [

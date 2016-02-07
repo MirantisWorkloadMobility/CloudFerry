@@ -7,9 +7,9 @@
 set -e
 set -x
 
-stop nova-compute
+service nova-compute stop
 add-apt-repository cloud-archive:icehouse
 apt-get update
 apt-get -y install -o 'Dpkg::Options::=--force-confold' qemu
 apt-get install --reinstall libvirt-bin python-libvirt
-start nova-compute
+service nova-compute restart

@@ -40,6 +40,7 @@ class GlanceImageFilterTestCase(test.TestCase):
         filter_yaml.get_tenant.return_value = tenant
         filter_yaml.get_image_ids.return_value = image_ids
         filter_yaml.get_image_date.return_value = date
+        filter_yaml.is_public_and_member_images_filtered.return_value = False
 
         glance_filters = filters.GlanceFilters(glance_client=glance_client,
                                                filter_yaml=filter_yaml)
