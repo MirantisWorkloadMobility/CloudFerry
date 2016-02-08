@@ -30,8 +30,8 @@ def transfer_file_to_file(src_cloud,
                           cfg_migrate):
     # TODO: Delete after transport_db_via_ssh action rewriting
     LOG.debug("| | copy file")
-    ssh_ip_src = src_cloud.getIpSsh()
-    ssh_ip_dst = dst_cloud.getIpSsh()
+    ssh_ip_src = src_cloud.cloud_config.cloud.ssh_host
+    ssh_ip_dst = dst_cloud.cloud_config.cloud.ssh_host
     with settings(host_string=ssh_ip_src,
                   connection_attempts=env.connection_attempts):
         with utils.forward_agent(cfg_migrate.key_filename):

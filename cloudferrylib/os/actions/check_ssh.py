@@ -34,7 +34,7 @@ class CheckSSH(action.Action):
 
     def check_access(self, node):
         cfg = self.cloud.cloud_config.cloud
-        gateway = self.cloud.getIpSsh()
+        gateway = cfg.ssh_host
         runner = remote_runner.RemoteRunner(node, cfg.ssh_user,
                                             password=cfg.ssh_sudo_password,
                                             timeout=60)

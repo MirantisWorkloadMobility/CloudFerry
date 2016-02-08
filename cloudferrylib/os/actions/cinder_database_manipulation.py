@@ -36,6 +36,7 @@ NAMESPACE_CINDER_CONST = "cinder_database"
 AVAILABLE = 'available'
 CINDER_VOLUME = "cinder-volume"
 HOST = 'host'
+SSH_HOST = 'ssh_host'
 BY_VTID = 'by_vtid'
 ALL = 'all'
 MOUNT_DELIM = '='
@@ -80,7 +81,7 @@ QUOTA_RESOURCES = ('volumes', 'gigabytes')
 
 
 def _remote_runner(cloud):
-    return remote_runner.RemoteRunner(cloud[CFG].get(HOST),
+    return remote_runner.RemoteRunner(cloud[CFG].get(SSH_HOST),
                                       cloud[CFG].ssh_user,
                                       cloud[CFG].ssh_sudo_password,
                                       sudo=True)
@@ -379,7 +380,7 @@ class CopyVolumes(object):
 
     def _run_cmd(self, cloud, cmd):
         runner = _remote_runner(cloud)
-        with settings(gateway=cloud[CLOUD].getIpSsh(),
+        with settings(gateway=cloud[CFG].get(SSH_HOST),
                       connection_attempts=self.ssh_attempts):
             output = runner.run(cmd)
             res = output.split('\r\n')
@@ -392,7 +393,7 @@ class CopyVolumes(object):
 
         """
         runner = _remote_runner(cloud)
-        with settings(gateway=cloud[CLOUD].getIpSsh(),
+        with settings(gateway=cloud[CFG].get(SSH_HOST),
                       connection_attempts=self.ssh_attempts):
             try:
                 runner.run_repeat_on_errors(cmd)
@@ -425,7 +426,7 @@ class CopyVolumes(object):
         """
         cmd = RSYNC_CMD
         cmd += ' %s %s@%s:%s' % (src, self.clouds[DST][CFG].ssh_user,
-                                 self.clouds[DST][CFG].get(HOST), dst)
+                                 self.clouds[DST][CFG].get(SSH_HOST), dst)
         err = self.run_repeat_on_errors(self.clouds[SRC], cmd)
         if err:
             LOG.warning("Failed copying to %s", dst)

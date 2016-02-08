@@ -29,9 +29,9 @@ LOG = log.getLogger(__name__)
 class SSHCephToCeph(driver_transporter.DriverTransporter):
     def transfer(self, data, snapshot=None, snapshot_type=1):
         host_src = (data.get('host_src') if data.get('host_src')
-                    else self.src_cloud.getIpSsh())
+                    else self.src_cloud.cloud_config.cloud.ssh_host)
         host_dst = (data.get('host_dst') if data.get('host_dst')
-                    else self.dst_cloud.getIpSsh())
+                    else self.dst_cloud.cloud_config.cloud.ssh_host)
         with (settings(host_string=host_src,
                        connection_attempts=env.connection_attempts),
               utils.forward_agent(env.key_filename)):

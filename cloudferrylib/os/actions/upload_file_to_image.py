@@ -46,7 +46,7 @@ class UploadFileToImage(action.Action):
             if img_res.config.image.convert_to_raw:
                 image_format = utl.RAW
             # action
-            with settings(host_string=cfg.host,
+            with settings(host_string=cfg.ssh_host,
                           connection_attempts=ssh_attempts):
                 cmd = image.glance_image_create_cmd(cfg, image_name,
                                                     image_format, base_file)
