@@ -109,9 +109,16 @@ class ServerGroupsHandler(compute.Compute):
                 policies = []
                 for policy in self._execute(sql).fetchall():
                     policies.append(policy[0])
+
+                tenant_name = self.identity.try_get_tenant_name_by_id(row[1])
+                if tenant_name is None:
+                    LOG.info("Tenant '%s' does not exist on the SRC. Skipping "
+                             "server group '%s'...", row[1], row[3])
+                    continue
+
                 groups.append(
                     {"user": self.identity.try_get_username_by_id(row[0]),
-                     "tenant": self.identity.try_get_tenant_name_by_id(row[1]),
+                     "tenant": tenant_name,
                      "uuid": row[2],
                      "name": row[3],
                      "policies": policies})
