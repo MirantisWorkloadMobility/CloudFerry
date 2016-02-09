@@ -73,7 +73,9 @@ class CinderStorageTestCase(test.TestCase):
             filters.CinderFilters(self.cinder_client, filter_yaml=filter_yaml)
 
         self.fake_volume_0 = mock.Mock()
+        self.fake_volume_0.status = 'available'
         self.fake_volume_1 = mock.Mock()
+        self.fake_volume_1.status = 'available'
 
         self.mock_client().volumes.get.return_value = self.fake_volume_0
 

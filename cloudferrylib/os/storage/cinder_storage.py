@@ -157,7 +157,7 @@ class CinderStorage(storage.Storage):
             flts = self.get_filter().get_filters()
             for f in flts:
                 volumes = ifilter(f, volumes)
-            volumes = [i for i in volumes]
+            volumes = list(volumes)
 
             def get_name(volume):
                 if isinstance(volume, dict):
@@ -166,7 +166,9 @@ class CinderStorage(storage.Storage):
 
             LOG.info("Filtered volumes: %s",
                      ", ".join((str(get_name(i)) for i in volumes)))
-        return volumes
+        return [vol for vol in volumes
+                if cinder_filters.CinderFilters.get_col(vol, 'status').lower()
+                in VALID_STATUSES]
 
     def get_volumes_list(self, detailed=True, search_opts=None):
         search_opts['all_tenants'] = 1
@@ -488,6 +490,8 @@ class CinderNFSStorage(CinderStorage):
                         if USER_ID in e:
                             e[USER_ID] = migrated[utl.IDENTITY_RESOURCE].\
                                 migrated_id(e[USER_ID], resource_type='users')
+            elif table == 'volumes':
+                data = skip_invalid_status_volumes(data)
             info[table] = data
         return info
 
