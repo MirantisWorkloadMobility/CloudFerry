@@ -12,33 +12,35 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from fabric.api import task, env
 import warnings
+import sys
+import traceback
+
+from fabric.api import task, env
+import yaml
+from oslo_utils import importutils
+import oslo.config.cfg
+import oslo.config.types
 
 import cfglib
+from cloudferrylib.os import context
+from cloudferrylib.os.estimation import procedures
 from cloudferrylib.scheduler.namespace import Namespace
 from cloudferrylib.scheduler.scheduler import Scheduler
 from cloudferrylib.utils import log
 from cloudferrylib.utils import utils
 from cloudferrylib.utils.errorcodes import ERROR_INVALID_CONFIGURATION
 from cloudferrylib.scheduler.scenario import Scenario
-
 from cloud import cloud_ferry
 from cloud import grouping
-
 from condensation import process
 from condensation import utils as condense_utils
 from condensation.action import get_freed_nodes
 from condensation.scripts import nova_collector
-
 import data_storage
 from dry_run import chain
 from evacuation import evacuation_chain
 from make_filters import make_filters
-import sys
-import oslo.config.cfg
-import oslo.config.types
-import traceback
 
 env.forward_agent = True
 env.user = 'root'
@@ -193,6 +195,35 @@ def create_filters(name_config=None, filter_folder=DEFAULT_FILTERS_FILES,
     make_filters.make(filter_folder, images_date)
 
 
+@task
+def discover(config_path, debug=False):
+    """
+        :config_name - name of config yaml-file, example 'config.yaml'
+    """
+    config = load_yaml_config(config_path, debug)
+    ctx = context.Context(**config['context'])
+    for cloud_name, cloud in ctx.clouds.items():
+        for fq_class_name in cloud.discover:
+            cls = importutils.import_class(fq_class_name)
+            LOG.info('Starting discover %s objects in %s cloud',
+                     cls.__name__, cloud_name)
+            cls.discover(cloud)
+            LOG.info('Done discovering %s objects in %s cloud',
+                     cls.__name__, cloud_name)
+
+
+@task
+def estimate_migration(source, tenant=None):
+    procedures.estimate_copy(source, tenant)
+    procedures.show_largest_servers(10, source, tenant)
+    procedures.show_largest_unused_resources(10, source, tenant)
+
+
+@task
+def show_unused_resources(cloud, count=100, tenant=None):
+    procedures.show_largest_unused_resources(int(count), cloud, tenant)
+
+
 def init(name_config=None, debug=None):
     cfglib.collector_configs_plugins()
     try:
@@ -208,6 +239,38 @@ def init(name_config=None, debug=None):
         value = oslo.config.types.Boolean()(debug)
         cfglib.CONF.set_override('debug', value, 'migrate')
     log.configure_logging()
+
+
+def load_yaml_config(yaml_path, debug=None):
+    def import_legacy(cloud, cfg):
+        cred = cloud.setdefault('credential', {})
+        cred['auth_url'] = cfg.auth_url
+        cred['username'] = cfg.user
+        cred['password'] = cfg.password
+        cred['region_name'] = cfg.region
+        cred['https_insecure'] = cfg.insecure
+        cred['https_cacert'] = cfg.cacert
+        scope = cloud.setdefault('scope', {})
+        scope['project_name'] = cfg.tenant
+        ssh = cloud.setdefault('ssh', {})
+        ssh['gateway'] = cfg.ssh_host
+        ssh['username'] = cfg.ssh_user
+        ssh['sudo_password'] = cfg.ssh_sudo_password
+        ssh['connection_attempts'] = \
+            cfglib.CONF.migrate.ssh_connection_attempts
+
+    prev_legacy_config_path = None
+    with open(yaml_path, 'r') as config_file:
+        config = yaml.load(config_file)
+        clouds = config.setdefault('context', {}).setdefault('clouds', {})
+        for name, value in clouds.items():
+            if 'legacy' not in value:
+                continue
+            legacy_config_path, section = value.pop('legacy').split(':')
+            if prev_legacy_config_path != legacy_config_path:
+                init(legacy_config_path, debug)
+            import_legacy(value, getattr(cfglib.CONF, section))
+        return config
 
 
 if __name__ == '__main__':

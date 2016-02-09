@@ -24,3 +24,4 @@ python-swiftclient==2.3.1
 pyyaml
 redis
 sqlalchemy
+marshmallow==2.4.2
