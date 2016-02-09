@@ -12,27 +12,47 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import datetime
 import logging
 from logging import config
 from logging import handlers
-import datetime
 import os
+import sys
 
 from fabric import api
 import yaml
 
 import cfglib
+from cloudferrylib.utils import sizeof_format
 
 getLogger = logging.getLogger
+
+
+class StdoutLogger(object):
+    """ The wrapper of stdout messages
+    Transfer all messages from stdout to cloudferrylib.stdout logger.
+
+    """
+    def __init__(self, name=None):
+        self.log = logging.getLogger(name or 'cloudferrylib.stdout')
+
+    def write(self, message):
+        message = message.strip()
+        if message:
+            self.log.info(message)
+
+    def flush(self):
+        pass
 
 
 def configure_logging():
     """Configure the logging
 
     Loading logging configuration file which is defined in the general
-    configuration file and configure the logging sytem.
+    configuration file and configure the logging system.
     Setting the level of console handler to DEBUG mode if debug option is set
     as True.
+    Wrap the stdout stream by StdoutLogger.
     """
     with open(cfglib.CONF.migrate.log_config, 'r') as f:
         config.dictConfig(yaml.load(f))
@@ -41,6 +61,7 @@ def configure_logging():
         for handler in logger.handlers:
             if handler.name == 'console':
                 handler.setLevel(logging.DEBUG)
+    sys.stdout = StdoutLogger()
 
 
 class RunRotatingFileHandler(handlers.RotatingFileHandler):
@@ -50,22 +71,25 @@ class RunRotatingFileHandler(handlers.RotatingFileHandler):
     the filename.
 
     :param filename: The template for filename
-    :param date_format: The temaplate for formatting the current datetime
+    :param date_format: The template for formatting the current datetime
     """
     def __init__(self,
                  filename='%(scenario)s-%(date)s.log',
                  date_format='%F-%H-%M-%S',
                  **kwargs):
         self.date_format = date_format
+        max_bytes = sizeof_format.parse_size(kwargs.pop('maxBytes', 0))
 
         super(RunRotatingFileHandler, self).__init__(
-            filename=self.get_filename(filename), **kwargs)
+            filename=self.get_filename(filename),
+            maxBytes=max_bytes,
+            **kwargs)
 
     def get_filename(self, filename):
         """Format the filename
 
         :param filename: the formatting string for the filename
-        :return: Formatted filename with included scenarion and
+        :return: Formatted filename with included scenario and
         current datetime.
         """
         scenario = os.path.splitext(os.path.basename(

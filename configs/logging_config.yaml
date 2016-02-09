@@ -53,7 +53,7 @@ handlers:
     date_format: '%F-%H-%M-%S'
     formatter: debug_colored
     level: NOTSET
-    maxBytes: 10485760
+    maxBytes: 100M
     filters: [show_current_task]
   info:
     backupCount: 20
@@ -63,7 +63,7 @@ handlers:
     date_format: '%F-%H-%M-%S'
     formatter: info_colored
     level: INFO
-    maxBytes: 10485760
+    maxBytes: 100M
     filters: [show_current_task]
 loggers:
   cloudferrylib:
