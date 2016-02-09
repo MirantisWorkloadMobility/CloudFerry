@@ -44,11 +44,29 @@ class FilterSimilarVMsFromDST(action.Action):
         self.similar_isntances = collections.defaultdict(set)
         self.conflict_instances = collections.defaultdict(set)
 
+    def get_similar_tenants(self):
+        src_identity = self.src_cloud.resources[utils.IDENTITY_RESOURCE]
+        dst_identity = self.dst_cloud.resources[utils.IDENTITY_RESOURCE]
+        src_tenants = src_identity.read_info()['tenants']
+        dst_tenants = {t['tenant']['name']: t['tenant']['id']
+                       for t in dst_identity.read_info()['tenants']}
+        similar_tenants = {}
+        for ts in src_tenants:
+            index = ts['tenant']['name']
+            if index in dst_tenants:
+                similar_tenants[ts['tenant']['id']] = dst_tenants[index]
+            else:
+                similar_tenants[ts['tenant']['id']] = ''
+        return similar_tenants
+
     def run(self, **kwargs):
         self.src_instances = kwargs['info']['instances']
-        for tenant in kwargs['identity_info']['tenants']:
-            self.tenant_id_to_new_id[tenant['tenant']['id']] = \
-                tenant['meta']['new_id']
+        if 'identity_info' in kwargs:
+            for tenant in kwargs['identity_info']['tenants']:
+                self.tenant_id_to_new_id[tenant['tenant']['id']] = \
+                    tenant['meta']['new_id']
+        else:
+            self.tenant_id_to_new_id = self.get_similar_tenants()
         self.find_similar_instances()
         for src_instance_id, dst_ids in self.similar_isntances.items():
             LOG.warning("Instance %s already in DST cloud as instance %s. "
