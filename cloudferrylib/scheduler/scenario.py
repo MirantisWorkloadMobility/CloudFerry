@@ -13,16 +13,10 @@
 # limitations under the License.
 
 
-import imp
-import inspect
-import os
-import re
 import yaml
 
-import addons
-import cloudferrylib
-
 from cloudferrylib.base.action import action
+from cloudferrylib.utils import extensions
 from cloudferrylib.utils import log
 
 LOG = log.getLogger(__name__)
@@ -32,13 +26,21 @@ class Scenario(object):
     def __init__(self, path_tasks, path_scenario):
         self.path_tasks = path_tasks
         self.path_scenario = path_scenario
+        self.tasks = None
+        self.namespace = None
+        self.migration = None
+        self.preparation = None
+        self.rollback = None
 
-    def init_tasks(self, init={}):
+    def init_tasks(self, init):
         with open(self.path_tasks) as tasks_file:
             tasks_file = yaml.load(tasks_file)
             actions = {}
-            for mod in tasks_file['paths']:
-                actions.update(self.get_actions(mod))
+            for path in tasks_file['paths']:
+                actions.update({e.__name__: e
+                                for e in extensions.available_extensions(
+                                    action.Action, path)})
+
             tasks = {}
             for task in tasks_file['tasks']:
                 args = tasks_file['tasks'][task][1:]
@@ -93,41 +95,6 @@ class Scenario(object):
             elif value and elem:
                 net = net >> elem
         return net
-
-    def get_actions(self, mod):
-        path_split = mod.split(".")
-        module = None
-        if path_split[0] == 'cloudferrylib':
-            module = cloudferrylib
-        elif path_split[0] == 'addons':
-            module = addons
-        for p in path_split[1:]:
-            module = module.__dict__[p]
-        path = module.__path__[0]
-        files = os.listdir(path)
-
-        # Match only *.py files
-        modules_matches = filter(lambda file_name: file_name is not None,
-                                 [re.match(".*\.py$", f) for f in files])
-        # cut off extension part (.py)
-        list_name_modules = map(lambda x: x.string.replace(".py", ""),
-                                modules_matches)
-
-        modules = [imp.load_source(name, path + '/%s.py' % name)
-                   for name in list_name_modules]
-        actions = {}
-        for module in modules:
-            for item in module.__dict__:
-                if inspect.isclass(module.__dict__[item]) and \
-                        issubclass(module.__dict__[item], action.Action):
-                    actions[item] = module.__dict__[item]
-        return actions
-
-    def init_process_migrate(self, path):
-        migrate = yaml.load(open(path, 'r'))
-        process = migrate['process']
-        namespace = migrate['namespace']
-        return process, namespace
 
 
 class ScenarioChecker():
