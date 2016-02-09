@@ -22,7 +22,7 @@ from utils import forward_agent
 class SshUtil(object):
     def __init__(self, cloud, config_migrate, host=None):
         self.cloud = cloud
-        self.host = self.cloud.ssh_host
+        self.host = host or self.cloud.ssh_host
         self.config_migrate = config_migrate
 
     def execute(self, cmd, internal_host=None, host_exec=None,
