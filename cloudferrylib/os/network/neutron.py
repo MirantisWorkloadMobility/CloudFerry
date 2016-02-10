@@ -1326,29 +1326,32 @@ class NeutronNetwork(network.Network):
             LOG.warning('External (%s) network is not exists on destination',
                         ext_net_id)
 
-    def add_router_interfaces(self, src_router, dst_router, src_snets,
-                              dst_snets):
-        for snet_id in src_router['subnet_ids']:
-            snet_hash = self.get_res_hash_by_id(src_snets, snet_id)
-            ex_snet = self.get_res_by_hash(dst_snets, snet_hash)
-            if ex_snet['id'] in dst_router['subnet_ids']:
-                continue
-            src_net = self.get_res_by_hash(src_snets, snet_hash)
-            if src_net['external']:
+    def add_router_interfaces(self, src_router, dst_router, src_subnets,
+                              dst_subnets):
+        for subnet_id in src_router['subnet_ids']:
+            subnet_hash = self.get_res_hash_by_id(src_subnets, subnet_id)
+
+            src_subnet = self.get_res_by_hash(src_subnets, subnet_hash)
+            if src_subnet['external']:
                 LOG.debug("NOT connecting subnet '%s' to router '%s' because "
-                          "it's connected to external network", snet_id,
+                          "it's connected to external network", subnet_id,
                           dst_router['name'])
                 continue
-            LOG.debug("Adding subnet '%s' to router '%s'", snet_id,
+
+            existing_subnet = self.get_res_by_hash(dst_subnets, subnet_hash)
+            if existing_subnet['id'] in dst_router['subnet_ids']:
+                continue
+
+            LOG.debug("Adding subnet '%s' to router '%s'", subnet_id,
                       dst_router['name'])
             try:
                 self.neutron_client.add_interface_router(
                     dst_router['id'],
-                    {"subnet_id": ex_snet['id']})
+                    {"subnet_id": existing_subnet['id']})
             except neutron_exc.NeutronClientException as e:
                 LOG.debug(e, exc_info=True)
                 LOG.warning("Couldn't add interface to subnet %s to router %s:"
-                            " %s", ex_snet['id'], dst_router['id'], e)
+                            "\n%s", existing_subnet['id'], dst_router['id'], e)
 
     def upload_floatingips(self, networks, src_floats):
         """Creates floating IPs on destination
