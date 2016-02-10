@@ -383,6 +383,7 @@ class DeployInstanceWithManualScheduling(test.TestCase):
         client_conf = mock.Mock()
 
         nc = mock.Mock()
+        nc.get_availability_zone.return_value = 'nova'
         nc.get_compute_hosts.return_value = compute_hosts
         nc.deploy_instance.side_effect = exception.TimeoutException(
             None, None, None)
