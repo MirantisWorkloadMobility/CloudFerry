@@ -112,14 +112,14 @@ class GlanceImage(image.Image):
 
     def __init__(self, config, cloud):
         self.config = config
-        self.host = config.cloud.host
+        self.ssh_host = config.cloud.ssh_host
         self.cloud = cloud
         self.identity_client = cloud.resources['identity']
         self.filter_tenant_id = None
         self.filter_image = []
         # get mysql settings
         self.mysql_connector = cloud.mysql_connector('glance')
-        self.runner = remote_runner.RemoteRunner(self.host,
+        self.runner = remote_runner.RemoteRunner(self.ssh_host,
                                                  self.config.cloud.ssh_user)
         self._image_filter = None
         super(GlanceImage, self).__init__(config)
@@ -183,11 +183,12 @@ class GlanceImage(image.Image):
         return self.glance_client.images.get(image_id)
 
     def image_exists(self, image_id):
-        try:
-            self.get_image_raw(image_id)
-            return True
-        except glance_exceptions.HTTPNotFound:
-            return False
+        with proxy_client.expect_exception(glance_exceptions.HTTPNotFound):
+            try:
+                self.get_image_raw(image_id)
+                return True
+            except glance_exceptions.HTTPNotFound:
+                return False
 
     def get_image_list(self):
         images = self.glance_client.images.list(filters={"is_public": None})
@@ -202,17 +203,14 @@ class GlanceImage(image.Image):
         return images
 
     def create_image(self, **kwargs):
-        try:
-            return self.glance_client.images.create(**kwargs)
-        except glance_exceptions.HTTPConflict:
-            image_id = kwargs.pop('id', None)
-            if image_id is not None:
-                LOG.warning("Image ID will not be kept for source image "
-                            "'%(name)s' (%(id)s), image ID is already present "
-                            "in destination (perhaps was deleted previously).",
-                            {'name': kwargs.get('name'), 'id': image_id})
-                return self.glance_client.images.create(**kwargs)
-            raise
+        image_id = kwargs.get('id')
+        if image_id is not None and self.image_exists(image_id):
+            LOG.warning("Image ID will not be kept for source image "
+                        "'%(name)s' (%(id)s), image ID is already present "
+                        "in destination (perhaps was deleted previously).",
+                        {'name': kwargs.get('name'), 'id': image_id})
+            del kwargs['id']
+        return self.glance_client.images.create(**kwargs)
 
     def delete_image(self, image_id):
         # Change protected property to false before delete
@@ -614,7 +612,7 @@ class GlanceImage(image.Image):
 
         if backend_storage == 'ceph':
             image_from_glance = self.get_image_by_id(image_id)
-            with settings(host_string=self.cloud.getIpSsh(),
+            with settings(host_string=self.ssh_host,
                           connection_attempts=ssh_attempts):
                 out = json.loads(
                     run("rbd -p images info %s --format json" % image_id))

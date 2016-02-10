@@ -265,6 +265,8 @@ class NovaCompute(compute.Compute):
 
         search_opts = kwargs.get('search_opts') or {}
         search_opts.update(all_tenants=True)
+        if self.filter_tenant_id:
+            search_opts.update(tenant_id=self.filter_tenant_id)
 
         info = {'instances': {}}
 
@@ -310,7 +312,7 @@ class NovaCompute(compute.Compute):
         if direct_transfer:
             ext_cidr = cfg.cloud.ext_cidr
             host = node_ip.get_ext_ip(ext_cidr,
-                                      cloud.getIpSsh(),
+                                      cfg.cloud.ssh_host,
                                       instance_node,
                                       ssh_user)
         elif is_ceph:
@@ -319,7 +321,7 @@ class NovaCompute(compute.Compute):
             host = instance_node
 
         if not utl.libvirt_instance_exists(instance_name,
-                                           cloud.getIpSsh(),
+                                           cfg.cloud.ssh_host,
                                            instance_node,
                                            ssh_user,
                                            cfg.cloud.ssh_sudo_password):
@@ -329,7 +331,7 @@ class NovaCompute(compute.Compute):
 
         instance_block_info = utl.get_libvirt_block_info(
             instance_name,
-            cloud.getIpSsh(),
+            cfg.cloud.ssh_host,
             instance_node,
             ssh_user,
             cfg.cloud.ssh_sudo_password)

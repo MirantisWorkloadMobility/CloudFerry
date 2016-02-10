@@ -30,8 +30,8 @@ LOG = log.getLogger(__name__)
 
 class SSHFileToCeph(driver_transporter.DriverTransporter):
     def transfer(self, data):
-        ssh_ip_src = self.src_cloud.getIpSsh()
-        ssh_ip_dst = self.dst_cloud.getIpSsh()
+        ssh_ip_src = self.src_cloud.cloud_config.cloud.ssh_host
+        ssh_ip_dst = self.dst_cloud.cloud_config.cloud.ssh_host
         action_utils.delete_file_from_rbd(ssh_ip_dst, data['path_dst'])
         with (settings(host_string=ssh_ip_src,
                        connection_attempts=env.connection_attempts),

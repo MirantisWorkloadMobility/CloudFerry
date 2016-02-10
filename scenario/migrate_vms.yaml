@@ -47,7 +47,7 @@ rollback:
 
 process:
   - transport_instances_and_dependency_resources:
-      - act_identity_trans: True
+      - act_identity_trans: False
       - act_get_info_inst: True
       - init_iteration_instance:
           - init_iteration_instance_copy_var: True

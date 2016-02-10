@@ -27,7 +27,11 @@ from novaclient import exceptions as nv_exceptions
 from base import BasePrerequisites
 from cleanup import CleanEnv
 import config as conf
+import logging
+from logging.config import dictConfig
 
+dictConfig(conf.logging_configuration)
+LOG = logging.getLogger(__name__)
 TIMEOUT = 600
 VM_SPAWNING_LIMIT = 5
 CREATE_CLEAN_METHODS_MAP = {
@@ -45,14 +49,14 @@ def clean_if_exists(func):
             return func(self, *args, **kwargs)
         except (ks_exceptions.Conflict,
                 nv_exceptions.Conflict,
-                nt_exceptions.NeutronClientException) as e:
-            print('Method "%s" failed, current resource already exists:\n%s'
-                  % (func.__name__, e))
+                nt_exceptions.NeutronClientException):
+            LOG.warning('Method "%s" failed, current resource already exists:',
+                        func.__name__, exc_info=True)
             clean_method = getattr(self.clean_tools,
                                    CREATE_CLEAN_METHODS_MAP[func.__name__])
-            print 'Run cleanup method "%s"' % clean_method.__name__
+            LOG.info('Run cleanup method "%s"', clean_method.__name__)
             clean_method()
-            print 'Run method "%s" one more time' % func.__name__
+            LOG.info('Run method "%s" one more time', func.__name__)
             func(self, *args, **kwargs)
     return wrapper
 
@@ -144,9 +148,9 @@ class Prerequisites(BasePrerequisites):
                         self.keystoneclient.roles.add_user_role(
                             user=user, role=self.get_role_id(role['role']),
                             tenant=self.get_tenant_id(role['tenant']))
-                    except ks_exceptions.Conflict as e:
-                        print "There was an error during role creating: {}"\
-                            .format(e)
+                    except ks_exceptions.Conflict:
+                        LOG.warning("There was an error during role creating:",
+                                    exc_info=True)
                         continue
 
     @clean_if_exists
@@ -807,8 +811,8 @@ class Prerequisites(BasePrerequisites):
         try:
             self.novaclient.flavors.delete(
                 self.get_flavor_id(flavor))
-        except nv_exceptions.ClientException as e:
-            print "Flavor %s failed to delete: %s" % (flavor, repr(e))
+        except nv_exceptions.ClientException:
+            LOG.warning("Flavor %s failed to delete:", flavor, exc_info=True)
 
     def update_network_quotas(self):
         tenants = {ten.name: ten.id
@@ -888,9 +892,9 @@ class Prerequisites(BasePrerequisites):
         for role in roles_to_create:
             try:
                 self.dst_cloud.keystoneclient.roles.create(name=role['role'])
-            except ks_exceptions.Conflict as e:
-                print "There was an error during role creating on dst: {}"\
-                    .format(e)
+            except ks_exceptions.Conflict:
+                LOG.warning("There was an error during role creating on dst:",
+                            exc_info=True)
                 continue
             if role['tenant'] not in tenants_names:
                 tenants_names.append(role['tenant'])
@@ -957,70 +961,70 @@ class Prerequisites(BasePrerequisites):
         self.dst_cloud.create_networks(self.config.dst_networks)
 
     def run_preparation_scenario(self):
-        print('>>> Creating tenants:')
+        LOG.info('Creating tenants')
         self.create_tenants()
-        print('>>> Creating users:')
+        LOG.info('Creating users')
         self.create_users()
-        print('>>> Creating roles:')
+        LOG.info('Creating roles')
         self.create_roles()
-        print('>>> Creating keypairs:')
+        LOG.info('Creating keypairs')
         self.create_keypairs()
-        print('>>> Modifying quotas:')
+        LOG.info('Modifying quotas')
         self.modify_quotas()
-        print('>>> Creating flavors:')
+        LOG.info('Creating flavors')
         self.create_flavors()
-        print('>>> Uploading images:')
+        LOG.info('Uploading images')
         self.upload_image()
-        print('>>> Creating networking:')
+        LOG.info('Creating networking')
         self.create_all_networking()
         if self.openstack_release in ['icehouse', 'juno']:
-            print('>>> Creating server groups')
+            LOG.info('Creating server groups')
             self.create_server_groups()
-            print('>>> Create bootable volume from image')
+            LOG.info('Create bootable volume from image')
             self.create_volumes_from_images()
-            print('>>> Boot vm from volume')
+            LOG.info('Boot vm from volume')
             self.boot_vms_from_volumes()
-        print('>>> Creating vms:')
+        LOG.info('Creating vms')
         self.create_vms()
-        print('>>> Breaking VMs:')
+        LOG.info('Breaking VMs')
         self.break_vm()
-        print('>>> Breaking Images:')
+        LOG.info('Breaking Images')
         self.break_image()
-        print('>>> Updating filtering:')
+        LOG.info('Updating filtering')
         self.update_filtering_file()
-        print('>>> Creating vm snapshots:')
+        LOG.info('Creating vm snapshots')
         self.create_vm_snapshots()
-        print('>>> Creating security groups:')
+        LOG.info('Creating security groups')
         self.create_security_groups()
-        print('>>> Creating cinder objects:')
+        LOG.info('Creating cinder objects')
         self.create_cinder_objects()
-        print('>>> Writing data into the volumes:')
+        LOG.info('Writing data into the volumes')
         self.write_data_to_volumes()
-        print('>>> Creating invalid cinder objects:')
+        LOG.info('Creating invalid cinder objects')
         self.create_invalid_cinder_objects()
-        print('>>> Emulating vm states:')
+        LOG.info('Emulating vm states')
         self.emulate_vm_states()
-        print('>>> Generating vm states list:')
+        LOG.info('Generating vm states list')
         self.generate_vm_state_list()
-        print('>>> Deleting flavor:')
+        LOG.info('Deleting flavor')
         self.delete_flavor()
-        print('>>> Modifying admin tenant quotas:')
+        LOG.info('Modifying admin tenant quotas')
         self.modify_admin_tenant_quotas()
-        print('>>> Update network quotas:')
+        LOG.info('Update network quotas')
         self.update_network_quotas()
-        print('>>> Change admin role in tenants:')
+        LOG.info('Change admin role in tenants')
         self.change_admin_role_in_tenants()
-        print('>>> Creating user tenant roles:')
+        LOG.info('Creating user tenant roles')
         self.create_user_tenant_roles()
-        print('>>> Delete users which should be deleted:')
+        LOG.info('Delete users which should be deleted')
         self.delete_users()
-        print('>>> Delete tenants which should be deleted:')
+        LOG.info('Delete tenants which should be deleted')
         self.delete_tenants()
-        print('>>> Create tenant on dst, without security group:')
+        LOG.info('Create tenant on dst, without security group')
         self.create_tenant_wo_sec_group_on_dst()
-        print('>>> Create role on dst:')
+        LOG.info('Create role on dst')
         self.create_user_on_dst()
-        print('>>> Creating networks on dst:')
+        LOG.info('Creating networks on dst')
         self.create_network_with_segm_id()
 
 

@@ -140,7 +140,7 @@ class TransportEphemeral(action.Action):
 
         instances = info[utl.INSTANCES_TYPE]
         temp_src = src_cloud.cloud_config.cloud.temp
-        host_dst = dst_cloud.getIpSsh()
+        host_dst = dst_cloud.cloud_config.cloud.ssh_host
         qemu_img_dst = dst_cloud.qemu_img
         qemu_img_src = src_cloud.qemu_img
 

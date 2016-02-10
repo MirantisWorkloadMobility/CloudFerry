@@ -36,7 +36,8 @@ class MapComputeInfo(action.Action):
             path_dst = "%s/%s" % (self.dst_cloud.cloud_config.cloud.temp,
                                   "temp%s_base" % instance_id)
             instance[DIFF][PATH_DST] = path_dst
-            instance[DIFF][HOST_DST] = self.dst_cloud.getIpSsh()
+            instance[DIFF][HOST_DST] = \
+                self.dst_cloud.cloud_config.cloud.ssh_host
         return {
             'info': new_info
         }

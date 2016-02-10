@@ -53,7 +53,7 @@ class CheckBandwidth(action.Action):
 
     def run(self, **kwargs):
         cfg = self.cloud.cloud_config.cloud
-        runner = remote_runner.RemoteRunner(cfg.host, cfg.ssh_user)
+        runner = remote_runner.RemoteRunner(cfg.ssh_host, cfg.ssh_user)
 
         temp_dir_name = os.popen('mktemp -dt check_band_XXXX').read().rstrip()
         temp_file_name = str(uuid.uuid4())
@@ -73,14 +73,14 @@ class CheckBandwidth(action.Action):
         scp_upload = cmd_cfg.scp_cmd(ssh_util.get_cipher_option(),
                                      '',
                                      ssh_user,
-                                     self.cloud.cloud_config.cloud.ssh_host,
+                                     cfg.ssh_host,
                                      remote_file_path,
                                      temp_dir_name)
 
         scp_download = cmd_cfg.scp_cmd(ssh_util.get_cipher_option(),
                                        local_file_path,
                                        ssh_user,
-                                       self.cloud.cloud_config.cloud.ssh_host,
+                                       cfg.ssh_host,
                                        temp_dir_name,
                                        '')
 

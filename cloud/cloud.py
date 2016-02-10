@@ -36,11 +36,6 @@ class Cloud(object):
         self.cloud_config = self.make_cloud_config(self.config, self.position)
         self.init_resources(self.cloud_config)
 
-    def getIpSsh(self):
-        return self.cloud_config.cloud.ssh_host \
-            if self.cloud_config.cloud.ssh_host \
-            else self.cloud_config.cloud.host
-
     @staticmethod
     def make_cloud_config(config, position):
         cloud_config = utils.ext_dict(migrate=utils.ext_dict(),

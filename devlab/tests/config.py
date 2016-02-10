@@ -25,6 +25,26 @@ cloud_ferry_conf = 'configuration.ini'
 ssh_check_user = 'cirros'
 ssh_vm_shell = '/bin/sh -c'
 
+logging_configuration = {
+    'version': 1,
+    'formatters': {
+        'simple': {'format': '%(asctime)s - %(levelname)s - %(message)s'}
+    },
+    'handlers': {
+        'simple_handler': {'class': 'logging.StreamHandler',
+                           'formatter': 'simple',
+                           'level': 'INFO'}
+    },
+    'loggers': {
+        '__main__': {'handlers': ['simple_handler'],
+                     'level': 'INFO',
+                     'propagate': False},
+        'cleanup': {'handlers': ['simple_handler'],
+                    'level': 'INFO',
+                    'propagate': False}
+    }
+}
+
 filters_file_naming_template = 'filter_{tenant_name}.yaml'
 """Path to store filter files"""
 

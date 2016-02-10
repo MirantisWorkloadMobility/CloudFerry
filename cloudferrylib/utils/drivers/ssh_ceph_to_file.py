@@ -27,8 +27,8 @@ LOG = log.getLogger(__name__)
 
 class SSHCephToFile(driver_transporter.DriverTransporter):
     def transfer(self, data):
-        ssh_ip_src = self.src_cloud.getIpSsh()
-        ssh_ip_dst = self.dst_cloud.getIpSsh()
+        ssh_ip_src = self.src_cloud.cloud_config.cloud.ssh_host
+        ssh_ip_dst = self.dst_cloud.cloud_config.cloud.ssh_host
         with utils.forward_agent(env.key_filename), utils.up_ssh_tunnel(
                 data['host_dst'], ssh_ip_dst, ssh_ip_src) as port:
             dd = cmd_cfg.dd_cmd_of
