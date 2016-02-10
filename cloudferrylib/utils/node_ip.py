@@ -12,16 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import socket
-from fabric.context_managers import settings
-from fabric.operations import run
-from fabric.state import env
 import ipaddr
+import logging
+import socket
 
-from cloudferrylib.utils import log
+from cloudferrylib.utils import remote_runner
 
-
-LOG = log.getLogger(__name__)
+LOG = logging.getLogger(__name__)
 
 
 def get_ext_ip(ext_cidr, init_host, compute_host, ssh_user):
@@ -37,18 +34,16 @@ def get_ext_ip(ext_cidr, init_host, compute_host, ssh_user):
 
 
 def get_ips(init_host, compute_host, ssh_user):
-    with settings(host_string=compute_host,
-                  user=ssh_user,
-                  gateway=init_host,
-                  connection_attempts=env.connection_attempts):
-        cmd = ("ifconfig | awk -F \"[: ]+\" \'/inet addr:/ "
-               "{ if ($4 != \"127.0.0.1\") print $4 }\'")
-        out = run(cmd)
-        list_ips = []
-        for info in out.split():
-            try:
-                ipaddr.IPAddress(info)
-            except ValueError:
-                continue
-            list_ips.append(info)
+    runner = remote_runner.RemoteRunner(host=compute_host, user=ssh_user,
+                                        gateway=init_host)
+    cmd = ("ifconfig | awk -F \"[: ]+\" \'/inet addr:/ "
+           "{ if ($4 != \"127.0.0.1\") print $4 }\'")
+    out = runner.run(cmd)
+    list_ips = []
+    for info in out.split():
+        try:
+            ipaddr.IPAddress(info)
+        except ValueError:
+            continue
+        list_ips.append(info)
     return list_ips

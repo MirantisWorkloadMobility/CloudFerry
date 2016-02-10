@@ -27,7 +27,7 @@ class RemoteExecutionError(RuntimeError):
 
 class RemoteRunner(object):
     def __init__(self, host, user, password=None, sudo=False, key=None,
-                 ignore_errors=False, timeout=None):
+                 ignore_errors=False, timeout=None, gateway=None):
         self.host = host
         if key is None:
             key = cfglib.CONF.migrate.key_filename
@@ -37,6 +37,7 @@ class RemoteRunner(object):
         self.key = key
         self.ignore_errors = ignore_errors
         self.timeout = timeout
+        self.gateway = gateway
 
     def run(self, cmd, **kwargs):
         abort_exception = None
@@ -56,7 +57,8 @@ class RemoteRunner(object):
                           reject_unkown_hosts=False,
                           combine_stderr=False,
                           connection_attempts=ssh_attempts,
-                          command_timeout=self.timeout):
+                          command_timeout=self.timeout,
+                          gateway=self.gateway):
             with utils.forward_agent(self.key):
                 LOG.debug("running '%s' on '%s' host as user '%s'",
                           cmd, self.host, self.user)
