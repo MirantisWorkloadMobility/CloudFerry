@@ -5,4 +5,8 @@
 # After successful testing all resources and VMs are deleted.
 
 process:
+  - print_info:
+      - print_configuration: True
+      - print_scenario: True
+      - print_filter_raw: True
   - act_check_dst_cloud: True

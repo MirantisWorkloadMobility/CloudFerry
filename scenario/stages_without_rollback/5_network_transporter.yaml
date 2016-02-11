@@ -3,7 +3,10 @@
 # LoadBalancer resources (pools, monitors, members, vips)
 
 preparation:
-  - create_snapshot: True
+  - print_info:
+      - print_configuration: True
+      - print_scenario: True
+      - print_filter_raw: True
 
 process:
   - act_get_filter: True
