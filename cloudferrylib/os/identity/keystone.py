@@ -57,14 +57,16 @@ class AddAdminUserToNonAdminTenant(object):
         """
 
         self.keystone = keystone
-        for some_tenant in self.keystone.tenants.list():
-            if some_tenant.name.lower() == tenant.lower():
-                self.tenant = some_tenant
-                break
-        else:
-            self.tenant = self.keystone.tenants.find(id=tenant)
-        self.user = self.keystone.users.find(name=admin_user)
-        self.role = self.keystone.roles.find(name=member_role)
+        try:
+            with proxy_client.expect_exception(ks_exceptions.NotFound):
+                self.tenant = find_by_name(
+                    'tenant', self.keystone.tenants.list(), tenant)
+        except ks_exceptions.NotFound:
+            self.tenant = self.keystone.tenants.get(tenant)
+        self.user = find_by_name(
+            'user', self.keystone.users.list(), admin_user)
+        self.role = find_by_name(
+            'role', self.keystone.roles.list(), member_role)
         self.already_member = False
 
     def __enter__(self):
@@ -72,7 +74,7 @@ class AddAdminUserToNonAdminTenant(object):
                                                    tenant=self.tenant)
 
         for role in roles:
-            if role.name == self.role.name:
+            if role.name.lower() == self.role.name.lower():
                 # do nothing if user is already member of a tenant
                 self.already_member = True
                 return
@@ -132,14 +134,14 @@ class KeystoneIdentity(identity.Identity):
                     'meta': {}}
 
         elif isinstance(identity_obj, keystone_client.users.User):
-            overwirte_user_passwords = cfg.migrate.overwrite_user_passwords
+            overwrite_user_passwords = cfg.migrate.overwrite_user_passwords
             return {'user': {'name': identity_obj.name,
                              'id': identity_obj.id,
                              'email': getattr(identity_obj, 'email', ''),
                              'tenantId': getattr(identity_obj, 'tenantId', '')
                              },
                     'meta': {
-                        'overwrite_password': overwirte_user_passwords}}
+                        'overwrite_password': overwrite_user_passwords}}
 
         elif isinstance(identity_obj, keystone_client.roles.Role):
             return {'role': {'name': identity_obj.name,
@@ -268,12 +270,8 @@ class KeystoneIdentity(identity.Identity):
 
     def get_tenant_by_name(self, name):
         """Search tenant by name case-insensitively"""
-        name_lower = name.lower()
-        for tenant in self.keystone_client.tenants.list():
-            if tenant.name.lower() == name_lower:
-                return tenant
-        raise ks_exceptions.NotFound(
-            404, 'Couldn\'t find tenant "%s"' % name)
+        return find_by_name(
+            'tenant', self.keystone_client.tenants.list(), name)
 
     def get_tenant_id_by_name(self, name):
         """ Getting tenant ID by name from keystone. """
@@ -292,7 +290,7 @@ class KeystoneIdentity(identity.Identity):
             if default is None:
                 return self.get_tenant_by_name(self.config.cloud.tenant)
             else:
-                return tenants.find(id=default)
+                return tenants.get(default)
 
     def try_get_tenant_name_by_id(self, tenant_id, default=None):
         """ Same as `get_tenant_by_id` but returns `default` in case tenant
@@ -343,8 +341,8 @@ class KeystoneIdentity(identity.Identity):
                     result.append(tenant)
         else:
             result = ks_tenants.list()
-        LOG.info("List of tenants: %s", ", ".join(['%s (%s)' % (t.name, t.id)
-                                                   for t in result]))
+        LOG.info("List of tenants: %s", ", ".join('%s (%s)' % (t.name, t.id)
+                                                  for t in result))
         return result
 
     def get_users_list(self):
@@ -370,8 +368,7 @@ class KeystoneIdentity(identity.Identity):
 
     def try_get_user_by_id(self, user_id, default=None):
         if default is None:
-            admin_usr = \
-                self.try_get_user_by_name(username=self.config.cloud.user)
+            admin_usr = self.try_get_user_by_name(self.config.cloud.user)
             default = admin_usr.id
         try:
             with proxy_client.expect_exception(ks_exceptions.NotFound):
@@ -382,13 +379,8 @@ class KeystoneIdentity(identity.Identity):
             return self.keystone_client.users.find(id=default)
 
     def try_get_user_by_name(self, username, default=None):
-        try:
-            with proxy_client.expect_exception(ks_exceptions.NotFound):
-                return self.keystone_client.users.find(name=username)
-        except ks_exceptions.NotFound:
-            LOG.warning("User '%s' has not been found, returning default "
-                        "value = '%s'", username, default)
-            return self.keystone_client.users.find(name=default)
+        return find_by_name(
+            'user', self.keystone_client.users.list(), username, default)
 
     def get_default(self, resource_type):
         """ Get default of `resource_type` (Tenant or User).
@@ -402,8 +394,7 @@ class KeystoneIdentity(identity.Identity):
                     self.get_tenant_by_name(self.config.cloud.tenant)
             elif resource_type == utl.USERS_TYPE:
                 self.defaults[resource_type] = \
-                    self.keystone_client.users.find(
-                        name=self.config.cloud.user)
+                    self.try_get_user_by_name(self.config.cloud.user)
             else:
                 raise NotImplementedError('Unknown resource type: %s',
                                           resource_type)
@@ -446,15 +437,15 @@ class KeystoneIdentity(identity.Identity):
         """ Create new user in keystone. """
 
         try:
-            with proxy_client.expect_exception(ks_exceptions.NotFound):
+            with proxy_client.expect_exception(ks_exceptions.Conflict):
                 return self.keystone_client.users.create(name=name,
                                                          password=password,
                                                          email=email,
                                                          tenant_id=tenant_id,
                                                          enabled=enabled)
-        except ks_exceptions.NotFound as e:
-            LOG.warning(e.message)
-        return self.keystone_client.users.find(name=name)
+        except ks_exceptions.Conflict:
+            LOG.warning('Conflict creating user %s', name, exc_info=True)
+            return self.try_get_user_by_name(name)
 
     def update_tenant(self, tenant_id, tenant_name=None, description=None,
                       enabled=None):
@@ -479,11 +470,11 @@ class KeystoneIdentity(identity.Identity):
 
     def _deploy_tenants(self, tenants):
         LOG.info('Deploying tenants...')
-        dst_tenants = {tenant.name: tenant.id for tenant in
+        dst_tenants = {tenant.name.lower(): tenant.id for tenant in
                        self.get_tenants_list()}
         for _tenant in tenants:
             tenant = _tenant['tenant']
-            if tenant['name'] not in dst_tenants:
+            if tenant['name'].lower() not in dst_tenants:
                 LOG.debug("Creating tenant '%s'", tenant['name'])
                 _tenant['meta']['new_id'] = self.create_tenant(
                     tenant['name'],
@@ -491,12 +482,13 @@ class KeystoneIdentity(identity.Identity):
             else:
                 LOG.debug("Tenant '%s' is already present on destination, "
                           "skipping", tenant['name'])
-                _tenant['meta']['new_id'] = dst_tenants[tenant['name']]
+                _tenant['meta']['new_id'] = dst_tenants[tenant['name'].lower()]
 
         LOG.info("Tenant deployment done.")
 
     def _deploy_users(self, users, tenants):
-        dst_users = {user.name: user.id for user in self.get_users_list()}
+        dst_users = {user.name.lower(): user.id
+                     for user in self.get_users_list()}
         tenant_mapped_ids = {tenant['tenant']['id']: tenant['meta']['new_id']
                              for tenant in tenants}
 
@@ -507,9 +499,9 @@ class KeystoneIdentity(identity.Identity):
             user = _user['user']
             password = self._generate_password()
 
-            if user['name'] in dst_users:
+            if user['name'].lower() in dst_users:
                 # Create users mapping
-                _user['meta']['new_id'] = dst_users[user['name']]
+                _user['meta']['new_id'] = dst_users[user['name'].lower()]
 
                 if overwrite_passwd and not keep_passwd:
                     self.update_user(_user['meta']['new_id'],
@@ -634,12 +626,9 @@ class KeystoneIdentity(identity.Identity):
             res = self._get_roles_sql_request()
             for user_id, tenant_id, roles_field in res:
                 roles_ids = ast.literal_eval(roles_field)['roles']
-                all_roles[user_id] = {} \
-                    if user_id not in all_roles else all_roles[user_id]
-                all_roles[user_id][tenant_id] = [] \
-                    if tenant_id not in all_roles[user_id] \
-                    else all_roles[user_id][tenant_id]
-                all_roles[user_id][tenant_id].extend(roles_ids)
+                user_roles = all_roles.setdefault(user_id, {})
+                user_tenant_roles = user_roles.setdefault(tenant_id, [])
+                user_tenant_roles.extend(roles_ids)
             LOG.debug('Done fetching all roles for all tenants')
 
         def _get_user_roles(user_id, tenant_id):
@@ -651,10 +640,11 @@ class KeystoneIdentity(identity.Identity):
         return _get_user_roles
 
     def _get_user_tenants_roles_by_db(self, tenant_list, user_list):
-        user_tenants_roles = {u.name: {t.name: [] for t in tenant_list}
-                              for u in user_list}
-        tenant_ids = {tenant.id: tenant.name for tenant in tenant_list}
-        user_ids = {user.id: user.name for user in user_list}
+        user_tenants_roles = {
+            u.name.lower(): {t.name.lower(): [] for t in tenant_list}
+            for u in user_list}
+        tenant_ids = {tenant.id: tenant.name.lower() for tenant in tenant_list}
+        user_ids = {user.id: user.name.lower() for user in user_list}
         roles = {r.id: r for r in self.get_roles_list()}
         for user_id, tenant_id, roles_field in self._get_roles_sql_request():
             # skip filtered tenants and users
@@ -674,15 +664,15 @@ class KeystoneIdentity(identity.Identity):
         return user_tenants_roles
 
     def _get_user_tenants_roles_by_api(self, tenant_list, user_list):
-        user_tenants_roles = {u.name: {t.name: [] for t in tenant_list}
-                              for u in user_list}
+        user_tenants_roles = {}
         for user in user_list:
-            user_tenants_roles[user.name] = {}
+            user_tenants_roles[user.name.lower()] = {}
             for tenant in tenant_list:
                 roles = []
                 for role in self.roles_for_user(user.id, tenant.id):
                     roles.append({'role': {'name': role.name, 'id': role.id}})
-                user_tenants_roles[user.name][tenant.name] = roles
+                user_tenants_roles[user.name.lower()][tenant.name.lower()] = \
+                    roles
         return user_tenants_roles
 
     def _upload_user_passwords(self, users, user_passwords):
@@ -696,9 +686,12 @@ class KeystoneIdentity(identity.Identity):
                 password=user_passwords[user['name']])
 
     def _upload_user_tenant_roles(self, user_tenants_roles, users, tenants):
-        roles_id = {role.name: role.id for role in self.get_roles_list()}
-        dst_users = {user.name: user.id for user in self.get_users_list()}
-        dst_roles = {role.id: role.name for role in self.get_roles_list()}
+        roles_id = {role.name.lower(): role.id
+                    for role in self.get_roles_list()}
+        dst_users = {user.name.lower(): user.id
+                     for user in self.get_users_list()}
+        dst_roles = {role.id: role.name.lower()
+                     for role in self.get_roles_list()}
         get_user_roles = self._get_user_roles_cached()
         for _user in users:
             user = _user['user']
@@ -709,20 +702,20 @@ class KeystoneIdentity(identity.Identity):
                 user_roles_objs = get_user_roles(
                     _user['meta']['new_id'],
                     _tenant['meta']['new_id'])
-                exists_roles = [dst_roles[role] if not hasattr(role,
-                                                               'name')
-                                else role.name
+                exists_roles = [dst_roles[role] if not hasattr(role, 'name')
+                                else role.name.lower()
                                 for role in user_roles_objs]
-                for _role in user_tenants_roles[user['name']][tenant['name']]:
+                user_roles = user_tenants_roles[user['name'].lower()]
+                for _role in user_roles[tenant['name'].lower()]:
                     role = _role['role']
-                    if role['name'] in exists_roles:
+                    if role['name'].lower() in exists_roles:
                         continue
                     try:
                         with proxy_client.expect_exception(
                                 ks_exceptions.Conflict):
                             self.keystone_client.roles.add_user_role(
                                 _user['meta']['new_id'],
-                                roles_id[role['name']],
+                                roles_id[role['name'].lower()],
                                 _tenant['meta']['new_id'])
                     except ks_exceptions.Conflict:
                         LOG.info("Role '%s' for user '%s' in tenant '%s' "
@@ -767,7 +760,7 @@ class KeystoneIdentity(identity.Identity):
             src_tenant = {'name': cfglib.CONF.src.tenant}
         if not dst_tenant:
             dst_tenant = {'name': cfglib.CONF.dst.tenant}
-        return src_tenant['name'] == dst_tenant['name']
+        return src_tenant['name'].lower() == dst_tenant['name'].lower()
 
 
 def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
@@ -776,7 +769,7 @@ def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
     user does not exist"""
     try:
         with proxy_client.expect_exception(ks_exceptions.NotFound):
-            src_user = src_keystone.keystone_client.users.find(id=src_user_id)
+            src_user = src_keystone.keystone_client.users.get(src_user_id)
         src_user_name = src_user.name
     except ks_exceptions.NotFound:
         LOG.warning("User '%s' not found on SRC!", src_user_id)
@@ -786,15 +779,34 @@ def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
         else:
             return
 
+    if fallback_to_admin:
+        default_user_name = cfglib.CONF.dst.user
+    else:
+        default_user_name = None
     try:
         with proxy_client.expect_exception(ks_exceptions.NotFound):
-            dst_user = dst_keystone.keystone_client.users.find(
-                name=src_user_name)
-        return dst_user
+            return dst_keystone.try_get_user_by_name(
+                src_user_name, default_user_name)
     except ks_exceptions.NotFound:
-        LOG.warning("User '%s' not found on DST!", src_user_name)
-        if fallback_to_admin:
-            LOG.warning("Replacing user '%s' with DST admin", src_user_name)
-            dst_user = dst_keystone.keystone_client.users.find(
-                name=cfglib.CONF.dst.user)
-            return dst_user
+        return None
+
+
+def find_by_name(object_name, objects, name, default=None):
+    name_lower = name.lower()
+    default_obj = None
+    default_lower = default and default.lower()
+    for obj in objects:
+        obj_name = obj.name.lower()
+        if obj_name == name_lower:
+            return obj
+        elif obj_name == default_lower:
+            default_obj = obj
+    LOG.warning('Object "%s" with name "%s" not found', object_name, name)
+    if default_obj is not None:
+        return default_obj
+    else:
+        if default is not None:
+            LOG.warning('Could not find default "%s" with name "%s"',
+                        object_name, default)
+        raise ks_exceptions.NotFound(
+            404, object_name + ' ' + name + ' not found!')
