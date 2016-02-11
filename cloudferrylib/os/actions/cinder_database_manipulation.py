@@ -19,8 +19,6 @@ import copy
 import os
 import time
 
-from fabric.context_managers import settings
-
 from cloudferrylib.base.action import action
 from cloudferrylib.base.exception import AbortMigrationError
 from cloudferrylib.views import cinder_storage_view
@@ -84,7 +82,8 @@ def _remote_runner(cloud):
     return remote_runner.RemoteRunner(cloud[CFG].get(HOST),
                                       cloud[CFG].ssh_user,
                                       cloud[CFG].ssh_sudo_password,
-                                      sudo=True)
+                                      sudo=True,
+                                      gateway=cloud[CFG].get(SSH_HOST))
 
 
 def _volume_types_map(data):
@@ -380,11 +379,9 @@ class CopyVolumes(object):
 
     def _run_cmd(self, cloud, cmd):
         runner = _remote_runner(cloud)
-        with settings(gateway=cloud[CFG].get(SSH_HOST),
-                      connection_attempts=self.ssh_attempts):
-            output = runner.run(cmd)
-            res = output.split('\r\n')
-            return res if len(res) > 1 else res[0]
+        output = runner.run(cmd)
+        res = output.split('\r\n')
+        return res if len(res) > 1 else res[0]
 
     def run_repeat_on_errors(self, cloud, cmd):
         """Run remote command cmd.
@@ -393,12 +390,10 @@ class CopyVolumes(object):
 
         """
         runner = _remote_runner(cloud)
-        with settings(gateway=cloud[CFG].get(SSH_HOST),
-                      connection_attempts=self.ssh_attempts):
-            try:
-                runner.run_repeat_on_errors(cmd)
-            except remote_runner.RemoteExecutionError as e:
-                return e.message
+        try:
+            runner.run_repeat_on_errors(cmd)
+        except remote_runner.RemoteExecutionError as e:
+            return e.message
 
     def find_dir(self, position, paths, v):
         """
