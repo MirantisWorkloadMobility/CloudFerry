@@ -75,7 +75,6 @@ class VerifyVms(action.Action):
                         dst_cmp_inst['flav_details']):
                     LOG.warning("Wrong flav_details of instance %s on DST",
                                 src_inst_id)
-                    failed_vms.append(src_inst_id)
                 if src_inst_info['key_name'] != dst_cmp_inst['key_name']:
                     LOG.warning("Wrong key_name of instance %s on DST",
                                 src_inst_id)
@@ -88,7 +87,6 @@ class VerifyVms(action.Action):
                 if src_inst_info['volumes'] != dst_cmp_inst['volumes']:
                     LOG.warning("Wrong volumes of instance %s on DST",
                                 src_inst_id)
-                    failed_vms.append(src_inst_id)
 
                 # Verify that migrated VM belongs to correct server group
                 if (src_inst_info['server_group'] !=
