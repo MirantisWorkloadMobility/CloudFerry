@@ -81,7 +81,7 @@ QUOTA_RESOURCES = ('volumes', 'gigabytes')
 
 
 def _remote_runner(cloud):
-    return remote_runner.RemoteRunner(cloud[CFG].get(SSH_HOST),
+    return remote_runner.RemoteRunner(cloud[CFG].get(HOST),
                                       cloud[CFG].ssh_user,
                                       cloud[CFG].ssh_sudo_password,
                                       sudo=True)
@@ -407,15 +407,17 @@ class CopyVolumes(object):
         :return: path to the file
 
         """
+        volume_filename = self.storage[position].volume_name_template + v['id']
+        LOG.debug('Looking for %s in %s', volume_filename, repr(paths))
         if not paths:
             return None
-        volume_filename = self.storage[position].volume_name_template + v['id']
         for p in paths:
             cmd = 'ls -1 %s' % p
             lst = self._run_cmd(self.clouds[position], cmd)
             if lst and not isinstance(lst, list):
                 lst = [lst]
             if volume_filename in lst:
+                LOG.debug('Found %s in %s', volume_filename, p)
                 return '%s/%s' % (p, volume_filename)
 
     def run_rsync(self, src, dst):
@@ -426,7 +428,7 @@ class CopyVolumes(object):
         """
         cmd = RSYNC_CMD
         cmd += ' %s %s@%s:%s' % (src, self.clouds[DST][CFG].ssh_user,
-                                 self.clouds[DST][CFG].get(SSH_HOST), dst)
+                                 self.clouds[DST][CFG].get(HOST), dst)
         err = self.run_repeat_on_errors(self.clouds[SRC], cmd)
         if err:
             LOG.warning("Failed copying to %s", dst)
@@ -756,6 +758,8 @@ class CopyVolumes(object):
         volumes_size_map = {}
         for position in self.clouds:
             for v in self.data[position]['volumes']:
+                LOG.debug('Calculating size of volume %s on %s cloud',
+                          v['id'], position)
                 volume_type_id = v.get('volume_type_id', None)
                 srcpaths = self._paths(position, volume_type_id)
                 src = self.find_dir(position, srcpaths, v)
