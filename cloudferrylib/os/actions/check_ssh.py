@@ -37,10 +37,10 @@ class CheckSSH(action.Action):
         gateway = cfg.ssh_host
         runner = remote_runner.RemoteRunner(node, cfg.ssh_user,
                                             password=cfg.ssh_sudo_password,
-                                            timeout=60)
+                                            timeout=60,
+                                            gateway=gateway)
         try:
-            with api.settings(gateway=gateway,
-                              abort_on_prompts=True):
+            with api.settings(abort_on_prompts=True):
                 runner.run('echo')
         except remote_runner.RemoteExecutionError as e:
             LOG.debug('Check access error: %s', e, exc_info=True)
