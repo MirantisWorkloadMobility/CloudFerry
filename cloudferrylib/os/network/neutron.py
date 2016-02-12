@@ -1166,8 +1166,9 @@ class NeutronNetwork(network.Network):
                 not self.config.migrate.migrate_extnets or
                 (src_net['id'] in self.ext_net_map))
             if no_extnet_migration:
-                LOG.debug("External network migration is disabled in config, "
-                          "skipping external network '%s (%s)'",
+                LOG.debug("External networks migration is disabled in the "
+                          "config OR external networks mapping is enabled. "
+                          "Skipping external network: '%s (%s)'",
                           src_net['name'], src_net['id'])
                 continue
 

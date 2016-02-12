@@ -46,6 +46,7 @@ class CheckNetworks(action.Action):
     def run(self, **kwargs):
         LOG.debug("Checking networks...")
         overlapping_resources = {}
+        invalid_resources = {}
 
         src_net = self.src_cloud.resources[utils.NETWORK_RESOURCE]
         dst_net = self.dst_cloud.resources[utils.NETWORK_RESOURCE]
@@ -62,6 +63,17 @@ class CheckNetworks(action.Action):
         LOG.debug("Retrieving Compute information from Source cloud...")
         src_compute_info = ComputeInfo(src_compute, search_opts)
 
+        ext_net_map = utils.read_yaml_file(self.cfg.migrate.ext_net_map) or {}
+
+        # Check external networks mapping
+        if ext_net_map:
+            LOG.info("Check external networks mapping...")
+            invalid_ext_net_ids = src_net_info.get_invalid_ext_net_ids(
+                dst_net_info, ext_net_map)
+            if invalid_ext_net_ids:
+                invalid_resources.update(
+                    {"invalid_external_nets_ids_in_map": invalid_ext_net_ids})
+
         # Check subnets and segmentation IDs overlap
         LOG.info("Check networks overlapping...")
         nets_overlapping_subnets, nets_overlapping_seg_ids = (
@@ -77,14 +89,16 @@ class CheckNetworks(action.Action):
         # Check external subnets overlap
         LOG.info("Check external subnets overlapping...")
         overlapping_external_subnets = (
-            src_net_info.get_overlapping_external_subnets(dst_net_info))
+            src_net_info.get_overlapping_external_subnets(dst_net_info,
+                                                          ext_net_map))
         if overlapping_external_subnets:
             overlapping_resources.update(
                 {"overlapping_external_subnets": overlapping_external_subnets})
 
         # Check floating IPs overlap
         LOG.info("Check floating IPs overlapping...")
-        floating_ips = src_net_info.list_overlapping_floating_ips(dst_net_info)
+        floating_ips = src_net_info.list_overlapping_floating_ips(dst_net_info,
+                                                                  ext_net_map)
         if floating_ips:
             overlapping_resources.update(
                 {'overlapping_floating_ips': floating_ips})
@@ -113,13 +127,17 @@ class CheckNetworks(action.Action):
             overlapping_resources.update({'vms_in_external_network': vms_list})
 
         # Print LOG message with all overlapping stuff and abort migration
-        if overlapping_resources:
-            LOG.critical('Network overlapping list:\n%s',
-                         overlapping_resources)
+        if overlapping_resources or invalid_resources:
+            if overlapping_resources:
+                LOG.critical('Network overlapping list:\n%s',
+                             overlapping_resources)
+            if invalid_resources:
+                LOG.critical('Invalid Network resources list:\n%s',
+                             invalid_resources)
             raise exception.AbortMigrationError(
-                "There is a number of overlapping Network resources, so "
-                "migration process can not be continued. Resolve it please and"
-                " try again.")
+                "There is a number of overlapping/invalid Network resources, "
+                "so migration process can not be continued. Resolve it please "
+                "and try again")
 
 
 class ComputeInfo(object):
@@ -192,11 +210,13 @@ class NetworkInfo(object):
         return {port['device_id'] for port in self.ports
                 if port['network_id'] in networks_ids}
 
-    def list_overlapping_floating_ips(self, dst_info):
+    def list_overlapping_floating_ips(self, dst_info, ext_net_map):
         """
         Get list of Floating IPs, that overlap with the DST.
 
         :param dst_info: NetworkInfo instance of DST cloud
+        :param ext_net_map: External networks mapping dictionary. Format:
+                        {<src_external_network>: <dst_external_network>, ...}
         """
 
         floating_ips_list = []
@@ -210,6 +230,14 @@ class NetworkInfo(object):
 
             LOG.debug('Floating IP `%s` has been found on DST. Checking for '
                       'overlap...', floating_ip.address)
+
+            if floating_ip.network_id in ext_net_map:
+                LOG.debug("Floating IP '%s' is related to the external network"
+                          " '%s', that specified in external networks mapping."
+                          " Skipping floating IP...",
+                          floating_ip.address, floating_ip.network_id)
+                continue
+
             try:
                 floating_ip.check_floating_ips_overlapping(dst_floating_ip)
             except exception.AbortMigrationError:
@@ -217,11 +245,13 @@ class NetworkInfo(object):
 
         return floating_ips_list
 
-    def get_overlapping_external_subnets(self, dst_info):
+    def get_overlapping_external_subnets(self, dst_info, ext_net_map):
         """
         Get lists of subnets, that overlap with the DST.
 
         :param dst_info: NetworkInfo instance of DST cloud
+        :param ext_net_map: External networks mapping dictionary. Format:
+                        {<src_external_network>: <dst_external_network>, ...}
 
         :return list of dicts: Overlapping subnets in format:
                                 [{'src_subnet': <src_subnet_id>,
@@ -255,6 +285,14 @@ class NetworkInfo(object):
                 if not pools_overlap:
                     LOG.debug("Allocation pools do not overlap")
                     continue
+
+                if src_subnet['network_id'] in ext_net_map:
+                    LOG.debug("Subnet '%s' is related to the external network "
+                              "'%s', that specified in external networks "
+                              "mapping. Skipping subnet... ",
+                              src_subnet['id'], src_subnet['network_id'])
+                    continue
+
                 overlap = {'src_subnet': src_subnet['id'],
                            'dst_subnet': dst_subnet['id']}
                 LOG.warning("Allocation pool of subnet '%s' on SRC overlaps "
@@ -388,6 +426,38 @@ class NetworkInfo(object):
 
         return missing_vlan_physnets
 
+    def get_invalid_ext_net_ids(self, dst_info, ext_net_map):
+        """
+        Get invalid external networks IDs.
+
+        Check existence and validity of external networks, specified in the map
+        file (config.migrate.ext_net_map - path to this file)
+
+        :param dst_info: NetworkInfo instance of DST cloud
+        :param ext_net_map: External networks mapping dictionary. Format:
+                        {<src_external_network>: <dst_external_network>, ...}
+
+        :return dict: Dictionary of all invalid external networks, specified in
+                      the mapping file. Format:
+                      {'src_nets': [<src_net_id_0>, <src_net_id_1>, ...],
+                       'dst_nets': [<dst_net_id_0>, <dst_net_id_1>, ...]}
+        """
+
+        invalid_ext_nets = {}
+
+        src_ext_nets_ids = [net.id for net in self.by_id.itervalues() if
+                            net.external]
+        dst_ext_nets_ids = [net.id for net in dst_info.by_id.itervalues() if
+                            net.external]
+
+        for src_net_id, dst_net_id in ext_net_map.iteritems():
+            if src_net_id not in src_ext_nets_ids:
+                invalid_ext_nets.setdefault('src_nets', []).append(src_net_id)
+            if dst_net_id not in dst_ext_nets_ids:
+                invalid_ext_nets.setdefault('dst_nets', []).append(dst_net_id)
+
+        return invalid_ext_nets
+
 
 class Network(object):
     def __init__(self, info):
@@ -454,6 +524,7 @@ class FloatingIp(object):
         self.network = info['network_name']
         self.net_tenant = info['ext_net_tenant_name']
         self.port_id = info['port_id']
+        self.network_id = info['floating_network_id']
 
     def __eq__(self, other):
         if not isinstance(other, FloatingIp):

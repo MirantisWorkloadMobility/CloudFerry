@@ -44,7 +44,8 @@ class CheckNetworksTestCase(test.TestCase):
         fake_dst_net.read_info.return_value = dst_net_info
         fake_src_cloud = mock.Mock()
         fake_dst_cloud = mock.Mock()
-        fake_config = {}
+        fake_config = mock.MagicMock()
+        fake_config.migrate.ext_net_map = None
         fake_src_cloud.resources = {'network': fake_src_net,
                                     'compute': fake_src_compute}
         fake_dst_cloud.resources = {'network': fake_dst_net}
@@ -261,7 +262,8 @@ class CheckNetworksTestCase(test.TestCase):
                                           'tenant_name': 'test_tenant',
                                           'network_name': 'test_net',
                                           'ext_net_tenant_name': 'test_tenant',
-                                          'port_id': 'test_port'}]}
+                                          'port_id': 'test_port',
+                                          'floating_network_id': 'net_id'}]}
         dst_net_info = {'networks': [],
                         'subnets': [],
                         'floating_ips': []}
@@ -275,14 +277,16 @@ class CheckNetworksTestCase(test.TestCase):
                                           'tenant_name': 'test_tenant',
                                           'network_name': 'test_net',
                                           'ext_net_tenant_name': 'test_tenant',
-                                          'port_id': None}]}
+                                          'port_id': None,
+                                          'floating_network_id': 'net_id'}]}
         dst_net_info = {'networks': [],
                         'subnets': [],
                         'floating_ips': [{'floating_ip_address': '1.1.1.1',
                                           'tenant_name': 'test_tenant',
                                           'network_name': 'test_net',
                                           'ext_net_tenant_name': 'test_tenant',
-                                          'port_id': None}]}
+                                          'port_id': None,
+                                          'floating_network_id': 'net_id'}]}
 
         self.get_action(src_net_info, dst_net_info).run()
 
@@ -293,14 +297,16 @@ class CheckNetworksTestCase(test.TestCase):
                                           'tenant_name': 'test_tenant',
                                           'network_name': 'test_net',
                                           'ext_net_tenant_name': 'test_tenant',
-                                          'port_id': None}]}
+                                          'port_id': None,
+                                          'floating_network_id': 'net_id'}]}
         dst_net_info = {'networks': [],
                         'subnets': [],
                         'floating_ips': [{'floating_ip_address': '1.1.1.1',
                                           'tenant_name': 'new_tenant',
                                           'network_name': 'test_net',
                                           'ext_net_tenant_name': 'test_tenant',
-                                          'port_id': None}]}
+                                          'port_id': None,
+                                          'floating_network_id': 'net_id'}]}
 
         action = self.get_action(src_net_info, dst_net_info)
         self.assertRaises(exception.AbortMigrationError, action.run)
@@ -312,14 +318,16 @@ class CheckNetworksTestCase(test.TestCase):
                                           'tenant_name': 'test_tenant',
                                           'network_name': 'test_net',
                                           'ext_net_tenant_name': 'test_tenant',
-                                          'port_id': 'test_port'}]}
+                                          'port_id': 'test_port',
+                                          'floating_network_id': 'net_id'}]}
         dst_net_info = {'networks': [],
                         'subnets': [],
                         'floating_ips': [{'floating_ip_address': '1.1.1.1',
                                           'tenant_name': 'test_tenant',
                                           'network_name': 'test_net',
                                           'ext_net_tenant_name': 'test_tenant',
-                                          'port_id': 'test_port'}]}
+                                          'port_id': 'test_port',
+                                          'floating_network_id': 'net_id'}]}
 
         action = self.get_action(src_net_info, dst_net_info)
         self.assertRaises(exception.AbortMigrationError, action.run)
@@ -331,14 +339,16 @@ class CheckNetworksTestCase(test.TestCase):
                                           'tenant_name': 'test_tenant',
                                           'network_name': 'test_net',
                                           'ext_net_tenant_name': 'test_tenant',
-                                          'port_id': None}]}
+                                          'port_id': None,
+                                          'floating_network_id': 'net_id'}]}
         dst_net_info = {'networks': [],
                         'subnets': [],
                         'floating_ips': [{'floating_ip_address': '1.1.1.1',
                                           'tenant_name': 'test_tenant',
                                           'network_name': 'test_net',
                                           'ext_net_tenant_name': 'test_tenant',
-                                          'port_id': 'test_port'}]}
+                                          'port_id': 'test_port',
+                                          'floating_network_id': 'net_id'}]}
 
         self.get_action(src_net_info, dst_net_info).run()
 
