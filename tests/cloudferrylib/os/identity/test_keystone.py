@@ -85,23 +85,35 @@ class KeystoneIdentityTestCase(test.TestCase):
         self.fake_role_1.name = 'role_name_1'
         self.fake_role_1.id = 'role_id_1'
 
-        self.fake_src_keystone = mock.Mock()
-        self.fake_dst_keystone = mock.Mock()
-        self.fake_src_keystone.keystone_client.users.find.side_effect = (
-            self.mock_user_find)
-        self.fake_dst_keystone.keystone_client.users.find.side_effect = (
-            self.mock_user_find)
-
         cfglib.init_config()
         cfglib.CONF.src.user = 'src_admin_user'
         cfglib.CONF.dst.user = 'dst_admin_user'
 
         self.fake_src_admin_user = mock.Mock()
+        self.fake_src_admin_user.name = 'src_admin_user'
         self.fake_dst_admin_user = mock.Mock()
+        self.fake_dst_admin_user.name = 'dst_admin_user'
 
         self.fake_same_user = mock.Mock()
         self.fake_same_user.id = 'fake_same_id'
         self.fake_same_user.name = 'fake_same_name'
+
+        src_keystone = mock.Mock()
+        dst_keystone = mock.Mock()
+        self.fake_src_keystone = src_keystone
+        self.fake_dst_keystone = dst_keystone
+        src_keystone.keystone_client.users.list.return_value = [
+            self.fake_user_0,
+            self.fake_same_user,
+            self.fake_src_admin_user]
+        dst_keystone.keystone_client.users.list.return_value = [
+            self.fake_user_1,
+            self.fake_same_user,
+            self.fake_dst_admin_user]
+        src_keystone.keystone_client.users.get.side_effect = self.mock_user_get
+        dst_keystone.keystone_client.users.get.side_effect = self.mock_user_get
+        src_keystone.try_get_user_by_name.side_effect = self.mock_user_get
+        dst_keystone.try_get_user_by_name.side_effect = self.mock_user_get
 
     def test_get_client_generates_new_token(self):
         client1 = self.keystone_client.keystone_client
@@ -300,17 +312,18 @@ class KeystoneIdentityTestCase(test.TestCase):
                  'meta': {}})
         return fake_info
 
-    def mock_user_find(self, id=None, name=None):
+    def mock_user_get(self, id, default=None):
         map_dict = {'user_id_0': self.fake_user_0,
                     'user_name_1': self.fake_user_1,
                     'fake_same_id': self.fake_same_user,
                     'fake_same_name': self.fake_same_user,
                     'src_admin_user_id': self.fake_src_admin_user,
                     'dst_admin_user': self.fake_dst_admin_user}
-        key = id or name
         try:
-            return map_dict[key]
+            return map_dict[id]
         except KeyError:
+            if default is not None:
+                return map_dict[default]
             raise exceptions.NotFound
 
     def test_get_dst_user_from_src_user_id_0(self):
@@ -491,6 +504,16 @@ class KeystoneClientTestCase(test.TestCase):
 class AddAdminToNonAdminTenantTestCase(test.TestCase):
     def test_user_role_is_removed_on_scope_exit(self):
         ksclient = mock.MagicMock()
+        member_role = mock.Mock()
+        member_role.name = 'admin'
+        user = mock.MagicMock()
+        user.name = 'adm'
+        tenant = mock.MagicMock()
+        tenant.name = 'tenant'
+        ksclient.roles.list.return_value = [member_role]
+        ksclient.users.list.return_value = [user]
+        ksclient.tenants.list.return_value = [tenant]
+        ksclient.roles.roles_for_user.return_value = []
 
         with keystone.AddAdminUserToNonAdminTenant(ksclient, 'adm', 'tenant'):
             pass
@@ -503,8 +526,14 @@ class AddAdminToNonAdminTenantTestCase(test.TestCase):
         role_name = 'member'
         member_role = mock.Mock()
         member_role.name = role_name
+        user = mock.MagicMock()
+        user.name = 'adm'
+        tenant = mock.MagicMock()
+        tenant.name = 'tenant'
+        ksclient.roles.list.return_value = [member_role]
+        ksclient.users.list.return_value = [user]
+        ksclient.tenants.list.return_value = [tenant]
         ksclient.roles.roles_for_user.return_value = [member_role]
-        ksclient.roles.find.return_value = member_role
 
         with keystone.AddAdminUserToNonAdminTenant(ksclient,
                                                    'adm',

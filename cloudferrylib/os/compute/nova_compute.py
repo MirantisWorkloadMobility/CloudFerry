@@ -95,7 +95,7 @@ class RandomSchedulerVmDeployer(object):
         try:
             return self.nc.deploy_instance(create_params, client_conf)
         except exception.TimeoutException:
-            az = instance['availability_zone']
+            az = self.nc.get_availability_zone(instance['availability_zone'])
             hosts = self.nc.get_compute_hosts(availability_zone=az)
             random.seed()
             random.shuffle(hosts)
@@ -959,15 +959,16 @@ class NovaCompute(compute.Compute):
     def get_hypervisor_statistics(self):
         return self.nova_client.hypervisors.statistics()
 
-    def get_compute_hosts(self, availability_zone=None):
-        if availability_zone:
-            try:
-                self.nova_client.availability_zones.find(
+    def get_availability_zone(self, availability_zone):
+        try:
+            self.nova_client.availability_zones.find(
                     zoneName=availability_zone)
-            except nova_exc.NotFound:
-                availability_zone = \
-                    self.config.migrate.default_availability_zone
+        except nova_exc.NotFound:
+            availability_zone = \
+                self.config.migrate.default_availability_zone
+        return availability_zone
 
+    def get_compute_hosts(self, availability_zone=None):
         hosts = self.nova_client.hosts.list(zone=availability_zone)
         az_host_names = set([h.host_name for h in hosts])
 

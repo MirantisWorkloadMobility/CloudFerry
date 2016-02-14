@@ -232,7 +232,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
     @unittest.skipIf(functional_test.get_option_from_config_ini(
             option='keep_affinity_settings') == 'False',
         'Keep affinity settings disabled in CloudFerry config')
-    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2', 'tenant4'])
+    @attr(migrated_tenant=['tenant1', 'tenant2', 'tenant4'])
     def test_migrate_nova_server_groups(self):
         """Validate server groups were migrated with correct parameters.
 

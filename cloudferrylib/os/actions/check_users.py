@@ -44,15 +44,19 @@ class CheckUsersAvailabilityOnSrcAndDst(action.Action):
         src_users = src_keystone_client.users.list()
         dst_users = dst_keystone_client.users.list()
 
-        src_user_names = set(map(attrgetter('name'), src_users))
-        dst_user_names = set(map(attrgetter('name'), dst_users))
+        src_user_names = {name.lower(): name
+                          for name in map(attrgetter('name'), src_users)}
+        dst_user_names = {name.lower(): name
+                          for name in map(attrgetter('name'), dst_users)}
 
-        users_missing_on_dst = src_user_names - dst_user_names
+        users_missing_on_dst = \
+            set(src_user_names.keys()) - set(dst_user_names.keys())
 
         if users_missing_on_dst:
             msg = "{n} missing users on destination: {users}".format(
                 n=len(users_missing_on_dst),
-                users=", ".join(users_missing_on_dst))
+                users=", ".join(src_user_names[key]
+                                for key in users_missing_on_dst))
             LOG.error(msg)
             raise cf_exceptions.AbortMigrationError(msg)
 
