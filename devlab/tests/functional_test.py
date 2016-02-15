@@ -177,11 +177,28 @@ class FunctionalTest(unittest.TestCase):
                for sg in i['security_groups']]
         return self._get_neutron_resources('security_groups', sgs)
 
-    def filter_images(self):
+    def filter_images(self, exclude_images_with_fields=None):
+        if exclude_images_with_fields is None:
+            exclude_images_with_fields = {}
+
+        if exclude_images_with_fields.get('broken') is None:
+            exclude_images_with_fields['broken'] = True
+
+        def _image_exclude_filter(images):
+            filtered_images_name = []
+            for image in images:
+                for key, value in exclude_images_with_fields.iteritems():
+                    if key in image and image[key] == value:
+                        break
+                else:
+                    filtered_images_name.append(image['name'])
+            return filtered_images_name
+
         all_images = self.migration_utils.get_all_images_from_config()
-        images = [i['name'] for i in all_images if not i.get('broken')]
+        filtered_images = _image_exclude_filter(all_images)
+
         image_list = self.src_cloud.glanceclient.images.list(is_public=None)
-        return [i for i in image_list if i.name in images]
+        return [i for i in image_list if i.name in filtered_images]
 
     def filter_volumes(self):
         volumes = config.cinder_volumes

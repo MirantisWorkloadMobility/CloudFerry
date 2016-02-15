@@ -330,6 +330,11 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.validate_resource_parameter_in_dst(src_images, dst_images,
                                                 resource_name='image',
                                                 parameter='checksum')
+
+        exclude_images_with_fields = {'delete_on_dst': True}
+        src_images = self.filter_images(exclude_images_with_fields)
+        filtering_data = self.filtering_utils.filter_images(src_images)
+        src_images = filtering_data[0]
         self.validate_resource_parameter_in_dst(src_images, dst_images,
                                                 resource_name='image',
                                                 parameter='id')
@@ -373,6 +378,29 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             self.assertTrue(image not in dst_images,
                             'Image migrated despite that it was not included '
                             'in filter, Image info: \n{}'.format(image))
+
+    def test_glance_image_deleted_and_migrated_second_time_with_new_id(self):
+        src_images = []
+        for image in config.images:
+            if image.get('delete_on_dst'):
+                src_images.append(image)
+        dst_images_gen = self.dst_cloud.glanceclient.images.list()
+        dst_images = [x for x in dst_images_gen]
+
+        for src_image in src_images:
+            src_image = self.src_cloud.glanceclient.images.get(
+                src_image['id'])
+            for dst_image in dst_images:
+                if src_image.name == dst_image.name:
+                    self.assertNotEqual(
+                        src_image.id,
+                        dst_image.id,
+                        "The image with name {src_image_name} have the "
+                        "same ID on dst - must be different for this image,"
+                        "because this image was migrated and deleted on dst. "
+                        "On the next migration must be generated new ID".
+                        format(src_image_name=src_image.name)
+                    )
 
     def test_migrate_neutron_networks(self):
         """Validate networks were migrated with correct parameters.
