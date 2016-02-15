@@ -1644,8 +1644,8 @@ def generate_new_segmentation_id(src_seg_ids, dst_seg_ids, network_type):
     :result int: New generated free segmentation ID
     """
 
-    src_seg_ids = set(src_seg_ids[network_type])
-    dst_seg_ids = set(dst_seg_ids[network_type])
+    src_seg_ids = set(src_seg_ids.get(network_type, []))
+    dst_seg_ids = set(dst_seg_ids.get(network_type, []))
     busy_seg_ids = src_seg_ids | dst_seg_ids
 
     free_seg_id = None
