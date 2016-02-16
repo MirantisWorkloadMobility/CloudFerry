@@ -21,11 +21,11 @@ import re
 
 from fabric.api import run
 from fabric.api import settings
-
 from glanceclient import client as glance_client
 from glanceclient import exc as glance_exceptions
 from glanceclient.v1.images import CREATE_PARAMS
 from keystoneclient import exceptions as keystone_exceptions
+from OpenSSL import SSL as ssl
 
 from cloudferrylib.base import exception
 from cloudferrylib.base import image
@@ -255,12 +255,16 @@ class GlanceImage(image.Image):
 
     def get_ref_image(self, image_id):
         try:
+            # ssl.ZeroReturnError happens because a size of an image is zero
             with proxy_client.expect_exception(
-                    glance_exceptions.NotFound,
-                    glance_exceptions.HTTPInternalServerError):
+                glance_exceptions.NotFound,
+                glance_exceptions.HTTPInternalServerError,
+                ssl.ZeroReturnError
+            ):
                 return self.get_resp(self.glance_client.images.data(image_id))
         except (glance_exceptions.HTTPInternalServerError,
-                glance_exceptions.HTTPNotFound):
+                glance_exceptions.HTTPNotFound,
+                ssl.ZeroReturnError):
             raise exception.ImageDownloadError
 
     def get_image_checksum(self, image_id):
@@ -556,9 +560,11 @@ class GlanceImage(image.Image):
                 empty_image_list[image_id_src] = info['images'][image_id_src]
 
         view.show_progress()
-        # Remove obsolete/broken images from info
-        for img_id in obsolete_images_ids_list:
-            info['images'].pop(img_id)
+        if obsolete_images_ids_list:
+            LOG.warning('List of broken images: %s', obsolete_images_ids_list)
+            # Remove obsolete/broken images from info
+            for img_id in obsolete_images_ids_list:
+                info['images'].pop(img_id)
 
         return self._new_info(created_images, empty_image_list,
                               delete_disk_format, delete_container_format)

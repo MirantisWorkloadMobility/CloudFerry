@@ -85,6 +85,8 @@ class ConvertComputeToImage(action.Action):
                         missing_images[instance_id] = image_id
             else:
                 compute_ignored_images[instance_id] = instance
+        if missing_images:
+            LOG.warning('List of broken images: %s', missing_images.values())
         return {
             self.target_output: image_info,
             'compute_ignored_images': compute_ignored_images,
