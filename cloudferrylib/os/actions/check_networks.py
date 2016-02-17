@@ -18,6 +18,8 @@ import collections
 import ipaddr
 import netaddr
 
+from neutronclient.common import exceptions as neutron_exc
+
 from cloudferrylib.base import exception
 from cloudferrylib.base.action import action
 from cloudferrylib.os.network import neutron
@@ -86,6 +88,22 @@ class CheckNetworks(action.Action):
         if floating_ips:
             overlapping_resources.update(
                 {'overlapping_floating_ips': floating_ips})
+
+        # Check busy physical networks on DST of FLAT network type
+        LOG.info("Check busy physical networks for FLAT network type...")
+        busy_flat_physnets = src_net_info.busy_flat_physnets(dst_net_info)
+        if busy_flat_physnets:
+            overlapping_resources.update(
+                {'busy_flat_physnets': busy_flat_physnets})
+
+        # Check physical networks existence on DST for VLAN network type
+        LOG.info("Check physical networks existence for VLAN network type...")
+        dst_neutron_client = dst_net.neutron_client
+        missing_vlan_physnets = src_net_info.missing_vlan_physnets(
+            dst_net_info, dst_neutron_client)
+        if missing_vlan_physnets:
+            overlapping_resources.update(
+                {'missing_vlan_physnets': missing_vlan_physnets})
 
         # Check VMs spawned directly in external network
         LOG.info("Check VMs spawned directly in external networks...")
@@ -297,6 +315,79 @@ class NetworkInfo(object):
 
         return nets_with_overlapping_subnets, nets_with_overlapping_seg_ids
 
+    def busy_flat_physnets(self, dst_info):
+        """
+        Get list of busy physical networks for FLAT network type.
+
+        :param dst_info: NetworkInfo instance of DST cloud
+
+        :return: List of busy FLAT physnets.
+        """
+
+        dst_flat_physnets = [net.physnet for net in dst_info.get_networks() if
+                             net.network_type == 'flat']
+        busy_flat_physnets = []
+
+        for network in self.get_networks():
+            if network.network_type != 'flat':
+                continue
+
+            dst_net = dst_info.by_hash.get(network.hash)
+            if dst_net:
+                continue
+
+            if network.physnet in dst_flat_physnets:
+                busy_flat_physnets.append(network.physnet)
+
+        return busy_flat_physnets
+
+    def missing_vlan_physnets(self, dst_info, dst_neutron_client):
+        """
+        Get list of missing physical networks for VLAN network type.
+
+        :param dst_info: NetworkInfo instance of DST cloud
+        :param dst_neutron_client: DST neutron client
+
+        :return: List of missing VLAN physnets.
+        """
+
+        missing_vlan_physnets = []
+        dst_vlan_physnets = [net.physnet for net in dst_info.get_networks() if
+                             net.network_type == 'vlan']
+
+        # We need to specify segmentation ID in case of VLAN network creation
+        # in OpenStack versions earlier than Juno (f.e. Icehouse, Grizzly etc.)
+        dst_seg_ids = neutron.get_segmentation_ids_from_net_list(
+            dst_info.networks_info)
+        # We do not care about free segmentation ID on source cloud, we only
+        # need to have destination one for checking purpose
+        free_seg_id = neutron.generate_new_segmentation_id(dst_seg_ids,
+                                                           dst_seg_ids,
+                                                           'vlan')
+
+        for network in self.get_networks():
+            if network.network_type != 'vlan':
+                continue
+
+            if network.physnet in dst_vlan_physnets:
+                continue
+
+            try:
+                network_info = {
+                    'network': {
+                        'provider:physical_network': network.physnet,
+                        'provider:network_type': 'vlan',
+                        'provider:segmentation_id': free_seg_id
+                    }
+                }
+                new_net = dst_neutron_client.create_network(network_info)
+            except neutron_exc.NeutronClientException:
+                missing_vlan_physnets.append(network.physnet)
+            else:
+                dst_neutron_client.delete_network(new_net['network']['id'])
+
+        return missing_vlan_physnets
+
 
 class Network(object):
     def __init__(self, info):
@@ -309,6 +400,7 @@ class Network(object):
         self.external = self.info['router:external']
         self.network_type = self.info['provider:network_type']
         self.seg_id = self.info["provider:segmentation_id"]
+        self.physnet = self.info["provider:physical_network"]
 
     def add_subnet(self, info):
         self.subnets.append(info)
@@ -384,6 +476,8 @@ class FloatingIp(object):
 
         Also check if this Floating IP is not busy (i.e. is not associated to
         VM on SRC and DST at the same time) on both environments.
+
+        :param dst_floating_ip: DST FloatingIp instance.
 
         :raise AbortMigrationError: If FloatingIp overlaps with the DST.
         """

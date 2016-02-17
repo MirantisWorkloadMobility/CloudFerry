@@ -38,7 +38,8 @@ FAKE_CONFIG = utils.ext_dict(
     migrate=utils.ext_dict({'migrate_quotas': True,
                             'retry': '7',
                             'time_wait': 5,
-                            'keep_network_interfaces_order': True}))
+                            'keep_network_interfaces_order': True,
+                            'keep_usage_quotas_inst': True}))
 
 
 class BaseNovaComputeTestCase(test.TestCase):

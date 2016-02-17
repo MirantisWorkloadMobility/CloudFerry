@@ -31,6 +31,7 @@ migrate_user_quotas = False
 incloud_live_migration = nova
 ssh_connection_attempts = 3
 keep_affinity_settings = True
+keep_usage_quotas_inst = True
 
 [src]
 type = os
