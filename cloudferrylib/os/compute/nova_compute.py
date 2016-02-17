@@ -32,6 +32,7 @@ from cloudferrylib.os.identity import keystone
 from cloudferrylib.utils import log
 from cloudferrylib.utils import mysql_connector
 from cloudferrylib.utils import node_ip
+from cloudferrylib.utils import override
 from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.os.compute.usage_quota import UsageQuotaCompute
@@ -90,13 +91,12 @@ class RandomSchedulerVmDeployer(object):
     def __init__(self, nova_compute_obj):
         self.nc = nova_compute_obj
 
-    def deploy(self, instance, create_params, client_conf):
-        LOG.info("Deploying instance '%s'", instance['name'])
-
+    def deploy(self, create_params, client_conf):
+        LOG.info("Deploying instance '%s'", create_params['name'])
+        az = create_params['availability_zone']
         try:
             return self.nc.deploy_instance(create_params, client_conf)
         except exception.TimeoutException:
-            az = self.nc.get_availability_zone(instance['availability_zone'])
             hosts = self.nc.get_compute_hosts(availability_zone=az)
             random.seed()
             random.shuffle(hosts)
@@ -106,14 +106,14 @@ class RandomSchedulerVmDeployer(object):
                 create_params['availability_zone'] = ':'.join([az, next_host])
                 LOG.info("Trying to deploy instance '%s' in '%s'",
                          create_params['name'],
-                         create_params.get('availability_zone', 'UNKNOWN'))
+                         create_params['availability_zone'])
                 try:
                     return self.nc.deploy_instance(create_params, client_conf)
                 except exception.TimeoutException:
                     pass
 
         message = ("Unable to schedule VM '{vm}' on any of available compute "
-                   "nodes.").format(vm=instance['name'])
+                   "nodes.").format(vm=create_params['name'])
         LOG.error(message)
         raise DestinationCloudNotOperational(message)
 
@@ -132,6 +132,11 @@ class NovaCompute(compute.Compute):
         self._failed_instances = []
         self.instance_info_caches = instance_info_caches.InstanceInfoCaches(
             self.get_db_connection())
+        if config.migrate.override_rules is None:
+            self.attr_override = override.AttributeOverrides.zero()
+        else:
+            self.attr_override = override.AttributeOverrides.from_filename(
+                config.migrate.override_rules)
 
     @property
     def nova_client(self):
@@ -671,13 +676,25 @@ class NovaCompute(compute.Compute):
             instance = _instance['instance']
             with self._ensure_instance_flavor_exists(instance):
                 LOG.debug("creating instance %s", instance['name'])
-                create_params = {'name': instance['name'],
-                                 'flavor': instance['flavor_id'],
-                                 'key_name': instance['key_name'],
-                                 'nics': instance['nics'],
-                                 'image': instance['image_id'],
-                                 # user_id matches user_id on source
-                                 'user_id': instance.get('user_id')}
+                create_params = {
+                    'name': instance['name'],
+                    'flavor': self.attr_override.get_attr(
+                        instance, 'flavor_id'),
+                    'key_name': self.attr_override.get_attr(
+                        instance, 'key_name'),
+                    'nics': instance['nics'],
+                    'image': instance['image_id'],
+                    # user_id matches user_id on source
+                    'user_id': instance.get('user_id'),
+                    'availability_zone': self.attr_override.get_attr(
+                        instance, 'availability_zone',
+                        default=self.get_availability_zone(
+                            instance['availability_zone'])),
+                    'scheduler_hints': {
+                        'group': self.attr_override.get_attr(
+                            instance, 'server_group')
+                    },
+                }
                 if instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
                     volume_id = instance['volumes'][0]['id']
                     create_params["block_device_mapping_v2"] = [{
@@ -689,17 +706,9 @@ class NovaCompute(compute.Compute):
                     }]
                     create_params['image'] = None
 
-                if (self.config.migrate.keep_affinity_settings and
-                        instance['server_group'] is not None):
-                    create_params['scheduler_hints'] = {
-                        'group': instance['server_group']}
-
                 client_conf.cloud.tenant = instance['tenant_name']
-
-                new_id = RandomSchedulerVmDeployer(self).deploy(instance,
-                                                                create_params,
+                new_id = RandomSchedulerVmDeployer(self).deploy(create_params,
                                                                 client_conf)
-
                 new_ids[new_id] = instance['id']
         return new_ids
 
@@ -982,14 +991,13 @@ class NovaCompute(compute.Compute):
     def get_hypervisor_statistics(self):
         return self.nova_client.hypervisors.statistics()
 
-    def get_availability_zone(self, availability_zone):
+    def get_availability_zone(self, az_name):
         try:
-            self.nova_client.availability_zones.find(
-                    zoneName=availability_zone)
+            with proxy_client.expect_exception(nova_exc.NotFound):
+                self.nova_client.availability_zones.find(zoneName=az_name)
+                return az_name
         except nova_exc.NotFound:
-            availability_zone = \
-                self.config.migrate.default_availability_zone
-        return availability_zone
+            return None
 
     def get_compute_hosts(self, availability_zone=None):
         hosts = self.nova_client.hosts.list(zone=availability_zone)

@@ -1,0 +1,53 @@
+---
+
+# Examples:
+#server_group:
+#- when:
+#    id:
+#    - 14ba292e-f0bb-4eec-9b3a-abb775db7ff4
+#    - 533d5840-8584-47bc-be16-2825536e9027
+#    - 7398b91f-e1c2-4378-9943-391318981aee
+#    - 1da4d59e-06de-4d34-b0e7-655e886e0183
+#  replace: 66e76c27-874d-48e1-bca2-b0eb0ea95ff3
+
+
+# Change AZ:
+#  1) from us_west_dc1_ssd to us_west_dc2_ssd
+#  2) us_west_dc3, us_west_dc4, us_west_dc5 to us_east_dc1
+#  3) if no AZ with same name as in SRC cloud, change AZ to us_west_dc2
+#availability_zone:
+#- when: us_west_dc1_ssd
+#  replace: us_west_dc2_ssd
+#- when:
+#    availability_zone:
+#    - us_west_dc3
+#    - us_west_dc4
+#    - us_west_dc5
+#  replace: us_east_dc1
+#- when: null
+#  replace: us_west_dc2
+
+# Change falvor for instances with listed IDs to "4"
+#flavor:
+#- when:
+#    id:
+#    - 14ba292e-f0bb-4eec-9b3a-abb775db7ff4
+#    - 533d5840-8584-47bc-be16-2825536e9027
+#    - 7398b91f-e1c2-4378-9943-391318981aee
+#    - 1da4d59e-06de-4d34-b0e7-655e886e0183
+#  replace: 4
+
+# Change key_name from 'admin' to 'h4x0r'
+#key_name:
+#- when: admin
+#  replace: h4x0r
+
+# Change AZ to us_west_dc2_ssd when source AZ is us_west_dc1 and source flavor
+# is "5"
+#availability_zone:
+#- when:
+#    availability_zone:
+#    - us_west_dc1
+#    flavor:
+#    - 5
+#  replace: us_west_dc2_ssd
