@@ -91,6 +91,7 @@ Vagrant.configure(2) do |config|
       case nodedata.fetch("role", "")
         when "openstack"
           thisnode.vm.provision "shell", path: "./provision/fix_interfaces.sh"
+          thisnode.vm.provision "shell", path: "./provision/create_disks_swift.sh"
           if nodename == "grizzly" then
             thisnode.vm.provision "shell", path: "./provision/qemu.sh"
           elsif nodename == "icehouse" then
