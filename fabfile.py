@@ -225,7 +225,6 @@ def show_unused_resources(cloud, count=100, tenant=None):
 
 
 def init(name_config=None, debug=None):
-    cfglib.collector_configs_plugins()
     try:
         cfglib.init_config(name_config)
     except oslo.config.cfg.Error:

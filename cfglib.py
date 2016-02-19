@@ -1,5 +1,21 @@
+# Copyright (c) 2016 Mirantis Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the License);
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an AS IS BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and#
+# limitations under the License.
+
+
 from oslo.config import cfg
-import addons
+
+
 src = cfg.OptGroup(name='src',
                    title='Credentials and general config for source cloud')
 
@@ -677,53 +693,3 @@ def init_config(name_config=None):
     if name_config:
         name_configs[0] = name_config
     CONF(default_config_files=name_configs, args="")
-
-
-def get_plugins():
-    plugins = addons
-    dir_plugins = dir(plugins)
-    exclude_field = ['__author__', '__builtins__', '__doc__', '__file__',
-                     '__name__', '__package__', '__path__']
-    plugins = [(item, plugins.__dict__[item])
-               for item in dir_plugins if item not in exclude_field]
-    return plugins
-
-
-def find_group(group):
-    for g in xrange(len(cfg_for_reg)):
-        if group.name == cfg_for_reg[g][0].name:
-            return g
-    return -1
-
-
-def find_field(field, fields):
-    for g in xrange(len(fields)):
-        if field.name == fields[g].name:
-            return g
-    return -1
-
-
-def merge_fields(index_pair, fields):
-    for field in fields:
-        index_field = find_field(field, cfg_for_reg[index_pair][1])
-        if index_field >= 0:
-            cfg_for_reg[index_pair][1][index_field] = field
-        else:
-            cfg_for_reg[index_pair][1].append(field)
-
-
-def merge_cfg(conf):
-    for pair in conf:
-        index_pair = find_group(pair[0])
-        if index_pair == -1:
-            cfg_for_reg.append(pair)
-        else:
-            merge_fields(index_pair, pair[1])
-
-
-def collector_configs_plugins():
-    pass
-
-if __name__ == '__main__':
-    collector_configs_plugins()
-    init_config()
