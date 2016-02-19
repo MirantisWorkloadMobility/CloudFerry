@@ -107,6 +107,9 @@ class KeyPairMigrationTestCase(test.TestCase):
 
             tkp.src_cloud = mock.MagicMock()
             tkp.dst_cloud = mock.MagicMock()
+            tkp.cfg = mock.Mock()
+            tkp.cfg.migrate.skip_orphaned_keypairs = True
+
             src_users = tkp.src_cloud.resources[
                 utl.IDENTITY_RESOURCE].keystone_client.users
             src_users.find.side_effect = keystoneclient.exceptions.NotFound
@@ -131,6 +134,9 @@ class KeyPairMigrationTestCase(test.TestCase):
                                     kp_db_broker=db_broker)
         tkp.src_cloud = mock.MagicMock()
         tkp.dst_cloud = mock.MagicMock()
+        tkp.cfg = mock.Mock()
+        tkp.cfg.migrate.skip_orphaned_keypairs = True
+
         tkp.run()
 
         self.assertTrue(db_broker.store_keypair.call_count == num_keypairs)
