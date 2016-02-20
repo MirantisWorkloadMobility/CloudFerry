@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import collections
 import functools
 
 
@@ -20,10 +19,6 @@ class Memoized(object):
     """Decorator. Caches a function's return value each time it is called.
    If called later with the same arguments, the cached value is returned
    (not reevaluated).
-
-   Does not support key-value arguments.
-
-   Taken from https://wiki.python.org/moin/PythonDecoratorLibrary#Memoize
    """
 
     def __init__(self, func):
@@ -31,21 +26,26 @@ class Memoized(object):
         self.cache = {}
 
     def __call__(self, *args, **kwargs):
-        if kwargs:
-            return self.func(*args, **kwargs)
-        if not isinstance(args, collections.Hashable):
-            # uncacheable. a list, for instance.
-            # better to not cache than blow up.
-            return self.func(*args)
-        if args in self.cache:
-            return self.cache[args]
-        else:
-            value = self.func(*args)
-            self.cache[args] = value
-            return value
+        key = self._make_key(args, kwargs)
+        hashable = True
+        try:
+            if key in self.cache:
+                return self.cache[key]
+        except TypeError:
+            hashable = False
+
+        # Invoke function and store to cache if key is hashable
+        value = self.func(*args, **kwargs)
+        if hashable:
+            self.cache[key] = value
+        return value
 
     def reset(self):
         self.cache = {}
+
+    @staticmethod
+    def _make_key(args, kwargs):
+        return args, tuple(sorted(kwargs.items()))
 
     def __repr__(self):
         """Return the function's docstring."""
