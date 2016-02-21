@@ -330,6 +330,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.validate_resource_parameter_in_dst(src_images, dst_images,
                                                 resource_name='image',
                                                 parameter='checksum')
+        self.validate_resource_parameter_in_dst(src_images, dst_images,
+                                                resource_name='image',
+                                                parameter='id')
 
     @attr(migrated_tenant=['tenant1', 'tenant2'])
     def test_migrate_glance_image_belongs_to_deleted_tenant(self):
