@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from nose.plugins.attrib import attr
 import os
 import re
 import unittest
-import yaml
 
-import tests.functional_test as functional_test
+import yaml
+from nose.plugins.attrib import attr
+
+import devlab.tests.functional_test as functional_test
 
 
 class GroupProcedureVerification(functional_test.FunctionalTest):
@@ -38,6 +39,10 @@ class GroupProcedureVerification(functional_test.FunctionalTest):
         #  Ferry.
         self.conf_path = 'devlab/tests'
         self.TENANT_ID_LENGTH = 32
+        self.new_file_name = 'test_file.yaml'
+        self.post_conf_dict = {}
+        self.pre_conf_dict = {}
+        self.src_vms = []
         dst_ip = self._get_ip_from_url(self.dst_cloud.auth_url)
         src_ip = self._get_ip_from_url(self.src_cloud.auth_url)
         cmd_no_path = './../../devlab/provision/generate_config.sh' \
@@ -60,20 +65,18 @@ class GroupProcedureVerification(functional_test.FunctionalTest):
         for cmd in [cmd_1, cmd_2]:
             try:
                 os.system(cmd)
-            except Exception as e:
+            except OSError as e:
                 print 'Was unable to delete testing files, error output:' \
                       '\n{}'.format(e)
 
     def _get_ip_from_url(self, url):
-        ip_regexp = '.+(\d{3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).+'
+        ip_regexp = r'.+(\d{3}\.\d{1,3}\.\d{1,3}\.\d{1,3}).+'
         return re.match(ip_regexp, url).group(1)
 
     def _prepare_files(self, grouping_by):
         """
         Method for generation of test/configuration files.
         """
-        self.post_conf_dict = {}
-        self.pre_conf_dict = {}
         main_folder = self.main_folder
 
         file_path = 'devlab/tests/groups_example.yaml'
@@ -96,7 +99,6 @@ class GroupProcedureVerification(functional_test.FunctionalTest):
         self.pre_conf_dict['group_by'] = [unicode(grouping_by)]
         self.pre_conf_dict['user_defined_group_1'] = inst_id_list
         self.pre_conf_dict['user_defined_group_2'] = [inst_3]
-        self.new_file_name = 'test_file.yaml'
         file_to_write_into = os.path.join(os.getcwd(), self.new_file_name)
         with open(file_to_write_into, 'w') as stream:
             yaml.dump(self.pre_conf_dict, stream, default_flow_style=False)

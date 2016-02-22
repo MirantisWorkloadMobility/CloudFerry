@@ -71,5 +71,4 @@ vagrant reload grizzly icehouse
 fi
 
 echo "Generate load on SRC"
-cd tests
 python generate_load.py

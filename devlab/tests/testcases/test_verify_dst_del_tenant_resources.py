@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from nose.plugins.attrib import attr
-import tests.config as config
-import tests.functional_test as functional_test
 import unittest
+
+from nose.plugins.attrib import attr
+
+import devlab.tests.config as config
+import devlab.tests.functional_test as functional_test
 
 
 class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):

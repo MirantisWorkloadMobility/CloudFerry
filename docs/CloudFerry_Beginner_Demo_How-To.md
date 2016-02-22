@@ -125,9 +125,9 @@ How-To: CloudFerry for Beginners
     pristine and then create tenants, resources and workloads to
     migrate.
 
-27. [vagrant@nfs ~/CloudFerry]$ ```python devlab/tests/generate_load.py –clean```
+27. [vagrant@nfs ~/CloudFerry]$ ```python devlab/generate_load.py –clean```
 
-28. [vagrant@nfs ~/CloudFerry]$ ```python devlab/tests/generate_load.py```
+28. [vagrant@nfs ~/CloudFerry]$ ```python devlab/generate_load.py```
 
 29. [vagrant@nfs ~/CloudFerry]$ ```source .venv/bin/activate```
     
