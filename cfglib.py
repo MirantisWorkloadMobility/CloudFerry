@@ -208,7 +208,11 @@ migrate_opts = [
     cfg.BoolOpt('keep_network_interfaces_order', default=True,
                 help="Keep the order of network interfaces of instances."),
     cfg.BoolOpt('keep_usage_quotas_inst', default=True,
-                help="Keep the usage quotas for instances.")
+                help="Keep the usage quotas for instances."),
+    cfg.BoolOpt('skip_orphaned_keypairs', default=True,
+                help="If it is set to False - key pairs belonging to deleted "
+                     "tenant or to deleted user on SRC will be assigned to "
+                     "the admin on DST, otherwise skipped.")
 ]
 
 mail = cfg.OptGroup(name='mail',
