@@ -62,6 +62,10 @@ def public_filter():
     return lambda i: i.is_public
 
 
+def active_filter():
+    return lambda i: i.status == 'active'
+
+
 def tenant_filter(filtered_tenant_id):
     """Filters images not specified in tenant_id section of filters file"""
     return lambda i: (_tenant_filtering_disabled(filtered_tenant_id) or
@@ -101,6 +105,7 @@ class GlanceFilters(filters.CFFilters):
 
     def get_filters(self):
         is_public = public_filter()
+        is_active = active_filter()
         is_datetime = datetime_filter(self.filter_yaml.get_image_date())
         is_tenant = tenant_filter(self.filter_yaml.get_tenant())
         is_image_id = image_id_filter(self.filter_yaml.get_image_ids())
@@ -108,11 +113,13 @@ class GlanceFilters(filters.CFFilters):
                                   self.filter_yaml.get_tenant())
 
         if self.filter_yaml.is_public_and_member_images_filtered():
-            return [lambda i: (is_tenant(i) and
+            return [lambda i: (is_active(i) and
+                               is_tenant(i) and
                                is_image_id(i) and
                                is_datetime(i))]
         else:
             return [
-                lambda i: (is_public(i) or
-                           is_member(i) or
-                           is_tenant(i) and is_image_id(i) and is_datetime(i))]
+                lambda i: (is_active(i) and is_public(i) or
+                           is_active(i) and is_member(i) or
+                           is_active(i) and is_tenant(i) and is_image_id(i) and
+                           is_datetime(i))]
