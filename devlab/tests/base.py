@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
+from cinderclient.v1 import client as cinder
 from glanceclient.v1 import Client as glance
 from keystoneclient import exceptions as ks_exceptions
 from keystoneclient.v2_0 import client as keystone
-
-from novaclient.v1_1 import client as nova
 from neutronclient.v2_0 import client as neutron
-from cinderclient.v1 import client as cinder
+from novaclient.v1_1 import client as nova
 
-from test_exceptions import NotFound
-import utils
+import devlab.tests.utils as utils
+from devlab.tests.test_exceptions import NotFound
 
 OPENSTACK_RELEASES = {'192.168.1.2': 'grizzly',
                       '192.168.1.3': 'icehouse',
@@ -283,3 +284,16 @@ class BasePrerequisites(object):
 
         self.cinderclient = cinder.Client(user, password, tenant,
                                           self.auth_url)
+
+
+def get_dict_from_config_file(config_file):
+    conf_dict = {}
+    for section in config_file.sections():
+        conf_dict[section] = {}
+        for option in config_file.options(section):
+            conf_dict[section][option] = config_file.get(section, option)
+    return conf_dict
+
+
+def get_abs_path(file_path):
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), file_path)

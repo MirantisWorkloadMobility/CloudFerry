@@ -95,11 +95,15 @@ class TransportKeyPairs(action.Action):
         dst_users = {}
         key_pairs = self.kp_db_broker.get_all_keypairs(self.src_cloud)
 
+        # If we want to skip orphaned key pairs - we should not switch
+        # to the admin if dst_user doesn't exist
+        fallback_to_admin = not self.cfg.migrate.skip_orphaned_keypairs
+
         for key_pair in key_pairs:
             if key_pair.user_id not in dst_users:
                 dst_user = keystone.get_dst_user_from_src_user_id(
                     src_keystone, dst_keystone, key_pair.user_id,
-                    fallback_to_admin=True)
+                    fallback_to_admin=fallback_to_admin)
                 dst_users[key_pair.user_id] = dst_user
             else:
                 dst_user = dst_users[key_pair.user_id]

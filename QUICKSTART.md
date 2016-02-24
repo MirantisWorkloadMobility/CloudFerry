@@ -66,10 +66,10 @@
 
 7. Generate load on source VM (this will create a number of VMs on grizzly node)
     ```
-    cd CloudFerry/devlab/tests
-    source ./openrc.example
-    python ./generate_load.py --clean
-    python ./generate_load.py
+    cd CloudFerry/
+    source ./devlab/tests/openrc.example
+    python ./devlab/generate_load.py --clean
+    python ./devlab/generate_load.py
     ```
 
 8. Run migration

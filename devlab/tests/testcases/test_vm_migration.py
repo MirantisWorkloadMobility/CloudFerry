@@ -13,11 +13,12 @@
 # limitations under the License.
 
 import json
-from nose.plugins.attrib import attr
 import unittest
 
-from tests.functional_test import FunctionalTest
-import tests.config as config
+from nose.plugins.attrib import attr
+
+import devlab.tests.config as config
+from devlab.tests.functional_test import FunctionalTest
 
 
 class VmMigration(FunctionalTest):

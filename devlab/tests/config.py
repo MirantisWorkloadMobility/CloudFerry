@@ -48,6 +48,9 @@ logging_configuration = {
 filters_file_naming_template = 'filter_{tenant_name}.yaml'
 """Path to store filter files"""
 
+pre_migration_vm_states_file = 'pre_migration_vm_states.json'
+"""Path to store vm states file"""
+
 users = [
     {'name': 'user1', 'password': 'passwd1', 'email': 'mail@example.com',
      'tenant': 'tenant1', 'enabled': True},

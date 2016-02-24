@@ -13,23 +13,23 @@
 # limitations under the License.
 
 import itertools
-import time
 import logging
+import time
 from logging.config import dictConfig
 
 from keystoneclient import exceptions as ks_exceptions
 from neutronclient.common import exceptions as nt_exceptions
 from novaclient import exceptions as nv_exceptions
 
-from base import BasePrerequisites
-import config as conf
-from test_exceptions import NotFound
+import devlab.tests.config as conf
+from devlab.tests import base
+from devlab.tests import test_exceptions
 
 dictConfig(conf.logging_configuration)
 LOG = logging.getLogger(__name__)
 
 
-class CleanEnv(BasePrerequisites):
+class CleanEnv(base.BasePrerequisites):
 
     def clean_vms(self):
         vms = self.migration_utils.get_all_vms_from_config()
@@ -184,7 +184,8 @@ class CleanEnv(BasePrerequisites):
             try:
                 self.neutronclient.delete_security_group(self.get_sg_id(
                     sg['name']))
-            except (nt_exceptions.NeutronClientException, NotFound):
+            except (nt_exceptions.NeutronClientException,
+                    test_exceptions.NotFound):
                 LOG.warning("Security group %s failed to delete:",
                             sg['name'], exc_info=True)
 

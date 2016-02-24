@@ -47,14 +47,17 @@ class MysqlDump(action.Action):
         # dump mysql to file
         # probably, we have to choose what databases we have to dump
         # by default we dump all databases
-        command = ("mysqldump "
-                   "--user={user} "
-                   "--password={password} "
-                   "--opt "
-                   "--all-databases > {path}").format(
+        options = ["--user={user}", "--opt", "--all-databases"]
+        if self.cloud.cloud_config.mysql.db_password:
+            options.append("--password={password}")
+        options = " ".join(options).format(
             user=self.cloud.cloud_config.mysql.db_user,
-            password=self.cloud.cloud_config.mysql.db_password,
-            path=self.cloud.cloud_config.snapshot.snapshot_path)
+            password=self.cloud.cloud_config.mysql.db_password
+        )
+        command = "mysqldump {options} > {path}".format(
+            options=options,
+            path=self.cloud.cloud_config.snapshot.snapshot_path
+        )
         LOG.info("dumping database with command '%s'", command)
         self.cloud.ssh_util.execute(command, host_exec=db_host)
         # copy dump file to host with cloudferry (for now just in case)
@@ -87,13 +90,17 @@ class MysqlRestore(action.Action):
         db_host = mysql_connector.get_db_host(self.cloud.cloud_config)
 
         # apply sqldump from file to mysql
-        command = ("mysql "
-                   "--user={user} "
-                   "--password={password} "
-                   "< {path}").format(
+        options = ["--user={user}"]
+        if self.cloud.cloud_config.mysql.db_password:
+            options.append("--password={password}")
+        options = " ".join(options).format(
             user=self.cloud.cloud_config.mysql.db_user,
-            password=self.cloud.cloud_config.mysql.db_password,
-            path=self.cloud.cloud_config.snapshot.snapshot_path)
+            password=self.cloud.cloud_config.mysql.db_password
+        )
+        command = "mysql {options} < {path}".format(
+            options=options,
+            path=self.cloud.cloud_config.snapshot.snapshot_path
+        )
         LOG.info("restoring database with command '%s'", command)
         self.cloud.ssh_util.execute(command, host_exec=db_host)
         return {}

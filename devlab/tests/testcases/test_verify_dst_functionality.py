@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import tests.config as config
-import tests.functional_test as functional_test
 import time
 
-from fabric.api import sudo, local, settings, quiet
-from neutronclient.common.exceptions import NeutronClientException
-from novaclient.exceptions import Forbidden, OverLimit
 from cinderclient.exceptions import \
     ClientException as CinderClientBaseException
+from fabric.api import sudo, local, settings, quiet
 from keystoneclient import exceptions as ks_exceptions
+from neutronclient.common.exceptions import NeutronClientException
+from novaclient.exceptions import Forbidden, OverLimit
+
+import devlab.tests.config as config
+import devlab.tests.functional_test as functional_test
 
 TIMEOUT = 600
 TEST_TENANT_NAME = 'tenant4'
