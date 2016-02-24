@@ -195,13 +195,19 @@ migrate_opts = [
     cfg.StrOpt('default_availability_zone', default="nova",
                help="Availability zone to use for VM provisioning, in case "
                     "source cloud zones do not match destination"),
-    cfg.StrOpt('ephemeral_copy_backend', default="rsync",
-               help="Allows to choose how ephemeral storage is copied over "
-                    "from source to destination. Possible values: 'rsync' "
-                    "(default) and 'scp'. scp seem to be faster, while rsync "
-                    "is more reliable"),
+    cfg.StrOpt('copy_backend', default="rsync",
+               help="Allows to choose how ephemeral storage and cinder "
+                    "volumes are copied over from source to destination. "
+                    "Possible values: 'rsync' (default), 'scp' and 'bbcp'. "
+                    "scp seem to be faster, while rsync is more reliable, "
+                    "but bbcp works in multithreading mode."),
+    cfg.BoolOpt('copy_with_md5_verification', default=True,
+                help="Calculate md5 checksum for source and copied files and "
+                     "verify them."),
     cfg.StrOpt('log_config', default='configs/logging_config.yaml',
                help='The path of a logging configuration file.'),
+    cfg.BoolOpt('forward_stdout', default=True,
+                help="Forward messages from stdout to log."),
     cfg.BoolOpt('debug', default=False,
                 help="Print debugging output (set logging level to DEBUG "
                      "instead of default INFO level)."),
@@ -655,6 +661,20 @@ evacuation_opts = [
                     'during evacuation'),
 ]
 
+bbcp_group = cfg.OptGroup(name='bbcp', title='BBCP related settings')
+
+bbcp_opts = [
+    cfg.StrOpt('path', default='bbcp',
+               help='path to the executable bbcp to execute on the cloudferry '
+                    'host'),
+    cfg.StrOpt('src_path', default='$path',
+               help='path to the compiled bbcp for the source cloud hosts'),
+    cfg.StrOpt('dst_path', default='$path',
+               help='path to the compiled bbcp for the destination cloud '
+                    'hosts'),
+    cfg.StrOpt('options', default='-P 20', help='additional options'),
+]
+
 cfg_for_reg = [
     (src, src_opts),
     (dst, dst_opts),
@@ -683,6 +703,7 @@ cfg_for_reg = [
     (database, database_opts),
     (import_rules, import_rules_opts),
     (evacuation, evacuation_opts),
+    (bbcp_group, bbcp_opts),
 ]
 
 CONF = cfg.CONF

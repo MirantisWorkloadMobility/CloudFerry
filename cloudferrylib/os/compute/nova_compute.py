@@ -653,6 +653,10 @@ class NovaCompute(compute.Compute):
                                      stop_statuses=[ERROR])
             except exception.TimeoutException:
                 LOG.warning("Failed to create instance '%s'", new_id)
+                instance = self.get_instance(new_id)
+                if instance.fault:
+                    LOG.debug("Error message of failed instance '%s': %s",
+                              new_id, instance.fault)
                 self._failed_instances.append(new_id)
                 raise
 

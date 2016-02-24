@@ -32,6 +32,8 @@ incloud_live_migration = nova
 ssh_connection_attempts = 3
 keep_affinity_settings = True
 keep_usage_quotas_inst = True
+copy_backend = rsync
+copy_with_md5_verification = True
 
 [src]
 type = os
@@ -194,3 +196,7 @@ group_file=
 [database]
 host = localhost
 port = 6379
+
+[bbcp]
+path = <bbcp_path>
+options = -P 5 -e

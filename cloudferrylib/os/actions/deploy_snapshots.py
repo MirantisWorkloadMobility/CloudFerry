@@ -13,14 +13,14 @@
 # limitations under the License.
 
 
-from cloudferrylib.base.action import action
-from cloudferrylib.os.actions import snap_transfer
-from cloudferrylib.os.actions import task_transfer
-from cloudferrylib.utils.drivers import ssh_ceph_to_ceph
-from cloudferrylib.utils import rbd_util
-from cloudferrylib.utils import utils as utl
 import copy
 
+from cloudferrylib.base.action import action
+from cloudferrylib.copy_engines import ssh_ceph_to_ceph
+from cloudferrylib.os.actions import snap_transfer
+from cloudferrylib.os.actions import task_transfer
+from cloudferrylib.utils import rbd_util
+from cloudferrylib.utils import utils as utl
 
 OLD_ID = 'old_id'
 

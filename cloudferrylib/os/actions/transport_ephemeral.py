@@ -20,6 +20,7 @@ import os
 from fabric.api import env
 from fabric.api import run
 from fabric.api import settings
+from oslo_config import cfg
 
 from cloudferrylib.base.action import action
 from cloudferrylib.os.actions import task_transfer
@@ -27,6 +28,7 @@ from cloudferrylib.utils.utils import forward_agent
 from cloudferrylib.utils import utils as utl
 from cloudferrylib.utils import qemu_img as qemu_img_util
 
+CONF = cfg.CONF
 
 CLOUD = 'cloud'
 BACKEND = 'backend'
@@ -49,8 +51,6 @@ BACKING_FILE_DST = 'backing_file_dst'
 
 TEMP = 'temp'
 FLAVORS = 'flavors'
-
-SSH_CHUNKS = 'CopyFilesBetweenComputeHosts'
 
 TRANSPORTER_MAP = {CEPH: {CEPH: 'SSHCephToCeph',
                           ISCSI: 'SSHCephToFile'},
@@ -103,8 +103,8 @@ class TransportEphemeral(action.Action):
         src_compute = src_cloud.resources[resources]
         src_backend = src_compute.config.compute.backend
         dst_backend = dst_storage.config.compute.backend
-        ssh_driver = (SSH_CHUNKS
-                      if self.cfg.migrate.direct_compute_transfer
+        ssh_driver = (CONF.migrate.copy_backend
+                      if CONF.migrate.direct_compute_transfer
                       else TRANSPORTER_MAP[src_backend][dst_backend])
         transporter = task_transfer.TaskTransfer(
             self.init,

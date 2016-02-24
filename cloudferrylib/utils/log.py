@@ -20,12 +20,13 @@ import os
 import sys
 
 from fabric import api
+from oslo_config import cfg
 import yaml
 
-import cfglib
 from cloudferrylib.utils import sizeof_format
 
 getLogger = logging.getLogger
+CONF = cfg.CONF
 
 
 class StdoutLogger(object):
@@ -54,14 +55,15 @@ def configure_logging():
     as True.
     Wrap the stdout stream by StdoutLogger.
     """
-    with open(cfglib.CONF.migrate.log_config, 'r') as f:
+    with open(CONF.migrate.log_config, 'r') as f:
         config.dictConfig(yaml.load(f))
-    if cfglib.CONF.migrate.debug:
+    if CONF.migrate.debug:
         logger = logging.getLogger('cloudferrylib')
         for handler in logger.handlers:
             if handler.name == 'console':
                 handler.setLevel(logging.DEBUG)
-    sys.stdout = StdoutLogger()
+    if CONF.migrate.forward_stdout:
+        sys.stdout = StdoutLogger()
 
 
 class RunRotatingFileHandler(handlers.RotatingFileHandler):
@@ -92,8 +94,7 @@ class RunRotatingFileHandler(handlers.RotatingFileHandler):
         :return: Formatted filename with included scenario and
         current datetime.
         """
-        scenario = os.path.splitext(os.path.basename(
-            cfglib.CONF.migrate.scenario))[0]
+        scenario = os.path.splitext(os.path.basename(CONF.migrate.scenario))[0]
         dt = datetime.datetime.now().strftime(self.date_format)
         return filename % {
             'scenario': scenario,

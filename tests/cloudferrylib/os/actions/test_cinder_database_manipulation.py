@@ -15,17 +15,16 @@
 #    under the License.
 
 import mock
-from mock.mock import call, ANY
 
-from tests import test
 from cloudferrylib.os.actions import cinder_database_manipulation
 from cloudferrylib.utils import utils
+
+from tests import test
 
 
 SRC_CINDER_HOST = "src_cinder"
 DST_CINDER_HOST = "dst_cinder"
 SRC = 'src'
-RSYNC_CMD = cinder_database_manipulation.RSYNC_CMD
 TENANTS = TN1, TN2 = (
     {'id': 'tn1_id', 'name': 'tn1'},
     {'id': 'tn2_id', 'name': 'tn2'},
@@ -180,6 +179,9 @@ def _action(fake_src_data, fake_dst_data, fake_deployed_data):
         'cfg': fake_config
     }
 
+    m = mock.patch('cloudferrylib.copy_engines.base.get_copier')
+    m.start()
+
     action = cinder_database_manipulation.WriteVolumesDb(fake_init)
 
     action.cp_volumes.dst_mount = get_dst_mount(fake_dst_data)
@@ -205,8 +207,8 @@ def _action(fake_src_data, fake_dst_data, fake_deployed_data):
     action.cp_volumes.run_repeat_on_errors = mock.Mock()
 
     def not_rsync(_, src, dst):
-        return action.cp_volumes.run_rsync(src, dst)
-    action.cp_volumes.rsync_if_enough_space = \
+        return action.cp_volumes.run_transfer(src, dst)
+    action.cp_volumes.transfer_if_enough_space = \
         mock.MagicMock(side_effect=not_rsync)
 
     return action, {
@@ -256,16 +258,6 @@ class WriteVolumesDbTest(test.TestCase):
         action, args = _action(volumes, fake_dst_data, fake_deployed)
         data = action.run(**args)
 
-        calls = [
-            call(ANY,
-                 ('%s '
-                  '/var/lib/cinder/80a8c674d115b2a3c20f1e959bd1f20f/'
-                  'volume-vol-1'
-                  ' dst_user@dst_cinder:/var/lib/cinder/dstdir0a'
-                  ) % RSYNC_CMD
-                 ),
-        ]
-        action.cp_volumes.run_repeat_on_errors.assert_has_calls(calls)
         expected = {
             "volume_metadata": [],
             "volume_glance_metadata": [],
@@ -406,16 +398,6 @@ class WriteVolumesDbTest(test.TestCase):
         action, args = _action(volumes, fake_dst_data, fake_deployed)
         data = action.run(**args)
 
-        calls = [
-            call(ANY,
-                 ('%s '
-                  '/var/lib/cinder/80a8c674d115b2a3c20f1e959bd1f20f/'
-                  'volume-vol-1'
-                  ' dst_user@dst_cinder:/var/lib/cinder/dstdir0a'
-                  ) % RSYNC_CMD
-                 ),
-        ]
-        action.cp_volumes.run_repeat_on_errors.assert_has_calls(calls)
         expected = {
             "volume_metadata": [],
             "volume_glance_metadata": [],
@@ -585,25 +567,6 @@ class WriteVolumesDbTest(test.TestCase):
         action, args = _action(fake_src_data, fake_dst_data, fake_deployed)
         data = action.run(**args)
 
-        calls = [
-            call(ANY, ('%s '
-                       '/var/lib/cinder/dir1a/volume-vol-nfs1 '
-                       'dst_user@dst_cinder:/var/lib/cinder/dstdir1a'
-                       ) % RSYNC_CMD
-                 ),
-            call(ANY, ('%s '
-                       '/var/lib/cinder/dir2a/volume-vol-nfs2 '
-                       'dst_user@dst_cinder:/var/lib/cinder/dstdir2a'
-                       ) % RSYNC_CMD
-                 ),
-            call(ANY, ('%s '
-                       '/var/lib/cinder/dir3a/volume-vol-nfs3 '
-                       'dst_user@dst_cinder:/var/lib/cinder/dstdir3a'
-                       ) % RSYNC_CMD
-                 ),
-        ]
-        action.cp_volumes.run_repeat_on_errors.assert_has_calls(calls)
-
         expected = {
             "volume_metadata": [],
             "volume_glance_metadata": [],
@@ -694,16 +657,6 @@ class WriteVolumesDbTest(test.TestCase):
         action, args = _action(fake_src_data, fake_dst_data, fake_deployed)
         data = action.run(**args)
 
-        calls = [
-            call(ANY, ('%s '
-                       '/var/lib/cinder/80a8c674d115b2a3c20f1e959bd1f20f/'
-                       'volume-vol '
-                       'dst_user@dst_cinder:/var/lib/cinder/dstdir2a'
-                       ) % RSYNC_CMD
-                 ),
-        ]
-        action.cp_volumes.run_repeat_on_errors.assert_has_calls(calls)
-
         expected = {
             "volume_metadata": [],
             "volume_glance_metadata": [],
@@ -789,16 +742,6 @@ class WriteVolumesDbTest(test.TestCase):
 
         action, args = _action(fake_src_data, fake_dst_data, fake_deployed)
         data = action.run(**args)
-
-        calls = [
-            call(ANY, ('%s '
-                       '/var/lib/cinder/80a8c674d115b2a3c20f1e959bd1f20f/'
-                       'volume-vol '
-                       'dst_user@dst_cinder:/var/lib/cinder/dstdir2a'
-                       ) % RSYNC_CMD
-                 ),
-        ]
-        action.cp_volumes.run_repeat_on_errors.assert_has_calls(calls)
 
         expected = {
             "volumes": [
@@ -914,16 +857,6 @@ class WriteVolumesDbTest(test.TestCase):
 
         action, args = _action(fake_src_data, fake_dst_data, fake_deployed)
         data = action.run(**args)
-
-        calls = [
-            call(ANY, ('%s '
-                       '/var/lib/cinder/80a8c674d115b2a3c20f1e959bd1f20f/'
-                       'volume-vol '
-                       'dst_user@dst_cinder:/var/lib/cinder/dstdir2a'
-                       ) % RSYNC_CMD
-                 ),
-        ]
-        action.cp_volumes.run_repeat_on_errors.assert_has_calls(calls)
 
         expected = {
             "volumes": [
