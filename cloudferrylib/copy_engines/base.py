@@ -55,7 +55,7 @@ class BaseCopier(object):
         """
         dst_host = data['host_dst']
         dst_path = data['path_dst']
-        files.remote_rm(self.runner(dst_host, 'dst', True), dst_path,
+        files.remote_rm(self.runner(dst_host, 'dst'), dst_path,
                         ignoring_errors=True)
 
     def runner(self, host, position, gateway=None):
