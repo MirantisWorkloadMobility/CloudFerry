@@ -39,7 +39,8 @@ FAKE_CONFIG = utils.ext_dict(
                             'retry': '7',
                             'time_wait': 5,
                             'keep_network_interfaces_order': True,
-                            'keep_usage_quotas_inst': True}))
+                            'keep_usage_quotas_inst': True,
+                            'override_rules': None}))
 
 
 class BaseNovaComputeTestCase(test.TestCase):
@@ -379,8 +380,7 @@ class DeployInstanceWithManualScheduling(test.TestCase):
     def test_tries_to_boot_vm_on_all_nodes(self):
         compute_hosts = ['host1', 'host2', 'host3']
         num_computes = len(compute_hosts)
-        instance = {'availability_zone': 'somezone', 'name': 'vm1'}
-        create_params = {'name': 'vm1'}
+        create_params = {'name': 'vm1', 'availability_zone': 'somezone'}
         client_conf = mock.Mock()
 
         nc = mock.Mock()
@@ -392,20 +392,19 @@ class DeployInstanceWithManualScheduling(test.TestCase):
         deployer = nova_compute.RandomSchedulerVmDeployer(nc)
         self.assertRaises(
             nova_compute.DestinationCloudNotOperational,
-            deployer.deploy, instance, create_params, client_conf)
+            deployer.deploy, create_params, client_conf)
         self.assertEqual(nc.deploy_instance.call_count, num_computes + 1)
 
     def test_runs_only_one_boot_if_node_is_good(self):
         compute_hosts = ['host1', 'host2', 'host3']
-        instance = {'availability_zone': 'somezone', 'name': 'vm1'}
-        create_params = {'name': 'vm1'}
+        create_params = {'name': 'vm1', 'availability_zone': 'somezone'}
         client_conf = mock.Mock()
 
         nc = mock.Mock()
         nc.get_compute_hosts.return_value = compute_hosts
 
         deployer = nova_compute.RandomSchedulerVmDeployer(nc)
-        deployer.deploy(instance, create_params, client_conf)
+        deployer.deploy(create_params, client_conf)
 
         self.assertEqual(nc.deploy_instance.call_count, 1)
 
@@ -441,6 +440,7 @@ class FlavorDeploymentTestCase(test.TestCase):
         }
 
         config = mock.Mock()
+        config.migrate.override_rules = None
         cloud = mock.MagicMock()
         cloud.position = 'dst'
 
@@ -473,6 +473,7 @@ class FlavorDeploymentTestCase(test.TestCase):
         }
         tenant_map = {}
         config = mock.Mock()
+        config.migrate.override_rules = None
         cloud = mock.MagicMock()
         cloud.position = 'dst'
 
@@ -507,6 +508,7 @@ class FlavorDeploymentTestCase(test.TestCase):
         }
         tenant_map = {}
         config = mock.Mock()
+        config.migrate.override_rules = None
         cloud = mock.MagicMock()
         cloud.position = 'dst'
 
@@ -542,6 +544,7 @@ class NovaClientTestCase(test.TestCase):
         config.cloud.password = password
         config.cloud.insecure = insecure
         config.cloud.cacert = cacert
+        config.migrate.override_rules = None
 
         cloud.position = 'src'
 
@@ -570,6 +573,7 @@ class NovaClientTestCase(test.TestCase):
         config.cloud.password = password
         config.cloud.insecure = insecure
         config.cloud.cacert = cacert
+        config.migrate.override_rules = None
 
         cloud.position = 'src'
 

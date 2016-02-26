@@ -192,9 +192,6 @@ migrate_opts = [
     cfg.IntOpt('boot_timeout', default=300,
                help="Timeout booting of instance"),
     cfg.StrOpt('ssh_cipher', default=None, help='SSH cipher to use for SCP'),
-    cfg.StrOpt('default_availability_zone', default="nova",
-               help="Availability zone to use for VM provisioning, in case "
-                    "source cloud zones do not match destination"),
     cfg.StrOpt('copy_backend', default="rsync",
                help="Allows to choose how ephemeral storage and cinder "
                     "volumes are copied over from source to destination. "
@@ -218,7 +215,10 @@ migrate_opts = [
     cfg.BoolOpt('skip_orphaned_keypairs', default=True,
                 help="If it is set to False - key pairs belonging to deleted "
                      "tenant or to deleted user on SRC will be assigned to "
-                     "the admin on DST, otherwise skipped.")
+                     "the admin on DST, otherwise skipped."),
+    cfg.StrOpt('override_rules', default=None,
+               help='Server creation parameter (e.g. server group) override '
+                    'rules file path.'),
 ]
 
 mail = cfg.OptGroup(name='mail',
