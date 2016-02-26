@@ -258,6 +258,10 @@ def load_yaml_config(yaml_path, debug=None):
         ssh['connection_attempts'] = \
             cfglib.CONF.migrate.ssh_connection_attempts
 
+    log.configure_logging(log_config='configs/logging_config.yaml',
+                          debug=debug,
+                          forward_stdout=False)
+
     prev_legacy_config_path = None
     with open(yaml_path, 'r') as config_file:
         config = yaml.load(config_file)

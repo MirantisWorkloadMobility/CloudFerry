@@ -120,12 +120,15 @@ Example using ``Transaction`` class to store and retrieve data from database::
 """
 import collections
 import json
+import logging
 import sqlite3
 import threading
 
 import marshmallow
 from marshmallow import fields
+from oslo_utils import importutils
 
+LOG = logging.getLogger(__name__)
 CREATE_OBJECT_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS objects (
     uuid TEXT,
@@ -136,8 +139,49 @@ CREATE TABLE IF NOT EXISTS objects (
 )
 """
 
-ObjectId = collections.namedtuple('ObjectId', ('id', 'cloud'))
 registry = {}
+
+
+class ObjectId(collections.namedtuple('ObjectId', ('id', 'cloud'))):
+    """
+    Object identifier class containing the identifier itself and cloud name
+    as specified in discover.yaml
+    """
+
+    @staticmethod
+    def from_cloud(cloud, value):
+        """
+        Create ObjectId based on cloud name and identifier string (used mostly
+        during discover phase).
+        """
+        if isinstance(value, basestring):
+            return ObjectId(value, cloud.name)
+        elif isinstance(value, dict) and 'id' in value:
+            return ObjectId(value['id'], cloud.name)
+        else:
+            raise ValueError('Can\'t convert ' + repr(value) + ' to ObjectId')
+
+    @staticmethod
+    def convert(value):
+        """
+        Deserialize ObjectId from dictionary representation.
+        """
+        if isinstance(value, dict):
+            return ObjectId(value['id'], value['cloud'])
+        elif isinstance(value, ObjectId):
+            return value
+        else:
+            raise ValueError('Can\'t convert ' + repr(value) + ' to ObjectId')
+
+    def to_dict(self, cls):
+        """
+        Serialize ObjectId to dictionary representation.
+        """
+        return {
+            'id': self.id,
+            'cloud': self.cloud,
+            'type': _type_name(cls),
+        }
 
 
 class DataAdapter(object):
@@ -146,11 +190,11 @@ class DataAdapter(object):
     Schema.load. Not for use outside of ``Model.load_from_cloud`` code.
     """
 
-    def __init__(self, obj, field_mapping, transformers):
+    def __init__(self, obj, field_mapping, transformers, overrides=None):
         self.obj = obj
         self.field_mapping = field_mapping
         self.transformers = transformers
-        self.override = {}
+        self.override = overrides or {}
 
     def get(self, key, default):
         if key in self.override:
@@ -270,7 +314,7 @@ class Model(object):
         return obj
 
     @classmethod
-    def load_from_cloud(cls, cloud, data):
+    def load_from_cloud(cls, cloud, data, overrides=None):
         """
         Create model class instance using data from cloud with validation.
         :param cloud: ``context.Cloud`` object
@@ -290,18 +334,19 @@ class Model(object):
                     convert_result.append(converted)
                 return convert_result
             else:
-                object_id = _convert_object_id(cloud, old_value)
-                if not field.ensure_existence or _ensure_existence(
-                        cloud, field.model_class, object_id):
+                object_id = ObjectId.from_cloud(cloud, old_value)
+                if not field.ensure_existence or \
+                        field.model_class.find(cloud, object_id):
                     return object_id
                 else:
                     return None
 
-        def process_fields(schema, raw_data):
+        def process_fields(schema, raw_data, overrides=None):
             if raw_data is None:
                 return None
             adapted_data = DataAdapter(raw_data, schema.FIELD_MAPPING,
-                                       schema.FIELD_VALUE_TRANSFORMERS)
+                                       schema.FIELD_VALUE_TRANSFORMERS,
+                                       overrides)
             for name, field in schema.fields.items():
                 key = field.load_from or name
                 value = adapted_data.get(key, None)
@@ -324,7 +369,7 @@ class Model(object):
 
         schema = cls.get_schema()
         schema.context = {'cloud': cloud}
-        data = process_fields(schema, data)
+        data = process_fields(schema, data, overrides)
         loaded, _ = schema.load(data)
         return cls.create(loaded, schema=schema, mark_dirty=True)
 
@@ -410,6 +455,60 @@ class Model(object):
         """
         self._original.clear()
 
+    def dependencies(self):
+        """
+        Return list of other model instances that current object depend upon.
+        """
+        result = []
+        schema = self.get_schema()
+        for name, field in schema.declared_fields.items():
+            if isinstance(field, Dependency):
+                result.append(getattr(self, name))
+        return result
+
+    @classmethod
+    def find(cls, cloud, object_id):
+        """
+        Try to find object in DB, and if it's missing in DB try to fetch it
+        from cloud. Should be used during discover phase only.
+        :param cloud: cloud object that can be used to create OpenStack API
+                      clients, etc...
+        :param object_id: object identifier
+        :return object or None if it's missing even in cloud
+        """
+        with Transaction() as tx:
+            try:
+                if tx.is_missing(cls, object_id):
+                    return None
+                else:
+                    return tx.retrieve(cls, object_id)
+            except NotFound:
+                LOG.debug('Trying to load missing %s value: %s',
+                          _type_name(cls), object_id)
+                obj = cls.load_missing(cloud, object_id)
+                if obj is None:
+                    tx.store_missing(cls, object_id)
+                    return None
+                else:
+                    tx.store(obj)
+                    return obj
+
+    @classmethod
+    def get_class(cls):
+        """
+        Returns model class.
+        """
+        return cls
+
+    def __repr__(self):
+        schema = self.get_schema()
+        obj_fields = sorted(schema.declared_fields.keys())
+        cls = self.__class__
+        return '<{cls} {fields}>'.format(
+            cls=_type_name(cls),
+            fields=' '.join('{0}:{1}'.format(f, getattr(self, f))
+                            for f in obj_fields))
+
 
 class Reference(fields.Field):
     """
@@ -419,9 +518,20 @@ class Reference(fields.Field):
     def __init__(self, model_class, many=False, ensure_existence=False,
                  **kwargs):
         super(Reference, self).__init__(**kwargs)
-        self.model_class = model_class
+        if isinstance(model_class, basestring):
+            self._model_class_name = model_class
+            self._model_class = None
+        else:
+            self._model_class = model_class
         self.many = many
         self.ensure_existence = ensure_existence
+
+    @property
+    def model_class(self):
+        if self._model_class is None:
+            self._model_class = importutils.import_class(
+                self._model_class_name)
+        return self._model_class
 
     def _serialize(self, value, attr, obj):
         if value is None:
@@ -429,19 +539,24 @@ class Reference(fields.Field):
         model = self.model_class
         pk_field = model.pk_field
         if self.many:
-            return [_object_id_to_dict(model, getattr(x, pk_field))
+            return [getattr(x, pk_field).to_dict(model)
                     for x in value]
         else:
-            return _object_id_to_dict(model, getattr(value, pk_field))
+            return getattr(value, pk_field).to_dict(model)
 
     def _deserialize(self, value, attr, data):
         if self.many:
-            return [LazyObj(self.model_class, _to_object_id(x))
+            return [LazyObj(self.model_class, ObjectId.convert(x))
                     for x in value]
         else:
-            return LazyObj(self.model_class, _to_object_id(value))
+            return LazyObj(self.model_class, ObjectId.convert(value))
 
     def get_significant_value(self, value):
+        """
+        Returns id or set of id that can be safely used for detection of
+        changes to the field. E.g. don't compare previous and current objects
+        that are referenced, only compare id/set of ids.
+        """
         if value is None:
             return None
         model = self.model_class
@@ -484,13 +599,13 @@ class PrimaryKey(fields.Field):
             load_from=real_name, dump_to=real_name, required=True, **kwargs)
 
     def _serialize(self, value, attr, obj):
-        return _object_id_to_dict(_get_class(obj), value)
+        return value.to_dict(obj.get_class())
 
     def _deserialize(self, value, attr, data):
         cloud = self.context.get('cloud')
         if cloud is not None:
-            value = _convert_object_id(cloud, value)
-        return _to_object_id(value)
+            value = ObjectId.from_cloud(cloud, value)
+        return ObjectId.convert(value)
 
 
 class LazyObj(object):
@@ -522,6 +637,12 @@ class LazyObj(object):
         if self._object is None:
             with Transaction() as tx:
                 self._object = tx.retrieve(self._model, self._object_id)
+
+    def get_class(self):
+        """
+        Return model class.
+        """
+        return self._model
 
 
 class Transaction(object):
@@ -570,7 +691,10 @@ class Transaction(object):
             self.cursor.execute('ROLLBACK')
             return
         try:
-            for obj in self.session.values():
+            for (cls, pk), obj in self.session.items():
+                if obj is None:
+                    self._store_none(cls, pk)
+                    continue
                 if obj.is_dirty():
                     self._update_row(obj)
             self.cursor.execute('COMMIT')
@@ -590,8 +714,18 @@ class Transaction(object):
         pk = obj.primary_key
         if pk is None:
             raise TypeError('Can\'t store object without PrimaryKey field.')
-        key = (_get_class(obj), pk)
+        LOG.debug('Storing: %s', obj)
+        key = (obj.get_class(), pk)
         self.session[key] = obj
+
+    def store_missing(self, cls, object_id):
+        """
+        Stores information that object is missing in cloud
+        :param object_id: model.ObjectId instance
+        """
+        LOG.debug('Storing missing: %s %s', _type_name(cls), object_id)
+        key = (cls, object_id)
+        self.session[key] = None
 
     def retrieve(self, cls, object_id):
         """
@@ -601,7 +735,6 @@ class Transaction(object):
         :param object_id: model.ObjectId instance
         :return: model instance
         """
-
         key = (cls, object_id)
         if key in self.session:
             return self.session[key]
@@ -614,6 +747,24 @@ class Transaction(object):
         obj = cls.load(json.loads(result[0]))
         self.session[key] = obj
         return obj
+
+    def is_missing(self, cls, object_id):
+        """
+        Check if object couldn't be found in cloud (e.g. was deleted)
+        :param cls: model class
+        :param object_id: model.ObjectId instance
+        :return:
+        """
+        key = (cls, object_id)
+        if key in self.session:
+            return self.session[key] is None
+        self.cursor.execute('SELECT json FROM objects WHERE uuid=? AND '
+                            'cloud=? AND type=?',
+                            (object_id.id, object_id.cloud, _type_name(cls)))
+        result = self.cursor.fetchone()
+        if not result:
+            raise NotFound(cls, object_id)
+        return result[0] is None
 
     def list(self, cls, cloud=None):
         """
@@ -651,57 +802,19 @@ class Transaction(object):
         pk = obj.primary_key
         uuid = pk.id
         cloud = pk.cloud
-        type_name = _type_name(_get_class(obj))
+        type_name = _type_name(obj.get_class())
         self.cursor.execute('INSERT OR REPLACE INTO objects '
                             'VALUES (?, ?, ?, ?)',
                             (uuid, cloud, type_name, json.dumps(obj.dump())))
 
+    def _store_none(self, cls, pk):
+        uuid = pk.id
+        cloud = pk.cloud
+        type_name = _type_name(cls)
+        self.cursor.execute('INSERT OR REPLACE INTO objects '
+                            'VALUES (?, ?, ?, NULL)',
+                            (uuid, cloud, type_name))
+
 
 def _type_name(cls):
     return cls.__module__ + '.' + cls.__name__
-
-
-def _get_class(obj):
-    if isinstance(obj, LazyObj):
-        return obj._model
-    else:
-        return obj.__class__
-
-
-def _convert_object_id(cloud, value):
-    if isinstance(value, basestring):
-        return ObjectId(value, cloud.name)
-    elif isinstance(value, dict) and 'id' in value:
-        return ObjectId(value['id'], cloud.name)
-    else:
-        raise ValueError('Can\'t convert ' + repr(value) + ' to ObjectId')
-
-
-def _ensure_existence(cloud, cls, object_id):
-    with Transaction() as tx:
-        try:
-            tx.retrieve(cls, object_id)
-            return True
-        except NotFound:
-            obj = cls.load_missing(cloud, object_id)
-            if obj is None:
-                return False
-            tx.store(obj)
-            return True
-
-
-def _to_object_id(value):
-    if isinstance(value, dict):
-        return ObjectId(value['id'], value['cloud'])
-    elif isinstance(value, ObjectId):
-        return value
-    else:
-        raise ValueError('Can\'t convert ' + repr(value) + ' to ObjectId')
-
-
-def _object_id_to_dict(cls, object_id):
-    return {
-        'id': object_id.id,
-        'cloud': object_id.cloud,
-        'type': _type_name(cls)
-    }
