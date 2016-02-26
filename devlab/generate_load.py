@@ -941,15 +941,20 @@ class Prerequisites(base.BasePrerequisites):
             self.migration_utils.execute_command_on_vm(
                 self.get_vagrant_vm_ip(), cmd, username='root', password='')
 
-    def break_image(self):
+    def break_images(self):
         all_images = self.migration_utils.get_all_images_from_config()
         images_to_break = [image for image in all_images
                            if image.get('broken')]
+        images_to_delete = [image for image in all_images
+                            if image.get('is_deleted')]
         for image in images_to_break:
             image_id = self.get_image_id(image['name'])
             cmd = 'rm -rf /var/lib/glance/images/%s' % image_id
             self.migration_utils.execute_command_on_vm(
                 self.get_vagrant_vm_ip(), cmd, username='root', password='')
+        for image in images_to_delete:
+            image_id = self.get_image_id(image['name'])
+            self.glanceclient.images.delete(image_id)
 
     def create_dst_networking(self):
         if not self.dst_cloud:
@@ -997,7 +1002,7 @@ class Prerequisites(base.BasePrerequisites):
         LOG.info('Breaking VMs')
         self.break_vm()
         LOG.info('Breaking Images')
-        self.break_image()
+        self.break_images()
         LOG.info('Updating filtering')
         self.update_filtering_file()
         LOG.info('Creating vm snapshots')
