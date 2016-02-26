@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import time
 
 from cinderclient.v1 import client as cinder
 from glanceclient.v1 import Client as glance
@@ -246,9 +247,48 @@ class BasePrerequisites(object):
                 return True
         return False
 
-    def check_vm_state(self, srv):
-        srv = self.novaclient.servers.get(srv)
+    def check_vm_state(self, srv_id):
+        srv = self.novaclient.servers.get(srv_id)
         return srv.status == 'ACTIVE'
+
+    def check_image_state(self, img_id):
+        img = self.glanceclient.images.get(img_id)
+        return img.status == 'active'
+
+    def check_volume_state(self, vol_id):
+        vlm = self.cinderclient.volumes.get(vol_id)
+        if vlm.status == 'available' or vlm.status == 'in-use':
+            return True
+        elif vlm.status == 'error':
+            msg = 'Volume with id {0} was created with error'
+            raise RuntimeError(msg.format(vol_id))
+        return False
+
+    def check_snapshot_state(self, snp_id):
+        snp = self.glanceclient.images.get(snp_id)
+        if snp.status == 'active':
+            return True
+        elif snp.status == 'error':
+            msg = 'Snapshot with id {0} has become in error state'
+            raise RuntimeError(msg.format(snp_id))
+        return False
+
+    @staticmethod
+    def wait_until_objects_created(obj_list, check_func, timeout):
+        obj_list = obj_list[:]
+        waiting = 0
+        delay = 1
+        while waiting < timeout:
+            for obj in obj_list[:]:
+                if check_func(obj):
+                    obj_list.remove(obj)
+            if not obj_list:
+                return
+            time.sleep(delay)
+            waiting += delay
+            delay *= 2
+        msg = 'Objects {0} has not become in active state after timeout.'
+        raise RuntimeError(msg.format(obj_list))
 
     def tenant_exists(self, tenant_name=None, tenant_id=None):
         self.switch_user(self.username, self.password, self.tenant)
@@ -259,8 +299,7 @@ class BasePrerequisites(object):
                 self.keystoneclient.tenants.find(id=tenant_id)
         except ks_exceptions.NotFound:
             return False
-        else:
-            return True
+        return True
 
     def switch_user(self, user, password, tenant):
         self.keystoneclient = keystone.Client(auth_url=self.auth_url,
