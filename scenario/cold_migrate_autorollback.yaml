@@ -39,15 +39,12 @@ preparation:
       - check_networks: True
   - check_users_availability: True
   - create_snapshot: True
-  - create_vm_snapshot_src: True
-  - create_vm_snapshot_dst: True
   - create_image_snapshot_dst: True
   - task_check_write_access:
       - act_check_dst_cloud: True
 
 rollback:
-  - restore_from_vm_snapshot_dst: True
-  - restore_from_vm_snapshot_src: True
+  - restore_vms: True
   - image_rollback_dst: True
   - restore_from_snapshot: False
 
@@ -117,7 +114,5 @@ process:
       - verify_vms: True
       - remove_failed_instances: True
   - auto_rollback:
-      - restore_from_vm_snapshot_dst: True
-      - restore_from_vm_snapshot_src: True
       - image_rollback_dst: True
       - restore_from_snapshot: True

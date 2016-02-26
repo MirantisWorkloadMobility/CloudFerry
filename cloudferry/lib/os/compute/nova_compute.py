@@ -28,6 +28,7 @@ from cloudferry.lib.os.compute import instance_info_caches
 from cloudferry.lib.os.compute import cold_evacuate
 from cloudferry.lib.os.compute import server_groups
 from cloudferry.lib.os.identity import keystone
+from cloudferry.lib.scheduler import signal_handler
 from cloudferry.lib.utils import log
 from cloudferry.lib.utils import mysql_connector
 from cloudferry.lib.utils import node_ip
@@ -75,9 +76,6 @@ STATUSES_AFTER_MIGRATION = {ACTIVE: ACTIVE,
                             SHELVED_OFFLOADED: SHUTOFF,
                             VERIFY_RESIZE: ACTIVE}
 
-CORRECT_STATUSES_AFTER_MIGRATION = {STATUSES_AFTER_MIGRATION[status]
-                                    for status in ALLOWED_VM_STATUSES}
-
 
 class NovaCompute(compute.Compute):
     """The main class for working with Openstack Nova Compute Service. """
@@ -90,7 +88,8 @@ class NovaCompute(compute.Compute):
         self.identity = cloud.resources['identity']
         self.mysql_connector = cloud.mysql_connector('nova')
         # List of instance IDs which failed to create
-        self._failed_instances = []
+        self.processing_instances = []
+        self.failed_instances = []
         self.instance_info_caches = instance_info_caches.InstanceInfoCaches(
             self.get_db_connection())
         if config.migrate.override_rules is None:
@@ -102,12 +101,6 @@ class NovaCompute(compute.Compute):
     @property
     def nova_client(self):
         return self.proxy(self.get_client(), self.config)
-
-    @property
-    def failed_instances(self):
-        return [vm_id for vm_id in self._failed_instances
-                if self.instance_exists(vm_id) and
-                self.get_status(vm_id) not in CORRECT_STATUSES_AFTER_MIGRATION]
 
     def get_client(self, params=None):
         """Getting nova client. """
@@ -611,15 +604,18 @@ class NovaCompute(compute.Compute):
                 self.wait_for_status(new_id, self.get_status, 'active',
                                      timeout=conf.migrate.boot_timeout,
                                      stop_statuses=[ERROR])
-            except exception.TimeoutException:
+            except (exception.TimeoutException, KeyboardInterrupt,
+                    signal_handler.InterruptedException):
                 LOG.warning("Failed to create instance '%s'", new_id)
                 if self.instance_exists(new_id):
+                    self.reset_state(new_id)
                     instance = self.get_instance(new_id)
                     if hasattr(instance, 'fault') and instance.fault:
                         LOG.debug("Error message of failed instance '%s': %s",
                                   new_id, instance.fault)
-                self._failed_instances.append(new_id)
+                self.failed_instances.append(new_id)
                 raise
+            self.processing_instances.append(new_id)
 
         return new_id
 
@@ -1026,8 +1022,12 @@ class NovaCompute(compute.Compute):
 
         :param vm_id: ID of instance
         """
-        self.reset_state(vm_id)
-        self.delete_vm_by_id(vm_id)
+        with proxy_client.expect_exception(nova_exc.NotFound):
+            try:
+                self.reset_state(vm_id)
+                self.delete_vm_by_id(vm_id)
+            except nova_exc.NotFound:
+                pass
 
     def delete_vm_by_id(self, vm_id):
         self.nova_client.servers.delete(vm_id)
