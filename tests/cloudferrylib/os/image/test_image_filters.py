@@ -24,12 +24,14 @@ from tests import test
 DONT_CARE = mock.Mock()
 
 
-def _image(uuid=DONT_CARE, tenant=DONT_CARE, is_public=True, update_time=None):
+def _image(uuid=DONT_CARE, tenant=DONT_CARE, is_public=True, update_time=None,
+           status='active'):
     image = mock.Mock()
     image.is_public = is_public
     image.id = uuid
     image.owner = tenant
     image.updated_at = update_time
+    image.status = status
     return image
 
 
@@ -126,3 +128,17 @@ class GlanceImageFilterTestCase(test.TestCase):
 
         self.apply_filter(images, expected_ids, 'Foo', [],
                           glance_client=glance_client)
+
+    def test_statuses(self):
+        images = [_image(uuid='private', status='queued'),
+                  _image(uuid='private_1', status='active'),
+                  _image(uuid='shared', status='saving'),
+                  _image(uuid='pub', status='active'),
+                  _image(uuid='private_old', status='deleted'),
+                  _image(uuid='private_new', status='killed'),
+                  _image(uuid='private_bad', status='pending_delete'),
+                  ]
+
+        expected_ids = ['private_1', 'pub']
+
+        self.apply_filter(images, expected_ids, None, [])
