@@ -20,11 +20,13 @@ from cinderclient import exceptions as cinder_exc
 from pymysql import cursors
 
 from cloudferrylib.base import storage
+from cloudferrylib.os.identity import keystone
 from cloudferrylib.os.storage import filters as cinder_filters
 from cloudferrylib.utils import filters
 from cloudferrylib.utils import log
 from cloudferrylib.utils import proxy_client
-from cloudferrylib.utils import utils as utl
+from cloudferrylib.utils import retrying
+from cloudferrylib.utils import utils
 
 import re
 
@@ -60,6 +62,7 @@ TABLE_UNIQ_KEYS = {
 }
 
 VALID_STATUSES = ['available', 'in-use', 'attaching', 'detaching']
+MIGRATED_VOLUMES_METADATA_KEY = 'src_volume_id'
 
 
 class CinderStorage(storage.Storage):
@@ -77,7 +80,7 @@ class CinderStorage(storage.Storage):
         self.mysql_host = config.mysql.db_host \
             if config.mysql.db_host else self.ssh_host
         self.cloud = cloud
-        self.identity_client = cloud.resources[utl.IDENTITY_RESOURCE]
+        self.identity_client = cloud.resources[utils.IDENTITY_RESOURCE]
         self.mysql_connector = cloud.mysql_connector('cinder')
         self.volume_filter = None
 
@@ -110,8 +113,11 @@ class CinderStorage(storage.Storage):
         return self.volume_filter
 
     def read_info(self, **kwargs):
-        info = {utl.VOLUMES_TYPE: {}}
+        info = {utils.VOLUMES_TYPE: {}}
         for vol in self.get_volumes_list(search_opts=kwargs):
+            if vol.status not in ['available', 'in-use']:
+                continue
+
             volume = self.convert_volume(vol, self.config, self.cloud)
             snapshots = {}
             if self.config.migrate.keep_volume_snapshots:
@@ -122,12 +128,12 @@ class CinderStorage(storage.Storage):
                                                      self.config,
                                                      self.cloud)
                     snapshots[snapshot['id']] = snapshot
-            info[utl.VOLUMES_TYPE][vol.id] = {utl.VOLUME_BODY: volume,
-                                              'snapshots': snapshots,
-                                              utl.META_INFO: {
-                                              }}
+            info[utils.VOLUMES_TYPE][vol.id] = {utils.VOLUME_BODY: volume,
+                                                'snapshots': snapshots,
+                                                utils.META_INFO: {
+                                                }}
         if self.config.migrate.keep_volume_storage:
-            info['volumes_db'] = {utl.VOLUMES_TYPE: '/tmp/volumes'}
+            info['volumes_db'] = {utils.VOLUMES_TYPE: '/tmp/volumes'}
 
             # cleanup db
             self.cloud.ssh_util.execute('rm -rf /tmp/volumes',
@@ -138,17 +144,15 @@ class CinderStorage(storage.Storage):
         return info
 
     def deploy(self, info):
-        if info.get('volumes_db'):
-            return self.deploy_volumes_db(info)
         return self.deploy_volumes(info)
 
     def attach_volume_to_instance(self, volume_info):
-        if 'instance' in volume_info[utl.META_INFO]:
-            if volume_info[utl.META_INFO]['instance']:
+        if 'instance' in volume_info[utils.META_INFO]:
+            if volume_info[utils.META_INFO]['instance']:
                 self.attach_volume(
-                    volume_info[utl.VOLUME_BODY]['id'],
-                    volume_info[utl.META_INFO]['instance']['instance']['id'],
-                    volume_info[utl.VOLUME_BODY]['device'])
+                    volume_info[utils.VOLUME_BODY]['id'],
+                    volume_info[utils.META_INFO]['instance']['instance']['id'],
+                    volume_info[utils.VOLUME_BODY]['device'])
 
     def filter_volumes(self, volumes):
         filtering_enabled = self.cloud.position == SRC
@@ -171,12 +175,20 @@ class CinderStorage(storage.Storage):
                 in VALID_STATUSES]
 
     def get_volumes_list(self, detailed=True, search_opts=None):
+        search_opts = search_opts or {}
         search_opts['all_tenants'] = 1
         volumes = self.cinder_client.volumes.list(detailed, search_opts)
 
         volumes = self.filter_volumes(volumes)
 
         return volumes
+
+    def get_migrated_volume(self, volume_id):
+        """:returns: volume which was created from another volume using
+        :create_volume_from_volume: method"""
+        for v in self.get_volumes_list():
+            if v.metadata.get(MIGRATED_VOLUMES_METADATA_KEY) == volume_id:
+                return v
 
     def get_snapshots_list(self, detailed=True, search_opts=None):
         return self.cinder_client.volume_snapshots.list(detailed, search_opts)
@@ -188,8 +200,77 @@ class CinderStorage(storage.Storage):
                                                           display_name,
                                                           display_description)
 
+    def create_volume_from_volume(self, volume, tenant_id):
+        """Creates volume based on values from :param volume: and adds
+        metadata in order to not copy already copied volumes
+
+        :param volume: CF volume object (dict)
+
+        :raises: retrying.TimeoutExceeded if volume did not become available
+        in migrate.storage_backend_timeout time
+        """
+
+        glance = self.cloud.resources[utils.IMAGE_RESOURCE]
+        compute = self.cloud.resources[utils.COMPUTE_RESOURCE]
+        az_mapper = compute.attr_override
+
+        metadata = volume.get('metadata', {})
+        metadata[MIGRATED_VOLUMES_METADATA_KEY] = volume['id']
+
+        image_id = None
+        if volume['bootable']:
+            image_metadata = volume['volume_image_metadata']
+            dst_image = glance.get_matching_image(
+                uuid=image_metadata['image_id'],
+                size=image_metadata['size'],
+                name=image_metadata['image_name'],
+                checksum=image_metadata['checksum'])
+            if dst_image:
+                image_id = dst_image.id
+
+        src_az = compute.get_availability_zone(volume['availability_zone'])
+
+        created_volume = self.create_volume(
+            size=volume['size'],
+            project_id=tenant_id,
+            display_name=volume['display_name'],
+            display_description=volume['display_description'],
+            availability_zone=src_az or az_mapper.get_attr(
+                volume, 'availability_zone'),
+            metadata=metadata,
+            imageRef=image_id)
+
+        timeout = self.config.migrate.storage_backend_timeout
+        retryer = retrying.Retry(max_time=timeout,
+                                 predicate=lambda v: v.status == 'available',
+                                 predicate_retval_as_arg=True,
+                                 retry_message="Volume is not available")
+
+        retryer.run(self.get_volume_by_id, created_volume.id)
+
+        return created_volume
+
     def create_volume(self, size, **kwargs):
-        return self.cinder_client.volumes.create(size, **kwargs)
+        """Creates volume of given size
+        :raises: OverLimit in case quota exceeds for tenant
+        """
+
+        cinder = self.cinder_client
+        tenant_id = kwargs.get('project_id')
+
+        # if volume needs to be created in non-admin tenant, re-auth is
+        # required in that tenant
+        if tenant_id:
+            identity = self.cloud.resources[utils.IDENTITY_RESOURCE]
+            ks = identity.keystone_client
+            user = self.config.cloud.user
+            with keystone.AddAdminUserToNonAdminTenant(ks, user, tenant_id):
+                tenant = ks.tenants.get(tenant_id)
+                cinder = self.proxy(self.get_client(tenant=tenant.name),
+                                    self.config)
+
+        with proxy_client.expect_exception(cinder_exc.OverLimit):
+            return cinder.volumes.create(size, **kwargs)
 
     def delete_volume(self, volume_id):
         volume = self.get_volume_by_id(volume_id)
@@ -216,15 +297,15 @@ class CinderStorage(storage.Storage):
         try:
             with proxy_client.expect_exception(cinder_exc.BadRequest):
                 self.cinder_client.volumes.set_bootable(
-                    vol[utl.VOLUME_BODY]['id'],
-                    vol[utl.VOLUME_BODY]['bootable'])
+                    vol[utils.VOLUME_BODY]['id'],
+                    vol[utils.VOLUME_BODY]['bootable'])
         except cinder_exc.BadRequest:
             LOG.info("Can't update bootable flag of volume with id = %s "
                      "using API, trying to use DB...",
-                     vol[utl.VOLUME_BODY]['id'])
+                     vol[utils.VOLUME_BODY]['id'])
             self.__patch_option_bootable_of_volume(
-                vol[utl.VOLUME_BODY]['id'],
-                vol[utl.VOLUME_BODY]['bootable'])
+                vol[utils.VOLUME_BODY]['id'],
+                vol[utils.VOLUME_BODY]['bootable'])
 
     def upload_volume_to_image(self, volume_id, force, image_name,
                                container_format, disk_format):
@@ -242,37 +323,18 @@ class CinderStorage(storage.Storage):
 
     def deploy_volumes(self, info):
         new_ids = {}
-        for vol_id, vol in info[utl.VOLUMES_TYPE].iteritems():
+        for vol_id, vol in info[utils.VOLUMES_TYPE].iteritems():
             vol_for_deploy = self.convert_to_params(vol)
             volume = self.create_volume(**vol_for_deploy)
-            vol[utl.VOLUME_BODY]['id'] = volume.id
+            vol[utils.VOLUME_BODY]['id'] = volume.id
             self.try_wait_for_status(volume.id, self.get_status, AVAILABLE)
             self.finish(vol)
             new_ids[volume.id] = vol_id
         return new_ids
 
-    def deploy_volumes_db(self, info):
-        for table_name, file_name in info['volumes_db'].iteritems():
-            self.upload_table_to_db(table_name, file_name)
-        for tenant in info['tenants']:
-            self.update_column_with_condition('volumes',
-                                              'project_id',
-                                              tenant['tenant']['id'],
-                                              tenant[utl.META_INFO]['new_id'])
-        for user in info['users']:
-            self.update_column_with_condition('volumes', 'user_id',
-                                              user['user']['id'],
-                                              user[utl.META_INFO]['new_id'])
-        self.update_column_with_condition('volumes', 'attach_status',
-                                          'attached', 'detached')
-        self.update_column_with_condition('volumes', 'status', 'in-use',
-                                          'available')
-        self.update_column('volumes', 'instance_uuid', 'NULL')
-        return {}
-
     @staticmethod
     def convert_volume(vol, cfg, cloud):
-        compute = cloud.resources[utl.COMPUTE_RESOURCE]
+        compute = cloud.resources[utils.COMPUTE_RESOURCE]
         volume = {
             'id': vol.id,
             'size': vol.size,
@@ -283,38 +345,39 @@ class CinderStorage(storage.Storage):
             'availability_zone': vol.availability_zone,
             'device': vol.attachments[0][
                 'device'] if vol.attachments else None,
-            'bootable': False,
+            'bootable': vol.bootable.lower() == 'true',
             'volume_image_metadata': {},
             'host': None,
-            'path': None
+            'path': None,
+            'project_id': getattr(vol, 'os-vol-tenant-attr:tenant_id'),
+            'metadata': vol.metadata
         }
-        if 'bootable' in vol.__dict__:
-            volume[
-                'bootable'] = True if vol.bootable.lower() == 'true' else False
         if 'volume_image_metadata' in vol.__dict__:
             volume['volume_image_metadata'] = {
                 'image_id': vol.volume_image_metadata['image_id'],
-                'checksum': vol.volume_image_metadata['checksum']
+                'checksum': vol.volume_image_metadata['checksum'],
+                'image_name': vol.volume_image_metadata.get('image_name'),
+                'size': vol.volume_image_metadata.get('size')
             }
-        if cfg.storage.backend == utl.CEPH:
+        if cfg.storage.backend == utils.CEPH:
             volume['path'] = "%s/%s%s" % (
                 cfg.storage.rbd_pool, cfg.storage.volume_name_template, vol.id)
             volume['host'] = (cfg.storage.host
                               if cfg.storage.host
                               else cfg.cloud.ssh_host)
-        elif vol.attachments and (cfg.storage.backend == utl.ISCSI):
+        elif vol.attachments and (cfg.storage.backend == utils.ISCSI):
             instance = compute.read_info(
                 search_opts={'id': vol.attachments[0]['server_id']})
-            instance = instance[utl.INSTANCES_TYPE]
-            instance_info = instance.values()[0][utl.INSTANCE_BODY]
+            instance = instance[utils.INSTANCES_TYPE]
+            instance_info = instance.values()[0][utils.INSTANCE_BODY]
             volume['host'] = instance_info['host']
-            list_disk = utl.get_libvirt_block_info(
+            list_disk = utils.get_libvirt_block_info(
                 instance_info['instance_name'],
                 cfg.cloud.ssh_host,
                 instance_info['host'],
                 cfg.cloud.ssh_user,
                 cfg.cloud.ssh_sudo_password)
-            volume['path'] = utl.find_element_by_in(list_disk, vol.id)
+            volume['path'] = utils.find_element_by_in(list_disk, vol.id)
         return volume
 
     @staticmethod
@@ -331,7 +394,7 @@ class CinderStorage(storage.Storage):
             'vol_path': volume['path']
         }
 
-        if cfg.storage.backend == utl.CEPH:
+        if cfg.storage.backend == utils.CEPH:
             snapshot['name'] = "%s%s" % (cfg.storage.snapshot_name_template,
                                          snap.id)
             snapshot['path'] = "%s@%s" % (snapshot['vol_path'],
@@ -344,16 +407,17 @@ class CinderStorage(storage.Storage):
 
     @staticmethod
     def convert_to_params(vol):
+        volume_body = vol[utils.VOLUME_BODY]
         info = {
-            'size': vol[utl.VOLUME_BODY]['size'],
-            'display_name': vol[utl.VOLUME_BODY]['display_name'],
-            'display_description': vol[utl.VOLUME_BODY]['display_description'],
-            'volume_type': vol[utl.VOLUME_BODY]['volume_type'],
-            'availability_zone': vol[utl.VOLUME_BODY]['availability_zone'],
+            'size': volume_body['size'],
+            'display_name': volume_body['display_name'],
+            'display_description': volume_body['display_description'],
+            'volume_type': volume_body['volume_type'],
+            'availability_zone': volume_body['availability_zone'],
         }
-        if 'image' in vol[utl.META_INFO]:
-            if vol[utl.META_INFO]['image']:
-                info['imageRef'] = vol[utl.META_INFO]['image']['id']
+        if 'image' in vol[utils.META_INFO]:
+            if vol[utils.META_INFO]['image']:
+                info['imageRef'] = vol[utils.META_INFO]['image']['id']
         return info
 
     def __patch_option_bootable_of_volume(self, volume_id, bootable):
@@ -440,7 +504,7 @@ class CinderNFSStorage(CinderStorage):
             'volume_glance_metadata',
         ]
 
-    def get_client(self, params=None):
+    def get_client(self, params=None, tenant=None, **kwargs):
         params = params or self.config
 
         return cinder_client.Client(
@@ -485,10 +549,10 @@ class CinderNFSStorage(CinderStorage):
                 for e in data:
                     for col in PROJECT_ID, TENANT_ID:
                         if col in e:
-                            e[col] = migrated[utl.IDENTITY_RESOURCE].\
+                            e[col] = migrated[utils.IDENTITY_RESOURCE].\
                                 migrated_id(e[col], resource_type='tenants')
                         if USER_ID in e:
-                            e[USER_ID] = migrated[utl.IDENTITY_RESOURCE].\
+                            e[USER_ID] = migrated[utils.IDENTITY_RESOURCE].\
                                 migrated_id(e[USER_ID], resource_type='users')
             elif table == 'volumes':
                 data = skip_invalid_status_volumes(data)

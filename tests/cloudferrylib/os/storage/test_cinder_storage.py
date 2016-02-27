@@ -187,7 +187,8 @@ class CinderStorageTestCase(test.TestCase):
                          availability_zone='availability_zone',
                          volume_type='volume_type',
                          attachments=[{'device': 'device'}],
-                         bootable='bootable')
+                         bootable='bootable',
+                         status='available')
         self.cinder_client.get_volumes_list.return_value = [vol1]
         res = self.cinder_client.read_info(id="id1")
         self.assertIn('volumes', res)
@@ -242,7 +243,7 @@ class CinderStorageTestCase(test.TestCase):
 
         try:
             self.cinder_client.get_volume_path_iscsi('fake_vol_id')
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             self.assertEqual(expected_msg, e.message)
 
         self.fake_cloud.mysql_connector.execute.assert_called_once_with(

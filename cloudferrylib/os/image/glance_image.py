@@ -202,6 +202,16 @@ class GlanceImage(image.Image):
 
         return images
 
+    def get_matching_image(self, uuid, name, size, checksum):
+        for img in self.get_image_list():
+            image_matches = (
+                img.id == uuid or
+                img.name == name and
+                img.size == size and
+                img.checksum == checksum)
+            if image_matches:
+                return img
+
     def create_image(self, **kwargs):
         image_id = kwargs.get('id')
         if image_id is not None and self.image_exists(image_id):

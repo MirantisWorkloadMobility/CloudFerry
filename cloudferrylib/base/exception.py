@@ -41,3 +41,11 @@ class TimeoutException(RuntimeError):
         self.exp_status = exp_status
         self.msg = msg
         super(TimeoutException, self).__init__()
+
+
+class InvalidConfigException(AbortMigrationError):
+    pass
+
+
+class TenantNotPresentInDestination(RuntimeError):
+    pass

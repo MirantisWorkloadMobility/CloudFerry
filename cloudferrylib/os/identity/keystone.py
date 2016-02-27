@@ -763,6 +763,23 @@ class KeystoneIdentity(identity.Identity):
         return src_tenant['name'].lower() == dst_tenant['name'].lower()
 
 
+def get_dst_tenant_from_src_tenant_id(src_keystone, dst_keystone,
+                                      src_tenant_id):
+    try:
+        with proxy_client.expect_exception(ks_exceptions.NotFound):
+            client = src_keystone.keystone_client
+            src_tenant = client.tenants.find(id=src_tenant_id)
+    except ks_exceptions.NotFound:
+        return None
+
+    try:
+        with proxy_client.expect_exception(ks_exceptions.NotFound):
+            client = dst_keystone.keystone_client
+            return client.tenants.find(name=src_tenant.name)
+    except ks_exceptions.NotFound:
+        return None
+
+
 def get_dst_user_from_src_user_id(src_keystone, dst_keystone, src_user_id,
                                   fallback_to_admin=True):
     """Returns user from destination with the same name as on source. None if

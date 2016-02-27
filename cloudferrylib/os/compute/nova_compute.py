@@ -697,14 +697,22 @@ class NovaCompute(compute.Compute):
                 }
                 if instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
                     volume_id = instance['volumes'][0]['id']
-                    create_params["block_device_mapping_v2"] = [{
-                        "source_type": "volume",
-                        "uuid": volume_id,
-                        "destination_type": "volume",
-                        "delete_on_termination": True,
-                        "boot_index": 0
-                    }]
-                    create_params['image'] = None
+                    storage = self.cloud.resources[utl.STORAGE_RESOURCE]
+                    vol = storage.get_migrated_volume(volume_id)
+
+                    if vol:
+                        create_params["block_device_mapping_v2"] = [{
+                            "source_type": "volume",
+                            "uuid": vol.id,
+                            "destination_type": "volume",
+                            "delete_on_termination": True,
+                            "boot_index": 0
+                        }]
+                        create_params['image'] = None
+                    else:
+                        msg = ("Bootable volume for instance '%s' is "
+                               "not present, volume will NOT be attached")
+                        LOG.warning(msg, instance['name'])
 
                 client_conf.cloud.tenant = instance['tenant_name']
                 new_id = RandomSchedulerVmDeployer(self).deploy(create_params,

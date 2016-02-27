@@ -173,7 +173,7 @@ class CinderDatabaseTestCase(test.TestCase):
                                                  region_name=None)
         self.assertEqual(self.mock_client(), client)
 
-    def test_read_db_info(self):
+    def test_read_info(self):
 
         def select_all(table):
             class FakeProxyQuery(object):
