@@ -20,12 +20,15 @@ import os
 import time
 
 from cloudferrylib.base.action import action
-from cloudferrylib.base.exception import AbortMigrationError
-from cloudferrylib.views import cinder_storage_view
+from cloudferrylib.base import exception
+from cloudferrylib.copy_engines import base
+from cloudferrylib.utils import files
+from cloudferrylib.utils import local
 from cloudferrylib.utils import log
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import sizeof_format
 from cloudferrylib.utils import utils
+from cloudferrylib.views import cinder_storage_view
 
 LOG = log.getLogger(__name__)
 
@@ -69,11 +72,6 @@ AWK_GET_MOUNTED_LAST_NFS_SHARES = ''.join([
     AWK_GET_MOUNTED_PREFIX,
     AWK_GET_MOUNTED_SUFFIX
 ])
-
-RSYNC_CMD = (
-    'rsync --progress --partial --inplace --perms --times'
-    ' -e "ssh -o StrictHostKeyChecking=no"'
-)
 
 QUOTA_RESOURCES = ('volumes', 'gigabytes')
 
@@ -134,7 +132,7 @@ class CinderDatabaseInteraction(action.Action):
         cinder_resource = self.cloud.resources.get(
             utils.STORAGE_RESOURCE)
         if not cinder_resource:
-            raise AbortMigrationError(
+            raise exception.AbortMigrationError(
                 "No resource {res} found".format(res=utils.STORAGE_RESOURCE))
         return cinder_resource
 
@@ -170,105 +168,12 @@ class TransportVolumes(CinderDatabaseInteraction):
         """Run TransportVolumes Action."""
         data_from_namespace = kwargs.get(NAMESPACE_CINDER_CONST)
         if not data_from_namespace:
-            raise AbortMigrationError(
+            raise exception.AbortMigrationError(
                 "Cannot read attribute {attribute} from namespace".format(
                     attribute=NAMESPACE_CINDER_CONST))
 
         data = data_from_namespace
         self.get_resource().deploy(data)
-
-
-class WriteVolumesDb(CinderDatabaseInteraction):
-
-    """
-    Copy volumes.
-
-    Work via rsync, can handle big files
-    and resume after errors.
-
-    """
-
-    def __init__(self, *args, **kwargs):
-        super(WriteVolumesDb, self).__init__(*args, **kwargs)
-        self.cp_volumes = CopyVolumes(self.cfg, self.src_cloud, self.dst_cloud)
-
-    @staticmethod
-    def _default_quota_usages(quota_usages, quotas):
-        def existed_usage(q):
-            return [u for u in quota_usages
-                    if u['project_id'] == q['project_id'] and
-                    u['resource'] == q['resource']]
-
-        def _quota_usage(q):
-            return {
-                'resource': q['resource'],
-                'project_id': q['project_id'],
-                'in_use': 0,
-                'reserved': 0,
-            }
-        return [_quota_usage(q) for q in quotas
-                if q['resource'] in QUOTA_RESOURCES and
-                not existed_usage(q)]
-
-    @staticmethod
-    def _recalculate_quota_usages(quota_usages, volumes):
-        for u in quota_usages:
-            if u['resource'] in QUOTA_RESOURCES:
-                u['in_use'] = 0
-
-        for v in volumes:
-            for res in QUOTA_RESOURCES:
-                u = [q for q in quota_usages
-                     if q['project_id'] == v['project_id'] and
-                     q['resource'] == res]
-                if res == 'volumes':
-                    add = 1
-                elif res == 'gigabytes':
-                    add = v.get('size', 0)
-
-                if u:
-                    u[0]['in_use'] += add
-                else:
-                    u = {'resource': res,
-                         'project_id': v['project_id'],
-                         'in_use': add,
-                         'reserved': 0}
-                    quota_usages.append(u)
-        return quota_usages
-
-    def fix_quota_usages(self, data):
-        """Re-calculate quota usages.
-
-        :return: dict
-
-        """
-        volumes = data.get('volumes', [])
-        quotas = data.get('quotas', [])
-        quota_usages = data.get('quota_usages', [])
-
-        quota_usages.extend(self._default_quota_usages(quota_usages, quotas))
-
-        quota_usages = self._recalculate_quota_usages(quota_usages, volumes)
-
-        data['quota_usages'] = quota_usages
-        if quotas:
-            data['quotas'] = quotas
-        return data
-
-    def run(self, *args, **kwargs):
-        """Run WriteVolumesDb Action.
-
-        :return: dict
-
-        """
-
-        data = self.cp_volumes.run()
-
-        res = self.dst_cloud.resources.get(utils.STORAGE_RESOURCE)
-        res.deploy(data)
-        data = self.fix_quota_usages(res.reread())
-        res.deploy({'quota_usages': data['quota_usages']})
-        return data
 
 
 class CopyVolumes(object):
@@ -321,7 +226,7 @@ class CopyVolumes(object):
         """
         LOG.info('Start volumes migration process.')
         for position in self.clouds:
-            self.data[position] = self.clouds[position][RES].read_db_info()
+            self.data[position] = self.clouds[position][RES].read_info()
 
         self._skip_existing_volumes()
 
@@ -415,30 +320,38 @@ class CopyVolumes(object):
                 LOG.debug('Found %s in %s', volume_filename, p)
                 return '%s/%s' % (p, volume_filename)
 
-    def run_rsync(self, src, dst):
-        """Run repeating remote rsync commmand.
+    def run_transfer(self, src, dst):
+        """Run repeating remote commmand.
 
         :return: True on success (or False otherwise)
 
         """
-        cmd = RSYNC_CMD
-        cmd += ' %s %s@%s:%s' % (src, self.clouds[DST][CFG].ssh_user,
-                                 self.clouds[DST][CFG].get(HOST), dst)
-        err = self.run_repeat_on_errors(self.clouds[SRC], cmd)
-        if err:
-            LOG.warning("Failed copying to %s", dst)
-        return err
+        data = {'host_src': self.clouds[SRC][CFG].get(HOST),
+                'path_src': src,
+                'host_dst': self.clouds[DST][CFG].get(HOST),
+                'path_dst': os.path.join(dst, os.path.basename(src)),
+                'gateway': self.clouds[SRC][CFG].get(SSH_HOST)}
 
-    def volume_size(self, cloud, vol_file):
+        copier = base.get_copier(self.clouds[SRC][CLOUD],
+                                 self.clouds[DST][CLOUD],
+                                 data)
+        try:
+            copier.transfer(data)
+            return True
+        except (remote_runner.RemoteExecutionError,
+                local.LocalExecutionFailed)as e:
+            LOG.debug(e, exc_info=True)
+            LOG.warning("Failed copying to %s from %s", dst, src)
+            return False
+
+    def volume_size(self, cloud, path):
         """
         Get size of vol_file in bytes.
 
         :return: int
-
         """
-        cmd = "du -b %s | awk '{print $1}'" % vol_file
-        size = self._run_cmd(cloud, cmd)
-        return int(size)
+        runner = _remote_runner(cloud)
+        return files.remote_file_size(runner, path)
 
     def free_space(self, cloud, path):
         """
@@ -464,8 +377,8 @@ class CopyVolumes(object):
         LOG.info("Delete volume %s", filepath)
         self.run_repeat_on_errors(cloud, cmd)
 
-    def rsync_if_enough_space(self, size, src, dst):
-        """Rsync if enough space.
+    def transfer_if_enough_space(self, size, src, dst):
+        """Copy if enough space.
 
         :return: True on success (or False otherwise)
 
@@ -476,24 +389,21 @@ class CopyVolumes(object):
             LOG.info("Enough space found on %s", dst)
             LOG.info('Start copying volume.')
 
-            err = self.run_rsync(src, dst)
-            return not err
+            return self.run_transfer(src, dst)
         LOG.warning("No enough space on %s", dst)
 
-    def checksum(self, position, filepath):
+    def checksum(self, cloud, path):
         """
         Get checksum of `filepath`.
 
         :return: str
-
         """
-        cmd = (
-            "md5sum %s | awk '{print $1}'"
-        ) % filepath
-        return self._run_cmd(self.clouds[position], cmd)
 
-    def _rsync(self, src, dstpaths, volume, src_size):
-        LOG.debug("Trying rsync file for volume: %s[%s]",
+        runner = _remote_runner(cloud)
+        return files.remote_md5_sum(runner, path)
+
+    def _transfer(self, src, dstpaths, volume, src_size):
+        LOG.debug("Trying transfer file for volume: %s[%s]",
                   volume.get('display_name', None), volume['id'])
         dstfile = self.find_dir(DST, dstpaths, volume)
         LOG.debug("Source file size = %d", src_size)
@@ -507,17 +417,19 @@ class CopyVolumes(object):
 
             LOG.info('Calculate and compare checksums volume on the source '
                      'and on the destionation cloud.')
-            if src_size == dst_size and \
-                    self.checksum(SRC, src) == self.checksum(DST, dstfile):
-                LOG.info("Destination file %s is up-to-date. "
-                         "Sizes and checksums are matched.", dstfile)
-                return dst, 0
+            if src_size == dst_size:
+                src_md5 = self.checksum(self.clouds[SRC], src)
+                dst_md5 = self.checksum(self.clouds[DST], dstfile)
+                if src_md5 == dst_md5:
+                    LOG.info("Destination file %s is up-to-date. "
+                             "Sizes and checksums are matched.", dstfile)
+                    return dst, 0
 
             LOG.info('Checksums are different. Start copying volume %s(%s)',
                      volume.get('display_name', ''),
                      volume['id'])
             start_time = time.time()
-            if self.rsync_if_enough_space(src_size - dst_size, src, dst):
+            if self.transfer_if_enough_space(src_size - dst_size, src, dst):
                 elapsed_time = time.time() - start_time
                 return dst, elapsed_time
             else:
@@ -529,11 +441,11 @@ class CopyVolumes(object):
 
         for dst in dstpaths:
             start_time = time.time()
-            res = self.rsync_if_enough_space(src_size, src, dst)
+            res = self.transfer_if_enough_space(src_size, src, dst)
             elapsed_time = time.time() - start_time
             if res:
                 return dst, elapsed_time
-        raise AbortMigrationError('No space found for %s on %s' % (
+        raise exception.AbortMigrationError('No space found for %s on %s' % (
             str(volume), str(dstpaths)))
 
     def _mount_output_all(self, position, dirs_only=False):
@@ -618,7 +530,8 @@ class CopyVolumes(object):
             res = self._run_cmd(self.clouds[position], cmd)
             res = set(res if isinstance(res, list) else [res])
         if not res:
-            raise AbortMigrationError('No NFS share found on "%s"' % position)
+            raise exception.AbortMigrationError(
+                'No NFS share found on "%s"' % position)
         return res
 
     def mount_dirs(self, position, vt=None):
@@ -800,21 +713,17 @@ class CopyVolumes(object):
                 err_msg = 'No mount found on DST Cloud'
                 if v['volume_type_id']:
                     err_msg += ' for volume type: %s' % v['volume_type_id']
-                raise AbortMigrationError(err_msg)
+                raise exception.AbortMigrationError(err_msg)
 
             LOG.debug('dstpaths: %s', str(dstpaths))
 
             src = self.find_dir(SRC, srcpaths, v)
             if not src:
-                raise AbortMigrationError(
+                raise exception.AbortMigrationError(
                     'No SRC volume file found for %s[%s]'
                     % (v.get('display_name', None), v['id']))
-            dst, elapsed_time = self._rsync(
-                src,
-                dstpaths,
-                v,
-                volumes_size_map[v['id']]
-            )
+            dst, elapsed_time = self._transfer(src, dstpaths, v,
+                                               volumes_size_map[v['id']])
 
             if dst:
                 v['provider_location'] = self._dir_to_provider(dst)

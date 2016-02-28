@@ -12,30 +12,27 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import logging
 
-from fabric.api import env
-from fabric.api import settings
+from fabric import api
 
+from cloudferrylib.copy_engines import base
 from cloudferrylib.os.actions import utils as action_utils
-
 from cloudferrylib.utils import cmd_cfg
-from cloudferrylib.utils import driver_transporter
-from cloudferrylib.utils import log
 from cloudferrylib.utils import rbd_util
 from cloudferrylib.utils import utils
 
+LOG = logging.getLogger(__name__)
 
-LOG = log.getLogger(__name__)
 
-
-class SSHFileToCeph(driver_transporter.DriverTransporter):
+class SSHFileToCeph(base.BaseCopier):
     def transfer(self, data):
         ssh_ip_src = self.src_cloud.cloud_config.cloud.ssh_host
         ssh_ip_dst = self.dst_cloud.cloud_config.cloud.ssh_host
         action_utils.delete_file_from_rbd(ssh_ip_dst, data['path_dst'])
-        with (settings(host_string=ssh_ip_src,
-                       connection_attempts=env.connection_attempts),
-              utils.forward_agent(env.key_filename)):
+        with api.settings(host_string=ssh_ip_src,
+                          connection_attempts=api.env.connection_attempts), \
+                utils.forward_agent(api.env.key_filename):
             rbd_import = rbd_util.RbdUtil.rbd_import_cmd
             ssh_cmd_dst = cmd_cfg.ssh_cmd
             ssh_dst = ssh_cmd_dst(ssh_ip_dst, rbd_import)

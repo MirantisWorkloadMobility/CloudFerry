@@ -20,9 +20,7 @@ class SnapTransfer(action.Action):
     def __init__(self, init, driver,
                  snap_position):
         super(SnapTransfer, self).__init__(init)
-        self.driver = driver(self.src_cloud,
-                             self.dst_cloud,
-                             self.cfg)
+        self.driver = driver(self.src_cloud, self.dst_cloud)
         self.snap_position = snap_position
 
     def run(self, volume, snapshot_info, **kwargs):

@@ -12,31 +12,31 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import logging
 
-from fabric.api import settings
+from fabric import api
+from oslo_config import cfg
 
+from cloudferrylib.copy_engines import base
 from cloudferrylib.utils import cmd_cfg
-from cloudferrylib.utils import driver_transporter
-from cloudferrylib.utils import log
 from cloudferrylib.utils import utils
 
+LOG = logging.getLogger(__name__)
+CONF = cfg.CONF
 
-LOG = log.getLogger(__name__)
 
-
-class SSHFileToFile(driver_transporter.DriverTransporter):
+class SSHFileToFile(base.BaseCopier):
     def transfer(self, data):
-        if self.cfg.migrate.direct_compute_transfer:
+        if CONF.migrate.direct_compute_transfer:
             return self.transfer_direct(data)
 
         LOG.debug("| | copy file")
         ssh_ip_src = self.src_cloud.cloud_config.cloud.ssh_host
         ssh_ip_dst = self.dst_cloud.cloud_config.cloud.ssh_host
-        with utils.forward_agent(self.cfg.migrate.key_filename), \
-                utils.up_ssh_tunnel(data['host_dst'],
-                                    ssh_ip_dst,
+        with utils.forward_agent(CONF.migrate.key_filename), \
+                utils.up_ssh_tunnel(data['host_dst'], ssh_ip_dst,
                                     ssh_ip_src) as port:
-            if self.cfg.migrate.file_compression == "dd":
+            if CONF.migrate.file_compression == "dd":
                 dd_dst = cmd_cfg.dd_cmd_of
                 ssh_cmd_dst = cmd_cfg.ssh_cmd_port
                 ssh_dst = ssh_cmd_dst(port, 'localhost', dd_dst)
@@ -53,7 +53,7 @@ class SSHFileToFile(driver_transporter.DriverTransporter):
 
                 self.src_cloud.ssh_util.execute(process)
 
-            elif self.cfg.migrate.file_compression == "gzip":
+            elif CONF.migrate.file_compression == "gzip":
                 dd = cmd_cfg.dd_cmd_of
                 gunzip_dd = cmd_cfg.gunzip_cmd >> dd
                 ssh_cmd_dst = cmd_cfg.ssh_cmd_port
@@ -64,23 +64,23 @@ class SSHFileToFile(driver_transporter.DriverTransporter):
                 ssh_src = ssh_cmd_src(data['host_src'], gzip_cmd)
 
                 process = ssh_src >> ssh_dst
-                process = process(self.cfg.migrate.level_compression,
+                process = process(CONF.migrate.level_compression,
                                   data['path_src'], '1M', data['path_dst'])
 
                 self.src_cloud.ssh_util.execute(process)
 
     def transfer_direct(self, data):
-        ssh_attempts = self.cfg.migrate.ssh_connection_attempts
+        ssh_attempts = CONF.migrate.ssh_connection_attempts
         LOG.debug("| | copy file")
-        if self.cfg.src.ssh_user != 'root' or self.cfg.dst.ssh_user != 'root':
+        if CONF.src.ssh_user != 'root' or CONF.dst.ssh_user != 'root':
             LOG.critical("This operation needs 'sudo' access rights, that is "
-                         "currently not implemented in this driver. Please use"
-                         " 'CopyFilesBetweenComputeHosts' driver from "
-                         "cloudferrylib/utils/drivers/.")
-        with (settings(host_string=data['host_src'],
-                       connection_attempts=ssh_attempts),
-              utils.forward_agent(self.cfg.migrate.key_filename)):
-            if self.cfg.migrate.file_compression == "dd":
+                         "currently not implemented in this driver. "
+                         "Please use the default driver from "
+                         "cloudferrylib/copy_engines/.")
+        with api.settings(host_string=data['host_src'],
+                          connection_attempts=ssh_attempts), \
+                utils.forward_agent(CONF.migrate.key_filename):
+            if CONF.migrate.file_compression == "dd":
                 dd_dst = cmd_cfg.dd_cmd_of
                 ssh_cmd_dst = cmd_cfg.ssh_cmd
                 ssh_dst = ssh_cmd_dst(data['host_dst'], dd_dst)
@@ -96,7 +96,7 @@ class SSHFileToFile(driver_transporter.DriverTransporter):
                 self.src_cloud.ssh_util.execute(process,
                                                 host_exec=data['host_src'])
 
-            elif self.cfg.migrate.file_compression == "gzip":
+            elif CONF.migrate.file_compression == "gzip":
                 dd = cmd_cfg.dd_cmd_of
                 gunzip_dd = cmd_cfg.gunzip_cmd >> dd
                 ssh_cmd_dst = cmd_cfg.ssh_cmd
@@ -105,7 +105,7 @@ class SSHFileToFile(driver_transporter.DriverTransporter):
                 gzip_cmd = cmd_cfg.gzip_cmd
 
                 process = gzip_cmd >> ssh_dst
-                process = process(self.cfg.migrate.level_compression,
+                process = process(CONF.migrate.level_compression,
                                   data['path_src'], '1M', data['path_dst'])
 
                 self.src_cloud.ssh_util.execute(process,

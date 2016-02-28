@@ -12,25 +12,25 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import logging
 
-from fabric.api import env
+from fabric import api
 
+from cloudferrylib.copy_engines import base
 from cloudferrylib.utils import cmd_cfg
-from cloudferrylib.utils import driver_transporter
-from cloudferrylib.utils import log
 from cloudferrylib.utils import rbd_util
 from cloudferrylib.utils import utils
 
+LOG = logging.getLogger(__name__)
 
-LOG = log.getLogger(__name__)
 
-
-class SSHCephToFile(driver_transporter.DriverTransporter):
+class SSHCephToFile(base.BaseCopier):
     def transfer(self, data):
         ssh_ip_src = self.src_cloud.cloud_config.cloud.ssh_host
         ssh_ip_dst = self.dst_cloud.cloud_config.cloud.ssh_host
-        with utils.forward_agent(env.key_filename), utils.up_ssh_tunnel(
-                data['host_dst'], ssh_ip_dst, ssh_ip_src) as port:
+        with utils.forward_agent(api.env.key_filename), \
+                utils.up_ssh_tunnel(data['host_dst'], ssh_ip_dst,
+                                    ssh_ip_src) as port:
             dd = cmd_cfg.dd_cmd_of
             ssh_cmd = cmd_cfg.ssh_cmd_port
             rbd_export = rbd_util.RbdUtil.rbd_export_cmd

@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import mock
 
 from cloudferrylib.utils import remote_runner
@@ -38,7 +39,7 @@ class RemoteRunnerTestCase(test.TestCase):
             rr.run_ignoring_errors("failing command")
 
             self.assertFalse(rr.ignore_errors)
-        except Exception as e:
+        except remote_runner.RemoteExecutionError as e:
             self.fail("run_ignoring_errors must not raise exceptions: %s" % e)
 
     @mock.patch('cloudferrylib.utils.utils.forward_agent')
