@@ -518,6 +518,11 @@ class Prerequisites(base.BasePrerequisites):
             if sub['name'] == name:
                 return sub['id']
 
+    def create_unassociated_fips(self, neutronclient, fips_count, net_id):
+        for _ in range(fips_count):
+            neutronclient.create_floatingip(
+                    {"floatingip": {"floating_network_id": net_id}})
+
     def get_pool_id(self, name):
         pools = self.neutronclient.list_pools()['pools']
         for pool in pools:
@@ -583,11 +588,10 @@ class Prerequisites(base.BasePrerequisites):
                 self.create_monitors(tenant['monitors'])
             if tenant.get('vips'):
                 self.create_vips(tenant['vips'])
-            if not tenant.get('unassociated_fip'):
-                continue
-            for _ in range(tenant['unassociated_fip']):
-                self.neutronclient.create_floatingip(
-                    {"floatingip": {"floating_network_id": self.ext_net_id}})
+            if tenant.get('unassociated_fip'):
+                self.create_unassociated_fips(self.neutronclient,
+                                              tenant.get('unassociated_fip'),
+                                              self.ext_net_id)
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
@@ -947,7 +951,7 @@ class Prerequisites(base.BasePrerequisites):
             self.migration_utils.execute_command_on_vm(
                 self.get_vagrant_vm_ip(), cmd, username='root', password='')
 
-    def create_network_with_segm_id(self):
+    def create_dst_networking(self):
         if not self.dst_cloud:
             self.dst_cloud = Prerequisites(
                 cloud_prefix='DST',
@@ -956,8 +960,13 @@ class Prerequisites(base.BasePrerequisites):
         self.dst_cloud.switch_user(user=self.dst_cloud.username,
                                    password=self.dst_cloud.password,
                                    tenant=self.dst_cloud.tenant)
-
         self.dst_cloud.create_networks(self.config.dst_networks)
+        for net in self.config.dst_networks:
+            if net.get('real_network'):
+                ext_net_id = self.dst_cloud.get_net_id(net.get('name'))
+                self.create_unassociated_fips(self.dst_cloud.neutronclient,
+                                              self.config.dst_unassociated_fip,
+                                              ext_net_id)
 
     def run_preparation_scenario(self):
         LOG.info('Creating tenants')
@@ -1024,7 +1033,7 @@ class Prerequisites(base.BasePrerequisites):
         LOG.info('Create role on dst')
         self.create_user_on_dst()
         LOG.info('Creating networks on dst')
-        self.create_network_with_segm_id()
+        self.create_dst_networking()
 
 
 if __name__ == '__main__':
