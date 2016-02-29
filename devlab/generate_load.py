@@ -295,7 +295,12 @@ class Prerequisites(base.BasePrerequisites):
     @clean_if_exists
     def create_flavors(self):
         for flavor in self.config.flavors:
-            fl = self.novaclient.flavors.create(**flavor)
+            if flavor.get('is_deleted'):
+                flavor.pop('is_deleted')
+                fl = self.novaclient.flavors.create(**flavor)
+                self.novaclient.flavors.delete(fl.id)
+            else:
+                fl = self.novaclient.flavors.create(**flavor)
             if not is_flavor_public(flavor):
                 self.novaclient.flavor_access.add_tenant_access(
                     flavor=fl.id,

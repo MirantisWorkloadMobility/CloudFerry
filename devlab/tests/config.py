@@ -374,9 +374,19 @@ flavors = [
     {'name': 'flavorname3', 'disk': '10', 'ram': '32', 'vcpus': '1',
      'is_public': False},
     {'name': 'flavorname2', 'disk': '2', 'ram': '48', 'vcpus': '2'},
-    {'name': 'del_flvr', 'disk': '1', 'ram': '64', 'vcpus': '1'}
+    {'name': 'del_flvr', 'disk': '1', 'ram': '64', 'vcpus': '1'},
+    {'name': 'deleted_flavor', 'flavorid': '777', 'disk': '1', 'ram': '48',
+     'vcpus': '1', "ephemeral": '0', 'is_deleted': True},
+    {'name': 'recreated_flavor', 'flavorid': '777', 'disk': '1', 'ram': '48',
+     'vcpus': '1', "ephemeral": '2'}
 ]
-"""Flavors to create/delete"""
+"""Flavors to create/delete.
+`deleted_flavor` flavor covers this scenario:
+- In source cloud
+   -- Create flavor with ID 3 with ephemeral == 0
+   -- Delete flavor
+   -- Create new flavor with the same ID with ephemeral > 0
+ - Run migration"""
 
 networks = [
     {'name': 'mynetwork1', 'admin_state_up': True,
