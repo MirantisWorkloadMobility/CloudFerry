@@ -353,7 +353,10 @@ images = [
      'container_format': 'bare'},
     # Image, deleted from back-end
     {'name': 'broken_image', 'copy_from': img_url, 'disk_format': 'qcow2',
-     'container_format': 'bare', 'broken': True}
+     'container_format': 'bare', 'broken': True},
+    # Image, deleted using glance delete command
+    {'name': 'deleted_image', 'copy_from': img_url, 'disk_format': 'qcow2',
+     'container_format': 'bare', 'is_deleted': True}
 ]
 """Images to create/delete"""
 
@@ -490,7 +493,7 @@ vms = [
     {'name': 'server2', 'image': 'image2', 'flavor': 'flavorname1'},
     {'name': 'server3', 'image': 'image1', 'flavor': 'flavorname2',
      'fip': True},
-    {'name': 'server4', 'image': 'image2', 'flavor': 'flavorname2'},
+    {'name': 'server4', 'image': 'deleted_image', 'flavor': 'flavorname2'},
     {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'server7', 'image': 'image1', 'flavor': 'flavorname1',
