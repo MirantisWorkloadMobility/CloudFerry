@@ -109,11 +109,6 @@ migrate_opts = [
     cfg.StrOpt('router_ips_stub_tenant', default=None,
                help='tenant for creation router ip stubs, if it "None" as '
                     'default stub creates in router tenant'),
-    cfg.StrOpt('cinder_migration_strategy',
-               default='cloudferrylib.os.storage.cinder_storage.'
-                       'CinderNFSStorage',
-               help='path to class that will perform '
-                    'cinder migration actions'),
     cfg.BoolOpt('keep_lbaas', default=False,
                 help='yes - keep lbaas settings, '
                      'no - not keep lbaas settings'),
@@ -214,12 +209,6 @@ migrate_opts = [
                help="Defines number of parallel processes for cinder volume "
                     "migration process. Does not parallelize migration of "
                     "other resources."),
-    cfg.StrOpt('availability_zone_map_file',
-               default='configs/availability_zone_mapping.yaml',
-               help='Allows specifying map between source and destination '
-                    'availability zones. Mapping is used to provision objects '
-                    'in correct availability zones in case source cloud zones '
-                    'are not present in destination.'),
     cfg.StrOpt('local_sudo_password', default=None,
                help='Password to be used for sudo command if needed on the '
                     'local host'),
@@ -316,7 +305,7 @@ src_storage = cfg.OptGroup(name='src_storage',
 src_storage_opts = [
     cfg.StrOpt('service', default='cinder',
                help='name service for storage'),
-    cfg.StrOpt('backend', default='iscsi',
+    cfg.StrOpt('backend', default='nfs',
                help='Cinder volume backend. Possible values: nfs, iscsi-vmax'),
     cfg.StrOpt('host', default=None,
                help='storage node ip address'),
@@ -524,7 +513,7 @@ dst_storage = cfg.OptGroup(name='dst_storage',
 dst_storage_opts = [
     cfg.StrOpt('service', default='cinder',
                help='name service for storage'),
-    cfg.StrOpt('backend', default='iscsi',
+    cfg.StrOpt('backend', default='nfs',
                help='Cinder volume backend. Possible values: nfs, iscsi-vmax'),
     cfg.StrOpt('host', default=None,
                help='storage node ip address'),

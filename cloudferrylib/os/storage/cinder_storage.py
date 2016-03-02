@@ -17,7 +17,6 @@ from itertools import ifilter
 
 from cinderclient.v1 import client as cinder_client
 from cinderclient import exceptions as cinder_exc
-from pymysql import cursors
 
 from cloudferrylib.base import storage
 from cloudferrylib.os.identity import keystone
@@ -67,12 +66,7 @@ MIGRATED_VOLUMES_METADATA_KEY = 'src_volume_id'
 
 class CinderStorage(storage.Storage):
 
-    """ The main class for working with Openstack cinder client.
-
-    to use this strategy - specify cinder_migration_strategy in config as
-    'cloudferrylib.os.storage.cinder.CinderStorage'
-
-    """
+    """Implements basic functionality around cinder client"""
 
     def __init__(self, config, cloud):
         super(CinderStorage, self).__init__(config)
@@ -254,7 +248,6 @@ class CinderStorage(storage.Storage):
         """Creates volume of given size
         :raises: OverLimit in case quota exceeds for tenant
         """
-
         cinder = self.cinder_client
         tenant_id = kwargs.get('project_id')
 
@@ -269,8 +262,11 @@ class CinderStorage(storage.Storage):
                 cinder = self.proxy(self.get_client(tenant=tenant.name),
                                     self.config)
 
-        with proxy_client.expect_exception(cinder_exc.OverLimit):
-            return cinder.volumes.create(size, **kwargs)
+                with proxy_client.expect_exception(cinder_exc.OverLimit):
+                    return cinder.volumes.create(size, **kwargs)
+        else:
+            with proxy_client.expect_exception(cinder_exc.OverLimit):
+                return cinder.volumes.create(size, **kwargs)
 
     def delete_volume(self, volume_id):
         volume = self.get_volume_by_id(volume_id)
@@ -466,283 +462,3 @@ class CinderStorage(storage.Storage):
             lun)
 
         return volume_path
-
-
-def skip_invalid_status_volumes(volumes):
-    result = []
-    for v in volumes:
-        if v[STATUS] not in VALID_STATUSES:
-            LOG.warning('Skipping volume %s[%s] in "%s" state',
-                        v.get(DISPLAY_NAME, ''), v[ID], v[STATUS])
-        else:
-            result.append(v)
-    return result
-
-
-class CinderNFSStorage(CinderStorage):
-
-    """Migration strategy used with NFS multi backend.
-
-    copies volume files via rsync;
-    copies data directly from database to database, avoiding creation of
-    new volumes;
-
-    To use this strategy - specify cinder_migration_strategy in config as
-    'cloudferrylib.os.storage.cinder.CinderNFSStorage'.
-
-    """
-
-    def __init__(self, config, cloud):
-        super(CinderNFSStorage, self).__init__(config, cloud)
-        self.list_of_tables = [
-            'volumes',
-            'quotas',
-            'quota_classes',
-            'volume_types',
-            'volume_type_extra_specs',
-            'volume_metadata',
-            'volume_glance_metadata',
-        ]
-
-    def get_client(self, params=None, tenant=None, **kwargs):
-        params = params or self.config
-
-        return cinder_client.Client(
-            params.cloud.user,
-            params.cloud.password,
-            params.cloud.tenant,
-            params.cloud.auth_url,
-            cacert=params.cloud.cacert,
-            insecure=params.cloud.insecure,
-            region_name=params.cloud.region
-        )
-
-    def _filter_quotas_list(self, table_name, quotas):
-        filtering_enabled = self.cloud.position == SRC
-
-        if filtering_enabled:
-            fltr = self.get_filter().get_tenant_filter()
-            quotas = [q for q in quotas if fltr(q)]
-            LOG.info("Filtered %s: %s", table_name,
-                     ", ".join((str(v) for v in quotas)))
-        return quotas
-
-    def _filter(self, table, result):
-        if table == 'volumes':
-            result = self.filter_volumes(result)
-            result = skip_invalid_status_volumes(result)
-        if table in QUOTA_TABLES:
-            result = self._filter_quotas_list(table, result)
-        return result
-
-    def read_db_info(self, **kwargs):
-        info = {}
-        for table in self.list_of_tables:
-            data = CinderTable(self.cloud.mysql_connector('cinder'),
-                               table).read_info(**kwargs)
-            # filter deleted volumes
-            data = [a for a in data if not a.get(DELETED, 0)]
-
-            if self.cloud.position == SRC:
-                data = self._filter(table, data)
-                migrated = self.cloud.migration
-                for e in data:
-                    for col in PROJECT_ID, TENANT_ID:
-                        if col in e:
-                            e[col] = migrated[utils.IDENTITY_RESOURCE].\
-                                migrated_id(e[col], resource_type='tenants')
-                        if USER_ID in e:
-                            e[USER_ID] = migrated[utils.IDENTITY_RESOURCE].\
-                                migrated_id(e[USER_ID], resource_type='users')
-            elif table == 'volumes':
-                data = skip_invalid_status_volumes(data)
-            info[table] = data
-        return info
-
-    def reread(self):
-        """Re-read db info after deployment.
-
-        :return: dict
-
-        """
-        return self.read_db_info()
-
-    def deploy_data_to_table(self, table_name, data):
-        if not data:
-            # if we don't have data to be added - exit
-            return
-
-        CinderTable(self.cloud.mysql_connector('cinder'),
-                    table_name).deploy(data)
-
-    def deploy(self, data):
-        """ Read data and writes it to database.
-
-        :return: data
-
-        """
-        for table_name in self.list_of_tables:
-            if table_name in data:
-                self.deploy_data_to_table(table_name, data[table_name])
-        return data
-
-
-class CinderTable(object):
-
-    """Cinder DB table."""
-
-    def __init__(self, connector, table_name):
-        self.mysql_connector = connector
-        self.table_name = table_name
-        self.keys = TABLE_UNIQ_KEYS.get(table_name, ['id'])
-
-    def write_to_database(self, cmd, cursor, entries, primary_key=None):
-        if not entries:
-            return
-        cmd = cmd.upper()
-
-        for entry in entries:
-            if 'snapshot_id' in entry:
-                entry.pop('snapshot_id')
-            keys = entry.keys()
-            values = tuple([entry[k] for k in keys])
-
-            reserved = ['key']
-            for key in reserved:
-                if key in keys:
-                    keys[keys.index(key)] = '%s.%s' % (self.table_name, key)
-
-            if cmd == 'UPDATE':
-                query = (
-                    "UPDATE %s SET %s WHERE %s='%s'" % (
-                        self.table_name,
-                        ",".join(k + "=%s" for k in keys),
-                        primary_key,
-                        entry[primary_key],
-                    )
-                )
-            elif cmd == 'INSERT':
-                query = (
-                    "INSERT INTO %s (%s) VALUES (%s)" % (
-                        self.table_name,
-                        ",".join(keys),
-                        ",".join(["%s" for _ in keys]),
-                    )
-                )
-            else:
-                raise ValueError('Unknown command: %s', cmd)
-
-            LOG.debug(query, *values)
-            cursor.execute(query, values)
-
-    def get_primary_key(self, cursor):
-        cursor.execute("show index from %s where Key_name = 'PRIMARY'" %
-                       self.table_name)
-        primary_key = cursor.fetchone().get("Column_name")
-        LOG.debug("Primary key of %s: %s", self.table_name, primary_key)
-        return primary_key
-
-    def get_auto_increment(self, cursor):
-        cursor.execute(("select auto_increment from information_schema.tables "
-                        "where table_name = '%s' "
-                        "and table_schema = 'cinder'") % self.table_name)
-        auto_increment = cursor.fetchone().get("auto_increment")
-        LOG.debug("Auto increment of %s: %s", self.table_name, auto_increment)
-        return auto_increment
-
-    @staticmethod
-    def identical(obj1, obj2):
-        common_cols = list(set(obj1.keys()) & set(obj2.keys()))
-
-        def common(obj):
-            return {i: obj[i] for i in obj if i in common_cols}
-
-        return common(obj1) == common(obj2)
-
-    def mul_key(self, row):
-        """Get MUL key for row.
-
-        :return: list
-
-        """
-        return tuple([row.get(key, None) for key in self.keys])
-
-    def filter_data(self, existing_data, data_to_be_added, primary_key,
-                    auto_increment):
-        """ Handle duplicates in database.
-
-        :return: (entries, duplicates)
-
-        """
-        entries, duplicates = [], []
-
-        existing = {self.mul_key(i): i for i in existing_data}
-        for candidate in data_to_be_added:
-            pk = candidate[primary_key]
-            key = self.mul_key(candidate)
-            if auto_increment or primary_key not in self.keys:
-                candidate.pop(primary_key)
-            if key in existing:
-                ex = existing[key]
-                if self.identical(ex, candidate):
-                    # if dicts are comlpletely same - drop that dict
-                    LOG.debug("Duplicate in table %s for pk %s",
-                              self.table_name, pk)
-                else:
-                    LOG.warning("Duplicate in table %s: %s", self.table_name,
-                                str(ex))
-                    LOG.warning("Candidate to update %s: %s", self.table_name,
-                                str(candidate))
-                    candidate[primary_key] = pk
-                    duplicates.append(candidate)
-            else:
-                entries.append(candidate)
-        return (entries, duplicates)
-
-    def deploy(self, data):
-        sql_engine = self.mysql_connector.get_engine()
-        connection = sql_engine.raw_connection()
-        cursor = connection.cursor(cursors.DictCursor)
-
-        primary_key = self.get_primary_key(cursor)
-        auto_increment = self.get_auto_increment(cursor)
-        data_in_database = self.read_info()
-        entries, duplicates = self.filter_data(data_in_database, data,
-                                               primary_key, auto_increment)
-
-        self.write_to_database("INSERT", cursor, entries)
-        self.write_to_database("UPDATE", cursor, duplicates, primary_key)
-
-        cursor.close()
-        connection.commit()
-        connection.close()
-
-    def select_all(self, table_name):
-        """Select * from table.
-
-        :return: query
-
-        """
-        sql = ("SELECT * from %s" % table_name)
-        return self.mysql_connector.execute(sql)
-
-    def get_table(self):
-        query = self.select_all(self.table_name)
-        column_names = query.keys()
-        result = [dict(zip(column_names, row)) for row in query]
-        return result
-
-    def read_info(self, **kwargs):
-        """ Perform SQL query and returns rows as dict. """
-        # ignore deleted and errored volumes
-        result = self.get_table()
-        if not result:
-            return result
-        if kwargs:
-            result = [a for a in result
-                      for k, v in kwargs.items()
-                      if a.get(k, None) == v]
-        for r in result:
-            if DELETED in r and not r.get(DELETED):
-                r[DELETED] = 0
-        return result

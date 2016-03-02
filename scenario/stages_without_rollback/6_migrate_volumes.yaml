@@ -5,8 +5,6 @@ preparation:
   - act_check_filter: True
   - check_vmax_prerequisites: True
 
-rollback:
-
 process:
   - get_volumes_db_data: True
   - migrate_volumes: True
