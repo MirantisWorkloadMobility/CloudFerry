@@ -92,9 +92,9 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
 
         self.release_fips_tenant()
 
-        self.external_networks_ids_list = \
+        self.external_networks_ids_list = (
             [i['id'] for i in self.dst_cloud.neutronclient.list_networks(
-            )['networks'] if i['router:external'] is True]
+            )['networks'] if i.get('router:external') is True])
 
         fip = self.dst_cloud.neutronclient.create_floatingip(
             {"floatingip": {"floating_network_id":

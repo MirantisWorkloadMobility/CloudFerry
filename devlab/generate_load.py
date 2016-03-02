@@ -61,23 +61,6 @@ def clean_if_exists(func):
     return wrapper
 
 
-def retry_until_resources_created(resource_name):
-    def actual_decorator(func):
-        def wrapper(_list):
-            for _ in range(TIMEOUT):
-                _list = func(_list)
-                if _list:
-                    time.sleep(1)
-                    continue
-                else:
-                    break
-            else:
-                msg = '{0}s with ids {1} have not become in active state'
-                raise RuntimeError(msg.format(resource_name, _list))
-        return wrapper
-    return actual_decorator
-
-
 def is_flavor_public(flavor):
     return flavor.get('is_public', True)
 
@@ -182,13 +165,6 @@ class Prerequisites(base.BasePrerequisites):
                     tenant['name']), **tenant['quota'])
 
     def upload_image(self):
-        @retry_until_resources_created('image')
-        def wait_until_images_created(image_ids):
-            for img_id in image_ids:
-                img = self.glanceclient.images.get(img_id)
-                if img.status == 'active':
-                    image_ids.remove(img_id)
-            return image_ids
 
         def _get_body_for_image_creating(_image):
             # Possible parameters for image creating
@@ -217,7 +193,8 @@ class Prerequisites(base.BasePrerequisites):
             img = self.glanceclient.images.create(
                 **_get_body_for_image_creating(image))
             img_ids.append(img.id)
-        wait_until_images_created(img_ids[:])
+        self.wait_until_objects_created(img_ids, self.check_image_state,
+                                        TIMEOUT)
 
         tenant_list = self.keystoneclient.tenants.list()
         for image_id in img_ids:
@@ -295,7 +272,12 @@ class Prerequisites(base.BasePrerequisites):
     @clean_if_exists
     def create_flavors(self):
         for flavor in self.config.flavors:
-            fl = self.novaclient.flavors.create(**flavor)
+            if flavor.get('is_deleted'):
+                flavor.pop('is_deleted')
+                fl = self.novaclient.flavors.create(**flavor)
+                self.novaclient.flavors.delete(fl.id)
+            else:
+                fl = self.novaclient.flavors.create(**flavor)
             if not is_flavor_public(flavor):
                 self.novaclient.flavor_access.add_tenant_access(
                     flavor=fl.id,
@@ -375,18 +357,12 @@ class Prerequisites(base.BasePrerequisites):
                 vm_ids.append(_vm.id)
                 if not vm.get('fip'):
                     continue
-                wait_until_vms_created([_vm.id])
+                self.wait_until_objects_created([_vm.id], self.check_vm_state,
+                                                TIMEOUT)
                 fip = self.neutronclient.create_floatingip(
                     {"floatingip": {"floating_network_id": self.ext_net_id}})
                 _vm.add_floating_ip(fip['floatingip']['floating_ip_address'])
             return vm_ids
-
-        @retry_until_resources_created('vm')
-        def wait_until_vms_created(vm_list):
-            for vm in vm_list[:]:
-                if self.check_vm_state(vm):
-                    vm_list.remove(vm)
-            return vm_list
 
         vms = create_vms(self.config.vms)
         for tenant in self.config.tenants:
@@ -424,19 +400,9 @@ class Prerequisites(base.BasePrerequisites):
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
-        wait_until_vms_created(vms)
+        self.wait_until_objects_created(vms, self.check_vm_state, TIMEOUT)
 
     def create_vm_snapshots(self):
-        @retry_until_resources_created('vm_snapshot')
-        def wait_until_vm_snapshots_created(snapshot_ids):
-            for snp_id in snapshot_ids[:]:
-                snp = self.glanceclient.images.get(snp_id)
-                if snp.status == 'active':
-                    snp_ids.remove(snp_id)
-                elif snp.status == 'error':
-                    msg = 'Snapshot with id {0} has become in error state'
-                    raise RuntimeError(msg.format(snp_id))
-            return snapshot_ids
 
         snp_ids = []
         for snapshot in self.config.snapshots:
@@ -446,7 +412,8 @@ class Prerequisites(base.BasePrerequisites):
             snp = self.glanceclient.images.get(self.get_image_id(
                 snapshot['image_name']))
             snp_ids.append(snp.id)
-        wait_until_vm_snapshots_created(snp_ids)
+        self.wait_until_objects_created(snp_ids, self.check_snapshot_state,
+                                        TIMEOUT)
 
     def create_networks(self, networks):
 
@@ -513,6 +480,11 @@ class Prerequisites(base.BasePrerequisites):
             if sub['name'] == name:
                 return sub['id']
 
+    def create_unassociated_fips(self, neutronclient, fips_count, net_id):
+        for _ in range(fips_count):
+            neutronclient.create_floatingip(
+                    {"floatingip": {"floating_network_id": net_id}})
+
     def get_pool_id(self, name):
         pools = self.neutronclient.list_pools()['pools']
         for pool in pools:
@@ -578,11 +550,10 @@ class Prerequisites(base.BasePrerequisites):
                 self.create_monitors(tenant['monitors'])
             if tenant.get('vips'):
                 self.create_vips(tenant['vips'])
-            if not tenant.get('unassociated_fip'):
-                continue
-            for _ in range(tenant['unassociated_fip']):
-                self.neutronclient.create_floatingip(
-                    {"floatingip": {"floating_network_id": self.ext_net_id}})
+            if tenant.get('unassociated_fip'):
+                self.create_unassociated_fips(self.neutronclient,
+                                              tenant.get('unassociated_fip'),
+                                              self.ext_net_id)
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
@@ -621,17 +592,6 @@ class Prerequisites(base.BasePrerequisites):
 
     def create_cinder_volumes(self, volumes_list):
 
-        @retry_until_resources_created('volume')
-        def wait_for_volumes(volume_ids):
-            for volume_id in volume_ids[:]:
-                _vlm = self.cinderclient.volumes.get(volume_id)
-                if _vlm.status == 'available' or _vlm.status == 'in-use':
-                    volume_ids.remove(volume_id)
-                elif _vlm.status == 'error':
-                    msg = 'Volume with id {0} was created with error'
-                    raise RuntimeError(msg.format(volume_id))
-            return volume_ids
-
         def wait_until_vms_with_fip_accessible(_vm_id):
             vm = self.novaclient.servers.get(_vm_id)
             self.migration_utils.open_ssh_port_secgroup(self, vm.tenant_id)
@@ -665,7 +625,8 @@ class Prerequisites(base.BasePrerequisites):
             vlm_ids.append(vlm.id)
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
-        wait_for_volumes(vlm_ids)
+        self.wait_until_objects_created(vlm_ids, self.check_volume_state,
+                                        TIMEOUT)
         vlm_ids = []
         for volume in volumes_list:
             if 'server_to_attach' not in volume:
@@ -677,7 +638,8 @@ class Prerequisites(base.BasePrerequisites):
             self.novaclient.volumes.create_server_volume(
                 server_id=vm_id, volume_id=vlm_id, device=volume['device'])
             vlm_ids.append(vlm_id)
-        wait_for_volumes(vlm_ids)
+        self.wait_until_objects_created(vlm_ids, self.check_volume_state,
+                                        TIMEOUT)
 
     def create_cinder_snapshots(self, snapshot_list):
         for snapshot in snapshot_list:
@@ -932,17 +894,22 @@ class Prerequisites(base.BasePrerequisites):
             self.migration_utils.execute_command_on_vm(
                 self.get_vagrant_vm_ip(), cmd, username='root', password='')
 
-    def break_image(self):
+    def break_images(self):
         all_images = self.migration_utils.get_all_images_from_config()
         images_to_break = [image for image in all_images
                            if image.get('broken')]
+        images_to_delete = [image for image in all_images
+                            if image.get('is_deleted')]
         for image in images_to_break:
             image_id = self.get_image_id(image['name'])
             cmd = 'rm -rf /var/lib/glance/images/%s' % image_id
             self.migration_utils.execute_command_on_vm(
                 self.get_vagrant_vm_ip(), cmd, username='root', password='')
+        for image in images_to_delete:
+            image_id = self.get_image_id(image['name'])
+            self.glanceclient.images.delete(image_id)
 
-    def create_network_with_segm_id(self):
+    def create_dst_networking(self):
         if not self.dst_cloud:
             self.dst_cloud = Prerequisites(
                 cloud_prefix='DST',
@@ -951,8 +918,13 @@ class Prerequisites(base.BasePrerequisites):
         self.dst_cloud.switch_user(user=self.dst_cloud.username,
                                    password=self.dst_cloud.password,
                                    tenant=self.dst_cloud.tenant)
-
         self.dst_cloud.create_networks(self.config.dst_networks)
+        for net in self.config.dst_networks:
+            if net.get('real_network'):
+                ext_net_id = self.dst_cloud.get_net_id(net.get('name'))
+                self.create_unassociated_fips(self.dst_cloud.neutronclient,
+                                              self.config.dst_unassociated_fip,
+                                              ext_net_id)
 
     def run_preparation_scenario(self):
         LOG.info('Creating tenants')
@@ -983,7 +955,7 @@ class Prerequisites(base.BasePrerequisites):
         LOG.info('Breaking VMs')
         self.break_vm()
         LOG.info('Breaking Images')
-        self.break_image()
+        self.break_images()
         LOG.info('Updating filtering')
         self.update_filtering_file()
         LOG.info('Creating vm snapshots')
@@ -1019,7 +991,7 @@ class Prerequisites(base.BasePrerequisites):
         LOG.info('Create role on dst')
         self.create_user_on_dst()
         LOG.info('Creating networks on dst')
-        self.create_network_with_segm_id()
+        self.create_dst_networking()
 
 
 if __name__ == '__main__':

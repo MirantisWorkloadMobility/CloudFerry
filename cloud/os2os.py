@@ -21,6 +21,7 @@ from cloudferrylib.os.identity import keystone
 from cloudferrylib.os.image import glance_image
 from cloudferrylib.os.network import neutron
 from cloudferrylib.os.object_storage import swift_storage
+from cloudferrylib.os.storage import cinder_storage
 from cloudferrylib.scheduler import cursor
 from cloudferrylib.scheduler import namespace
 from cloudferrylib.scheduler import scheduler
@@ -33,8 +34,7 @@ class OS2OSFerry(cloud_ferry.CloudFerry):
         super(OS2OSFerry, self). __init__(config)
         resources = {'identity': keystone.KeystoneIdentity,
                      'image': glance_image.GlanceImage,
-                     'storage': utl.import_class_by_string(
-                         config.migrate.cinder_migration_strategy),
+                     'storage': cinder_storage.CinderStorage,
                      'network': neutron.NeutronNetwork,
                      'compute': nova_compute.NovaCompute,
                      'objstorage': swift_storage.SwiftStorage}

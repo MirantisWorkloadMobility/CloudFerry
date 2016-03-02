@@ -68,5 +68,7 @@ class CheckVMAXPrerequisites(action.Action):
             raise exception.AbortMigrationError(msg)
 
     def run(self, **kwargs):
+        if self.cfg.dst_storage.backend != 'iscsi-vmax':
+            return
         self._iscsiadm_is_installed_locally()
         self._ssh_connectivity_between_controllers()

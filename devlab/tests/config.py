@@ -223,7 +223,7 @@ tenants = [
               {'filename': 'test/dir/test_data.txt',
                'data': 'test data string'}]}
          ],
-     'unassociated_fip': 1
+     'unassociated_fip': 3
      },
     {'name': 'tenant3', 'description': 'This tenant will be deleted',
      'enabled': True, 'deleted': True,
@@ -353,7 +353,10 @@ images = [
      'container_format': 'bare'},
     # Image, deleted from back-end
     {'name': 'broken_image', 'copy_from': img_url, 'disk_format': 'qcow2',
-     'container_format': 'bare', 'broken': True}
+     'container_format': 'bare', 'broken': True},
+    # Image, deleted using glance delete command
+    {'name': 'deleted_image', 'copy_from': img_url, 'disk_format': 'qcow2',
+     'container_format': 'bare', 'is_deleted': True}
 ]
 """Images to create/delete"""
 
@@ -374,9 +377,19 @@ flavors = [
     {'name': 'flavorname3', 'disk': '10', 'ram': '32', 'vcpus': '1',
      'is_public': False},
     {'name': 'flavorname2', 'disk': '2', 'ram': '48', 'vcpus': '2'},
-    {'name': 'del_flvr', 'disk': '1', 'ram': '64', 'vcpus': '1'}
+    {'name': 'del_flvr', 'disk': '1', 'ram': '64', 'vcpus': '1'},
+    {'name': 'deleted_flavor', 'flavorid': '777', 'disk': '1', 'ram': '48',
+     'vcpus': '1', "ephemeral": '0', 'is_deleted': True},
+    {'name': 'recreated_flavor', 'flavorid': '777', 'disk': '1', 'ram': '48',
+     'vcpus': '1', "ephemeral": '2'}
 ]
-"""Flavors to create/delete"""
+"""Flavors to create/delete.
+`deleted_flavor` flavor covers this scenario:
+- In source cloud
+   -- Create flavor with ID 3 with ephemeral == 0
+   -- Delete flavor
+   -- Create new flavor with the same ID with ephemeral > 0
+ - Run migration"""
 
 networks = [
     {'name': 'mynetwork1', 'admin_state_up': True,
@@ -441,10 +454,8 @@ vips = [
 
 dst_networks = [
     {'name': 'test_segm_id_cidr1', 'admin_state_up': True,
-     'shared': False,
-     'router:external': False, 'real_network': False,
-     'provider:segmentation_id': 177,
-     'provider:network_type': 'gre',
+     'shared': False, 'router:external': False, 'real_network': False,
+     'provider:segmentation_id': 177, 'provider:network_type': 'gre',
      'subnets': [
          {'cidr': '31.31.31.0/24', 'ip_version': 4,
           'name': 'segm_id_test_subnet_1', 'connect_to_ext_router': False,
@@ -452,16 +463,26 @@ dst_networks = [
          ]
      },
     {'name': 'test_segm_id_cidr2', 'admin_state_up': True,
-     'shared': False,
-     'router:external': False, 'real_network': False,
-     'provider:segmentation_id': 178,
-     'provider:network_type': 'gre',
+     'shared': False, 'router:external': False, 'real_network': False,
+     'provider:segmentation_id': 178, 'provider:network_type': 'gre',
      'subnets': [
          {'cidr': '41.41.41.0/24', 'ip_version': 4,
           'name': 'segm_id_test_subnet_2', 'connect_to_ext_router': False,
           }
          ]
+     },
+    {'name': 'another_shared_net', 'admin_state_up': True, 'shared': True,
+     'router:external': True, 'real_network': True,
+     'provider:physical_network': 'physnet2', 'provider:network_type': 'flat',
+     'subnets': [
+         {'cidr': '192.168.55.0/24', 'ip_version': 4,
+          'name': 'another_ext_subnet', 'allocation_pools': [
+             {'start': '192.168.55.100', 'end': '192.168.55.254'}]
+          }]
      }]
+
+dst_unassociated_fip = 4
+"""Amount of unassociated Floating IP will be created on DST cloud."""
 
 server_groups = [
     {'name': 'admin_server_group', 'policies': ['anti-affinity']}
@@ -472,7 +493,7 @@ vms = [
     {'name': 'server2', 'image': 'image2', 'flavor': 'flavorname1'},
     {'name': 'server3', 'image': 'image1', 'flavor': 'flavorname2',
      'fip': True},
-    {'name': 'server4', 'image': 'image2', 'flavor': 'flavorname2'},
+    {'name': 'server4', 'image': 'deleted_image', 'flavor': 'flavorname2'},
     {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'server7', 'image': 'image1', 'flavor': 'flavorname1',

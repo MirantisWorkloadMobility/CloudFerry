@@ -19,6 +19,7 @@ from cinderclient import exceptions as cinder_exc
 from keystoneclient import exceptions as keystone_exc
 from novaclient import exceptions as nova_exc
 from cloudferrylib.base.action import action
+from cloudferrylib.base import exception
 from cloudferrylib.os.storage import filters as cinder_filters
 from cloudferrylib.utils import log
 from cloudferrylib.utils import proxy_client
@@ -128,6 +129,9 @@ class CheckFilter(action.Action):
         ident_resource = self.cloud.resources[utl.IDENTITY_RESOURCE]
         if opts and opts.get('tenant_id'):
             tenants = opts['tenant_id']
+            if len(tenants) > 1:
+                raise exception.AbortMigrationError(
+                    'More than one tenant in tenant filters is not supported.')
             for tenant_id in tenants:
                 LOG.debug('Filtered tenant id: %s', tenant_id)
                 try:
