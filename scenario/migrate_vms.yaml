@@ -45,13 +45,9 @@ preparation:
 rollback:
   - restore_from_vm_snapshot_dst: True
   - restore_from_vm_snapshot_src: True
-  - image_rollback_dst: False
-  - restore_from_snapshot: False
-
 
 process:
   - transport_instances_and_dependency_resources:
-      - act_identity_trans: False
       - act_get_info_inst: True
       - init_iteration_instance:
           - init_iteration_instance_copy_var: True
