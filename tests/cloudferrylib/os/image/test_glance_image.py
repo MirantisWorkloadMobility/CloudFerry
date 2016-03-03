@@ -253,3 +253,30 @@ class GlanceImageTestCase(test.TestCase):
 
         info = self.glance_image.read_info()
         self.assertEqual(self.fake_result_info, info)
+
+    def test_get_matching_image_positive_match_uuid(self):
+        fake_images = [self.fake_image_1, self.fake_image_2]
+        self.glance_mock_client().images.list.return_value = fake_images
+
+        img = self.glance_image.get_matching_image(
+            uuid=self.fake_image_1.id, checksum='mismatch_checksum',
+            size=2048, name='mismatch_name')
+        self.assertEqual(self.fake_image_1, img)
+
+    def test_get_matching_image_positive_mismatch_uuid(self):
+        fake_images = [self.fake_image_1, self.fake_image_2]
+        self.glance_mock_client().images.list.return_value = fake_images
+
+        img = self.glance_image.get_matching_image(
+            uuid='mismatching', checksum=self.fake_image_1.checksum,
+            size=self.fake_image_1.size, name=self.fake_image_1.name)
+        self.assertEqual(self.fake_image_1, img)
+
+    def test_get_matching_image_negative(self):
+        fake_images = [self.fake_image_1, self.fake_image_2]
+        self.glance_mock_client().images.list.return_value = fake_images
+
+        img = self.glance_image.get_matching_image(
+            uuid='mismatching', checksum='mismatch_checksum',
+            size=2048, name='mismatch_name')
+        self.assertEqual(None, img)

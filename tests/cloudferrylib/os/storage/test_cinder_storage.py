@@ -252,3 +252,39 @@ class CinderStorageTestCase(test.TestCase):
         self.assertRaises(Exception,
                           self.cinder_client.get_volume_path_iscsi,
                           'fake_vol_id')
+
+    def test_convert_volume(self):
+        vol = mock.Mock(id="id1",
+                        size=1024,
+                        display_name='display_name',
+                        display_description='display_description',
+                        availability_zone='availability_zone',
+                        volume_type='volume_type',
+                        attachments=[{'device': 'sdb'}],
+                        bootable='true',
+                        metadata={'data': 'data'},
+                        volume_image_metadata={'image_id': 'id',
+                                               'checksum': 'checksum',
+                                               'image_name': 'name',
+                                               'size': '1024'})
+        setattr(vol, 'os-vol-tenant-attr:tenant_id', 'tenant_id')
+
+        converted_vol = {'id': "id1",
+                         'size': 1024,
+                         'display_name': 'display_name',
+                         'display_description': 'display_description',
+                         'availability_zone': 'availability_zone',
+                         'volume_type': 'volume_type',
+                         'bootable': True,
+                         'project_id': 'tenant_id',
+                         'path': None,
+                         'host': None,
+                         'device': 'sdb',
+                         'metadata': {'data': 'data'},
+                         'volume_image_metadata': {'image_id': 'id',
+                                                   'checksum': 'checksum',
+                                                   'image_name': 'name',
+                                                   'size': 1024}}
+        vol = self.cinder_client.convert_volume(vol, mock.Mock(),
+                                                self.fake_cloud)
+        self.assertEqual(converted_vol, vol)
