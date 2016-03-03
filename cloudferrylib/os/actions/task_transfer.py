@@ -37,6 +37,7 @@ class TaskTransfer(action.Action):
 
         for item in data_for_trans.itervalues():
             data = item[self.resource_root_name]
-            self.driver.transfer(data)
+            if self.driver.check_usage(data):
+                self.driver.transfer(data)
 
         return {}
