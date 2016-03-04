@@ -31,7 +31,9 @@ Process
 -------
 
  1. Download image from source cloud using glance APIs;
- 2. Upload image to destination cloud using glance APIs.
+ 2. Upload image to destination cloud using glance APIs;
+ 3. Glance image UUID will be kept in destination, unless an image with the
+    same ID exists or existed previously.
 
 .. note::
 
@@ -54,3 +56,11 @@ override this behavior by making :dfn:`exclude_public_and_members` option
 enabled in :ref:`filter file <filter-configuration>`. If it still tries to
 migrate all the images - make sure you have :dfn:`act_get_filter` action
 enabled in your scenario.
+
+
+**Q**: Glance APIs allow specifying glance images IDs, but image I
+migrated has different ID. WTF???
+
+**A**: Glance image IDs are only kept if image with that ID does not exist or
+existed previously in destination cloud. Glance keeps deleted images and their
+IDs and does allow to create image with the ID already known to glance.
