@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from cloudferrylib.utils import remote_runner
+from oslo_config import cfg
 
-import cfglib
-import cmd_cfg
-from utils import forward_agent
+from cloudferrylib.utils import cmd_cfg
+from cloudferrylib.utils import remote_runner
+from cloudferrylib.utils import utils
+
+CONF = cfg.CONF
 
 
 class SshUtil(object):
@@ -40,12 +42,20 @@ class SshUtil(object):
             return runner.run(str(cmd))
 
     def execute_on_inthost(self, runner, cmd, host):
-        with forward_agent(self.config_migrate.key_filename):
+        with utils.forward_agent(self.config_migrate.key_filename):
             return runner.run(str(cmd_cfg.ssh_cmd(host, str(cmd))))
 
 
 def get_cipher_option():
-    if cfglib.CONF.migrate.ssh_cipher:
-        return '-c ' + cfglib.CONF.migrate.ssh_cipher
+    if CONF.migrate.ssh_cipher:
+        return '-c ' + CONF.migrate.ssh_cipher
     else:
         return ''
+
+
+def default_ssh_options():
+    options = [
+        '-o UserKnownHostsFile=/dev/null',
+        '-o StrictHostKeyChecking=no'
+    ]
+    return ' '.join(options)

@@ -82,6 +82,7 @@ class BbcpCopier(base.BaseCopier):
         dst_path = data['path_dst']
 
         options = CONF.bbcp.options
+        additional_options = []
         # -f: forces the copy by first unlinking the target file before
         # copying.
         # -p: preserve source mode, ownership, and dates.
@@ -91,12 +92,19 @@ class BbcpCopier(base.BaseCopier):
             forced_options.append('-e')
         for o in forced_options:
             if o not in options:
-                options += ' ' + o
+                additional_options.append(o)
+        # -S: command to start bbcp on the source node.
+        # -T: command to start bbcp on the target node.
+        for o in ('-S', '-T'):
+            if o not in options:
+                additional_options.append(o + " '{bbcp_cmd}'")
+        bbcp_cmd = "ssh {ssh_opts} %I -l %U %H bbcp".format(
+            ssh_opts=ssh_util.default_ssh_options())
+        options += ' ' + ' '.join(additional_options).format(bbcp_cmd=bbcp_cmd)
         cmd = ("{bbcp} {options} "
                "{src_user}@{src_host}:{src_path} "
                "{dst_user}@{dst_host}:{dst_path} "
                "2>&1")
-
         retrier = retrying.Retry(
             max_attempts=CONF.migrate.retry,
             timeout=0,
