@@ -108,6 +108,12 @@ class Retry(object):
     def increment_attempts(self):
         self.attempt += 1
 
+    def reset_attempts(self):
+        self.attempt = 0
+
+    def reset_total_time(self):
+        self.total_time = 0
+
     def timedout(self):
         return self.total_time >= self.max_time
 
@@ -151,15 +157,18 @@ class Retry(object):
     def run(self, func, *args, **kwargs):
         stop_retrying = self.max_attempts_reached
         step_action = self.increment_attempts
+        reset_retrying = self.reset_attempts
 
         if self.max_time is not UNLIMITED:
             stop_retrying = self.timedout
             step_action = self.update_total_time
+            reset_retrying = self.reset_total_time
 
         retval = None
         failing = True
         last_exception = None
 
+        reset_retrying()
         while failing and not stop_retrying():
             step_action()
             try:
