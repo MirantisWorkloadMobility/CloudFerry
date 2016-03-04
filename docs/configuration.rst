@@ -105,8 +105,8 @@ Filter file is a standard YAML file with following syntax::
             - <volume_id1>
             - <volume_id2>
 
-When :dfn:`exclude_public_and_members` is set to :keyword:`True`, all the
-public images and images which have membership in the tenant specified in
+When :dfn:`exclude_public_and_members` is set to ``True``, all the public
+images and images which have membership in the tenant specified in
 :dfn:`tenant_id` are not included in migration list. In other words, only
 images which directly belong to :dfn:`tenant_id` are migrated, all the
 dependencies are ignored. See more in :ref:`glance-image-migration`.
