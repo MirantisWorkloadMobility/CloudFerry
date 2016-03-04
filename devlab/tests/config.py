@@ -209,7 +209,7 @@ tenants = [
      'vms': [
          {'name': 'tn2server1', 'image': 'image1', 'flavor': 'flavorname2',
           'fip': True, 'key_name': 'key2'},
-         {'name': 'keypair_test_server', 'image': 'image1',
+         {'name': 'keypair_test_server', 'image': 'deleted_image',
           'flavor': 'flavorname2', 'key_name': 'key2', 'nics': [
               {'net-id': 'tenantnet2'}], 'fip': True}],
      'networks': [
@@ -365,7 +365,7 @@ images = [
      'container_format': 'bare', 'broken': True},
     # Image, deleted using glance delete command
     {'name': 'deleted_image', 'copy_from': img_url, 'disk_format': 'qcow2',
-     'container_format': 'bare', 'is_deleted': True},
+     'container_format': 'bare', 'is_deleted': True, 'is_public': True},
     # Image will be created on src and dst with the same UUID.
     # After that deleted from dst before migration.
     # CF must create new UUID during migration for this image
@@ -517,7 +517,7 @@ server_groups = [
 vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'server2', 'image': 'image2', 'flavor': 'flavorname1'},
-    {'name': 'server3', 'image': 'image1', 'flavor': 'flavorname2',
+    {'name': 'server3', 'image': 'deleted_image', 'flavor': 'flavorname2',
      'fip': True},
     {'name': 'server4', 'image': 'deleted_image', 'flavor': 'flavorname2'},
     {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1'},
