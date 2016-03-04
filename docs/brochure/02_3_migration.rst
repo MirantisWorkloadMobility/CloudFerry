@@ -1,7 +1,7 @@
 Migration
 ---------
 
-.. image:: /images/full-migration-process.png
+.. image:: images/full-migration-process.png
     :alt: Figure 1: CloudFerry Migration Process Cycle
     :align: center
 
@@ -17,7 +17,7 @@ of risk. CloudFerry minimizes the risk partly by providing a scenario and
 sticking to it and largely by keeping necessary human actions to a minimum.
 
 
-.. image:: /images/fishes.png
+.. image:: images/fishes.png
     :align: center
 
 Thanks to the use of layered configuration specificity CloudFerry is

@@ -3,7 +3,7 @@ Feature Overview
 ================
 
 
-.. image:: /images/openstack-clouds.png
+.. image:: images/openstack-clouds.png
     :align: center
 
 

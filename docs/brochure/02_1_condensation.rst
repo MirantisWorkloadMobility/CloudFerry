@@ -26,7 +26,7 @@ fixed-size *knapsack* and must fill it with the most valuable items. There are
 well known mathematical and algorithmic solutions to the problem.
 
 
-.. image:: /images/knapsack.png
+.. image:: images/knapsack.png
     :align: center
 
 

@@ -8,7 +8,7 @@ and Migration functionality making this process less confusing, less error prone
 and massively faster than any manual means.
 
 
-.. image:: /images/time-to-upgrade.jpg
+.. image:: images/time-to-upgrade.jpg
     :align: center
 
 
