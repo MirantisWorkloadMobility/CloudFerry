@@ -68,6 +68,7 @@ class CheckNetworksTestCase(test.TestCase):
     def test_empty_dst(self):
         src_net_info = {'networks': [{'id': 'id1',
                                       'res_hash': 1,
+                                      'subnets_hash': {2},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -86,6 +87,7 @@ class CheckNetworksTestCase(test.TestCase):
     def test_equals_networks(self):
         src_net_info = {'networks': [{'id': 'id1',
                                       'res_hash': 1,
+                                      'subnets_hash': {2},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -98,6 +100,7 @@ class CheckNetworksTestCase(test.TestCase):
                         'floating_ips': []}
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
+                                      'subnets_hash': {2},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -113,6 +116,7 @@ class CheckNetworksTestCase(test.TestCase):
     def test_equals_and_new_networks(self):
         src_net_info = {'networks': [{'id': 'id1',
                                       'res_hash': 1,
+                                      'subnets_hash': {2, 5},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -130,6 +134,7 @@ class CheckNetworksTestCase(test.TestCase):
                         'floating_ips': []}
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
+                                      'subnets_hash': {2},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -145,6 +150,7 @@ class CheckNetworksTestCase(test.TestCase):
     def test_diff(self):
         src_net_info = {'networks': [{'id': 'id1',
                                       'res_hash': 1,
+                                      'subnets_hash': {1},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -158,6 +164,7 @@ class CheckNetworksTestCase(test.TestCase):
                         'floating_ips': []}
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
+                                      'subnets_hash': {3},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -174,6 +181,7 @@ class CheckNetworksTestCase(test.TestCase):
     def test_overlap(self):
         src_net_info = {'networks': [{'id': 'id1',
                                       'res_hash': 1,
+                                      'subnets_hash': {2},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -186,6 +194,7 @@ class CheckNetworksTestCase(test.TestCase):
                         'floating_ips': []}
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
+                                      'subnets_hash': {3},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -202,6 +211,7 @@ class CheckNetworksTestCase(test.TestCase):
     def test_check_segmentation_id_overlapping_no_dst_networks(self):
         src_net_info = {'networks': [{'id': 'id1',
                                       'res_hash': 1,
+                                      'subnets_hash': {},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'gre',
                                       'provider:segmentation_id': 200,
@@ -218,6 +228,7 @@ class CheckNetworksTestCase(test.TestCase):
     def test_check_segmentation_id_overlapping_same_network(self):
         src_net_info = {'networks': [{'id': 'id1',
                                       'res_hash': 1,
+                                      'subnets_hash': {},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'gre',
                                       'provider:segmentation_id': 200,
@@ -227,6 +238,7 @@ class CheckNetworksTestCase(test.TestCase):
 
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
+                                      'subnets_hash': {},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'gre',
                                       'provider:segmentation_id': 200,
@@ -355,6 +367,7 @@ class CheckNetworksTestCase(test.TestCase):
     def test_no_instance_in_external_network(self):
         src_net_info = {'networks': [{'id': 'fake_network_id',
                                       'res_hash': 1,
+                                      'subnets_hash': {2},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -373,6 +386,7 @@ class CheckNetworksTestCase(test.TestCase):
     def test_instance_in_external_network(self):
         src_net_info = {'networks': [{'id': 'fake_network_id',
                                       'res_hash': 1,
+                                      'subnets_hash': {2},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -392,6 +406,7 @@ class CheckNetworksTestCase(test.TestCase):
     def test_allocation_pools_overlap(self):
         src_net_info = {'networks': [{'id': 'id1',
                                       'res_hash': 1,
+                                      'subnets_hash': {2},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -411,6 +426,7 @@ class CheckNetworksTestCase(test.TestCase):
 
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
+                                      'subnets_hash': {3},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -432,6 +448,7 @@ class CheckNetworksTestCase(test.TestCase):
     def test_allocation_pools_no_overlap(self):
         src_net_info = {'networks': [{'id': 'id1',
                                       'res_hash': 1,
+                                      'subnets_hash': {2},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -449,6 +466,7 @@ class CheckNetworksTestCase(test.TestCase):
 
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
+                                      'subnets_hash': {3},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -471,6 +489,7 @@ class CheckNetworksTestCase(test.TestCase):
     def test_allocation_pools_same_network_and_subnet(self):
         src_net_info = {'networks': [{'id': 'id1',
                                       'res_hash': 1,
+                                      'subnets_hash': {3},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
@@ -490,6 +509,7 @@ class CheckNetworksTestCase(test.TestCase):
 
         dst_net_info = {'networks': [{'id': 'id2',
                                       'res_hash': 1,
+                                      'subnets_hash': {3},
                                       "provider:physical_network": None,
                                       'provider:network_type': 'local',
                                       'provider:segmentation_id': None,
