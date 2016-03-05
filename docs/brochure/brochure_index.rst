@@ -1,4 +1,8 @@
-.. image:: /images/ferry.jpg
+===================
+CloudFerry brochure
+===================
+
+.. image:: images/ferry.jpg
     :align: center
 
 
