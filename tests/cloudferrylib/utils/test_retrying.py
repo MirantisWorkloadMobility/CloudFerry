@@ -29,7 +29,7 @@ class RetryTestCase(test.TestCase):
 
         retryer.run(func)
 
-        self.assertEqual(sleep_mock.call_count, 0)
+        self.assertFalse(sleep_mock.called)
         self.assertEqual(retryer.attempt, 1)
 
     def test_raises_last_error_if_all_attempts_failed(self, sleep_mock):
@@ -53,7 +53,7 @@ class RetryTestCase(test.TestCase):
 
         self.assertRaises(KeyError, func)
         self.assertEqual(retry.attempt, 1)
-        self.assertEqual(sleep_mock.call_count, 0)
+        self.assertFalse(sleep_mock.called)
 
     def test_retries_on_invalid_return_value(self, sleep_mock):
         bad_value = 10
@@ -84,7 +84,7 @@ class RetryTestCase(test.TestCase):
         func()
 
         self.assertTrue(retry.total_time >= retry.max_time)
-        self.assertTrue(sleep_mock.call_count > 1)
+        self.assertTrue(sleep_mock.called)
 
     def test_retries_if_predicate_fails(self, sleep_mock):
         def always_fail():
@@ -120,7 +120,7 @@ class RetryTestCase(test.TestCase):
         func()
 
         self.assertEqual(retry.attempt, 1)
-        self.assertEqual(sleep_mock.call_count, 0)
+        self.assertFalse(sleep_mock.called)
 
     def test_raises_timeout_error_if_timedout(self, sleep_mock):
         retry = retrying.Retry(max_time=100,
@@ -133,7 +133,7 @@ class RetryTestCase(test.TestCase):
 
         self.assertRaises(retrying.TimeoutExceeded, func)
         self.assertTrue(retry.total_time >= retry.max_time)
-        self.assertTrue(sleep_mock.call_count > 1)
+        self.assertTrue(sleep_mock.called)
 
     def test_stops_if_retval_matches_predicate(self, sleep_mock):
         def func():
@@ -145,7 +145,7 @@ class RetryTestCase(test.TestCase):
 
         retry.run(func)
         self.assertEqual(retry.attempt, 1)
-        self.assertEqual(sleep_mock.call_count, 0)
+        self.assertFalse(sleep_mock.called)
 
     def test_raises_error_if_predicate_failed_after_timeout(self, sleep_mock):
         def func():
@@ -157,7 +157,7 @@ class RetryTestCase(test.TestCase):
 
         self.assertRaises(retrying.TimeoutExceeded, retry.run, func)
         self.assertTrue(retry.total_time >= retry.max_time)
-        self.assertTrue(sleep_mock.call_count > 1)
+        self.assertTrue(sleep_mock.called)
 
     def test_returns_object_returned_by_function(self, sleep_mock):
         expected_rv = 0
@@ -172,4 +172,18 @@ class RetryTestCase(test.TestCase):
         actual_rv = retry.run(func)
         self.assertEqual(1, retry.attempt)
         self.assertEqual(expected_rv, actual_rv)
-        self.assertEqual(sleep_mock.call_count, 0)
+        self.assertFalse(sleep_mock.called)
+
+    def test_max_attempt_reached_not_raised_for_multiple_runs(self,
+                                                              sleep_mock):
+        predicate = mock.Mock()
+
+        @retrying.retry(max_attempts=2, predicate=predicate)
+        def foo():
+            return 'fake'
+
+        for _ in range(5):
+            predicate.side_effect = (False, True)
+            sleep_mock.reset_mock()
+            self.assertEqual('fake', foo())
+            self.assertCalledOnce(sleep_mock)

@@ -353,7 +353,7 @@ class CinderStorage(storage.Storage):
                 'image_id': vol.volume_image_metadata['image_id'],
                 'checksum': vol.volume_image_metadata['checksum'],
                 'image_name': vol.volume_image_metadata.get('image_name'),
-                'size': vol.volume_image_metadata.get('size')
+                'size': int(vol.volume_image_metadata.get('size', 0))
             }
         if cfg.storage.backend == utils.CEPH:
             volume['path'] = "%s/%s%s" % (
