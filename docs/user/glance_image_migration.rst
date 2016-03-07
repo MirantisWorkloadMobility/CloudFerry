@@ -23,8 +23,9 @@ releases), there are following ways of performing glance image migration:
     :ref:`filtering config <filter-configuration>`, that is either only
     images belonging to a tenant, or image IDs specified.
 
-That behavior is controlled by :dfn:`exclude_public_and_members` option
-specified in :ref:`filter file <filter-configuration>`.
+That behavior is controlled by
+:dfn:`dont_include_public_and_members_from_other_tenants` option specified in
+:ref:`filter file <filter-configuration>`.
 
 
 Process
@@ -52,7 +53,8 @@ public images in the cloud! WTF???
 image or image with membership in a migrated tenant. In case you're only
 trying to migrate images, and no other resources (for example, you're using
 :file:`3_get_and_transfer_images.yaml` as your scenario), than you can
-override this behavior by making :dfn:`exclude_public_and_members` option
+override this behavior by making
+:dfn:`dont_include_public_and_members_from_other_tenants` option
 enabled in :ref:`filter file <filter-configuration>`. If it still tries to
 migrate all the images - make sure you have :dfn:`act_get_filter` action
 enabled in your scenario.
