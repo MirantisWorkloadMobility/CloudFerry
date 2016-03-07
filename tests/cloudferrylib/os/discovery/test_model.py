@@ -78,7 +78,7 @@ class Example(model.Model):
 
     @classmethod
     def load_missing(cls, cloud, object_id):
-        return Example.load_from_cloud('test', cls.generate_cloud_data())
+        return Example.load_from_cloud(cloud, cls.generate_cloud_data())
 
     @classmethod
     def generate_cloud_data(cls):
@@ -317,3 +317,16 @@ class ModelTest(test.TestCase):
             self.assertEqual('foo', obj.many[0].foo)
             self.assertEqual('bar', obj.many[1].foo)
             self.assertEqual('baz', obj.many[2].foo)
+
+    def test_example_name_ref(self):
+        class ExampleNameRef(model.Model):
+            class Schema(model.Schema):
+                object_id = model.PrimaryKey()
+                ref = model.Dependency('tests.cloudferrylib.os.'
+                                       'discovery.test_model.Example')
+
+        obj = ExampleNameRef.load_from_cloud(self.cloud, {
+            'object_id': 'ExampleNameRef-1',
+            'ref': str('foo-bar-baz'),
+        })
+        self.assertIs(Example, obj.ref.get_class())
