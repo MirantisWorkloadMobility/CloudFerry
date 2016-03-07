@@ -101,6 +101,11 @@ tenants = [
          'router': 14,
          'subnet': 55
      },
+     'quota_cinder': {
+         'gigabytes': 700, 'gigabytes_nfs1': -1, 'gigabytes_nfs2': 1000,
+         'snapshots': 9, 'snapshots_nfs1': 8, 'snapshots_nfs2': 7,
+         'volumes': 6, 'volumes_nfs1': 5, 'volumes_nfs2': 4,
+     },
      'server_groups': [
          {'name': 'tn1_server_group', 'policies': ['affinity']},
          {'name': 'tn1_server_group2', 'policies': ['affinity']}
