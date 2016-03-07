@@ -52,11 +52,15 @@ class RemoteFileCopy(CopyMechanism):
             'path_dst': destination_object.path
         }
 
-        copier = base.get_copier(context.src_cloud, context.dst_cloud, data)
-
         try:
+            copier = base.get_copier(context.src_cloud,
+                                     context.dst_cloud,
+                                     data)
+
             copier.transfer(data)
-        except base.FileCopyError as e:
+        except (base.FileCopyError,
+                base.CopierCannotBeUsed,
+                base.CopierNotFound) as e:
             msg = ("Copying file from {src_host}@{src_file} to "
                    "{dst_host}@{dst_file}, error: {err}").format(
                 src_host=source_object.host,
