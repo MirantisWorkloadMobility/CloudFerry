@@ -9,7 +9,7 @@
 #    images_list:
 #        - <image_id1>
 #        - <image_id2>
-#    exclude_public_and_members: True
+#    dont_include_public_and_members_from_other_tenants: True
 #volumes:
 #    volumes_list:
 #        - <volume_id1>
