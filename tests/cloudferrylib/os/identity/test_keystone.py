@@ -44,7 +44,7 @@ FAKE_CONFIG = utils.ext_dict(
     mail=utils.ext_dict({'server': '-'}))
 
 
-@mock.patch("cloudferrylib.base.clients", mock.MagicMock())
+@mock.patch("cloudferrylib.base.clients.os_cli_cmd", mock.MagicMock())
 class KeystoneIdentityTestCase(test.TestCase):
     def setUp(self):
         super(KeystoneIdentityTestCase, self).setUp()
