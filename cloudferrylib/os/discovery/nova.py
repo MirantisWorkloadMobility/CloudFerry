@@ -90,11 +90,11 @@ class Server(model.Model):
     def discover(cls, cloud):
         compute_client = cloud.compute_client()
         avail_hosts = list_available_compute_hosts(compute_client)
-        with model.Transaction() as tx:
+        with model.Session() as session:
             servers = []
 
             # Collect servers using API
-            for tenant in tx.list(keystone.Tenant, cloud.name):
+            for tenant in session.list(keystone.Tenant, cloud.name):
                 server_list = compute_client.servers.list(
                     search_opts={
                         'all_tenants': True,
@@ -136,7 +136,7 @@ class Server(model.Model):
                         ephemeral_disks = _list_ephemeral(remote, srv)
                         if ephemeral_disks is not None:
                             srv.ephemeral_disks = ephemeral_disks
-                            tx.store(srv)
+                            session.store(srv)
 
 
 def _list_ephemeral(remote, server):

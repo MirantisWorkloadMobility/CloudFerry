@@ -78,17 +78,17 @@ class Image(model.Model):
     @classmethod
     def discover(cls, cloud):
         image_client = cloud.image_client()
-        with model.Transaction() as tx:
+        with model.Session() as session:
             for raw_image in image_client.images.list(
                     filters={"is_public": None}):
                 try:
                     image = Image.load_from_cloud(cloud, raw_image)
-                    tx.store(image)
+                    session.store(image)
                     members_list = image_client.image_members.list(
                         image=raw_image)
                     for raw_member in members_list:
                         member = ImageMember.load_from_cloud(cloud, raw_member)
-                        tx.store(member)
+                        session.store(member)
                         image.members.append(member)
                 except exceptions.ValidationError as e:
                     LOG.warning('Invalid image %s: %s', raw_image.id, e)

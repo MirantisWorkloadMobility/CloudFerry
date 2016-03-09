@@ -23,7 +23,7 @@ import oslo_config.cfg
 import oslo_config.types
 
 import cfglib
-from cloudferrylib.os import context
+from cloudferrylib import config
 from cloudferrylib.os.estimation import procedures
 from cloudferrylib.scheduler.namespace import Namespace
 from cloudferrylib.scheduler.scheduler import Scheduler
@@ -200,8 +200,7 @@ def discover(config_path, debug=False):
     """
         :config_name - name of config yaml-file, example 'config.yaml'
     """
-    config = load_yaml_config(config_path, debug)
-    ctx = context.Context(**config['context'])
+    ctx = config.Configuration(**load_yaml_config(config_path, debug))
     for cloud_name, cloud in ctx.clouds.items():
         for fq_class_name in cloud.discover:
             cls = importutils.import_class(fq_class_name)
@@ -264,16 +263,16 @@ def load_yaml_config(yaml_path, debug=None):
 
     prev_legacy_config_path = None
     with open(yaml_path, 'r') as config_file:
-        config = yaml.load(config_file)
-        clouds = config.setdefault('context', {}).setdefault('clouds', {})
-        for name, value in clouds.items():
+        cfg = yaml.load(config_file)
+        clouds = cfg.setdefault('clouds', {})
+        for value in clouds.values():
             if 'legacy' not in value:
                 continue
             legacy_config_path, section = value.pop('legacy').split(':')
             if prev_legacy_config_path != legacy_config_path:
                 init(legacy_config_path, debug)
             import_legacy(value, getattr(cfglib.CONF, section))
-        return config
+        return cfg
 
 
 if __name__ == '__main__':

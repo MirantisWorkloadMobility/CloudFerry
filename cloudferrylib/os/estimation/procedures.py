@@ -20,20 +20,20 @@ from cloudferrylib.os.discovery import model
 from cloudferrylib.utils import sizeof_format
 
 
-def list_filtered(tx, cls, cloud_name, tenant):
-    return (x for x in tx.list(cls, cloud_name)
+def list_filtered(session, cls, cloud_name, tenant):
+    return (x for x in session.list(cls, cloud_name)
             if tenant is None or tenant == x.tenant.object_id.id)
 
 
 def estimate_copy(cloud_name, tenant):
-    with model.Transaction() as tx:
+    with model.Session() as session:
         total_ephemeral_size = 0
         total_volume_size = 0
         total_image_size = 0
         accounted_volumes = set()
         accounted_images = set()
 
-        for server in list_filtered(tx, nova.Server, cloud_name, tenant):
+        for server in list_filtered(session, nova.Server, cloud_name, tenant):
             for ephemeral_disk in server.ephemeral_disks:
                 total_ephemeral_size += ephemeral_disk.size
             if server.image is not None \
@@ -44,10 +44,11 @@ def estimate_copy(cloud_name, tenant):
                 if volume.object_id not in accounted_volumes:
                     total_volume_size += volume.size
                     accounted_volumes.add(volume.object_id)
-        for volume in list_filtered(tx, cinder.Volume, cloud_name, tenant):
+        for volume in list_filtered(session, cinder.Volume, cloud_name,
+                                    tenant):
             if volume.object_id not in accounted_volumes:
                 total_volume_size += volume.size
-        for image in list_filtered(tx, glance.Image, cloud_name, tenant):
+        for image in list_filtered(session, glance.Image, cloud_name, tenant):
             if image.object_id not in accounted_images:
                 total_image_size += image.size
 
@@ -71,11 +72,11 @@ def show_largest_servers(count, cloud_name, tenant):
         return size
 
     output = []
-    with model.Transaction() as tx:
+    with model.Session() as session:
         for index, server in enumerate(
                 heapq.nlargest(
                     count,
-                    list_filtered(tx, nova.Server, cloud_name, tenant),
+                    list_filtered(session, nova.Server, cloud_name, tenant),
                     key=server_size),
                 start=1):
             output.append(
@@ -87,10 +88,10 @@ def show_largest_servers(count, cloud_name, tenant):
 
 
 def show_largest_unused_resources(count, cloud_name, tenant):
-    with model.Transaction() as tx:
+    with model.Session() as session:
         used_volumes = set()
         used_images = set()
-        servers = list_filtered(tx, nova.Server, cloud_name, tenant)
+        servers = list_filtered(session, nova.Server, cloud_name, tenant)
         for server in servers:
             if server.image is not None:
                 used_images.add(server.image.object_id)
@@ -100,7 +101,7 @@ def show_largest_unused_resources(count, cloud_name, tenant):
         # Find unused volumes
         volumes_output = []
         volumes_size = 0
-        volumes = list_filtered(tx, cinder.Volume, cloud_name, tenant)
+        volumes = list_filtered(session, cinder.Volume, cloud_name, tenant)
         for index, volume in enumerate(
                 heapq.nlargest(count,
                                (v for v in volumes
@@ -116,7 +117,7 @@ def show_largest_unused_resources(count, cloud_name, tenant):
         # Find unused images
         images_output = []
         images_size = 0
-        images = list_filtered(tx, glance.Image, cloud_name, tenant)
+        images = list_filtered(session, glance.Image, cloud_name, tenant)
         for index, image in enumerate(
                 heapq.nlargest(count,
                                (i for i in images

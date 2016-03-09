@@ -65,7 +65,7 @@ class Volume(model.Model):
         volume_client = cloud.volume_client()
         volumes_list = volume_client.volumes.list(
             search_opts={'all_tenants': True})
-        with model.Transaction() as tx:
+        with model.Session() as session:
             for raw_volume in volumes_list:
                 volume = Volume.load_from_cloud(cloud, raw_volume)
-                tx.store(volume)
+                session.store(volume)
