@@ -240,7 +240,8 @@ class Prerequisites(base.BasePrerequisites):
                 'id': []
             },
             'images': {
-                'images_list': []
+                'images_list': [],
+                'dont_include_public_and_members_from_other_tenants': False
             }
         }
         all_img_ids = []
