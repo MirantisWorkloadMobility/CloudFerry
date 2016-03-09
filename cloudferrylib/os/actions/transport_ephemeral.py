@@ -104,7 +104,7 @@ class TransportEphemeral(action.Action):
         src_backend = src_compute.config.compute.backend
         dst_backend = dst_storage.config.compute.backend
         ssh_driver = (CONF.migrate.copy_backend
-                      if CONF.migrate.direct_compute_transfer
+                      if CONF.migrate.direct_transfer
                       else TRANSPORTER_MAP[src_backend][dst_backend])
         transporter = task_transfer.TaskTransfer(
             self.init,
@@ -177,7 +177,7 @@ class TransportEphemeral(action.Action):
             resource_name=utl.INSTANCES_TYPE,
             resource_root_name=utl.EPHEMERAL_BODY)
 
-        for inst_id, inst in instances.iteritems():
+        for inst in instances.values():
             path_src = inst[EPHEMERAL][PATH_SRC]
             path_src_temp_raw = path_src + "." + utl.RAW
 
@@ -192,7 +192,7 @@ class TransportEphemeral(action.Action):
 
     @staticmethod
     def rebase_diff(dst_cloud, info):
-        for instance_id, obj in info[utl.INSTANCES_TYPE].items():
+        for obj in info[utl.INSTANCES_TYPE].values():
             image_id = obj['instance']['image_id']
             new_backing_file = hashlib.sha1(image_id).hexdigest()
             diff = obj['diff']

@@ -137,7 +137,7 @@ migrate_opts = [
                help='format when covert volume to image'),
     cfg.StrOpt('container_format', default='bare',
                help='container format when covert volume to image'),
-    cfg.BoolOpt('direct_compute_transfer', default=False,
+    cfg.BoolOpt('direct_transfer', default=False,
                 help='Direct data transmission between compute nodes '
                      'via external network'),
     cfg.StrOpt('filter_path', default='configs/filter.yaml',
@@ -731,6 +731,17 @@ bbcp_opts = [
     cfg.StrOpt('options', default='-P 20', help='additional options'),
 ]
 
+rsync_group = cfg.OptGroup(name='rsync', title='rsync related settings')
+
+rsync_opts = [
+    cfg.IntOpt('port', default=50000,
+               help="The port of a tunnel to destination host. Used in case "
+                    "source and destination hosts have no direct connectivity "
+                    "(direct_transfer = False)."
+                    "In case of parallel execution on same controller "
+                    "the ports must be different."),
+]
+
 cfg_for_reg = [
     (src, src_opts),
     (dst, dst_opts),
@@ -760,6 +771,7 @@ cfg_for_reg = [
     (import_rules, import_rules_opts),
     (evacuation, evacuation_opts),
     (bbcp_group, bbcp_opts),
+    (rsync_group, rsync_opts),
 ]
 
 CONF = cfg.CONF

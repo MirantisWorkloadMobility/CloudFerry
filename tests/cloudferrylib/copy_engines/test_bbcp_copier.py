@@ -16,7 +16,6 @@ import mock
 
 from cloudferrylib.copy_engines import base
 from cloudferrylib.copy_engines import bbcp_copier
-from cloudferrylib.utils import local
 from cloudferrylib.utils import remote_runner
 
 from tests.cloudferrylib.copy_engines import test_base
@@ -52,19 +51,25 @@ class BbcpCopierTestCase(test_base.BaseTestCase):
             self.assertTrue(self.copier.check_usage(self.data))
             mock_copy_bbcp.assert_not_called()
 
+    def test_transfer_direct_true(self):
+        with self.mock_runner() as mock_runner:
+            self.copier.transfer(self.data)
+            self.assertCalledOnce(mock_runner.run)
+
+            mock_runner.reset_mock()
+            self.cfg.set_override('retry', 2, 'migrate')
+            mock_runner.run.side_effect = remote_runner.RemoteExecutionError()
+            with mock.patch.object(self.copier, 'clean_dst') as mock_clean_dst:
+                self.assertRaises(base.FileCopyError, self.copier.transfer,
+                                  self.data)
+                self.assertEqual(2, mock_runner.run.call_count)
+                self.assertCalledOnce(mock_clean_dst)
+
     @mock.patch('cloudferrylib.utils.local.run')
-    def test_transfer(self, mock_run):
+    def test_transfer_direct_false(self, mock_run):
+        self.cfg.set_override('direct_transfer', False, 'migrate')
         self.copier.transfer(self.data)
         self.assertCalledOnce(mock_run)
-
-        mock_run.reset_mock()
-        self.cfg.set_override('retry', 2, 'migrate')
-        mock_run.side_effect = local.LocalExecutionFailed('fake', -1)
-        with mock.patch.object(self.copier, 'clean_dst') as mock_clean_dst:
-            self.assertRaises(base.FileCopyError, self.copier.transfer,
-                              self.data)
-            self.assertEqual(2, mock_run.call_count)
-            self.assertCalledOnce(mock_clean_dst)
 
     @mock.patch('cloudferrylib.utils.local.run')
     def test_copy_bbcp(self, mock_run):
