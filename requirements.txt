@@ -10,7 +10,7 @@ ipaddr
 jinja2
 jsondate
 PyMySQL==0.6.7
-oslo.config==1.15.0
+oslo.config==3.9.0
 oslo.utils==1.9.0
 pika==0.9.14
 progressbar==2.3
