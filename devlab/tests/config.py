@@ -479,9 +479,9 @@ dst_networks = [
      'router:external': True, 'real_network': True,
      'provider:physical_network': 'physnet2', 'provider:network_type': 'flat',
      'subnets': [
-         {'cidr': '192.168.55.0/24', 'ip_version': 4,
+         {'cidr': '172.16.1.0/24', 'ip_version': 4,
           'name': 'another_ext_subnet', 'allocation_pools': [
-             {'start': '192.168.55.100', 'end': '192.168.55.254'}]
+             {'start': '172.16.1.100', 'end': '172.16.1.254'}]
           }]
      }]
 
