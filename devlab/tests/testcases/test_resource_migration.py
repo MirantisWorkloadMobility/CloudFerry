@@ -600,7 +600,17 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
     @attr(migrated_tenant='tenant2')
     def test_migrate_cinder_volumes_data(self):
-        """Validate volume data was migrated correctly."""
+        """Validate volume data was migrated correctly.
+
+        Scenario:
+            1. Get volumes on which data was written
+            2. Get floating ip address of vm, to which volume attached
+            3. Open TCP/22 port for vm's tenant,
+            4. Wait until vm accessible via ssh
+            5. Check mount point has been migrated with ephemeral storage
+            6. Mount volume
+            7. Check data on volume is correct
+        """
         def check_file_valid(filename):
             get_md5_cmd = 'md5sum %s' % filename
             get_old_md5_cmd = 'cat %s_md5' % filename
@@ -611,6 +621,25 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             if md5sum != old_md5sum:
                 msg = "MD5 of file %s before and after migrate is different"
                 raise RuntimeError(msg % filename)
+
+        def check_mount_point_exists(ip, vol):
+            """ Method check directory, which will used as mount point for
+            volume, exists on the vm's ephemeral storage
+
+            :param ip:     vm's ip address, where mount point should be checked
+
+            :param vol:    dict with volume's parameters from tests/config.py
+            """
+            command = '[ -d %s ]' % vol['mount_point']
+            try:
+                self.migration_utils.execute_command_on_vm(ip, command)
+            except SystemExit:
+                msg = ('Mount point for volume "{vol_name}" not found. Check '
+                       'directory "{mp}" exists on vm with name "{vm_name}. '
+                       'If not exists check ephemeral storage migration works '
+                       'properly.')
+                self.fail(msg.format(vol_name=vol['display_name'],
+                                     mp=vol['mount_point'], vm_name=vm.name))
 
         volumes = config.cinder_volumes
         volumes += itertools.chain(*[tenant['cinder_volumes'] for tenant
@@ -626,6 +655,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             self.migration_utils.open_ssh_port_secgroup(self.dst_cloud,
                                                         vm.tenant_id)
             self.migration_utils.wait_until_vm_accessible_via_ssh(vm_ip)
+            check_mount_point_exists(vm_ip, volume)
             cmd = 'mount {0} {1}'.format(volume['device'],
                                          volume['mount_point'])
             self.migration_utils.execute_command_on_vm(vm_ip, cmd,
