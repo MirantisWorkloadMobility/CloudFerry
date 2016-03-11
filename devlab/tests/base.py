@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
 import os
 import time
 
@@ -20,11 +21,13 @@ from glanceclient.v1 import Client as glance
 from keystoneclient import exceptions as ks_exceptions
 from keystoneclient.v2_0 import client as keystone
 from neutronclient.v2_0 import client as neutron
+from novaclient import exceptions as nova_exceptions
 from novaclient.v1_1 import client as nova
 
 import devlab.tests.utils as utils
 from devlab.tests.test_exceptions import NotFound
 
+LOG = logging.getLogger(__name__)
 OPENSTACK_RELEASES = {'192.168.1.2': 'grizzly',
                       '192.168.1.3': 'icehouse',
                       '192.168.1.8': 'juno'}
@@ -274,13 +277,26 @@ class BasePrerequisites(object):
         return False
 
     @staticmethod
+    def check_floating_ip_assigned(vm, floating_ip_address):
+        for net in vm.addresses:
+            for addr in vm.addresses.get(net):
+                if addr.get('OS-EXT-IPS:type') == 'floating':
+                    return True
+        try:
+            vm.add_floating_ip(floating_ip_address)
+        except nova_exceptions.BadRequest as e:
+            LOG.warning("Floating IP is already assigned to VM: %s", e)
+        return False
+
+    @staticmethod
     def wait_until_objects_created(obj_list, check_func, timeout):
         obj_list = obj_list[:]
         waiting = 0
         delay = 1
         while waiting < timeout:
             for obj in obj_list[:]:
-                if check_func(obj):
+                args = obj if isinstance(obj, tuple) else (obj, )
+                if check_func(*args):
                     obj_list.remove(obj)
             if not obj_list:
                 return
