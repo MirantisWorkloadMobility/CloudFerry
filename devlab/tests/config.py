@@ -360,7 +360,14 @@ images = [
      'container_format': 'bare', 'broken': True},
     # Image, deleted using glance delete command
     {'name': 'deleted_image', 'copy_from': img_url, 'disk_format': 'qcow2',
-     'container_format': 'bare', 'is_deleted': True}
+     'container_format': 'bare', 'is_deleted': True},
+    # Image will be created on src and dst with the same UUID.
+    # After that deleted from dst before migration.
+    # CF must create new UUID during migration for this image
+    # and migrate it successfully
+    {'name': 'deleted_on_dst', 'id': 'e38390f0-e660-42fc-b8cd-db163fce1510',
+     'copy_from': img_url, 'disk_format': 'qcow2',
+     'container_format': 'bare', 'upload_on_dst': True, 'delete_on_dst': True}
 ]
 """Images to create/delete"""
 
