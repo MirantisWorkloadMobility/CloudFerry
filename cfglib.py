@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-from oslo.config import cfg
+from oslo_config import cfg
 
 
 src = cfg.OptGroup(name='src',
