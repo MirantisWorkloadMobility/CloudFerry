@@ -8,5 +8,5 @@ process:
   - print_info:
       - print_configuration: True
       - print_scenario: True
-      - print_filter_raw: True
+      - print_filter: True
   - act_check_dst_cloud: True

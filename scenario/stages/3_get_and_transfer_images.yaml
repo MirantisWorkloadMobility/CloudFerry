@@ -2,6 +2,10 @@
 # members.
 
 preparation:
+  - print_info:
+      - print_configuration: True
+      - print_scenario: True
+      - print_filter: True
   - create_snapshot: True
   - create_image_snapshot_dst: True
 
