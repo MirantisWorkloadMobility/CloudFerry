@@ -18,12 +18,12 @@ import traceback
 
 from fabric.api import task, env
 import yaml
-from oslo_utils import importutils
 import oslo_config.cfg
 import oslo_config.types
 
 import cfglib
 from cloudferrylib import config
+from cloudferrylib import stage
 from cloudferrylib.os.estimation import procedures
 from cloudferrylib.scheduler.namespace import Namespace
 from cloudferrylib.scheduler.scheduler import Scheduler
@@ -200,26 +200,25 @@ def discover(config_path, debug=False):
     """
         :config_name - name of config yaml-file, example 'config.yaml'
     """
-    ctx = config.Configuration(**load_yaml_config(config_path, debug))
-    for cloud_name, cloud in ctx.clouds.items():
-        for fq_class_name in cloud.discover:
-            cls = importutils.import_class(fq_class_name)
-            LOG.info('Starting discover %s objects in %s cloud',
-                     cls.__name__, cloud_name)
-            cls.discover(cloud)
-            LOG.info('Done discovering %s objects in %s cloud',
-                     cls.__name__, cloud_name)
+    cfg = config.Configuration(**load_yaml_config(config_path, debug))
+    stage.execute_stage('cloudferrylib.os.discovery.stages.DiscoverStage', cfg,
+                        force=True)
 
 
 @task
-def estimate_migration(source, tenant=None):
+def estimate_migration(config_path, source, tenant=None, debug=False):
+    cfg = config.Configuration(**load_yaml_config(config_path, debug))
+    stage.execute_stage('cloudferrylib.os.discovery.stages.DiscoverStage', cfg)
     procedures.estimate_copy(source, tenant)
     procedures.show_largest_servers(10, source, tenant)
     procedures.show_largest_unused_resources(10, source, tenant)
 
 
 @task
-def show_unused_resources(cloud, count=100, tenant=None):
+def show_unused_resources(config_path, cloud, count=100, tenant=None,
+                          debug=False):
+    cfg = config.Configuration(**load_yaml_config(config_path, debug))
+    stage.execute_stage('cloudferrylib.os.discovery.stages.DiscoverStage', cfg)
     procedures.show_largest_unused_resources(int(count), cloud, tenant)
 
 

@@ -121,7 +121,8 @@ def show_largest_unused_resources(count, cloud_name, tenant):
         for index, image in enumerate(
                 heapq.nlargest(count,
                                (i for i in images
-                                if i.object_id not in used_images)),
+                                if i.object_id not in used_images),
+                               key=lambda i: i.size),
                 start=1):
             images_size += image.size
             size = sizeof_format.sizeof_fmt(image.size)
