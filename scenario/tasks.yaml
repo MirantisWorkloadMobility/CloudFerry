@@ -121,3 +121,4 @@ tasks:
    print_filter_raw: ['PrintFilter', True]
    print_filter: ['PrintFilter', False]
    remove_bbcp: ['RemoveBBCP']
+   transport_storage_resources: ['TransportStorageResources']

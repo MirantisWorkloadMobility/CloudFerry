@@ -77,6 +77,7 @@ class CinderStorage(storage.Storage):
         self.identity_client = cloud.resources[utils.IDENTITY_RESOURCE]
         self.mysql_connector = cloud.mysql_connector('cinder')
         self.volume_filter = None
+        self.filter_tenant_id = None
 
     @property
     def cinder_client(self):
@@ -106,7 +107,19 @@ class CinderStorage(storage.Storage):
 
         return self.volume_filter
 
-    def read_info(self, **kwargs):
+    def read_info(self, target='volumes', **kwargs):
+        if target == 'volumes':
+            return self._read_info_volumes(**kwargs)
+        if target == 'resources':
+            return self._read_info_resources(**kwargs)
+
+    def _read_info_resources(self, **kwargs):
+        res = dict()
+        self.filter_tenant_id = kwargs.get('tenant_id', None)
+        res['quotas'] = self._read_info_quota()
+        return res
+
+    def _read_info_volumes(self, **kwargs):
         info = {utils.VOLUMES_TYPE: {}}
         for vol in self.get_volumes_list(search_opts=kwargs):
             if vol.status not in ['available', 'in-use']:
@@ -137,8 +150,64 @@ class CinderStorage(storage.Storage):
                 self.download_table_from_db_to_file(table_name, file_name)
         return info
 
-    def deploy(self, info):
-        return self.deploy_volumes(info)
+    def _read_info_quota(self):
+        admin_tenant_id = self.identity_client.get_tenant_id_by_name(
+            self.config.cloud.tenant)
+        service_tenant_id = self.identity_client.get_tenant_id_by_name(
+            self.config.cloud.service_tenant)
+        if self.cloud.position == 'src' and self.filter_tenant_id:
+            tmp_list = \
+                [admin_tenant_id, service_tenant_id]
+            tmp_list.extend(self.filter_tenant_id)
+            tmp_list = list(set(tmp_list))
+            tenant_ids = \
+                [tenant.id for tenant in
+                 self.identity_client.get_tenants_list()
+                 if tenant.id in tmp_list]
+        else:
+            tenant_ids = \
+                [tenant.id for tenant in
+                 self.identity_client.get_tenants_list()
+                    if tenant.id != service_tenant_id]
+        quotas = []
+        for tenant_id in tenant_ids:
+            quota = self.cinder_client.quotas.get(tenant_id)
+            quota_conv = self.convert_quota(quota)
+            quota_conv['tenant_id'] = tenant_id
+            quota_conv['tenant_name'] = self.identity_client\
+                .try_get_tenant_name_by_id(tenant_id)
+            quotas.append(quota_conv)
+        return quotas
+
+    def _deploy_quota(self, quotas):
+        quotas_res = []
+        for quota in quotas:
+            tenant_id = self.identity_client\
+                .get_tenant_id_by_name(quota['tenant_name'])
+            quota_arg = {k: v for k, v in quota.items()
+                         if k not in ['tenant_id', 'tenant_name']}
+            quota_defaults = self.convert_quota(
+                self.cinder_client.quotas.defaults(tenant_id))
+            quota_res = {k: quota_arg[k] for k in list(set(quota_arg) &
+                                                       set(quota_defaults))}
+            quota_obj = self.convert_quota(
+                self.cinder_client.quotas.update(tenant_id, **quota_res))
+            quotas_res.append(quota_obj)
+        return quotas_res
+
+    def _deploy_resources(self, info):
+        res = {
+            'volumes': {
+                'quotas': self._deploy_quota(info['quotas'])
+            }
+        }
+        return res
+
+    def deploy(self, info, target='volumes'):
+        if target == 'resources':
+            return self._deploy_resources(info)
+        if target == 'volumes':
+            return self.deploy_volumes(info)
 
     def attach_volume_to_instance(self, volume_info):
         if 'instance' in volume_info[utils.META_INFO]:
@@ -327,6 +396,16 @@ class CinderStorage(storage.Storage):
             self.finish(vol)
             new_ids[volume.id] = vol_id
         return new_ids
+
+    @staticmethod
+    def convert_quota(quota):
+        reprkeys = sorted(k
+                          for k in quota.__dict__.keys()
+                          if k[0] != '_' and k != 'manager')
+        quota_conv = {}
+        for k in reprkeys:
+            quota_conv[k] = quota.__dict__[k]
+        return quota_conv
 
     @staticmethod
     def convert_volume(vol, cfg, cloud):

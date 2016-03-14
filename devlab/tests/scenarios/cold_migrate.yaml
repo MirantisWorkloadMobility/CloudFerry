@@ -48,11 +48,12 @@ rollback:
   - restore_from_vm_snapshot_dst: True
   - restore_from_vm_snapshot_src: True
   - image_rollback_dst: True
-  - restore_from_snapshot: True
+  - restore_from_snapshot: False
 
 process:
   - task_resources_transporting:
       - act_identity_trans: True
+      - transport_storage_resources: True
       - task_images_trans:
           - act_get_info_images: True
           - act_deploy_images: True
