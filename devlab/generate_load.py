@@ -78,6 +78,13 @@ class Prerequisites(base.BasePrerequisites):
         self.clean_tools = cleanup.CleanEnv(config, configuration_ini,
                                             cloud_prefix)
 
+    def init_dst_cloud(self):
+        if not self.dst_cloud:
+            self.dst_cloud = Prerequisites(
+                cloud_prefix='DST',
+                configuration_ini=self.configuration_ini,
+                config=self.config)
+
     @clean_if_exists
     def create_users(self, users=None):
         def get_params_for_user_creating(_user):
@@ -195,11 +202,6 @@ class Prerequisites(base.BasePrerequisites):
             img = self.glanceclient.images.create(**image_body)
             img_ids.append(img.id)
             if image.get('upload_on_dst'):
-                if not self.dst_cloud:
-                    self.dst_cloud = Prerequisites(
-                        cloud_prefix='DST',
-                        configuration_ini=self.configuration_ini,
-                        config=self.config)
                 dst_img_id = self.dst_cloud.glanceclient.images.create(
                     **image_body)
                 dst_img_ids.append(dst_img_id)
@@ -484,17 +486,22 @@ class Prerequisites(base.BasePrerequisites):
                     self.neutronclient.add_gateway_router(
                         router_id, parameters)
 
-    def create_routers(self):
-        for router in self.config.routers:
-            self.neutronclient.create_router(router)
-        for tenant in self.config.tenants:
-            if tenant.get('routers'):
-                self.switch_user(user=self.username, password=self.password,
-                                 tenant=tenant['name'])
-                for router in tenant['routers']:
-                    self.neutronclient.create_router(router)
-        self.switch_user(user=self.username, password=self.password,
-                         tenant=self.tenant)
+    def create_routers(self, routers=None):
+        if routers:
+            for router in routers:
+                self.neutronclient.create_router(router)
+        else:
+            for router in self.config.routers:
+                self.neutronclient.create_router(router)
+            for tenant in self.config.tenants:
+                if tenant.get('routers'):
+                    self.switch_user(user=self.username,
+                                     password=self.password,
+                                     tenant=tenant['name'])
+                    for router in tenant['routers']:
+                        self.neutronclient.create_router(router)
+            self.switch_user(user=self.username, password=self.password,
+                             tenant=self.tenant)
 
     def get_subnet_id(self, name):
         subs = self.neutronclient.list_subnets()['subnets']
@@ -836,10 +843,6 @@ class Prerequisites(base.BasePrerequisites):
         security group, even default, while on src this tenant has security
         group.
         """
-        self.dst_cloud = Prerequisites(
-            cloud_prefix='DST',
-            configuration_ini=self.configuration_ini,
-            config=self.config)
         for t in self.config.tenants:
             if not t.get('deleted') and t['enabled']:
                 try:
@@ -922,13 +925,6 @@ class Prerequisites(base.BasePrerequisites):
         and generate new UUID for the image, because image with the original
         UUID has been deleted.
         """
-
-        if not self.dst_cloud:
-            self.dst_cloud = Prerequisites(
-                cloud_prefix='DST',
-                configuration_ini=self.configuration_ini,
-                config=self.config)
-
         all_images = self.migration_utils.get_all_images_from_config()
         images_to_delete = [image for image in all_images
                             if image.get('delete_on_dst')]
@@ -952,14 +948,7 @@ class Prerequisites(base.BasePrerequisites):
             self.glanceclient.images.delete(image_id)
 
     def create_dst_networking(self):
-        if not self.dst_cloud:
-            self.dst_cloud = Prerequisites(
-                cloud_prefix='DST',
-                configuration_ini=self.configuration_ini,
-                config=self.config)
-        self.dst_cloud.switch_user(user=self.dst_cloud.username,
-                                   password=self.dst_cloud.password,
-                                   tenant=self.dst_cloud.tenant)
+        self.dst_cloud.create_routers(self.config.dst_routers)
         self.dst_cloud.create_networks(self.config.dst_networks)
         for net in self.config.dst_networks:
             if net.get('real_network'):
@@ -983,6 +972,7 @@ class Prerequisites(base.BasePrerequisites):
                                 src_net=src_net_id, dst_net=dst_net_id))
 
     def run_preparation_scenario(self):
+        self.init_dst_cloud()
         LOG.info('Creating tenants')
         self.create_tenants()
         LOG.info('Creating users')
