@@ -35,10 +35,14 @@ Images filtering logic:
     - If nothing is specified in filters file all private images MUST migrate;
     - If tenant is specified, ALL images which belong to this tenant MUST
       migrate;
-    - If image ID is specified, only images specified MUST migrate.
+    - If image ID is specified in images_list, only images specified
+      MUST migrate. Or if image ID is specified in exclude_images_list ALL
+      images exclude images in this lists MUST migrate. You can specify either
+      images_list or exclude_images_list.
 """
 import datetime
 
+from cloudferrylib.base import exception
 from cloudferrylib.utils import filters
 
 
@@ -78,6 +82,12 @@ def image_id_filter(filtered_images):
                       i.id in filtered_images)
 
 
+def image_id_exclude_filter(filtered_images):
+    """Exclude images specified in exclude_images_list of filters file"""
+    return lambda i: (_image_filtering_disabled(filtered_images) or
+                      i.id not in filtered_images)
+
+
 def member_filter(glance_client, filtered_tenant_id):
     """Filters images which are shared between multiple tenants using image
     membership feature (see `glance help member-list`)"""
@@ -108,7 +118,23 @@ class GlanceFilters(filters.CFFilters):
         is_active = active_filter()
         is_datetime = datetime_filter(self.filter_yaml.get_image_date())
         is_tenant = tenant_filter(self.filter_yaml.get_tenant())
-        is_image_id = image_id_filter(self.filter_yaml.get_image_ids())
+
+        images_list = self.filter_yaml.get_image_ids()
+        excluded_images_list = self.filter_yaml.get_excluded_image_ids()
+
+        if images_list and excluded_images_list:
+            raise exception.AbortMigrationError("In the filter config file "
+                                                "specified 'images_list' and "
+                                                "'exclude_images_list'. Must "
+                                                "be only one list with "
+                                                "images - 'images_list' or "
+                                                "'exclude_images_list'.")
+
+        if excluded_images_list:
+            is_image_id = image_id_exclude_filter(excluded_images_list)
+        else:
+            is_image_id = image_id_filter(images_list)
+
         is_member = member_filter(self.glance_client,
                                   self.filter_yaml.get_tenant())
 

@@ -100,11 +100,20 @@ Filter file is a standard YAML file with following syntax::
         images_list:
             - <image_id1>
             - <image_id2>
+        #exclude_images_list:
+        #    - <image_id1>
+        #    - <image_id2>
         dont_include_public_and_members_from_other_tenants: False
     volumes:
         volumes_list:
             - <volume_id1>
             - <volume_id2>
+
+In the config file you can specify either ``images_list`` or
+``exclude_images_list`` in the images section. If you specified
+``images_list`` only images specified in this list will be migrated.
+If you specified ``exclude_images_list`` all images exclude images in
+the list will be migrated.
 
 When :dfn:`dont_include_public_and_members_from_other_tenants` is set to
 ``True`` (to which it is set by default), all the public images and images

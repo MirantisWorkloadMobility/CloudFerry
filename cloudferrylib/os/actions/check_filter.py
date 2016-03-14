@@ -108,6 +108,14 @@ class CheckFilter(action.Action):
 
     def _check_opts_img(self, opts):
         image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
+        if opts and \
+                opts.get('images_list') and opts.get('exclude_images_list'):
+            raise exception.AbortMigrationError(
+                "In the filter config file was specified "
+                "'images_list' and 'exclude_images_list'. "
+                "Must either specify - 'images_list' or "
+                "'exclude_images_list'.")
+
         if opts and opts.get('images_list'):
             images_list = opts['images_list']
             for img_id in images_list:
