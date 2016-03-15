@@ -211,7 +211,6 @@ def estimate_migration(config_path, source, tenant=None, debug=False):
     stage.execute_stage('cloudferrylib.os.discovery.stages.DiscoverStage', cfg)
     procedures.estimate_copy(source, tenant)
     procedures.show_largest_servers(10, source, tenant)
-    procedures.show_largest_unused_resources(10, source, tenant)
 
 
 @task

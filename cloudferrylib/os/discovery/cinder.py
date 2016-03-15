@@ -31,7 +31,7 @@ class Attachment(model.Model):
 class Volume(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey('id')
-        name = fields.String(required=True)
+        name = fields.String(required=True, allow_none=True)
         description = fields.String(required=True, allow_none=True)
         availability_zone = fields.String(required=True)
         encrypted = fields.Boolean(missing=False)

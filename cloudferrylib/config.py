@@ -47,7 +47,8 @@ class Configuration(bases.Hashable, bases.Representable):
             scope = Scope(**cloud['scope'])
             ssh_settings = SshSettings(**cloud['ssh'])
             self.clouds[name] = OpenstackCloud(name, credential, scope,
-                                               ssh_settings)
+                                               ssh_settings,
+                                               cloud.get('discover'))
 
     def get_cloud(self, name):
         return self.clouds[name]
