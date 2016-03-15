@@ -19,6 +19,7 @@ Based on :file:`CloudFerry/configs/config.ini`. This file contains generic
 migration configuration options as well as credentials to access source and
 destination cloud resources.
 
+.. _scenario-files-config:
 
 Scenario files
 --------------

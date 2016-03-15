@@ -10,6 +10,7 @@ End-user CloudFerry documentation
     quick_start_guide
     configuration
     nova_compute_migration
+    networking
     glance_image_migration
     cinder_migration
     copy_mechanisms
