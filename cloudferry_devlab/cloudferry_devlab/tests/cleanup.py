@@ -81,6 +81,13 @@ class CleanEnv(base.BasePrerequisites):
                 self.get_volume_id(volume.display_name))
             LOG.info('Volume "%s" has been deleted', volume.display_name)
 
+    def clean_swift_containers_and_objects(self):
+        containers = self.config.swift_containers
+        for container in containers:
+            for obj in container.get('objects', []):
+                self.delete_swift_object(container['name'], obj['name'])
+            self.delete_swift_container(container['name'])
+
     def clean_flavors(self):
         flavors_names = [flavor['name'] for flavor in self.config.flavors]
         for tenant in self.config.tenants:
@@ -336,6 +343,7 @@ class CleanEnv(base.BasePrerequisites):
         self.clean_snapshots()
         self.clean_cinder_snapshots()
         self.clean_volumes()
+        self.clean_swift_containers_and_objects()
         self.clean_all_networking()
         self.clean_security_groups()
         self.clean_roles()

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
 import logging
 import os
 import time
@@ -23,6 +24,7 @@ from keystoneclient.v2_0 import client as keystone
 from neutronclient.v2_0 import client as neutron
 from novaclient import exceptions as nova_exceptions
 from novaclient.v1_1 import client as nova
+from swiftclient import client as swift_client
 
 from cloudferry_devlab.tests import test_exceptions
 import cloudferry_devlab.tests.utils as utils
@@ -31,6 +33,28 @@ LOG = logging.getLogger(__name__)
 OPENSTACK_RELEASES = {'192.168.1.2': 'grizzly',
                       '192.168.1.3': 'icehouse',
                       '192.168.1.8': 'juno'}
+SWIFT_AUTH_VERSION = '2'
+
+
+class SwiftConnection(object):
+    def __init__(self, auth_url, username, password, tenant):
+        self.auth_url = auth_url
+        self.username = username
+        self.password = password
+        self.tenant = tenant
+
+    @contextlib.contextmanager
+    def __call__(self):
+        conn = swift_client.Connection(
+            authurl=self.auth_url,
+            user=self.username,
+            key=self.password,
+            tenant_name=self.tenant,
+            auth_version=SWIFT_AUTH_VERSION)
+        try:
+            yield conn
+        finally:
+            conn.close()
 
 
 class BasePrerequisites(object):
@@ -82,6 +106,38 @@ class BasePrerequisites(object):
         self.openstack_release = self._get_openstack_release()
         self.server_groups_supported = self.openstack_release in ['icehouse',
                                                                   'juno']
+        self.swift_connection = SwiftConnection(self.auth_url, self.username,
+                                                self.password, self.tenant)
+
+    def put_swift_container(self, container_name):
+        """Create a container."""
+
+        with self.swift_connection() as swift_conn:
+            swift_conn.put_container(container_name)
+
+    def delete_swift_container(self, container_name):
+        """Delete a container"""
+
+        with self.swift_connection() as swift_conn:
+            swift_conn.delete_container(container_name)
+
+    def put_swift_object(self, container_name, obj_name, contents=None):
+        """Create an object."""
+
+        with self.swift_connection() as swift_conn:
+            swift_conn.put_object(container_name, obj_name, contents)
+
+    def post_swift_object(self, container_name, obj_name, metadata):
+        """Update object metadata."""
+
+        with self.swift_connection() as swift_conn:
+            swift_conn.post_object(container_name, obj_name, metadata)
+
+    def delete_swift_object(self, container_name, obj_name):
+        """Delete an object"""
+
+        with self.swift_connection() as swift_conn:
+            swift_conn.delete_object(container_name, obj_name)
 
     def _get_openstack_release(self):
         for release in OPENSTACK_RELEASES:

@@ -760,6 +760,31 @@ class Prerequisites(base.BasePrerequisites):
                 display_name=invalid_volume_tmlt % st)
             self.cinderclient.volumes.reset_state(vol, state=st)
 
+    def create_swift_container_and_objects(self):
+        for cont in self.config.swift_containers:
+            self.put_swift_container(cont['name'])
+            for obj in cont['objects']:
+                contents = None
+                if 'random_contents_size_in_MB' in obj and 'contents' in obj:
+                    msg = "Object {obj_name} contains the 'contents' and "\
+                          "'random_contents_size_im_MB parameters' - "\
+                          "must be only one"
+                    raise RuntimeError(msg.format(obj_name=obj['name']))
+
+                if 'random_contents_size_in_MB' in obj:
+                    size = obj['random_contents_size_in_MB']
+                    contents = os.urandom(1024*1024*size)
+                elif 'contents' in obj:
+                    contents = obj['contents']
+
+                self.put_swift_object(cont['name'],
+                                      obj['name'],
+                                      contents)
+                if 'metadata' in obj:
+                    self.post_swift_object(cont['name'],
+                                           obj['name'],
+                                           obj['metadata'])
+
     def emulate_vm_states(self):
         for vm_state in self.config.vm_states:
             # emulate error state:
@@ -1029,6 +1054,8 @@ class Prerequisites(base.BasePrerequisites):
         self.write_data_to_volumes()
         self.log.info('Creating invalid cinder objects')
         self.create_invalid_cinder_objects()
+        self.log.info('Create swift containers and objects')
+        self.create_swift_container_and_objects()
         self.log.info('Emulating vm states')
         self.emulate_vm_states()
         self.log.info('Generating vm states list')
