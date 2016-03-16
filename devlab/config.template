@@ -26,7 +26,6 @@ ssh_chunk_size = 100
 retry = 5
 migrate_extnets = True
 time_wait = 5
-cinder_migration_strategy = cloudferrylib.os.storage.cinder_storage.CinderNFSStorage
 migrate_user_quotas = False
 incloud_live_migration = nova
 ssh_connection_attempts = 3

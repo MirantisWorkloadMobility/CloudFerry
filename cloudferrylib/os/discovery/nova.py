@@ -24,6 +24,7 @@ from cloudferrylib.os.discovery import model
 
 LOG = logging.getLogger(__name__)
 
+HOST = 'OS-EXT-SRV-ATTR:host'
 VOLUMES_ATTACHED = 'os-extended-volumes:volumes_attached'
 
 
@@ -57,6 +58,8 @@ class Server(model.Model):
         status = fields.String(required=True)
         tenant = model.Dependency(keystone.Tenant)
         image = model.Dependency(glance.Image, allow_none=True)
+        image_membership = model.Dependency(glance.ImageMember,
+                                            allow_none=True)
         user_id = fields.String(required=True)  # TODO: user reference
         key_name = fields.String(required=True, allow_none=True)
         flavor = model.Dependency(Flavor)
@@ -67,11 +70,12 @@ class Server(model.Model):
         instance_name = fields.String(required=True)
         metadata = fields.Dict(missing=dict)
         ephemeral_disks = model.Nested(EphemeralDisk, many=True, missing=list)
-        attached_volumes = model.Dependency(cinder.Volume, many=True)
+        attached_volumes = model.Dependency(cinder.Volume, many=True,
+                                            missing=list)
         # TODO: ports
 
         FIELD_MAPPING = {
-            'host': 'OS-EXT-SRV-ATTR:host',
+            'host': HOST,
             'hypervisor_hostname': 'OS-EXT-SRV-ATTR:hypervisor_hostname',
             'instance_name': 'OS-EXT-SRV-ATTR:instance_name',
             'availability_zone': 'OS-EXT-AZ:availability_zone',
@@ -97,32 +101,42 @@ class Server(model.Model):
                         'tenant_id': tenant.object_id.id,
                     })
                 for raw_server in server_list:
+                    host = getattr(raw_server, HOST)
+                    if host not in avail_hosts:
+                        LOG.warning('Skipping server %s, host not available.',
+                                    host)
+                        continue
                     # Workaround for grizzly lacking os-extended-volumes
+                    overrides = {}
                     if not hasattr(raw_server, VOLUMES_ATTACHED):
-                        setattr(raw_server, VOLUMES_ATTACHED,
-                                [volume.id for volume in
-                                 compute_client.volumes.get_server_volumes(
-                                     raw_server.id)])
+                        overrides['attached_volumes'] = [
+                            volume.id for volume in
+                            compute_client.volumes.get_server_volumes(
+                                raw_server.id)]
                     try:
-                        server = Server.load_from_cloud(cloud, raw_server)
-                        if server.host not in avail_hosts:
-                            continue
+                        srv = Server.load_from_cloud(cloud, raw_server,
+                                                     overrides)
+                        if srv.image and srv.image.tenant != srv.tenant:
+                            srv.image_membership = glance.ImageMember.get(
+                                cloud,
+                                srv.image.object_id.id,
+                                srv.tenant.object_id.id)
+                        servers.append(srv)
+                        LOG.debug('Discovered: %s', srv)
                     except marshmallow_exc.ValidationError as e:
                         LOG.warning('Server %s ignored: %s', raw_server.id, e)
                         continue
-                    servers.append(server)
 
             # Discover ephemeral volume info using SSH
             servers.sort(key=lambda s: s.host)
             for host, host_servers in itertools.groupby(servers,
                                                         key=lambda s: s.host):
                 with cloud.remote_executor(host, ignore_errors=True) as remote:
-                    for server in host_servers:
-                        ephemeral_disks = _list_ephemeral(remote, server)
-                        if ephemeral_disks is None:
-                            continue
-                        server.ephemeral_disks = ephemeral_disks
-                        tx.store(server)
+                    for srv in host_servers:
+                        ephemeral_disks = _list_ephemeral(remote, srv)
+                        if ephemeral_disks is not None:
+                            srv.ephemeral_disks = ephemeral_disks
+                            tx.store(srv)
 
 
 def _list_ephemeral(remote, server):

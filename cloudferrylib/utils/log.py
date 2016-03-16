@@ -46,7 +46,7 @@ class StdoutLogger(object):
         pass
 
 
-def configure_logging():
+def configure_logging(log_config=None, debug=None, forward_stdout=None):
     """Configure the logging
 
     Loading logging configuration file which is defined in the general
@@ -55,14 +55,21 @@ def configure_logging():
     as True.
     Wrap the stdout stream by StdoutLogger.
     """
-    with open(CONF.migrate.log_config, 'r') as f:
+    if log_config is None:
+        log_config = CONF.migrate.log_config
+    if debug is None:
+        debug = CONF.migrate.debug
+    if forward_stdout is None:
+        forward_stdout = CONF.migrate.forward_stdout
+
+    with open(log_config, 'r') as f:
         config.dictConfig(yaml.load(f))
-    if CONF.migrate.debug:
+    if debug:
         logger = logging.getLogger('cloudferrylib')
         for handler in logger.handlers:
             if handler.name == 'console':
                 handler.setLevel(logging.DEBUG)
-    if CONF.migrate.forward_stdout:
+    if forward_stdout:
         sys.stdout = StdoutLogger()
 
 
@@ -94,7 +101,11 @@ class RunRotatingFileHandler(handlers.RotatingFileHandler):
         :return: Formatted filename with included scenario and
         current datetime.
         """
-        scenario = os.path.splitext(os.path.basename(CONF.migrate.scenario))[0]
+        if hasattr(CONF, 'migrate') and hasattr(CONF.migrate, 'scenario'):
+            scenario_filename = os.path.basename(CONF.migrate.scenario)
+            scenario = os.path.splitext(scenario_filename)[0]
+        else:
+            scenario = 'none'
         dt = datetime.datetime.now().strftime(self.date_format)
         return filename % {
             'scenario': scenario,

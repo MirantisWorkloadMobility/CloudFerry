@@ -19,8 +19,8 @@ import traceback
 from fabric.api import task, env
 import yaml
 from oslo_utils import importutils
-import oslo.config.cfg
-import oslo.config.types
+import oslo_config.cfg
+import oslo_config.types
 
 import cfglib
 from cloudferrylib.os import context
@@ -227,7 +227,7 @@ def show_unused_resources(cloud, count=100, tenant=None):
 def init(name_config=None, debug=None):
     try:
         cfglib.init_config(name_config)
-    except oslo.config.cfg.Error:
+    except oslo_config.cfg.Error:
         traceback.print_exc()
         sys.exit(ERROR_INVALID_CONFIGURATION)
 
@@ -235,7 +235,7 @@ def init(name_config=None, debug=None):
     if cfglib.CONF.migrate.hide_ssl_warnings:
         warnings.simplefilter("ignore")
     if debug is not None:
-        value = oslo.config.types.Boolean()(debug)
+        value = oslo_config.types.Boolean()(debug)
         cfglib.CONF.set_override('debug', value, 'migrate')
     log.configure_logging()
 
@@ -257,6 +257,10 @@ def load_yaml_config(yaml_path, debug=None):
         ssh['sudo_password'] = cfg.ssh_sudo_password
         ssh['connection_attempts'] = \
             cfglib.CONF.migrate.ssh_connection_attempts
+
+    log.configure_logging(log_config='configs/logging_config.yaml',
+                          debug=debug,
+                          forward_stdout=False)
 
     prev_legacy_config_path = None
     with open(yaml_path, 'r') as config_file:

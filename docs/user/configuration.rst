@@ -19,6 +19,7 @@ Based on :file:`CloudFerry/configs/config.ini`. This file contains generic
 migration configuration options as well as credentials to access source and
 destination cloud resources.
 
+.. _scenario-files-config:
 
 Scenario files
 --------------
@@ -99,14 +100,15 @@ Filter file is a standard YAML file with following syntax::
         images_list:
             - <image_id1>
             - <image_id2>
-        exclude_public_and_members: True
+        dont_include_public_and_members_from_other_tenants: False
     volumes:
         volumes_list:
             - <volume_id1>
             - <volume_id2>
 
-When :dfn:`exclude_public_and_members` is set to ``True``, all the public
-images and images which have membership in the tenant specified in
-:dfn:`tenant_id` are not included in migration list. In other words, only
-images which directly belong to :dfn:`tenant_id` are migrated, all the
-dependencies are ignored. See more in :ref:`glance-image-migration`.
+When :dfn:`dont_include_public_and_members_from_other_tenants` is set to
+``True`` (to which it is set by default), all the public images and images
+which have membership in the tenant specified in :dfn:`tenant_id` are not
+included in migration list. In other words, only images which directly belong
+to :dfn:`tenant_id` are migrated, all the dependencies are ignored.
+See more in :ref:`glance-image-migration`.

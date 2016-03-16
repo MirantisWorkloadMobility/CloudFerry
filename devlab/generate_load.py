@@ -78,6 +78,13 @@ class Prerequisites(base.BasePrerequisites):
         self.clean_tools = cleanup.CleanEnv(config, configuration_ini,
                                             cloud_prefix)
 
+    def init_dst_cloud(self):
+        if not self.dst_cloud:
+            self.dst_cloud = Prerequisites(
+                cloud_prefix='DST',
+                configuration_ini=self.configuration_ini,
+                config=self.config)
+
     @clean_if_exists
     def create_users(self, users=None):
         def get_params_for_user_creating(_user):
@@ -159,17 +166,23 @@ class Prerequisites(base.BasePrerequisites):
                          tenant=self.tenant)
 
     def modify_quotas(self):
+        """ Modify nova and cinder quotas
+        """
         for tenant in self.config.tenants:
             if 'quota' in tenant:
                 self.novaclient.quotas.update(tenant_id=self.get_tenant_id(
                     tenant['name']), **tenant['quota'])
+            if 'quota_cinder' in tenant:
+                self.cinderclient.quotas.update(
+                    tenant_id=self.get_tenant_id(tenant['name']),
+                    **tenant['quota_cinder'])
 
     def upload_image(self):
 
         def _get_body_for_image_creating(_image):
             # Possible parameters for image creating
-            params = ['name', 'location', 'disk_format', 'container_format',
-                      'is_public', 'copy_from']
+            params = ['id', 'name', 'location', 'disk_format',
+                      'container_format', 'is_public', 'copy_from']
             return {param: _image[param] for param in params
                     if param in _image}
 
@@ -189,12 +202,24 @@ class Prerequisites(base.BasePrerequisites):
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
+        dst_img_ids = []
         for image in self.config.images:
-            img = self.glanceclient.images.create(
-                **_get_body_for_image_creating(image))
+            image_body = _get_body_for_image_creating(image)
+            img = self.glanceclient.images.create(**image_body)
             img_ids.append(img.id)
+            if image.get('upload_on_dst'):
+                dst_img_id = self.dst_cloud.glanceclient.images.create(
+                    **image_body)
+                dst_img_ids.append(dst_img_id)
+
         self.wait_until_objects_created(img_ids, self.check_image_state,
                                         TIMEOUT)
+
+        if dst_img_ids and self.dst_cloud:
+            self.wait_until_objects_created(
+                dst_img_ids,
+                self.chech_image_state_on_dst,
+                TIMEOUT)
 
         tenant_list = self.keystoneclient.tenants.list()
         for image_id in img_ids:
@@ -209,6 +234,10 @@ class Prerequisites(base.BasePrerequisites):
 
         if getattr(self.config, 'create_zero_image', None):
             self.glanceclient.images.create()
+
+    def chech_image_state_on_dst(self, img_id):
+        img = self.dst_cloud.glanceclient.images.get(img_id)
+        return img.status == 'active'
 
     def update_filtering_file(self):
         src_cloud = Prerequisites(cloud_prefix='SRC',
@@ -240,7 +269,8 @@ class Prerequisites(base.BasePrerequisites):
                 'id': []
             },
             'images': {
-                'images_list': []
+                'images_list': [],
+                'dont_include_public_and_members_from_other_tenants': False
             }
         }
         all_img_ids = []
@@ -462,17 +492,22 @@ class Prerequisites(base.BasePrerequisites):
                     self.neutronclient.add_gateway_router(
                         router_id, parameters)
 
-    def create_routers(self):
-        for router in self.config.routers:
-            self.neutronclient.create_router(router)
-        for tenant in self.config.tenants:
-            if tenant.get('routers'):
-                self.switch_user(user=self.username, password=self.password,
-                                 tenant=tenant['name'])
-                for router in tenant['routers']:
-                    self.neutronclient.create_router(router)
-        self.switch_user(user=self.username, password=self.password,
-                         tenant=self.tenant)
+    def create_routers(self, routers=None):
+        if routers:
+            for router in routers:
+                self.neutronclient.create_router(router)
+        else:
+            for router in self.config.routers:
+                self.neutronclient.create_router(router)
+            for tenant in self.config.tenants:
+                if tenant.get('routers'):
+                    self.switch_user(user=self.username,
+                                     password=self.password,
+                                     tenant=tenant['name'])
+                    for router in tenant['routers']:
+                        self.neutronclient.create_router(router)
+            self.switch_user(user=self.username, password=self.password,
+                             tenant=self.tenant)
 
     def get_subnet_id(self, name):
         subs = self.neutronclient.list_subnets()['subnets']
@@ -814,10 +849,6 @@ class Prerequisites(base.BasePrerequisites):
         security group, even default, while on src this tenant has security
         group.
         """
-        self.dst_cloud = Prerequisites(
-            cloud_prefix='DST',
-            configuration_ini=self.configuration_ini,
-            config=self.config)
         for t in self.config.tenants:
             if not t.get('deleted') and t['enabled']:
                 try:
@@ -894,6 +925,19 @@ class Prerequisites(base.BasePrerequisites):
             self.migration_utils.execute_command_on_vm(
                 self.get_vagrant_vm_ip(), cmd, username='root', password='')
 
+    def delete_image_on_dst(self):
+        """ Method delete images with a 'delete_on_dst' flag on
+        the destenation cloud. During migration CF must migrate the image
+        and generate new UUID for the image, because image with the original
+        UUID has been deleted.
+        """
+        all_images = self.migration_utils.get_all_images_from_config()
+        images_to_delete = [image for image in all_images
+                            if image.get('delete_on_dst')]
+        for image in images_to_delete:
+            image_id = self.dst_cloud.get_image_id(image['name'])
+            self.dst_cloud.glanceclient.images.delete(image_id)
+
     def break_images(self):
         all_images = self.migration_utils.get_all_images_from_config()
         images_to_break = [image for image in all_images
@@ -910,14 +954,7 @@ class Prerequisites(base.BasePrerequisites):
             self.glanceclient.images.delete(image_id)
 
     def create_dst_networking(self):
-        if not self.dst_cloud:
-            self.dst_cloud = Prerequisites(
-                cloud_prefix='DST',
-                configuration_ini=self.configuration_ini,
-                config=self.config)
-        self.dst_cloud.switch_user(user=self.dst_cloud.username,
-                                   password=self.dst_cloud.password,
-                                   tenant=self.dst_cloud.tenant)
+        self.dst_cloud.create_routers(self.config.dst_routers)
         self.dst_cloud.create_networks(self.config.dst_networks)
         for net in self.config.dst_networks:
             if net.get('real_network'):
@@ -941,6 +978,7 @@ class Prerequisites(base.BasePrerequisites):
                                 src_net=src_net_id, dst_net=dst_net_id))
 
     def run_preparation_scenario(self):
+        self.init_dst_cloud()
         LOG.info('Creating tenants')
         self.create_tenants()
         LOG.info('Creating users')
@@ -970,6 +1008,8 @@ class Prerequisites(base.BasePrerequisites):
         self.break_vm()
         LOG.info('Breaking Images')
         self.break_images()
+        LOG.info('Delete images on dst')
+        self.delete_image_on_dst()
         LOG.info('Updating filtering')
         self.update_filtering_file()
         LOG.info('Creating vm snapshots')

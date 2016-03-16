@@ -1,6 +1,10 @@
 # Runs migration of cinder volumes when VMAX is used in destination
 
 preparation:
+  - print_info:
+      - print_configuration: True
+      - print_scenario: True
+      - print_filter: True
   - create_snapshot: True
   - act_get_filter: True
   - act_check_filter: True
@@ -10,5 +14,6 @@ rollback:
   - restore_from_snapshot: True
 
 process:
+  - transport_storage_resources: True
   - get_volumes_db_data: True
   - migrate_volumes: True

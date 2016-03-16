@@ -769,7 +769,7 @@ class NeutronTestCase(test.TestCase):
                         }}
 
         self.neutron_network_client.upload_networks([self.net_1_info],
-                                                    self.segmentation_ids)
+                                                    self.segmentation_ids, [])
 
         if network_info['network']['provider:physical_network']:
             self.neutron_mock_client().create_network.\

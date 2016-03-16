@@ -6,6 +6,10 @@ namespace:
       instances: {}
 
 preparation:
+  - print_info:
+      - print_configuration: True
+      - print_scenario: True
+      - print_filter: True
   - pre_migration_test:
       - act_get_filter: True
       - act_check_filter: True
@@ -50,6 +54,6 @@ process:
       - act_comp_res_trans: True
       - act_network_trans: True
       - get_volumes_db_data: True
-      - write_volumes_db_data: True
+      - migrate_volumes: True
       - transport_key_pairs: True
       - act_server_group_trans: False

@@ -81,6 +81,9 @@ class NeutronNetwork(network.Network):
 
         nets = self.get_networks(tenant_id)
         subnets = self.get_subnets(tenant_id)
+        detached_ports = self.get_detached_ports(tenant_id)
+        LOG.debug('List of detached ports: %s',
+                  repr([p['id'] for p in detached_ports]))
 
         if self.filter_tenant_id is not None:
             shared_nets = self.get_shared_networks_raw()
@@ -114,6 +117,7 @@ class NeutronNetwork(network.Network):
         info = {'networks': nets,
                 'subnets': subnets,
                 'routers': routers,
+                'detached_ports': detached_ports,
                 'floating_ips': self.get_floatingips(tenant_id),
                 'security_groups': self.get_sec_gr_and_rules(tenant_id),
                 'quota': self.get_quota(tenant_id),
@@ -211,7 +215,8 @@ class NeutronNetwork(network.Network):
         deploy_info = info
         self.upload_quota(deploy_info['quota'])
         self.upload_networks(deploy_info['networks'],
-                             deploy_info['meta']['segmentation_ids'])
+                             deploy_info['meta']['segmentation_ids'],
+                             deploy_info['detached_ports'])
         dst_router_ip_ids = None
         if self.config.migrate.keep_floatingip:
             self.upload_floatingips(deploy_info['networks'],
@@ -339,17 +344,24 @@ class NeutronNetwork(network.Network):
                   repr(network_info), tenant_id, keep_ip)
         raise exception.AbortMigrationError("Can't find suitable network")
 
-    def check_existing_port(self, network_id, mac=None, ip_address=None):
-        for port in self.get_ports_list(fields=['network_id', 'mac_address',
-                                                'id', 'fixed_ips',
-                                                'device_owner'],
-                                        network_id=network_id):
+    def check_existing_port(self, network_id, mac=None, ip_address=None,
+                            ip_addresses=None, existing_ports=None):
+        if ip_addresses is None:
+            ip_addresses = []
+        if ip_address is not None and ip_address not in ip_addresses:
+            ip_addresses.append(ip_address)
+        if existing_ports is None:
+            existing_ports = self.get_ports_list(
+                fields=['network_id', 'mac_address', 'id', 'fixed_ips',
+                        'device_owner'],
+                network_id=network_id)
+        for port in existing_ports:
             if port['network_id'] != network_id:
                 continue
             if port['mac_address'] == mac:
                 return port
             for fixed_ip in port['fixed_ips']:
-                if fixed_ip['ip_address'] == ip_address:
+                if fixed_ip['ip_address'] in ip_addresses:
                     return port
         return None
 
@@ -747,6 +759,10 @@ class NeutronNetwork(network.Network):
     def get_subnets_list(self, tenant_id=''):
         return self.neutron_client.list_subnets(tenant_id=tenant_id)['subnets']
 
+    def get_detached_ports(self, tenant_id=''):
+        ports = self.neutron_client.list_ports(tenant_id=tenant_id)['ports']
+        return [p for p in ports if not p['device_owner']]
+
     def get_subnets(self, tenant_id=''):
         LOG.info("Get subnets...")
         subnets = self.get_subnets_list(tenant_id)
@@ -760,6 +776,8 @@ class NeutronNetwork(network.Network):
         return subnets_info
 
     def reset_subnet_dhcp(self, subnet_id, dhcp_flag):
+        LOG.debug('Setting enable_dhcp to %s for subnet %s',
+                  dhcp_flag, subnet_id)
         subnet_info = {
             'subnet':
             {
@@ -1124,31 +1142,34 @@ class NeutronNetwork(network.Network):
                     rule['meta']['id'] = new_rule['security_group_rule']['id']
         LOG.info("Done")
 
-    def upload_networks(self, networks, src_seg_ids):
+    def upload_networks(self, networks, src_seg_ids, detached_ports):
         LOG.info("Creating networks on destination")
         identity = self.identity_client
 
-        existing_networks = self.get_networks()
-        existing_nets_hashlist = (
-            [existing_net['res_hash'] for existing_net in existing_networks])
-        existing_subnets = self.get_subnets()
-        existing_subnets_hashlist = (
-            [exist_subnet['res_hash'] for exist_subnet in existing_subnets])
+        existing_nets = {n['res_hash']: n for n in self.get_networks()}
+        existing_subnets = {sn['res_hash']: sn for sn in self.get_subnets()}
 
         # we need to handle duplicates in segmentation ids
-        dst_seg_ids = get_segmentation_ids_from_net_list(existing_networks)
+        dst_seg_ids = get_segmentation_ids_from_net_list(
+            existing_nets.values())
 
         for src_net in networks:
+            network_detached_ports = [p for p in detached_ports
+                                      if p['network_id'] == src_net['id']]
+
             # Check network for existence on destination cloud
-            if src_net['res_hash'] in existing_nets_hashlist:
+            if src_net['res_hash'] in existing_nets:
                 # Check all network's subnets for existence on DST cloud
                 for subnet in src_net['subnets']:
-                    if subnet['res_hash'] not in existing_subnets_hashlist:
+                    if subnet['res_hash'] not in existing_subnets:
                         break
                 else:
                     LOG.info("DST cloud already has the same network "
                              "with name '%s' in tenant '%s'",
                              src_net['name'], src_net['tenant_name'])
+                    self.deploy_detached_ports(
+                        existing_nets[src_net['res_hash']],
+                        network_detached_ports)
                     continue
 
             LOG.debug("Trying to create network '%s'", src_net['name'])
@@ -1233,7 +1254,41 @@ class NeutronNetwork(network.Network):
                         network_info['network']['provider:segmentation_id'] = (
                             seg_id)
 
-            self.create_network(src_net, network_info)
+            created_network = self.create_network(src_net, network_info)
+            self.deploy_detached_ports(created_network, network_detached_ports)
+
+    def deploy_detached_ports(self, net, ports):
+        for subnet in net['subnets']:
+            self.reset_subnet_dhcp(subnet['id'], False)
+        existing_ports = {p['id']: p
+                          for p in self.get_ports_list(network_id=net['id'])}
+        for port in ports:
+            ip_addresses = [fip['ip_address'] for fip in port['fixed_ips']]
+            existing_port = self.check_existing_port(
+                net['id'], port['mac_address'],
+                ip_addresses=ip_addresses,
+                existing_ports=existing_ports.values())
+            if existing_port is not None:
+                if existing_port['mac_address'] == port['mac_address']:
+                    LOG.debug('Port %s already migrated to %s',
+                              port['id'], existing_port['id'])
+                    continue
+
+                if existing_port['device_owner'].startswith('network:') or \
+                        not existing_port['device_owner']:
+                    LOG.debug('Deleting port %s from DST', repr(existing_port))
+                    self.delete_port(existing_port['id'])
+                    del existing_ports[existing_port['id']]
+                else:
+                    raise exception.AbortMigrationError(
+                        'Can\'t migrate port %s conflict with port %s' %
+                        (port['id'], existing_port['id']))
+
+            self.create_port(net['id'], port['mac_address'], ip_addresses,
+                             net['tenant_id'], True)
+        for subnet in net['subnets']:
+            if subnet['enable_dhcp']:
+                self.reset_subnet_dhcp(subnet['id'], True)
 
     def create_network(self, src_net, network_info):
         try:
@@ -1270,6 +1325,7 @@ class NeutronNetwork(network.Network):
 
                 LOG.info("Created subnet '%s' in net '%s'",
                          created_subnet['cidr'], created_net['name'])
+                created_net['subnets'].append(created_subnet)
             except neutron_exc.NeutronClientException:
                 LOG.info("Subnet '%s' (%s) already exists, skipping",
                          snet['name'], snet['cidr'])

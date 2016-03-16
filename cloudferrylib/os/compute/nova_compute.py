@@ -789,10 +789,19 @@ class NovaCompute(compute.Compute):
                     LOG.warning("No server with ID of '%s' exists.", i)
 
         active_computes = self.get_compute_hosts()
-        servers = [i for i in servers
-                   if getattr(i, INSTANCE_HOST_ATTRIBUTE) in active_computes]
+        active_servers = []
 
-        return servers
+        for server in servers:
+            server_host = getattr(server, INSTANCE_HOST_ATTRIBUTE)
+            if server_host in active_computes:
+                active_servers.append(server)
+                continue
+
+            LOG.debug("Instance '%s' has been excluded from VMs list, because "
+                      "it is running on non-active compute host '%s'.",
+                      server.id, server_host)
+
+        return active_servers
 
     def is_nova_instance(self, object_id):
         """
@@ -1009,13 +1018,25 @@ class NovaCompute(compute.Compute):
             return None
 
     def get_compute_hosts(self, availability_zone=None):
+        LOG.debug("Obtaining a list of active compute hosts...")
+
         hosts = self.nova_client.hosts.list(zone=availability_zone)
         az_host_names = set([h.host_name for h in hosts])
 
         computes = self.nova_client.services.list(binary='nova-compute')
-        return [c.host
-                for c in computes if host_available(c) and
-                c.host in az_host_names]
+
+        active_compute_hosts = []
+
+        for c in computes:
+            if host_available(c) and c.host in az_host_names:
+                active_compute_hosts.append(c.host)
+                continue
+
+            LOG.debug("Compute host '%s' has been excluded from the list of "
+                      "active compute hosts. State: '%s', Status: '%s'.",
+                      c.host, c.state, c.status)
+
+        return active_compute_hosts
 
     def get_free_vcpus(self):
         hypervisor_statistics = self.get_hypervisor_statistics()

@@ -23,10 +23,12 @@ from novaclient.exceptions import Forbidden, OverLimit
 
 import devlab.tests.config as config
 import devlab.tests.functional_test as functional_test
+from devlab.tests.base import BasePrerequisites as base
 
 TIMEOUT = 600
 TEST_TENANT_NAME = 'tenant4'
 TEST_VM_NAME = 'VMtoVerifyDstCloudFunc'
+DEFAULT_SERVICE_PORT = 22
 
 CINDER_VOLUME_CHK_CMDS = ['mkdir /tmp/test',
                           '/usr/sbin/mkfs.ext2 /dev/vdb',
@@ -174,8 +176,8 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
                 description='Allows SSH to VM.')
             self.dst_cloud.create_security_group_rule(
                 sec_group['id'], self.dst_tenant_id,
-                protocol='tcp', port_range_max=22,
-                port_range_min=22, direction='ingress')
+                protocol='tcp', port_range_max=DEFAULT_SERVICE_PORT,
+                port_range_min=DEFAULT_SERVICE_PORT, direction='ingress')
 
             sg_new = True
         else:
@@ -184,15 +186,19 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
                             i['tenant_id'] == self.dst_tenant_id]
 
         if not sg_new:
-            if not any(d['port_range_max'] == 22 and
+            if not any(d['port_range_max'] == DEFAULT_SERVICE_PORT and
                        d['direction'] == 'ingress'
                        for d in sec_group['security_group_rules']):
                 self.dst_cloud.create_security_group_rule(
                     sec_group['id'], self.dst_tenant_id,
-                    protocol='tcp', port_range_max=22,
-                    port_range_min=22, direction='ingress')
+                    protocol='tcp', port_range_max=DEFAULT_SERVICE_PORT,
+                    port_range_min=DEFAULT_SERVICE_PORT, direction='ingress')
 
         return sec_group
+
+    def check_vm_state(self, srv_id):
+        srv = self.dst_cloud.novaclient.servers.get(srv_id)
+        return srv.status == 'ACTIVE'
 
     def check_vm_ssh_access(self, vm, ip_addr, username, cmd):
         with settings(host_string=ip_addr,
@@ -250,8 +256,8 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
                                        password=self.dst_cloud.password,
                                        tenant=tenant_name)
 
-    def wait_service_on_vm_to_be_ready(self, timeout,
-                                       float_ip, service_port):
+    def wait_service_on_vm_to_be_ready(self, timeout, float_ip, service_port,
+                                       vm):
         start_time = time.time()
         end_time = start_time + timeout
         nc_timeout_in_sec = 1
@@ -263,40 +269,26 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
             with quiet():
                 result = local(cmd_ssh_check, capture=True).succeeded
             if result:
-                return True
+                return
             time.sleep(1)
-        return False
-
-    def wait_vm_ready(self, srv, timeout):
-        start_time = time.time()
-        end_time = start_time + timeout
-        while end_time >= time.time():
-            vm_status = self.dst_cloud.novaclient.servers.get(srv).status
-            if vm_status == 'ACTIVE':
-                return True
-            elif vm_status == 'ERROR':
-                return False
-            time.sleep(1)
-        return False
+        msg = ('Timeout of {tmout} seconds for service port {service_port}'
+               ' to be accessible by ip {fip} of vm {vm} with id {vmid}')
+        self.fail(msg.format(tmout=timeout, service_port=service_port,
+                             fip=float_ip, vm=vm.name, vmid=vm.id))
 
     def test_cinder_volume(self):
         """Validate destination cloud's volumes running and attaching
         successfully."""
         vm = self.dst_cloud.novaclient.servers.create(**self.TST_IMAGE)
-        if not self.wait_vm_ready(vm, TIMEOUT):
-            msg = '{tmout} seconds timeout of waiting for VM to be ready ' \
-                  'expired or VM is in ERROR state'
-            self.fail(msg.format(tmout=TIMEOUT))
+        base.wait_until_objects_created([vm], self.check_vm_state, TIMEOUT)
 
         vm.add_floating_ip(self.float_ip_address)
-        if not self.wait_service_on_vm_to_be_ready(
-                TIMEOUT, self.float_ip_address, 22):
-            msg = ('Timeout of {tmout} seconds for service port {service_port}'
-                   ' to be accessible by ip {fip} of vm {vmid}')
-            self.fail(msg.format(tmout=TIMEOUT,
-                                 service_port=22,
-                                 fip=self.float_ip_address,
-                                 vmid=vm.id))
+
+        base.wait_until_objects_created([(vm, self.float_ip_address)],
+                                        base.check_floating_ip_assigned,
+                                        TIMEOUT)
+        self.wait_service_on_vm_to_be_ready(TIMEOUT, self.float_ip_address,
+                                            DEFAULT_SERVICE_PORT, vm)
 
         CINDER_VOLUME_PARAMS['server_to_attach'] = vm.name
         self.dst_cloud.create_cinder_volumes([CINDER_VOLUME_PARAMS])
@@ -312,20 +304,15 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
     def test_create_vm(self):
         """Validate destination cloud's VMs running successfully."""
         vm = self.dst_cloud.novaclient.servers.create(**self.TST_IMAGE)
-        if not self.wait_vm_ready(vm, TIMEOUT):
-            msg = '{tmout} seconds timeout of waiting for VM to be ready ' \
-                  'expired or VM is in ERROR state'
-            self.fail(msg.format(tmout=TIMEOUT))
+        base.wait_until_objects_created([vm], self.check_vm_state, TIMEOUT)
 
         vm.add_floating_ip(self.float_ip_address)
-        if not self.wait_service_on_vm_to_be_ready(
-                TIMEOUT, self.float_ip_address, 22):
-            msg = ('Timeout of {tmout} seconds for service port {service_port}'
-                   'to be accessible by ip {fip} of vm {vmid}')
-            self.fail(msg.format(tmout=TIMEOUT,
-                                 service_port=22,
-                                 fip=self.float_ip_address,
-                                 vmid=vm.id))
+
+        base.wait_until_objects_created([(vm, self.float_ip_address)],
+                                        base.check_floating_ip_assigned,
+                                        TIMEOUT)
+        self.wait_service_on_vm_to_be_ready(TIMEOUT, self.float_ip_address,
+                                            DEFAULT_SERVICE_PORT, vm)
 
         status_msg, status_state = self.check_vm_ssh_access(
             vm, self.float_ip_address,

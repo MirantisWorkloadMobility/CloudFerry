@@ -46,7 +46,8 @@ class FilterYaml(object):
     def is_public_and_member_images_filtered(self):
         fy = self.get_filter_yaml()
         images = fy.get('images', {})
-        return images.get('exclude_public_and_members', False)
+        return images.get(
+            'dont_include_public_and_members_from_other_tenants', True)
 
     def get_volume_ids(self):
         fy = self.get_filter_yaml()

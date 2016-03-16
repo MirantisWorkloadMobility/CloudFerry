@@ -44,7 +44,7 @@ FAKE_CONFIG = utils.ext_dict(
     mail=utils.ext_dict({'server': '-'}))
 
 
-@mock.patch("cloudferrylib.base.clients", mock.MagicMock())
+@mock.patch("cloudferrylib.base.clients.os_cli_cmd", mock.MagicMock())
 class KeystoneIdentityTestCase(test.TestCase):
     def setUp(self):
         super(KeystoneIdentityTestCase, self).setUp()
@@ -119,6 +119,29 @@ class KeystoneIdentityTestCase(test.TestCase):
         client1 = self.keystone_client.keystone_client
         client2 = self.keystone_client.keystone_client
         self.assertFalse(client1 == client2)
+
+    @mock.patch("time.sleep")
+    @mock.patch.object(keystone_client, "Client")
+    def test_retry_when_get_client_with_exception(self, mock_call,
+                                                  sleep_mock):
+        """
+         side effect is defined with two exceptions during get_client :
+         One is Expected - exceptions.Unauthorized
+         Another is Unexpected -  exceptions.AuthorizationFailure
+        """
+
+        # retry check when expected exception occurs
+        mock_call.side_effect = exceptions.Unauthorized
+        self.assertRaises(exceptions.Unauthorized,
+                          self.keystone_client.get_client)
+        self.assertFalse(sleep_mock.called)
+
+        # retry check when unexpected exception occurs
+        mock_call.reset_mock()
+        mock_call.side_effect = exceptions.AuthorizationFailure
+        self.assertRaises(exceptions.AuthorizationFailure,
+                          self.keystone_client.get_client)
+        self.assertTrue(sleep_mock.called)
 
     def test_get_tenants_list(self):
         fake_tenants_list = [self.fake_tenant_0, self.fake_tenant_1]

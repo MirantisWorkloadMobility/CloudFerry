@@ -3,6 +3,10 @@ namespace:
       instances: {}
 
 preparation:
+  - print_info:
+      - print_configuration: True
+      - print_scenario: True
+      - print_filter: True
   - pre_migration_test:
       - act_get_filter: True
       - act_check_filter: True
@@ -44,11 +48,12 @@ rollback:
   - restore_from_vm_snapshot_dst: True
   - restore_from_vm_snapshot_src: True
   - image_rollback_dst: True
-  - restore_from_snapshot: True
+  - restore_from_snapshot: False
 
 process:
   - task_resources_transporting:
       - act_identity_trans: True
+      - transport_storage_resources: True
       - task_images_trans:
           - act_get_info_images: True
           - act_deploy_images: True
@@ -81,7 +86,6 @@ process:
               - set_volume_id_for_attaching: True
           - transport_inst:
               - act_net_prep: True
-              - act_create_vrrp_ports: True
               - associate_floatingip_on_dest: True
               - act_map_com_info: True
               - act_is_not_trans_image: ['act_is_not_merge_diff']

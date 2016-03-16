@@ -23,6 +23,7 @@ import cfglib
 from cloudferrylib.base import identity
 from cloudferrylib.utils.cache import Cached
 from cloudferrylib.utils import proxy_client
+from cloudferrylib.utils import retrying
 from cloudferrylib.utils.utils import GeneratorPassword
 from cloudferrylib.utils.utils import Postman
 from cloudferrylib.utils.utils import Templater
@@ -219,12 +220,18 @@ class KeystoneIdentity(identity.Identity):
         :return: OpenStack Keystone Client instance
         """
 
-        auth_ref = self._get_client_by_creds().auth_ref
+        def func():
+            auth_ref = self._get_client_by_creds().auth_ref
+            return keystone_client.Client(auth_ref=auth_ref,
+                                          endpoint=self.config.cloud.auth_url,
+                                          cacert=self.config.cloud.cacert,
+                                          insecure=self.config.cloud.insecure)
 
-        return keystone_client.Client(auth_ref=auth_ref,
-                                      endpoint=self.config.cloud.auth_url,
-                                      cacert=self.config.cloud.cacert,
-                                      insecure=self.config.cloud.insecure)
+        retrier = retrying.Retry(
+            max_attempts=cfglib.CONF.migrate.retry,
+            expected_exceptions=[ks_exceptions.Unauthorized],
+            reraise_original_exception=True)
+        return retrier.run(func)
 
     def _get_client_by_creds(self):
         """Authenticating with a user name and password.

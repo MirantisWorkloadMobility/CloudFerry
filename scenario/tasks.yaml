@@ -16,7 +16,6 @@ tasks:
    associate_floatingip_on_dest: ['AssociateFloatingip', 'dst_cloud']
    act_map_com_info: ['MapComputeInfo']
    act_net_prep: ['PrepareNetworks', 'dst_cloud']
-   act_create_vrrp_ports: ['CreatePortsForVRRP', 'dst_cloud']
    act_deploy_instances: ['TransportInstance']
    act_conv_comp_img: ['ConvertComputeToImage', 'src_cloud']
    act_recreate_boot_image: ['ReCreateBootImage', 'src_cloud']
@@ -122,3 +121,4 @@ tasks:
    print_filter_raw: ['PrintFilter', True]
    print_filter: ['PrintFilter', False]
    remove_bbcp: ['RemoveBBCP']
+   transport_storage_resources: ['TransportStorageResources']

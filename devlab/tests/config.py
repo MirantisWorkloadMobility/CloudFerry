@@ -101,6 +101,11 @@ tenants = [
          'router': 14,
          'subnet': 55
      },
+     'quota_cinder': {
+         'gigabytes': 700, 'gigabytes_nfs1': -1, 'gigabytes_nfs2': 1000,
+         'snapshots': 9, 'snapshots_nfs1': 8, 'snapshots_nfs2': 7,
+         'volumes': 6, 'volumes_nfs1': 5, 'volumes_nfs2': 4,
+     },
      'server_groups': [
          {'name': 'tn1_server_group', 'policies': ['affinity']},
          {'name': 'tn1_server_group2', 'policies': ['affinity']}
@@ -360,7 +365,14 @@ images = [
      'container_format': 'bare', 'broken': True},
     # Image, deleted using glance delete command
     {'name': 'deleted_image', 'copy_from': img_url, 'disk_format': 'qcow2',
-     'container_format': 'bare', 'is_deleted': True}
+     'container_format': 'bare', 'is_deleted': True},
+    # Image will be created on src and dst with the same UUID.
+    # After that deleted from dst before migration.
+    # CF must create new UUID during migration for this image
+    # and migrate it successfully
+    {'name': 'deleted_on_dst', 'id': 'e38390f0-e660-42fc-b8cd-db163fce1510',
+     'copy_from': img_url, 'disk_format': 'qcow2',
+     'container_format': 'bare', 'upload_on_dst': True, 'delete_on_dst': True}
 ]
 """Images to create/delete"""
 
@@ -456,13 +468,20 @@ vips = [
         },
     ]
 
+dst_routers = [
+    {'router': {'external_gateway_info': {}, 'name': 'another_ext_router',
+                'admin_state_up': True}
+     }
+]
+
 dst_networks = [
     {'name': 'test_segm_id_cidr1', 'admin_state_up': True,
      'shared': False, 'router:external': False, 'real_network': False,
      'provider:segmentation_id': 177, 'provider:network_type': 'gre',
      'subnets': [
          {'cidr': '31.31.31.0/24', 'ip_version': 4,
-          'name': 'segm_id_test_subnet_1', 'connect_to_ext_router': False,
+          'name': 'segm_id_test_subnet_1', 'connect_to_ext_router': True,
+          'routers_to_connect': ['another_ext_router']
           }
          ]
      },
@@ -471,7 +490,8 @@ dst_networks = [
      'provider:segmentation_id': 178, 'provider:network_type': 'gre',
      'subnets': [
          {'cidr': '41.41.41.0/24', 'ip_version': 4,
-          'name': 'segm_id_test_subnet_2', 'connect_to_ext_router': False,
+          'name': 'segm_id_test_subnet_2', 'connect_to_ext_router': True,
+          'routers_to_connect': ['another_ext_router']
           }
          ]
      },
@@ -479,9 +499,11 @@ dst_networks = [
      'router:external': True, 'real_network': True,
      'provider:physical_network': 'physnet2', 'provider:network_type': 'flat',
      'subnets': [
-         {'cidr': '192.168.55.0/24', 'ip_version': 4,
+         {'cidr': '172.16.1.0/24', 'ip_version': 4,
+          'set_as_gateway_for_routers':
+              {'another_ext_router': {'enable_snat': False}},
           'name': 'another_ext_subnet', 'allocation_pools': [
-             {'start': '192.168.55.100', 'end': '192.168.55.254'}]
+              {'start': '172.16.1.100', 'end': '172.16.1.254'}]
           }]
      }]
 

@@ -24,8 +24,27 @@ LOG = logging.getLogger(__name__)
 
 class ImageMember(model.Model):
     class Schema(model.Schema):
-        member_id = fields.String(required=True)
-        can_share = fields.Boolean(required=True)
+        object_id = model.PrimaryKey()
+        image = model.Dependency('cloudferrylib.os.discovery.glance.Image')
+        member = model.Dependency('cloudferrylib.os.discovery.keystone.Tenant')
+        can_share = fields.Boolean(missing=False)
+
+    @classmethod
+    def load_from_cloud(cls, cloud, data, overrides=None):
+        return cls.get(cloud, data.image_id, data.member_id)
+
+    @classmethod
+    def load_missing(cls, cloud, object_id):
+        image_id, member_id = object_id.id.split(':')
+        return cls.get(cls, image_id, member_id)
+
+    @classmethod
+    def get(cls, cloud, image_id, member_id):
+        return super(ImageMember, cls).load_from_cloud(cloud, {
+            'object_id': '{0}:{1}'.format(image_id, member_id),
+            'image': image_id,
+            'member': member_id,
+        })
 
 
 class Image(model.Model):
@@ -45,7 +64,7 @@ class Image(model.Model):
         min_disk = fields.Integer(required=True)
         min_ram = fields.Integer(required=True)
         properties = fields.Dict()
-        members = model.Nested(ImageMember, many=True, missing=list)
+        members = model.Reference(ImageMember, many=True, missing=list)
 
     @classmethod
     def load_missing(cls, cloud, object_id):
@@ -64,11 +83,12 @@ class Image(model.Model):
                     filters={"is_public": None}):
                 try:
                     image = Image.load_from_cloud(cloud, raw_image)
+                    tx.store(image)
                     members_list = image_client.image_members.list(
                         image=raw_image)
-                    for member in members_list:
-                        image.members.append(
-                            ImageMember.load_from_cloud(cloud, member))
-                    tx.store(image)
+                    for raw_member in members_list:
+                        member = ImageMember.load_from_cloud(cloud, raw_member)
+                        tx.store(member)
+                        image.members.append(member)
                 except exceptions.ValidationError as e:
                     LOG.warning('Invalid image %s: %s', raw_image.id, e)
