@@ -9,6 +9,7 @@ End-user CloudFerry documentation
     installation
     quick_start_guide
     configuration
+    identity
     nova_compute_migration
     networking
     glance_image_migration
