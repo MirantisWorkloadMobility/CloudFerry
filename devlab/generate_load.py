@@ -166,10 +166,16 @@ class Prerequisites(base.BasePrerequisites):
                          tenant=self.tenant)
 
     def modify_quotas(self):
+        """ Modify nova and cinder quotas
+        """
         for tenant in self.config.tenants:
             if 'quota' in tenant:
                 self.novaclient.quotas.update(tenant_id=self.get_tenant_id(
                     tenant['name']), **tenant['quota'])
+            if 'quota_cinder' in tenant:
+                self.cinderclient.quotas.update(
+                    tenant_id=self.get_tenant_id(tenant['name']),
+                    **tenant['quota_cinder'])
 
     def upload_image(self):
 

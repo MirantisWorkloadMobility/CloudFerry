@@ -717,7 +717,20 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             parameter='size')
 
     def test_migrate_tenant_quotas(self):
-        """Validate tenant's quotas were migrated to correct tenant."""
+        """Validate tenant's quotas were migrated to correct tenant.
+
+        Scenario:
+            1. Get nova quota parameters from src cloud
+            2. Get neutron quota parameters from src cloud
+            3. Get cinder quota parameters, common for src and dst clouds
+            4. Get nova, neutron and cinder quotas values for each tenant from
+                src cloud
+            5. Get nova, neutron and cinder quotas values for each tenant from
+                dst cloud
+            6. Verify nova tenant quotas the same on dst and src clouds
+            7. Verify neutron tenant quotas the same on dst and src clouds
+            8. Verify cinder tenant quotas the same on dst and src clouds
+        """
 
         def get_tenant_quotas(tenants, client):
             """
@@ -727,7 +740,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             """
             qs = {}
             for t in tenants:
-                qs[t.name] = {'nova_q': {}, 'neutron_q': {}}
+                qs[t.name] = {'nova_q': {}, 'neutron_q': {}, 'cinder_q': {}}
                 nova_quota = client.novaclient.quotas.get(t.id).to_dict()
                 for k, v in nova_quota.iteritems():
                     if k in src_nova_quota_keys and k != 'id':
@@ -736,17 +749,25 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 for k, v in neutron_quota.iteritems():
                     if k in src_neutron_quota_keys:
                         qs[t.name]['neutron_q'][k] = v
+                cinder_quota = getattr(client.cinderclient.quotas.get(t.id),
+                                       '_info')
+                for k, v in cinder_quota.iteritems():
+                    if k in cinder_quota_keys and k != 'id':
+                        qs[t.name]['cinder_q'][k] = v
             return qs
-
         src_nova_quota_keys = self.src_cloud.novaclient.quotas.get(
             self.src_cloud.keystoneclient.tenant_id).to_dict().keys()
         src_neutron_quota_keys = self.src_cloud.neutronclient.show_quota(
             self.src_cloud.keystoneclient.tenant_id)['quota'].keys()
+        src_cinder_q_keys = getattr(self.src_cloud.cinderclient.quotas.get(
+            self.src_cloud.keystoneclient.tenant_id), '_info').keys()
+        dst_cinder_q_keys = getattr(self.dst_cloud.cinderclient.quotas.get(
+            self.dst_cloud.keystoneclient.tenant_id), '_info').keys()
+        cinder_quota_keys = set(src_cinder_q_keys) & set(dst_cinder_q_keys)
 
         src_quotas = get_tenant_quotas(self.filter_tenants(), self.src_cloud)
         dst_quotas = get_tenant_quotas(
             self.dst_cloud.keystoneclient.tenants.list(), self.dst_cloud)
-
         for tenant in src_quotas:
             self.assertIn(tenant, dst_quotas,
                           'Tenant %s is missing on dst' % tenant)
@@ -759,6 +780,11 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 src_quotas[tenant]['neutron_q'],
                 dst_quotas[tenant]['neutron_q'],
                 'Neutron quotas for tenant %s migrated not successfully'
+                % tenant)
+            # Check cinder quotas
+            self.assertDictEqual(
+                src_quotas[tenant]['cinder_q'], dst_quotas[tenant]['cinder_q'],
+                'Cinder quotas for tenant %s migrated not successfully'
                 % tenant)
 
     @attr(migrated_tenant='tenant2')
