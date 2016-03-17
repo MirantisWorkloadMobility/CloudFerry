@@ -110,6 +110,7 @@ class GlanceImageTestCase(test.TestCase):
                                               'disk_format': 'qcow2',
                                               'id': 'fake_image_id_1',
                                               'is_public': True,
+                                              'location': None,
                                               'owner': 'fake_tenant_id',
                                               'owner_name': 'fake_tenant_name',
                                               'name': 'fake_image_name_1',
@@ -118,6 +119,10 @@ class GlanceImageTestCase(test.TestCase):
                                               'resource': self.image_mock,
                                               'members': {},
                                               'properties': {},
+                                              'copy_from': None,
+                                              'min_disk': None,
+                                              'min_ram': None,
+                                              'store': None,
                                               'deleted': False},
                                     'meta': {'img_loc': None}}},
             'tags': {},
@@ -167,8 +172,7 @@ class GlanceImageTestCase(test.TestCase):
             fake_image_id)
 
     def test_get_image_by_id(self):
-        fake_images = [self.fake_image_1, self.fake_image_2]
-        self.glance_mock_client().images.list.return_value = fake_images
+        self.glance_mock_client().images.get.return_value = self.fake_image_1
 
         self.assertEquals(self.fake_image_1,
                           self.glance_image.get_image_by_id('fake_image_id_1'))
@@ -192,8 +196,7 @@ class GlanceImageTestCase(test.TestCase):
                           self.glance_image.get_image('fake_image_name_2'))
 
     def test_get_image_status(self):
-        fake_images = [self.fake_image_1, self.fake_image_2]
-        self.glance_mock_client().images.list.return_value = fake_images
+        self.glance_mock_client().images.get.return_value = self.fake_image_1
 
         self.assertEquals(self.fake_image_1.status,
                           self.glance_image.get_image_status(
@@ -207,8 +210,7 @@ class GlanceImageTestCase(test.TestCase):
                           self.glance_image.get_ref_image('fake_image_id_1'))
 
     def test_get_image_checksum(self):
-        fake_images = [self.fake_image_1, self.fake_image_2]
-        self.glance_mock_client().images.list.return_value = fake_images
+        self.glance_mock_client().images.get.return_value = self.fake_image_1
 
         self.assertEquals(self.fake_image_1.checksum,
                           self.glance_image.get_image_checksum(
