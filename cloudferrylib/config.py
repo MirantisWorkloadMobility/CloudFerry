@@ -69,8 +69,8 @@ class FirstFit(fields.Field):
         for field in self.variants:
             try:
                 return field.deserialize(value)
-            except marshmallow.ValidationError as e:
-                errors.append(e)
+            except marshmallow.ValidationError as ex:
+                errors.append(ex)
         raise marshmallow.ValidationError([e.messages for e in errors])
 
 
