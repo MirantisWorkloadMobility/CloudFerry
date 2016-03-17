@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import collections
 import sys
 
 
@@ -83,3 +84,15 @@ class Representable(object):
             fields=' '.join('{0}:{1}'.format(f, repr(getattr(self, f)))
                             for f in sorted_field_names(self)
                             if getattr(self, f) is not None))
+
+
+class ConstructableFromDict(object):
+    """
+    Mixin class with __init__ method that just assign values from dictionary
+    to object attributes with names identical to keys from dictionary.
+    """
+
+    def __init__(self, data):
+        assert isinstance(data, collections.Mapping)
+        for name, value in data.items():
+            setattr(self, name, value)

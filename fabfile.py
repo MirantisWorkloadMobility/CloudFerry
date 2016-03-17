@@ -200,14 +200,14 @@ def discover(config_path, debug=False):
     """
         :config_name - name of config yaml-file, example 'config.yaml'
     """
-    cfg = config.Configuration(**load_yaml_config(config_path, debug))
+    cfg = config.load(load_yaml_config(config_path, debug))
     stage.execute_stage('cloudferrylib.os.discovery.stages.DiscoverStage', cfg,
                         force=True)
 
 
 @task
 def estimate_migration(config_path, source, tenant=None, debug=False):
-    cfg = config.Configuration(**load_yaml_config(config_path, debug))
+    cfg = config.load(load_yaml_config(config_path, debug))
     stage.execute_stage('cloudferrylib.os.discovery.stages.DiscoverStage', cfg)
     procedures.estimate_copy(source, tenant)
     procedures.show_largest_servers(10, source, tenant)
@@ -216,7 +216,7 @@ def estimate_migration(config_path, source, tenant=None, debug=False):
 @task
 def show_unused_resources(config_path, cloud, count=100, tenant=None,
                           debug=False):
-    cfg = config.Configuration(**load_yaml_config(config_path, debug))
+    cfg = config.load(load_yaml_config(config_path, debug))
     stage.execute_stage('cloudferrylib.os.discovery.stages.DiscoverStage', cfg)
     procedures.show_largest_unused_resources(int(count), cloud, tenant)
 
