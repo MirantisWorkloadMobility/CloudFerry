@@ -52,6 +52,7 @@ STATUS = 'status'
 
 DISK = "disk"
 DISK_EPHEM = "disk.local"
+DISK_CONFIG = "disk.config"
 LEN_UUID_INSTANCE = 36
 
 HOST_SRC = 'host_src'

@@ -383,6 +383,8 @@ class NovaCompute(compute.Compute):
         else:
             server_group = None
 
+        config_drive = utl.get_disk_path(instance, instance_block_info,
+                                         disk=utl.DISK_CONFIG)
         inst = {'instance': {'name': instance.name,
                              'instance_name': instance_name,
                              'id': instance.id,
@@ -408,7 +410,8 @@ class NovaCompute(compute.Compute):
                              'is_ephemeral': is_ephemeral,
                              'volumes': volumes,
                              'user_id': instance.user_id,
-                             'server_group': server_group
+                             'server_group': server_group,
+                             'config_drive': config_drive is not None,
                              },
                 'ephemeral': ephemeral_path,
                 'diff': diff,
@@ -685,6 +688,7 @@ class NovaCompute(compute.Compute):
                         instance, 'key_name'),
                     'nics': instance['nics'],
                     'image': instance['image_id'],
+                    'config_drive': instance['config_drive'],
                     # user_id matches user_id on source
                     'user_id': instance.get('user_id'),
                     'availability_zone': self.attr_override.get_attr(
