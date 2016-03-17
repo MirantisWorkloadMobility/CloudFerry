@@ -40,6 +40,6 @@ class Tenant(model.Model):
     @classmethod
     def discover(cls, cloud):
         identity_client = cloud.identity_client()
-        with model.Transaction() as tx:
+        with model.Session() as session:
             for tenant in identity_client.tenants.list():
-                tx.store(Tenant.load_from_cloud(cloud, tenant))
+                session.store(Tenant.load_from_cloud(cloud, tenant))

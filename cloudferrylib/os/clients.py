@@ -29,56 +29,6 @@ _tokens = {}
 _endpoints = {}
 
 
-class Hashable(object):
-    def _fields(self):
-        return (f for f in dir(self) if not f.startswith('_'))
-
-    def __eq__(self, other):
-        if not isinstance(other, self.__class__):
-            return False
-        for field in self._fields():
-            if getattr(self, field) != getattr(other, field, None):
-                return False
-        return True
-
-    def __ne__(self, other):
-        return not (self == other)
-
-    def __hash__(self):
-        return hash(tuple(getattr(self, f) for f in self._fields()))
-
-    def __repr__(self):
-        cls = self.__class__
-        return '<{module}.{cls} {fields}>'.format(
-            module=cls.__module__,
-            cls=cls.__name__,
-            fields=' '.join('{0}={1}'.format(f, repr(getattr(self, f)))
-                            for f in self._fields()
-                            if getattr(self, f) is not None))
-
-
-class Scope(Hashable):
-    def __init__(self, project_id=None, project_name=None, domain_id=None):
-        self.project_name = project_name
-        self.project_id = project_id
-        self.domain_id = domain_id
-
-
-class Credential(Hashable):
-    def __init__(self, auth_url, username, password,
-                 region_name=None, domain_id=None,
-                 https_insecure=False, https_cacert=None,
-                 endpoint_type=consts.EndpointType.ADMIN):
-        self.auth_url = auth_url
-        self.username = username
-        self.password = password
-        self.region_name = region_name
-        self.domain_id = domain_id
-        self.https_insecure = https_insecure
-        self.https_cacert = https_cacert
-        self.endpoint_type = endpoint_type
-
-
 class ClientProxy(object):
     def __init__(self, factory_fn, credential, scope, token=None,
                  endpoint=None, path=None, service_type=None):
@@ -108,6 +58,7 @@ class ClientProxy(object):
             return attr
 
     def __call__(self, *args, **kwargs):
+        # pylint: disable=broad-except
         for retry in (True, False):
             try:
                 method = self._get_attr(self._path)

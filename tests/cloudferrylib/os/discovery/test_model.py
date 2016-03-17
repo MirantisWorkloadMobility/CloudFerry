@@ -12,18 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import mock
-import sqlite3
 import uuid
 
 from cloudferrylib.os.discovery import model
-
-from tests import test
-
-
-class UnclosableConnection(sqlite3.Connection):
-    def close(self, *args, **kwargs):
-        if kwargs.get('i_mean_it'):
-            super(UnclosableConnection, self).close()
+from tests.cloudferrylib.utils import test_local_db
 
 
 class ExampleReferenced(model.Model):
@@ -141,17 +133,9 @@ class Example(model.Model):
         }
 
 
-class ModelTest(test.TestCase):
+class ModelTestCase(test_local_db.DatabaseMockingTestCase):
     def setUp(self):
-        super(ModelTest, self).setUp()
-
-        connection = sqlite3.connect(':memory:', factory=UnclosableConnection)
-        self.addCleanup(connection.close, i_mean_it=True)
-
-        sqlite3_connect_patcher = mock.patch('sqlite3.connect')
-        self.addCleanup(sqlite3_connect_patcher.stop)
-        connect_mock = sqlite3_connect_patcher.start()
-        connect_mock.return_value = connection
+        super(ModelTestCase, self).setUp()
 
         self.cloud = mock.MagicMock()
         self.cloud.name = 'test_cloud'
@@ -159,9 +143,10 @@ class ModelTest(test.TestCase):
         self.cloud2 = mock.MagicMock()
         self.cloud2.name = 'test_cloud2'
 
-    def _validate_example_obj(self, object_id, obj, validate_refs=True):
+    def _validate_example_obj(self, object_id, obj, validate_refs=True,
+                              bar_value='some non-random string'):
         self.assertEqual(object_id, obj.object_id)
-        self.assertEqual('some non-random string', obj.bar)
+        self.assertEqual(bar_value, obj.bar)
         self.assertEqual('other non-random string', obj.baz.foo)
         if validate_refs:
             self.assertEqual(1337, obj.ref.qux)
@@ -233,27 +218,27 @@ class ModelTest(test.TestCase):
         data = Example.generate_cloud_data()
         orig_obj = Example.load_from_cloud(self.cloud, data)
         object_id = orig_obj.object_id
-        with model.Transaction() as tx:
-            tx.store(orig_obj)
+        with model.Session() as session:
+            session.store(orig_obj)
             # Validate retrieve working before commit
             self._validate_example_obj(
-                object_id, tx.retrieve(Example, object_id))
-        with model.Transaction() as tx:
+                object_id, session.retrieve(Example, object_id))
+        with model.Session() as session:
             # Validate retrieve working after commit
             self._validate_example_obj(
-                object_id, tx.retrieve(Example, object_id))
+                object_id, session.retrieve(Example, object_id))
 
     def test_store_list(self):
         data = Example.generate_cloud_data()
         orig_obj = Example.load_from_cloud(self.cloud, data)
         object_id = orig_obj.object_id
-        with model.Transaction() as tx:
-            tx.store(orig_obj)
+        with model.Session() as session:
+            session.store(orig_obj)
             # Validate retrieve working before commit
-            self._validate_example_obj(object_id, tx.list(Example)[0])
-        with model.Transaction() as tx:
+            self._validate_example_obj(object_id, session.list(Example)[0])
+        with model.Session() as session:
             # Validate retrieve working after commit
-            self._validate_example_obj(object_id, tx.list(Example)[0])
+            self._validate_example_obj(object_id, session.list(Example)[0])
 
     def test_store_list_cloud(self):
         data = Example.generate_cloud_data()
@@ -261,35 +246,35 @@ class ModelTest(test.TestCase):
         object1_id = orig_obj1.object_id
         orig_obj2 = Example.load_from_cloud(self.cloud2, data)
         object2_id = orig_obj2.object_id
-        with model.Transaction() as tx:
-            tx.store(orig_obj1)
-            tx.store(orig_obj2)
+        with model.Session() as session:
+            session.store(orig_obj1)
+            session.store(orig_obj2)
             # Validate retrieve working before commit
             self._validate_example_obj(object1_id,
-                                       tx.list(Example, 'test_cloud')[0])
+                                       session.list(Example, 'test_cloud')[0])
             self._validate_example_obj(object2_id,
-                                       tx.list(Example, 'test_cloud2')[0])
+                                       session.list(Example, 'test_cloud2')[0])
         # Validate retrieve working after commit
-        with model.Transaction() as tx:
+        with model.Session() as session:
             self._validate_example_obj(object1_id,
-                                       tx.list(Example, 'test_cloud')[0])
-        with model.Transaction() as tx:
+                                       session.list(Example, 'test_cloud')[0])
+        with model.Session() as session:
             self._validate_example_obj(object2_id,
-                                       tx.list(Example, 'test_cloud2')[0])
+                                       session.list(Example, 'test_cloud2')[0])
 
     def test_load_store(self):
         data = Example.generate_cloud_data()
         orig_obj = Example.load_from_cloud(self.cloud, data)
         object_id = orig_obj.object_id
-        with model.Transaction() as tx:
-            tx.store(orig_obj)
-        with model.Transaction() as tx:
-            obj = tx.retrieve(Example, object_id)
+        with model.Session() as session:
+            session.store(orig_obj)
+        with model.Session() as session:
+            obj = session.retrieve(Example, object_id)
             self._validate_example_obj(object_id, obj)
             obj.baz.foo = 'changed'
             obj.bar = 'changed too'
-        with model.Transaction() as tx:
-            loaded_obj = tx.retrieve(Example, object_id)
+        with model.Session() as session:
+            loaded_obj = session.retrieve(Example, object_id)
             self.assertEqual('changed', loaded_obj.baz.foo)
             self.assertEqual('changed too', loaded_obj.bar)
 
@@ -310,10 +295,12 @@ class ModelTest(test.TestCase):
         self.assertEqual('foo', many.many[0].foo)
         self.assertEqual('bar', many.many[1].foo)
         self.assertEqual('baz', many.many[2].foo)
-        with model.Transaction() as tx:
-            tx.store(many)
-        with model.Transaction() as tx:
-            obj = tx.retrieve(ExampleMany, model.ObjectId('foo', 'test_cloud'))
+        with model.Session() as session:
+            session.store(many)
+
+        with model.Session() as session:
+            obj = session.retrieve(
+                ExampleMany, model.ObjectId('foo', 'test_cloud'))
             self.assertEqual('foo', obj.many[0].foo)
             self.assertEqual('bar', obj.many[1].foo)
             self.assertEqual('baz', obj.many[2].foo)
@@ -330,3 +317,47 @@ class ModelTest(test.TestCase):
             'ref': str('foo-bar-baz'),
         })
         self.assertIs(Example, obj.ref.get_class())
+
+    def test_nested_sessions(self):
+        data = Example.generate_cloud_data()
+        orig_obj1 = Example.load_from_cloud(self.cloud, data)
+        object1_id = orig_obj1.object_id
+        orig_obj2 = Example.load_from_cloud(self.cloud2, data)
+        object2_id = orig_obj2.object_id
+
+        with model.Session() as s1:
+            s1.store(orig_obj1)
+            with model.Session() as s2:
+                s2.store(orig_obj2)
+                self._validate_example_obj(
+                    object1_id, s2.retrieve(Example, object1_id))
+                self._validate_example_obj(
+                    object2_id, s2.retrieve(Example, object2_id))
+        with model.Session() as s:
+            self._validate_example_obj(
+                object1_id, s.retrieve(Example, object1_id))
+            self._validate_example_obj(
+                object2_id, s2.retrieve(Example, object2_id))
+
+    def test_nested_sessions_save_updates_after_nested(self):
+        data = Example.generate_cloud_data()
+        orig_obj1 = Example.load_from_cloud(self.cloud, data)
+        object1_id = orig_obj1.object_id
+        orig_obj2 = Example.load_from_cloud(self.cloud2, data)
+        object2_id = orig_obj2.object_id
+
+        with model.Session() as s1:
+            s1.store(orig_obj1)
+            with model.Session() as s2:
+                s2.store(orig_obj2)
+                self._validate_example_obj(
+                    object1_id, s2.retrieve(Example, object1_id))
+                self._validate_example_obj(
+                    object2_id, s2.retrieve(Example, object2_id))
+            orig_obj1.bar = 'some other non-random string'
+        with model.Session() as s:
+            self._validate_example_obj(
+                object1_id, s.retrieve(Example, object1_id),
+                bar_value='some other non-random string')
+            self._validate_example_obj(
+                object2_id, s2.retrieve(Example, object2_id))

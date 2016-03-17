@@ -1,27 +1,26 @@
-context:
-  clouds:
-    grizzly_ewr2:
-      credential:
-        auth_url: https://keystone.example.com/v2.0/
-        username: foobar
-        password: foobar
-      scope:
-        project_id: 00000000000000000000000000000000
-      ssh:
-        username: foobar
-        sudo_password: foobar
-        connection_attempts: 3
+clouds:
+  grizzly_ewr2:
+    credential:
+      auth_url: https://keystone.example.com/v2.0/
+      username: foobar
+      password: foobar
+    scope:
+      project_id: 00000000000000000000000000000000
+    ssh:
+      username: foobar
+      sudo_password: foobar
+      connection_attempts: 3
 
 # All objects are discovered by default, but list of discovered objects can
 # be specified using discover parameter to cloud
-#      discover:
-#        - cloudferrylib.os.discovery.keystone.Tenant
-#        - cloudferrylib.os.discovery.glance.Image
-#        - cloudferrylib.os.discovery.cinder.Volume
-#        - cloudferrylib.os.discovery.nova.Server
+#    discover:
+#      - cloudferrylib.os.discovery.keystone.Tenant
+#      - cloudferrylib.os.discovery.glance.Image
+#      - cloudferrylib.os.discovery.cinder.Volume
+#      - cloudferrylib.os.discovery.nova.Server
 
 # Import legacy configuration
-#    grizzly_src:
-#      legacy: configuration.grizzly-juno.ini:src
-#    juno_dst:
-#      legacy: configuration.ini:dst
+#  grizzly_src:
+#    legacy: configuration.grizzly-juno.ini:src
+#  juno_dst:
+#    legacy: configuration.ini:dst

@@ -31,7 +31,7 @@ class Attachment(model.Model):
 class Volume(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey('id')
-        name = fields.String(required=True)
+        name = fields.String(required=True, allow_none=True)
         description = fields.String(required=True, allow_none=True)
         availability_zone = fields.String(required=True)
         encrypted = fields.Boolean(missing=False)
@@ -65,7 +65,7 @@ class Volume(model.Model):
         volume_client = cloud.volume_client()
         volumes_list = volume_client.volumes.list(
             search_opts={'all_tenants': True})
-        with model.Transaction() as tx:
+        with model.Session() as session:
             for raw_volume in volumes_list:
                 volume = Volume.load_from_cloud(cloud, raw_volume)
-                tx.store(volume)
+                session.store(volume)
