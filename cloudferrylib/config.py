@@ -20,6 +20,7 @@ from marshmallow import fields
 
 from cloudferrylib.os import clients
 from cloudferrylib.utils import bases
+from cloudferrylib.utils import query
 from cloudferrylib.utils import remote
 from cloudferrylib.utils import utils
 
@@ -194,12 +195,54 @@ class OpenstackCloud(bases.Hashable, bases.Representable,
             remote.RemoteExecutor.close_connection(hostname)
 
 
+class Migration(bases.Hashable, bases.Representable):
+    class Schema(marshmallow.Schema):
+        source = fields.String(required=True)
+        destination = fields.String(required=True)
+        objects = DictField(
+            fields.String(),
+            FirstFit(
+                fields.String(),
+                DictField(
+                    fields.String(),
+                    OneOrMore(fields.Raw())),
+                many=True),
+            required=True)
+
+        @marshmallow.post_load
+        def to_migration(self, data):
+            return Migration(**data)
+
+    def __init__(self, source, destination, objects):
+        self.source = source
+        self.destination = destination
+        self.query = query.Query(objects)
+
+
 class Configuration(bases.Hashable, bases.Representable,
                     bases.ConstructableFromDict):
     class Schema(marshmallow.Schema):
         clouds = DictField(
             fields.String(allow_none=False),
             fields.Nested(OpenstackCloud.Schema, default=dict))
+        migrations = DictField(
+            fields.String(allow_none=False),
+            fields.Nested(Migration.Schema, default=dict), debug=True)
+
+        @marshmallow.validates_schema(skip_on_field_errors=True)
+        def check_migration_have_correct_source_and_dict(self, data):
+            clouds = data['clouds']
+            migrations = data['migrations']
+            for migration_name, migration in migrations.items():
+                if migration.source not in clouds:
+                    raise marshmallow.ValidationError(
+                        'Migration "{0}" source "{1}" should be defined '
+                        'in clouds'.format(migration_name, migration.source))
+                if migration.destination not in clouds:
+                    raise marshmallow.ValidationError(
+                        'Migration "{0}" destination "{1}" should be defined '
+                        'in clouds'.format(migration_name,
+                                           migration.destination))
 
         @marshmallow.post_load
         def to_configuration(self, data):

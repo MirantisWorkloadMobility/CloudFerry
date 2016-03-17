@@ -34,12 +34,6 @@ class EnumType(object):
         return [(f, getattr(cls, f)) for f in cls.names()]
 
 
-class EndpointType(EnumType):
-    INTERNAL = "internal"
-    ADMIN = "admin"
-    PUBLIC = "public"
-
-
 class ServiceType(EnumType):
     IDENTITY = 'identity'
     COMPUTE = 'compute'

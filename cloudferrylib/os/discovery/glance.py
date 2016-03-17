@@ -31,15 +31,15 @@ class ImageMember(model.Model):
 
     @classmethod
     def load_from_cloud(cls, cloud, data, overrides=None):
-        return cls.get(cloud, data.image_id, data.member_id)
+        return cls._get(cloud, data.image_id, data.member_id)
 
     @classmethod
     def load_missing(cls, cloud, object_id):
         image_id, member_id = object_id.id.split(':')
-        return cls.get(cls, image_id, member_id)
+        return cls._get(cls, image_id, member_id)
 
     @classmethod
-    def get(cls, cloud, image_id, member_id):
+    def _get(cls, cloud, image_id, member_id):
         return super(ImageMember, cls).load_from_cloud(cloud, {
             'object_id': '{0}:{1}'.format(image_id, member_id),
             'image': image_id,
@@ -47,6 +47,7 @@ class ImageMember(model.Model):
         })
 
 
+@model.type_alias('images')
 class Image(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey('id')
