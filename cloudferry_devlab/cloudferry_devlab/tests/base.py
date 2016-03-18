@@ -267,6 +267,9 @@ class BasePrerequisites(object):
 
     def check_vm_state(self, srv_id):
         srv = self.novaclient.servers.get(srv_id)
+        if srv.status == 'ERROR':
+            msg = 'VM with id {0} was spawned in error state'
+            raise RuntimeError(msg.format(srv_id))
         return srv.status == 'ACTIVE'
 
     def check_image_state(self, img_id):
