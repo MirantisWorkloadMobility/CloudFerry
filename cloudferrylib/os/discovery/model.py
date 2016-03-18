@@ -132,6 +132,7 @@ from oslo_utils import importutils
 from cloudferrylib.utils import local_db
 
 LOG = logging.getLogger(__name__)
+type_aliases = {}
 local_db.execute_once("""
 CREATE TABLE IF NOT EXISTS objects (
     uuid TEXT,
@@ -527,6 +528,12 @@ class Model(object):
         """
         return cls
 
+    def get(self, name, default=None):
+        """
+        Returns object attribute by name.
+        """
+        return getattr(self, name, default)
+
     def __repr__(self):
         schema = self.get_schema()
         obj_fields = sorted(schema.declared_fields.keys())
@@ -664,6 +671,12 @@ class LazyObj(object):
         if self._object is None:
             with Session.current() as session:
                 self._object = session.retrieve(self._model, self._object_id)
+
+    def get(self, name):
+        """
+        Returns object attribute by name.
+        """
+        return getattr(self, name, None)
 
     def get_class(self):
         """
@@ -894,6 +907,31 @@ class Session(object):
         else:
             statement += ' 1'
         self.tx.execute(statement, **kwargs)
+
+
+def type_alias(name):
+    """
+    Decorator function that add alias for some model class
+    :param name: alias name
+    """
+
+    def wrapper(cls):
+        assert issubclass(cls, Model)
+        type_aliases[name] = cls
+        return cls
+    return wrapper
+
+
+def get_model(type_name):
+    """
+    Return model class instance using either alias or fully qualified name.
+    :param type_name: alias or fully qualified class name
+    :return: subclass of Model
+    """
+    if type_name in type_aliases:
+        return type_aliases[type_name]
+    else:
+        return importutils.import_class(type_name)
 
 
 def _type_name(cls):

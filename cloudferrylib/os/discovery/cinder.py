@@ -28,6 +28,7 @@ class Attachment(model.Model):
         device = fields.String(required=True)
 
 
+@model.type_alias('volumes')
 class Volume(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey('id')

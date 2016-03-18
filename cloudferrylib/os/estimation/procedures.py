@@ -25,7 +25,11 @@ def list_filtered(session, cls, cloud_name, tenant):
             if tenant is None or tenant == x.tenant.object_id.id)
 
 
-def estimate_copy(cloud_name, tenant):
+def estimate_copy(cfg, migration_name):
+    migration = cfg.migrations[migration_name]
+    query = migration.query
+    src_cloud = migration.source
+
     with model.Session() as session:
         total_ephemeral_size = 0
         total_volume_size = 0
@@ -33,7 +37,7 @@ def estimate_copy(cloud_name, tenant):
         accounted_volumes = set()
         accounted_images = set()
 
-        for server in list_filtered(session, nova.Server, cloud_name, tenant):
+        for server in query.search(session, src_cloud, nova.Server):
             for ephemeral_disk in server.ephemeral_disks:
                 total_ephemeral_size += ephemeral_disk.size
             if server.image is not None \
@@ -44,14 +48,16 @@ def estimate_copy(cloud_name, tenant):
                 if volume.object_id not in accounted_volumes:
                     total_volume_size += volume.size
                     accounted_volumes.add(volume.object_id)
-        for volume in list_filtered(session, cinder.Volume, cloud_name,
-                                    tenant):
+
+        for volume in query.search(session, src_cloud, cinder.Volume):
             if volume.object_id not in accounted_volumes:
                 total_volume_size += volume.size
-        for image in list_filtered(session, glance.Image, cloud_name, tenant):
+
+        for image in query.search(session, src_cloud, glance.Image):
             if image.object_id not in accounted_images:
                 total_image_size += image.size
 
+    print 'Migration', migration_name, 'estimates:'
     print 'Images:'
     print '  Size:', sizeof_format.sizeof_fmt(total_image_size)
     print 'Ephemeral disks:'
@@ -60,7 +66,7 @@ def estimate_copy(cloud_name, tenant):
     print '  Size:', sizeof_format.sizeof_fmt(total_volume_size, 'G')
 
 
-def show_largest_servers(count, cloud_name, tenant):
+def show_largest_servers(cfg, count, migration_name):
     def server_size(server):
         size = 0
         if server.image is not None:
@@ -72,15 +78,19 @@ def show_largest_servers(count, cloud_name, tenant):
         return size
 
     output = []
+    migration = cfg.migrations[migration_name]
     with model.Session() as session:
         for index, server in enumerate(
                 heapq.nlargest(
                     count,
-                    list_filtered(session, nova.Server, cloud_name, tenant),
+                    migration.query.search(session, migration.source,
+                                           nova.Server),
                     key=server_size),
                 start=1):
             output.append(
-                '  {0}. {1.object_id.id} {1.name}'.format(index, server))
+                '  {0}. {1.object_id.id} {1.name} - {2}'.format(
+                    index, server,
+                    sizeof_format.sizeof_fmt(server_size(server))))
     if output:
         print '\n{0} largest servers:'.format(len(output))
         for line in output:

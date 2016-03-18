@@ -21,6 +21,7 @@ from cloudferrylib.os.discovery import model
 LOG = logging.getLogger(__name__)
 
 
+@model.type_alias('tenants')
 class Tenant(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey('id')

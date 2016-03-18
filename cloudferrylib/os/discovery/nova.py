@@ -50,6 +50,7 @@ class EphemeralDisk(model.Model):
         size = fields.Integer(required=True)
 
 
+@model.type_alias('vms')
 class Server(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey('id')
@@ -158,8 +159,7 @@ def _list_ephemeral(remote, server):
         if len(split) != 2:
             continue
         target, path = split
-        if target in volume_targets or not path.startswith('/') or \
-                path.endswith('disk.config'):
+        if target in volume_targets or not path.startswith('/'):
             continue
         size_str = remote.sudo('stat -c %s {path}', path=path)
         if not size_str.succeeded:
