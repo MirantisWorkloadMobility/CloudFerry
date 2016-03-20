@@ -31,15 +31,15 @@ class ImageMember(model.Model):
 
     @classmethod
     def load_from_cloud(cls, cloud, data, overrides=None):
-        return cls.get(cloud, data.image_id, data.member_id)
+        return cls._get(cloud, data.image_id, data.member_id)
 
     @classmethod
     def load_missing(cls, cloud, object_id):
         image_id, member_id = object_id.id.split(':')
-        return cls.get(cls, image_id, member_id)
+        return cls._get(cls, image_id, member_id)
 
     @classmethod
-    def get(cls, cloud, image_id, member_id):
+    def _get(cls, cloud, image_id, member_id):
         return super(ImageMember, cls).load_from_cloud(cloud, {
             'object_id': '{0}:{1}'.format(image_id, member_id),
             'image': image_id,
@@ -47,6 +47,7 @@ class ImageMember(model.Model):
         })
 
 
+@model.type_alias('images')
 class Image(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey('id')
@@ -78,17 +79,17 @@ class Image(model.Model):
     @classmethod
     def discover(cls, cloud):
         image_client = cloud.image_client()
-        with model.Transaction() as tx:
+        with model.Session() as session:
             for raw_image in image_client.images.list(
                     filters={"is_public": None}):
                 try:
                     image = Image.load_from_cloud(cloud, raw_image)
-                    tx.store(image)
+                    session.store(image)
                     members_list = image_client.image_members.list(
                         image=raw_image)
                     for raw_member in members_list:
                         member = ImageMember.load_from_cloud(cloud, raw_member)
-                        tx.store(member)
+                        session.store(member)
                         image.members.append(member)
                 except exceptions.ValidationError as e:
                     LOG.warning('Invalid image %s: %s', raw_image.id, e)

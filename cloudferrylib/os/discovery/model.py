@@ -72,13 +72,13 @@ Example defining cloud object schema::
             volume_client = cloud.volume_client()
             volumes_list = volume_client.volumes.list(
                 search_opts={'all_tenants': True})
-            with model.Transaction() as tx:
+            with model.Session() as session:
                 for raw_volume in volumes_list:
                     volume = Volume.load_from_cloud(cloud, raw_volume)
-                    tx.store(volume)
+                    session.store(volume)
 
 
-Example using ``Transaction`` class to store and retrieve data from database::
+Example using ``Session`` class to store and retrieve data from database::
 
     from cloudferrylib.os.discovery import model
 
@@ -97,20 +97,20 @@ Example using ``Transaction`` class to store and retrieve data from database::
         },
         'name': 'foobar'
     })
-    with model.Transaction() as tx:
-        tx.store(new_tenant)
+    with model.Session() as session:
+        session.store(new_tenant)
 
     # Retrieving previously stored item
-    with model.Transaction() as tx:
+    with model.Session() as session:
         object_id = model.ObjectId('ed388ba9-dea3-4017-987b-92f7915f33bb',
                                    'us-west1')
-        stored_tenant = tx.retrieve(Tenant, object_id)
+        stored_tenant = session.retrieve(Tenant, object_id)
         assert stored_tenant.name == 'foobar'
 
     # Getting list of items
-    with model.Transaction() as tx:
+    with model.Session() as session:
         found_tenant = None
-        for tenant in tx.list(Tenant):
+        for tenant in session.list(Tenant):
             if tenant.id == object_id:
                 found_tenant = tenant
         assert found_tenant is not None
@@ -119,17 +119,21 @@ Example using ``Transaction`` class to store and retrieve data from database::
 
 """
 import collections
+import contextlib
 import json
 import logging
-import sqlite3
+import sys
 import threading
 
 import marshmallow
 from marshmallow import fields
 from oslo_utils import importutils
 
+from cloudferrylib.utils import local_db
+
 LOG = logging.getLogger(__name__)
-CREATE_OBJECT_TABLE_SQL = """
+type_aliases = {}
+local_db.execute_once("""
 CREATE TABLE IF NOT EXISTS objects (
     uuid TEXT,
     cloud TEXT,
@@ -137,9 +141,7 @@ CREATE TABLE IF NOT EXISTS objects (
     json TEXT,
     PRIMARY KEY (uuid, cloud, type)
 )
-"""
-
-registry = {}
+""")
 
 
 class ObjectId(collections.namedtuple('ObjectId', ('id', 'cloud'))):
@@ -285,6 +287,7 @@ class Model(object):
                            database when transaction completes)
         :return: instance of model class
         """
+        # pylint: disable=protected-access
 
         if schema is None:
             schema = cls.get_schema()
@@ -412,6 +415,7 @@ class Model(object):
         :param object_id: identifier of missing object
         :return: model class instance
         """
+        # pylint: disable=unused-argument
         raise NotFound(cls, object_id)
 
     @classmethod
@@ -423,6 +427,7 @@ class Model(object):
                       clients, etc...
         :return: model class instance
         """
+        # pylint: disable=unused-argument
         return
 
     def is_dirty(self):
@@ -455,6 +460,29 @@ class Model(object):
         """
         self._original.clear()
 
+    def clear_dirty(self):
+        """
+        Update internal state of object so it's not considered dirty (e.g.
+        don't need to be saved to database).
+        """
+        schema = self.get_schema()
+        for name, field in schema.fields.items():
+            if isinstance(field, Nested):
+                value = getattr(self, name, None)
+                if value is not None:
+                    if field.many:
+                        for elem in value:
+                            elem.clear_dirty()
+                    else:
+                        value.clear_dirty()
+            else:
+                value = getattr(self, name, None)
+                if isinstance(field, Reference):
+                    self._original[name] = \
+                        field.get_significant_value(value)
+                else:
+                    self._original[name] = value
+
     def dependencies(self):
         """
         Return list of other model instances that current object depend upon.
@@ -476,21 +504,21 @@ class Model(object):
         :param object_id: object identifier
         :return object or None if it's missing even in cloud
         """
-        with Transaction() as tx:
+        with Session.current() as session:
             try:
-                if tx.is_missing(cls, object_id):
+                if session.is_missing(cls, object_id):
                     return None
                 else:
-                    return tx.retrieve(cls, object_id)
+                    return session.retrieve(cls, object_id)
             except NotFound:
                 LOG.debug('Trying to load missing %s value: %s',
                           _type_name(cls), object_id)
                 obj = cls.load_missing(cloud, object_id)
                 if obj is None:
-                    tx.store_missing(cls, object_id)
+                    session.store_missing(cls, object_id)
                     return None
                 else:
-                    tx.store(obj)
+                    session.store(obj)
                     return obj
 
     @classmethod
@@ -499,6 +527,12 @@ class Model(object):
         Returns model class.
         """
         return cls
+
+    def get(self, name, default=None):
+        """
+        Returns object attribute by name.
+        """
+        return getattr(self, name, default)
 
     def __repr__(self):
         schema = self.get_schema()
@@ -635,8 +669,14 @@ class LazyObj(object):
 
     def _retrieve_obj(self):
         if self._object is None:
-            with Transaction() as tx:
-                self._object = tx.retrieve(self._model, self._object_id)
+            with Session.current() as session:
+                self._object = session.retrieve(self._model, self._object_id)
+
+    def get(self, name):
+        """
+        Returns object attribute by name.
+        """
+        return getattr(self, name, None)
 
     def get_class(self):
         """
@@ -645,65 +685,71 @@ class LazyObj(object):
         return self._model
 
 
-class Transaction(object):
+class Session(object):
     """
-    Transaction objects are used to store and retrieve objects to database. It
+    Session objects are used to store and retrieve objects to database. It
     tracks already loaded object to prevent loading same object twice and
     to prevent losing changes made to already loaded objects.
-    Transactions should be used as context managers (e.g. inside ``with``
-    block). On exit from this block all changes made using transaction will
+    Sessions should be used as context managers (e.g. inside ``with``
+    block). On exit from this block all changes made using session will
     be saved to disk.
     """
 
-    tls = threading.local()
-    tls.current = None
+    _tls = threading.local()
+    _tls.current = None
 
     def __init__(self):
         self.session = None
-        self.connection = None
-        self.cursor = None
+        self.previous = None
+        self.tx = None
 
     def __enter__(self):
-        if self.tls.current is not None:
-            # TODO: use save points for nested transactions
-            current_tx = self.tls.current
-            self.connection = current_tx.connection
-            self.cursor = current_tx.cursor
-            self.session = current_tx.session
-            return self
-        filepath = 'migration_data.db'
-        self.connection = sqlite3.connect(filepath)
-        self.connection.isolation_level = None
-        self.cursor = self.connection.cursor()
-        self.cursor.execute('BEGIN')
-        self.cursor.execute(CREATE_OBJECT_TABLE_SQL)
-        self.tls.current = self
+        # pylint: disable=protected-access
+        self.previous = self._tls.current
+        self._tls.current = self
+        if self.previous is not None:
+            # Store outer TX values for savepoint
+            self.previous._dump_objects()
+        self.tx = local_db.Transaction()
+        self.tx.__enter__()
         self.session = {}
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.tls.current is not self:
-            # TODO: use save points for nested transactions
-            return
-
-        self.tls.current = None
-        if exc_type is not None or exc_val is not None or exc_tb is not None:
-            self.cursor.execute('ROLLBACK')
-            return
+        self._tls.current = self.previous
         try:
-            for (cls, pk), obj in self.session.items():
-                if obj is None:
-                    self._store_none(cls, pk)
-                    continue
-                if obj.is_dirty():
-                    self._update_row(obj)
-            self.cursor.execute('COMMIT')
+            if exc_type is None and exc_val is None and exc_tb is None:
+                self._dump_objects()
         except Exception:
-            self.cursor.execute('ROLLBACK')
+            LOG.error('Exception dumping objects', exc_info=True)
+            exc_type, exc_val, exc_tb = sys.exc_info()
             raise
         finally:
-            self.cursor.close()
-            self.connection.close()
+            self.tx.__exit__(exc_type, exc_val, exc_tb)
+
+    def _dump_objects(self):
+        for (cls, pk), obj in self.session.items():
+            if obj is None:
+                self._store_none(cls, pk)
+                continue
+            if obj.is_dirty():
+                self._update_row(obj)
+
+    @classmethod
+    def current(cls):
+        """
+        Returns current session or create new session if there is no session
+        started yet.
+        :return: Session instance
+        """
+        current = cls._tls.current
+        if current is not None:
+            @contextlib.contextmanager
+            def noop_ctx_mgr():
+                yield current
+            return noop_ctx_mgr()
+        else:
+            return Session()
 
     def store(self, obj):
         """
@@ -738,10 +784,11 @@ class Transaction(object):
         key = (cls, object_id)
         if key in self.session:
             return self.session[key]
-        self.cursor.execute('SELECT json FROM objects WHERE uuid=? AND '
-                            'cloud=? AND type=?',
-                            (object_id.id, object_id.cloud, _type_name(cls)))
-        result = self.cursor.fetchone()
+        result = self.tx.query_one('SELECT json FROM objects WHERE uuid=:uuid '
+                                   'AND cloud=:cloud AND type=:type_name',
+                                   uuid=object_id.id,
+                                   cloud=object_id.cloud,
+                                   type_name=_type_name(cls))
         if not result or not result[0]:
             raise NotFound(cls, object_id)
         obj = cls.load(json.loads(result[0]))
@@ -758,10 +805,11 @@ class Transaction(object):
         key = (cls, object_id)
         if key in self.session:
             return self.session[key] is None
-        self.cursor.execute('SELECT json FROM objects WHERE uuid=? AND '
-                            'cloud=? AND type=?',
-                            (object_id.id, object_id.cloud, _type_name(cls)))
-        result = self.cursor.fetchone()
+        result = self.tx.query_one('SELECT json FROM objects WHERE uuid=:uuid '
+                                   'AND cloud=:cloud AND type=:type_name',
+                                   uuid=object_id.id,
+                                   cloud=object_id.cloud,
+                                   type_name=_type_name(cls))
         if not result:
             raise NotFound(cls, object_id)
         return result[0] is None
@@ -775,20 +823,19 @@ class Transaction(object):
         :return: list of model instances
         """
         if cloud is None:
-            self.cursor.execute('SELECT uuid, cloud, json '
-                                'FROM objects WHERE type=?',
-                                (_type_name(cls),))
+            query = 'SELECT uuid, cloud, json ' \
+                    'FROM objects WHERE type=:type_name'
         else:
-            self.cursor.execute('SELECT uuid, cloud, json '
-                                'FROM objects WHERE cloud=? AND type=?',
-                                (cloud, _type_name(cls)))
+            query = 'SELECT uuid, cloud, json ' \
+                    'FROM objects WHERE cloud=:cloud AND type=:type_name'
         result = []
         for obj in self.session.values():
             if isinstance(obj, cls) and \
                     (cloud is None or cloud == obj.primary_key.cloud):
                 result.append(obj)
 
-        for row in self.cursor.fetchall():
+        for row in self.tx.query(query, type_name=_type_name(cls),
+                                 cloud=cloud):
             uuid, cloud, json_data = row
             key = (cls, ObjectId(uuid, cloud))
             if key in self.session or not json_data:
@@ -798,22 +845,93 @@ class Transaction(object):
             result.append(obj)
         return result
 
+    def delete(self, cls=None, cloud=None, object_id=None):
+        """
+        Deletes all objects that have cls or cloud or object_id that are equal
+        to values passed as arguments. Arguments that are None are ignored.
+        """
+        if cloud is not None and object_id is not None:
+            assert object_id.cloud == cloud
+        for key in self.session.keys():
+            obj_cls, obj_pk = key
+            matched = True
+            if cls is not None and cls is not obj_cls:
+                matched = False
+            if cloud is not None and obj_pk.cloud != cloud:
+                matched = False
+            if object_id is not None and object_id != obj_pk:
+                matched = False
+            if matched:
+                del self.session[key]
+        self._delete_rows(cls, cloud, object_id)
+
     def _update_row(self, obj):
         pk = obj.primary_key
         uuid = pk.id
         cloud = pk.cloud
         type_name = _type_name(obj.get_class())
-        self.cursor.execute('INSERT OR REPLACE INTO objects '
-                            'VALUES (?, ?, ?, ?)',
-                            (uuid, cloud, type_name, json.dumps(obj.dump())))
+        self.tx.execute('INSERT OR REPLACE INTO objects '
+                        'VALUES (:uuid, :cloud, :type_name, :data)',
+                        uuid=uuid, cloud=cloud, type_name=type_name,
+                        data=json.dumps(obj.dump()))
+        obj.clear_dirty()
+        assert not obj.is_dirty()
 
     def _store_none(self, cls, pk):
         uuid = pk.id
         cloud = pk.cloud
         type_name = _type_name(cls)
-        self.cursor.execute('INSERT OR REPLACE INTO objects '
-                            'VALUES (?, ?, ?, NULL)',
-                            (uuid, cloud, type_name))
+        self.tx.execute('INSERT OR REPLACE INTO objects '
+                        'VALUES (:uuid, :cloud, :type_name, NULL)',
+                        uuid=uuid, cloud=cloud, type_name=type_name)
+
+    def _delete_rows(self, cls, cloud, object_id):
+        predicates = []
+        kwargs = {}
+        if cls is not None:
+            predicates.append('type=:type_name')
+            kwargs['type_name'] = _type_name(cls)
+        if object_id is not None:
+            predicates.append('uuid=:uuid')
+            kwargs['uuid'] = object_id.id
+            if cloud is None:
+                cloud = object_id.cloud
+            else:
+                assert cloud == object_id.cloud
+        if cloud is not None:
+            predicates.append('cloud=:cloud')
+            kwargs['cloud'] = cloud
+        statement = 'DELETE FROM objects WHERE'
+        if predicates:
+            statement += ' AND '.join(predicates)
+        else:
+            statement += ' 1'
+        self.tx.execute(statement, **kwargs)
+
+
+def type_alias(name):
+    """
+    Decorator function that add alias for some model class
+    :param name: alias name
+    """
+
+    def wrapper(cls):
+        assert issubclass(cls, Model)
+        type_aliases[name] = cls
+        return cls
+    return wrapper
+
+
+def get_model(type_name):
+    """
+    Return model class instance using either alias or fully qualified name.
+    :param type_name: alias or fully qualified class name
+    :return: subclass of Model
+    """
+    if type_name in type_aliases:
+        return type_aliases[type_name]
+    else:
+        return importutils.import_class(type_name)
 
 
 def _type_name(cls):

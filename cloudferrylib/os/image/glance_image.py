@@ -228,9 +228,12 @@ class GlanceImage(image.Image):
         self.glance_client.images.delete(image_id)
 
     def get_image_by_id(self, image_id):
-        for glance_image in self.get_image_list():
-            if glance_image.id == image_id:
-                return glance_image
+        try:
+            return self.glance_client.images.get(image_id)
+        except glance_exceptions.NotFound:
+            LOG.warning('Image %s not found on %s', image_id,
+                        self.cloud.position)
+            return None
 
     def get_image_by_name(self, image_name):
         for glance_image in self.get_image_list():
@@ -290,9 +293,8 @@ class GlanceImage(image.Image):
 
         resource = cloud.resources[utl.IMAGE_RESOURCE]
         keystone = cloud.resources["identity"]
-        gl_image = {
-            k: w for k, w in glance_image.to_dict().items(
-            ) if k in CREATE_PARAMS}
+        image_dict = glance_image.to_dict()
+        gl_image = {k: image_dict.get(k) for k in CREATE_PARAMS}
         # we need to pass resource to destination to copy image
         gl_image['resource'] = resource
 
