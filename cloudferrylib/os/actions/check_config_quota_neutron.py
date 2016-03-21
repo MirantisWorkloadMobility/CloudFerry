@@ -11,6 +11,8 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
+
+
 from cloudferrylib.base.action import action
 from cloudferrylib.utils import log
 from cloudferrylib.utils import utils as utl
@@ -22,9 +24,11 @@ LOG = log.getLogger(__name__)
 class CheckConfigQuotaNeutron(action.Action):
     """
     Checking config quotas between src and dst clouds.
-    If all tenants have customs quotas then
-    different configurations does not matter.
+
+    If all tenants have customs quotas then different configurations does not
+    matter.
     """
+
     def run(self, info=None, **kwargs):
         src_cloud = self.src_cloud
         dst_cloud = self.dst_cloud
@@ -63,15 +67,22 @@ class CheckConfigQuotaNeutron(action.Action):
         if not is_configs_different:
             LOG.info("Configs on clouds is equals")
 
-    def get_tenants_without_quotas(self, tenants_src, list_quotas):
+    @staticmethod
+    def get_tenants_without_quotas(tenants_src, list_quotas):
         tenants_ids = tenants_src.keys()
         quotas_ids_tenants = [quota["tenant_id"] for quota in list_quotas]
         return list(set(tenants_ids) - set(quotas_ids_tenants))
 
     def get_src_tenants(self, search_opts):
         identity_src = self.src_cloud.resources[utl.IDENTITY_RESOURCE]
-        identity_info = identity_src.read_info(**search_opts)
-        tenants = identity_info['tenants']
-        tenants_dict = {ten['tenant']['id']: ten['tenant']['name'] for ten in
-                        tenants}
+
+        if search_opts.get('tenant_id'):
+            filter_tenants_ids_list = search_opts['tenant_id']
+            tenants = [identity_src.keystone_client.tenants.find(id=tnt_id) for
+                       tnt_id in filter_tenants_ids_list]
+        else:
+            tenants = identity_src.get_tenants_list()
+
+        tenants_dict = {tenant.id: tenant.name for tenant in tenants}
+
         return tenants_dict

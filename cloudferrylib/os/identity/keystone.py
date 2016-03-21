@@ -168,7 +168,7 @@ class KeystoneIdentity(identity.Identity):
         if kwargs.get('tenant_id'):
             self.filter_tenant_id = kwargs['tenant_id'][0]
 
-        tenant_list = self.get_tenants_list()
+        tenant_list = self._get_required_tenants_list()
         info['tenants'] = [self.convert(tenant, self.config)
                            for tenant in tenant_list]
         user_list = self.get_users_list()
@@ -315,14 +315,14 @@ class KeystoneIdentity(identity.Identity):
 
         return self.keystone_client.services.list()
 
-    def get_tenants_list(self):
-        """ Getting list of tenants from keystone. """
+    def _get_required_tenants_list(self):
+        """ Getting list of tenants, that are required for migration. """
         result = []
-        ks_tenants = self.keystone_client.tenants
         filtering_enabled = (self.filter_tenant_id and
                              self.cloud.position == 'src')
         if filtering_enabled:
-            result.append(ks_tenants.find(id=self.filter_tenant_id))
+            result.append(
+                self.keystone_client.tenants.find(id=self.filter_tenant_id))
 
             resources_with_public_objects = [
                 self.cloud.resources[utl.IMAGE_RESOURCE],
@@ -347,10 +347,14 @@ class KeystoneIdentity(identity.Identity):
                     tenant_ids.append(tenant.id)
                     result.append(tenant)
         else:
-            result = ks_tenants.list()
+            result = self.get_tenants_list()
         LOG.info("List of tenants: %s", ", ".join('%s (%s)' % (t.name, t.id)
                                                   for t in result))
         return result
+
+    def get_tenants_list(self):
+        """ Getting list of all tenants from Keystone. """
+        return self.keystone_client.tenants.list()
 
     def get_users_list(self):
         """ Getting list of users from keystone. """
