@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import collections
 import itertools
 import pprint
 import unittest
@@ -338,6 +339,46 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         self.validate_resource_parameter_in_dst(src_images, dst_images,
                                                 resource_name='image',
                                                 parameter='id')
+
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    def test_migrate_deleted_glance_images_only_once(self):
+        """Validate deleted and broken images were migrated to dst only once.
+
+        Scenario:
+            1. Get deleted and broken image's ids from src
+            2. Get all images from dst
+            3. Verify each deleted and broken image has been restored once
+        """
+        src_vms = self.src_cloud.novaclient.servers.list(
+            search_opts={'all_tenants': True})
+        src_img_ids = [i.id for i in self.src_cloud.glanceclient.images.list()]
+        # getting images, from which vms were spawned, but which do not exist
+        # in the glance
+        to_restore_img_ids = []
+        for vm in src_vms:
+            if vm.image and vm.image['id'] not in src_img_ids:
+                to_restore_img_ids.append(vm.image['id'])
+        # getting 'broken' images (which exist in the glance, but deleted in
+        # storage)
+        all_images = self.migration_utils.get_all_images_from_config()
+        broken_images = [i['name'] for i in all_images if i.get('broken')]
+        src_images = self.src_cloud.glanceclient.images.list()
+        to_restore_img_ids.extend([image.id for image in src_images
+                                  if image.name in broken_images])
+
+        dst_images = [x for x in self.dst_cloud.glanceclient.images.list()]
+        restored_dst_images = collections.defaultdict(int)
+        for deleted_img_id in set(to_restore_img_ids):
+            for dst_image in dst_images:
+                if dst_image.name and deleted_img_id in dst_image.name:
+                    restored_dst_images[deleted_img_id] += 1
+        msg = 'Image "%s" was re-created %s times. '
+        error_msg = ''
+        for image in restored_dst_images:
+            if restored_dst_images[image] > 1:
+                error_msg += msg % (image, restored_dst_images[image])
+        if error_msg:
+            self.fail(error_msg)
 
     @attr(migrated_tenant=['tenant1', 'tenant2'])
     def test_migrate_glance_image_belongs_to_deleted_tenant(self):
