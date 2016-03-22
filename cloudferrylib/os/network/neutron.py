@@ -451,6 +451,7 @@ class NeutronNetwork(network.Network):
             'external': net['router:external'],
             'network_id': snet['network_id'],
             'tenant_name': get_tenant_name(snet['tenant_id']),
+            'dns_nameservers': snet['dns_nameservers'],
             'meta': {},
         }
 
@@ -1315,6 +1316,7 @@ class NeutronNetwork(network.Network):
                     'allocation_pools': snet['allocation_pools'],
                     'gateway_ip': snet['gateway_ip'],
                     'ip_version': snet['ip_version'],
+                    'dns_nameservers': snet['dns_nameservers'],
                     'tenant_id': created_net['tenant_id']
                 }
             }
