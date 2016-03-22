@@ -12,26 +12,30 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+
 from cloudferrylib.base.action import action
-from cloudferrylib.utils import utils as utl
+from cloudferrylib.utils import utils
 
 
 class GetFilter(action.Action):
 
     def run(self, **kwargs):
-        search_opts, search_opts_img, search_opts_tenant = None, {}, {}
+        search_opts, search_opts_img, search_opts_tenant = {}, {}, {}
         search_opts_vol = {}
         filter_path = self.cfg.migrate.filter_path
-        if utl.read_yaml_file(filter_path):
-            filter_config = utl.read_yaml_file(filter_path)
-            if utl.INSTANCES_TYPE in filter_config:
-                search_opts = filter_config[utl.INSTANCES_TYPE]
-            if utl.IMAGES_TYPE in filter_config:
-                search_opts_img = filter_config[utl.IMAGES_TYPE]
-            if utl.VOLUMES_TYPE in filter_config:
-                search_opts_vol = filter_config[utl.VOLUMES_TYPE]
-            if utl.TENANTS_TYPE in filter_config:
-                search_opts_tenant = filter_config[utl.TENANTS_TYPE]
+
+        if (utils.read_yaml_file(filter_path) and
+                not self.cfg.migrate.migrate_whole_cloud):
+            filter_config = utils.read_yaml_file(filter_path)
+            if utils.INSTANCES_TYPE in filter_config:
+                search_opts = filter_config[utils.INSTANCES_TYPE]
+            if utils.IMAGES_TYPE in filter_config:
+                search_opts_img = filter_config[utils.IMAGES_TYPE]
+            if utils.VOLUMES_TYPE in filter_config:
+                search_opts_vol = filter_config[utils.VOLUMES_TYPE]
+            if utils.TENANTS_TYPE in filter_config:
+                search_opts_tenant = filter_config[utils.TENANTS_TYPE]
+
         return {
             'search_opts': search_opts,
             'search_opts_img': search_opts_img,

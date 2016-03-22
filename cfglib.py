@@ -225,6 +225,8 @@ migrate_opts = [
     cfg.StrOpt('override_rules', default=None,
                help='Server creation parameter (e.g. server group) override '
                     'rules file path.'),
+    cfg.BoolOpt('migrate_whole_cloud', default=False,
+                help="Migrate the whole cloud despite the filter file."),
 ]
 
 mail = cfg.OptGroup(name='mail',
