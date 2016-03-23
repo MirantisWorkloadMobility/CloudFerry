@@ -51,7 +51,7 @@ def remove_iscsi_device(dev_name):
 
     if os.path.exists(path):
         flush_device_io(dev_name)
-        local.sudo("echo 1 > {path}".format(path=path))
+        local.run("echo 1 | sudo tee -a {path}".format(path=path))
 
 
 def rescan_iscsi():
@@ -118,8 +118,9 @@ class ISCSIConnector(object):
         device_path = get_device_path(target_portal, target_iqn, target_lun)
 
         if not self._path_exists(device_path, target_portal, target_iqn):
-            msg = "iSCSI volume not found at {host_device}"
-            LOG.error(msg.format(host_device=device_path))
+            msg = "iSCSI volume not found at {host_device}".format(
+                host_device=device_path)
+            LOG.error(msg)
             raise CannotConnectISCSIVolume(msg)
         return device_path
 
