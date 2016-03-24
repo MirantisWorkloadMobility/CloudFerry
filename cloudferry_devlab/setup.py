@@ -18,8 +18,8 @@ from setuptools import setup
 all_reqs = parse_requirements('requirements.txt', session=False)
 reqs = [str(r.req) for r in all_reqs]
 
+
 setup(name='cloudferry_devlab',
-      version='0.1',
       description='Devlab scripts and functional tests for CloudFerry tool.',
       url='https://github.com/MirantisWorkloadMobility/CloudFerry/tree/master/'
           'cloudferry_devlab',
@@ -28,8 +28,11 @@ setup(name='cloudferry_devlab',
       license='Apache',
       packages=['cloudferry_devlab', 'cloudferry_devlab.tests',
                 'cloudferry_devlab.tests.testcases'],
-      scripts=['cloudferry_devlab/bin/generate_load'],
+      entry_points={
+          'console_scripts': [
+              'generate_load = cloudferry_devlab.bin.main:main'
+          ],
+      },
       package_data={'cloudferry_devlab.tests.testcases':
                     ['groups_example.yaml']},
-      install_requires=reqs,
-      zip_safe=False)
+      install_requires=reqs)

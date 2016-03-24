@@ -21,7 +21,6 @@ import string
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from functools import wraps
 import json
 import os
 import inspect
@@ -252,58 +251,6 @@ class Templater(object):
             temp_render = temp_render.replace("{{%s}}" % arg, args[arg])
         temp_file.close()
         return temp_render
-
-
-class StackCallFunctions(object):
-    def __init__(self):
-        self.stack_call_functions = []
-        self.listeners = []
-
-    def trigger(self, name_event):
-        for listener in self.listeners:
-            {
-                'func_enter': listener.func_enter,
-                'func_exit': listener.func_exit
-            }[name_event](self)
-
-    def append(self, func_name, args, kwargs):
-        self.stack_call_functions.append({
-            'func_name': func_name,
-            'args': args,
-            'kwargs': kwargs
-        })
-        self.trigger('func_enter')
-
-    def depth(self):
-        return len(self.stack_call_functions)
-
-    def pop(self, res):
-        self.stack_call_functions[-1]['result'] = res
-        self.trigger('func_exit')
-        self.stack_call_functions.pop()
-
-    def addListener(self, listener):
-        self.listeners.insert(0, listener)
-
-    def removeListenerLast(self):
-        self.listeners = self.listeners[1:]
-
-
-stack_call_functions = StackCallFunctions()
-
-
-def log_step(log):
-    def decorator(func):
-        @wraps(func)
-        def inner(*args, **kwargs):
-            stack_call_functions.append(func.__name__, args, kwargs)
-            log.info("%s> Step %s" % ("- - " * stack_call_functions.depth(),
-                                      func.__name__))
-            res = func(*args, **kwargs)
-            stack_call_functions.pop(res)
-            return res
-        return inner
-    return decorator
 
 
 class forward_agent(object):

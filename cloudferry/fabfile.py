@@ -167,7 +167,7 @@ def condense(name_config=None, vm_grouping_config=None, debug=None):
     create_filters(name_config)
 
     LOG.info("Migration schedule generated. You may now want to start "
-             "evacuation job: 'fab evacuate'")
+             "evacuation job: 'cloudferry evacuate'")
 
     LOG.info("Condensation process finished. Checkout filters file: %s.",
              DEFAULT_FILTERS_FILES)

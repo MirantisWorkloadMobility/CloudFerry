@@ -147,8 +147,7 @@ class NeutronNetwork(network.Network):
         else:
             tenants[tenant_id] = self.identity_client.\
                 try_get_tenant_name_by_id(tenant_id)
-        data = {
-        }
+        data = {}
         if self.config.network.get_all_quota:
             for t_id, t_val in tenants.iteritems():
                 data[t_val] = self.neutron_client.show_quota(t_id)
@@ -166,7 +165,9 @@ class NeutronNetwork(network.Network):
         identity = self.identity_client
         for q_name, q_val in quota.iteritems():
             tenant_id = identity.get_tenant_id_by_name(q_name)
-            self.neutron_client.update_quota(tenant_id, q_val)
+            LOG.debug("Update quotas for tenant '%s' (%s): %s", q_name,
+                      tenant_id, pprint.pformat(q_val))
+            self.neutron_client.update_quota(tenant_id, {'quota': q_val})
 
     def create_quota(self, tenant_id, quota):
         return self.neutron_client.update_quota(tenant_id, quota)

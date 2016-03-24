@@ -16,17 +16,17 @@
 import argparse
 import ConfigParser
 
-from cloudferry_devlab.generate_load import Prerequisites
+from cloudferry_devlab import generate_load
 from cloudferry_devlab.tests import base
-import cloudferry_devlab.tests.config as conf
+from cloudferry_devlab.tests import config
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(
         description='Script to generate load for Openstack and delete '
                     'generated objects')
-    parser.add_argument('--clean', help='Clean objects, described'
-                                        ' in configuration.ini file',
+    parser.add_argument('--clean', help='Clean objects, described '
+                                        'in configuration.ini file',
                         action='store_true')
     parser.add_argument('--env', default='SRC', choices=['SRC', 'DST'],
                         help='Choose cloud: SRC or DST')
@@ -40,10 +40,15 @@ if __name__ == '__main__':
     confparser.readfp(args.cloudsconf)
     cloudsconf = base.get_dict_from_config_file(confparser)
 
-    preqs = Prerequisites(config=conf, configuration_ini=cloudsconf,
-                          cloud_prefix=args.env,
-                          results_path=args.generation_results)
+    preqs = generate_load.Prerequisites(config=config,
+                                        configuration_ini=cloudsconf,
+                                        cloud_prefix=args.env,
+                                        results_path=args.generation_results)
     if args.clean:
         preqs.clean_tools.clean_objects()
     else:
         preqs.run_preparation_scenario()
+
+
+if __name__ == '__main__':
+    main()
