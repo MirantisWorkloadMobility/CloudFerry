@@ -60,18 +60,32 @@ class FilteringUtils(Utils):
                 for tenant in config.tenants
                 if 'deleted' not in tenant and not tenant['deleted']]
 
-    def filter_vms(self, src_data_list):
+    def filter_vms_with_filter_config_file(self, src_data_list):
         loaded_data = self.load_file(self.filter_file_path)
         filter_dict = loaded_data[0]
+
+        current_data_list = list(src_data_list)
         popped_vm_list = []
-        if 'instances' not in filter_dict:
-            return [src_data_list, []]
-        for vm in src_data_list[:]:
-            if vm.id not in filter_dict['instances']['id']:
-                popped_vm_list.append(vm)
-                index = src_data_list.index(vm)
-                src_data_list.pop(index)
-        return [src_data_list, popped_vm_list]
+
+        if 'tenants' in filter_dict:
+            filtered_vms_by_tenant = []
+            for vm in current_data_list:
+                if vm.tenant_id in filter_dict['tenants']['tenant_id']:
+                    filtered_vms_by_tenant.append(vm)
+                else:
+                    popped_vm_list.append(vm)
+            current_data_list = filtered_vms_by_tenant
+
+        if 'instances' in filter_dict:
+            filtered_vms_by_id = []
+            for vm in current_data_list:
+                if vm.id in filter_dict['instances']['id']:
+                    filtered_vms_by_id.append(vm)
+                else:
+                    popped_vm_list.append(vm)
+            current_data_list = filtered_vms_by_id
+
+        return [current_data_list, popped_vm_list]
 
     def filter_images(self, src_data_list):
         loaded_data = self.load_file(self.filter_file_path)
