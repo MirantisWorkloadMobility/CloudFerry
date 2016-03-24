@@ -13,7 +13,6 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-
 import mock
 
 from novaclient.v1_1 import client as nova_client
@@ -26,26 +25,28 @@ from cloudferrylib.utils import utils
 from tests import test
 
 
-FAKE_CONFIG = utils.ext_dict(
-    cloud=utils.ext_dict({'user': 'fake_user',
-                          'password': 'fake_password',
-                          'tenant': 'fake_tenant',
-                          'region': None,
-                          'auth_url': 'http://1.1.1.1:35357/v2.0/',
-                          'cacert': '',
-                          'insecure': False}),
-    mysql=utils.ext_dict({'host': '1.1.1.1'}),
-    migrate=utils.ext_dict({'migrate_quotas': True,
-                            'retry': '7',
-                            'time_wait': 5,
-                            'keep_network_interfaces_order': True,
-                            'keep_usage_quotas_inst': True,
-                            'override_rules': None}))
+FAKE_CONFIG = {
+    'src': {'user': 'fake_user',
+            'password': 'fake_password',
+            'tenant': 'fake_tenant',
+            'region': None,
+            'auth_url': 'http://1.1.1.1:35357/v2.0/',
+            'cacert': '',
+            'insecure': False},
+    'src_mysql': {'db_host': '1.1.1.1'},
+    'migrate': {'migrate_quotas': True,
+                'retry': '7',
+                'time_wait': 5,
+                'keep_network_interfaces_order': True,
+                'keep_usage_quotas_inst': True,
+                'override_rules': None}}
 
 
 class BaseNovaComputeTestCase(test.TestCase):
     def setUp(self):
         super(BaseNovaComputeTestCase, self).setUp()
+
+        self.override_config(FAKE_CONFIG)
 
         self.mock_client = mock.MagicMock()
         self.nc_patch = mockpatch.PatchObject(nova_client, 'Client',
@@ -57,11 +58,11 @@ class BaseNovaComputeTestCase(test.TestCase):
         self.fake_cloud = mock.Mock()
         self.fake_cloud.resources = dict(identity=self.identity_mock)
         self.fake_cloud.position = 'src'
-        self.fake_cloud.config = FAKE_CONFIG
+        self.fake_cloud.config = self.cloud_config('src')
 
         with mock.patch(
                 'cloudferrylib.os.compute.nova_compute.mysql_connector'):
-            self.nova_client = nova_compute.NovaCompute(FAKE_CONFIG,
+            self.nova_client = nova_compute.NovaCompute(self.fake_cloud.config,
                                                         self.fake_cloud)
 
         self.fake_instance_0 = mock.Mock()
@@ -115,7 +116,7 @@ class NovaComputeTestCase(BaseNovaComputeTestCase):
         mock_get.return_value = 'shutoff'
         self.nova_client.change_status('active', instance=self.fake_instance_0)
         self.fake_instance_0.start.assert_called_once_with()
-        mock_sleep.assert_called_with(32)
+        mock_sleep.assert_called_with(256)
 
     @mock.patch('cloudferrylib.base.resource.time.sleep')
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
@@ -124,7 +125,7 @@ class NovaComputeTestCase(BaseNovaComputeTestCase):
         self.nova_client.change_status('shutoff',
                                        instance=self.fake_instance_0)
         self.fake_instance_0.stop.assert_called_once_with()
-        mock_sleep.assert_called_with(32)
+        mock_sleep.assert_called_with(256)
 
     @mock.patch('cloudferrylib.base.resource.time.sleep')
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
@@ -132,7 +133,7 @@ class NovaComputeTestCase(BaseNovaComputeTestCase):
         mock_get.return_value = 'suspended'
         self.nova_client.change_status('active', instance=self.fake_instance_0)
         self.fake_instance_0.resume.assert_called_once_with()
-        mock_sleep.assert_called_with(32)
+        mock_sleep.assert_called_with(256)
 
     @mock.patch('cloudferrylib.base.resource.time.sleep')
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
@@ -140,7 +141,7 @@ class NovaComputeTestCase(BaseNovaComputeTestCase):
         mock_get.return_value = 'active'
         self.nova_client.change_status('paused', instance=self.fake_instance_0)
         self.fake_instance_0.pause.assert_called_once_with()
-        mock_sleep.assert_called_with(32)
+        mock_sleep.assert_called_with(256)
 
     @mock.patch('cloudferrylib.base.resource.time.sleep')
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
@@ -149,7 +150,7 @@ class NovaComputeTestCase(BaseNovaComputeTestCase):
         self.nova_client.change_status('active',
                                        instance=self.fake_instance_0)
         self.fake_instance_0.unpause.assert_called_once_with()
-        mock_sleep.assert_called_with(32)
+        mock_sleep.assert_called_with(256)
 
     @mock.patch('cloudferrylib.base.resource.time.sleep')
     @mock.patch('cloudferrylib.os.compute.nova_compute.NovaCompute.get_status')
@@ -158,7 +159,7 @@ class NovaComputeTestCase(BaseNovaComputeTestCase):
         self.nova_client.change_status('suspended',
                                        instance=self.fake_instance_0)
         self.fake_instance_0.suspend.assert_called_once_with()
-        mock_sleep.assert_called_with(32)
+        mock_sleep.assert_called_with(256)
 
     def test_change_status_same(self):
         self.mock_client().servers.get('fake_instance_id').status = 'stop'

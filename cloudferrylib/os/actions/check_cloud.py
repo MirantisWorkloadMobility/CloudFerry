@@ -22,6 +22,7 @@ from glanceclient import exc as glance_exc
 from keystoneclient.openstack.common.apiclient import exceptions as ks_exc
 from neutronclient.common import exceptions as neutron_exc
 from novaclient import exceptions as nova_exc
+from oslo_config import cfg
 
 from cloudferrylib.base.action import action
 from cloudferrylib.base import exception
@@ -34,7 +35,7 @@ from cloudferrylib.utils import log
 from cloudferrylib.utils import proxy_client
 from cloudferrylib.utils import retrying
 
-
+CONF = cfg.CONF
 LOG = log.getLogger(__name__)
 
 
@@ -104,7 +105,9 @@ class CheckCloud(action.Action):
     def create_volume(self, cn_client, volume_info):
         LOG.info("Creating volume '%s'...", volume_info['display_name'])
         volume = cn_client.create_volume(**volume_info)
-        cn_client.wait_for_status(volume.id, cn_client.get_status, 'available')
+        timeout = CONF.migrate.storage_backend_timeout
+        cn_client.wait_for_status(volume.id, cn_client.get_status, 'available',
+                                  timeout=timeout)
         try:
             yield
         finally:
@@ -117,7 +120,7 @@ class CheckCloud(action.Action):
         LOG.info("Creating instance '%s'...", instance_info['name'])
         instance = nv_client.nova_client.servers.create(**instance_info)
         nv_client.wait_for_status(instance.id, nv_client.get_status, 'active',
-                                  timeout=300)
+                                  timeout=CONF.migrate.boot_timeout)
         try:
             yield
         finally:

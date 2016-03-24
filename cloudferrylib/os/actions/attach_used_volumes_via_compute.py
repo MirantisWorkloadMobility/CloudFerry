@@ -13,16 +13,17 @@
 # limitations under the License.
 
 import copy
+import logging
 
 from cinderclient import exceptions as cinder_exceptions
 from novaclient import exceptions as nova_exceptions
+from oslo_config import cfg
 
 from cloudferrylib.base.action import action
-from cloudferrylib.utils import log
 from cloudferrylib.utils import utils as utl
 
-
-LOG = log.getLogger(__name__)
+CONF = cfg.CONF
+LOG = logging.getLogger(__name__)
 
 
 class AttachVolumesCompute(action.Action):
@@ -52,9 +53,11 @@ class AttachVolumesCompute(action.Action):
                     try:
                         nova_client.volumes.create_server_volume(
                             inst['id'], volume_id, volume['device'])
+                        timeout = CONF.migrate.storage_backend_timeout
                         storage_res.try_wait_for_status(volume_id,
                                                         storage_res.get_status,
-                                                        'in-use')
+                                                        'in-use',
+                                                        timeout=timeout)
                     except (cinder_exceptions.ClientException,
                             nova_exceptions.ClientException) as e:
                         msg = ("Failed attaching volume %s to instance %s: "

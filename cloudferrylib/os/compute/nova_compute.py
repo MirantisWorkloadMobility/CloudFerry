@@ -860,7 +860,7 @@ class NovaCompute(compute.Compute):
             'status': lambda status: lambda instance: self.wait_for_status(
                 instance_id,
                 self.get_status,
-                status)  # pylint: disable=undefined-variable
+                status, timeout=self.config.migrate.boot_timeout)
         }
         map_status = {
             'paused': {

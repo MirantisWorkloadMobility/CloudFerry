@@ -38,23 +38,23 @@ Implements intercloud live migration functionality.
  - Grizzly to Icehouse
 """
 
-
+import logging
 import os
-from fabric.operations import prompt
 
-import cfglib
+from fabric.operations import prompt
+from oslo_config import cfg
+
 from cloudferrylib.base.action import action
 from cloudferrylib.os.compute import libvirt
 from cloudferrylib.os.compute.nova_compute import instance_host
 from cloudferrylib.os.compute.nova_compute import instance_libvirt_name
 from cloudferrylib.utils import files
-from cloudferrylib.utils import log
 from cloudferrylib.utils import ubuntu
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import utils
 
-
-LOG = log.getLogger(__name__)
+CONF = cfg.CONF
+LOG = logging.getLogger(__name__)
 
 
 class LiveMigration(action.Action):
@@ -98,9 +98,9 @@ class LiveMigration(action.Action):
         dst_host = instance_host(dst_instance)
 
         src_runner = remote_runner.RemoteRunner(src_host,
-                                                cfglib.CONF.src.ssh_user)
+                                                CONF.src.ssh_user)
         dst_runner = remote_runner.RemoteRunner(dst_host,
-                                                cfglib.CONF.dst.ssh_user)
+                                                CONF.dst.ssh_user)
 
         src_libvirt = libvirt.Libvirt(src_runner)
         dst_libvirt = libvirt.Libvirt(dst_runner)
@@ -122,7 +122,9 @@ class LiveMigration(action.Action):
             libvirt.nova_instances_path,
             '_base',
             'migration_disk_{}'.format(old_id))
-        dst_compute.wait_for_status(new_id, dst_compute.get_status, 'active')
+        timeout = CONF.migrate.boot_timeout
+        dst_compute.wait_for_status(new_id, dst_compute.get_status, 'active',
+                                    timeout=timeout)
 
         with files.RemoteTempFile(src_runner,
                                   "migrate-{}".format(old_id),
@@ -176,7 +178,7 @@ class RestoreOriginalInstancesTableSchema(action.Action):
     Requirements:
       - Write access to nova DB on destination
     """
-    def run(self, info=None, **kwargs):
+    def run(self, **kwargs):
         nova_compute = self.dst_cloud.resources[utils.COMPUTE_RESOURCE]
         mysql = nova_compute.mysql_connector
         reset_instances_id = ("alter table instances change id id INT (11) "
@@ -195,7 +197,7 @@ class CheckQemuVersion(action.Action):
 
     REQUIRED_QEMU_VERSION = "2.0"
 
-    def run(self, info=None, **kwargs):
+    def run(self, **kwargs):
         faulty_hosts = []
 
         for cloud in [self.src_cloud, self.dst_cloud]:

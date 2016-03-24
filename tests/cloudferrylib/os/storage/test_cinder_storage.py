@@ -20,29 +20,28 @@ from oslotest import mockpatch
 
 from cloudferrylib.os.storage import cinder_storage
 from cloudferrylib.os.storage import filters
-from cloudferrylib.utils import utils
 from tests import test
 
 
-FAKE_CONFIG = utils.ext_dict(
-    cloud=utils.ext_dict({'user': 'fake_user',
-                          'password': 'fake_password',
-                          'tenant': 'fake_tenant',
-                          'host': '1.1.1.1',
-                          'ssh_host': '1.1.1.10',
-                          'auth_url': 'http://1.1.1.1:35357/v2.0/',
-                          'region': None,
-                          'cacert': '',
-                          'insecure': False}),
-    migrate=utils.ext_dict({'retry': '7',
-                            'time_wait': 5,
-                            'keep_volume_storage': False,
-                            'keep_volume_snapshots': False}),
-    mysql=utils.ext_dict({'db_host': '1.1.1.1'}),
-    storage=utils.ext_dict({'backend': 'ceph',
-                            'rbd_pool': 'volumes',
-                            'volume_name_template': 'volume-',
-                            'host': '1.1.1.1'}))
+FAKE_CONFIG = {
+    'src': {'user': 'fake_user',
+            'password': 'fake_password',
+            'tenant': 'fake_tenant',
+            'host': '1.1.1.1',
+            'ssh_host': '1.1.1.10',
+            'auth_url': 'http://1.1.1.1:35357/v2.0/',
+            'region': None,
+            'cacert': '',
+            'insecure': False},
+    'migrate': {'retry': '7',
+                'time_wait': 5,
+                'keep_volume_storage': False,
+                'keep_volume_snapshots': False},
+    'src_mysql': {'db_host': '1.1.1.1'},
+    'src_storage': {'backend': 'ceph',
+                    'rbd_pool': 'volumes',
+                    'volume_name_template': 'volume-',
+                    'host': '1.1.1.1'}}
 
 
 class CinderStorageTestCase(test.TestCase):
@@ -56,14 +55,15 @@ class CinderStorageTestCase(test.TestCase):
         self.identity_mock = mock.Mock()
         self.compute_mock = mock.Mock()
 
+        self.override_config(FAKE_CONFIG)
+
         self.fake_cloud = mock.Mock()
         self.fake_cloud.position = 'src'
-
         self.fake_cloud.resources = dict(identity=self.identity_mock,
                                          compute=self.compute_mock)
-
+        self.fake_cloud.config = self.cloud_config('src')
         self.cinder_client = cinder_storage.CinderStorage(
-            FAKE_CONFIG, self.fake_cloud)
+            self.fake_cloud.config, self.fake_cloud)
 
         filter_yaml = mock.Mock()
         filter_yaml.get_tenant.return_value = None
@@ -83,7 +83,7 @@ class CinderStorageTestCase(test.TestCase):
         # To check self.mock_client call only from this test method
         self.mock_client.reset_mock()
 
-        client = self.cinder_client.get_client(FAKE_CONFIG)
+        client = self.cinder_client.get_client(self.fake_cloud.config)
 
         self.mock_client.assert_called_once_with('fake_user', 'fake_password',
                                                  'fake_tenant',
