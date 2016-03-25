@@ -10,5 +10,6 @@ preparation:
   - check_vmax_prerequisites: True
 
 process:
+  - transport_storage_resources: True
   - get_volumes_db_data: True
   - migrate_volumes: True
