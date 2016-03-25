@@ -1,3 +1,5 @@
+.. _external-networks-migration:
+
 =================
 External networks
 =================
