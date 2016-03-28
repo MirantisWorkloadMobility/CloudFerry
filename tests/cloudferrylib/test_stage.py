@@ -25,14 +25,15 @@ def fqname(cls):
 
 
 class TestStage(stage.Stage):
-    def __init__(self):
+    def __init__(self, config):
+        super(TestStage, self).__init__(config)
         self.invalidated = False
 
-    def signature(self, config):
-        return config
+    def signature(self):
+        return self.config
 
-    def execute(self, config):
-        self._execute(config, self.invalidated)
+    def execute(self):
+        self._execute(self.config, self.invalidated)
 
     def invalidate(self, old_signature, new_signature, force=False):
         self._invalidate(old_signature, new_signature)

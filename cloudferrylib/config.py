@@ -145,7 +145,7 @@ class OpenstackCloud(bases.Hashable, bases.Representable,
         credential = fields.Nested(Credential.Schema)
         scope = fields.Nested(Scope.Schema)
         ssh_settings = fields.Nested(SshSettings.Schema, load_from='ssh')
-        discover = OneOrMore(fields.String(), default=MODEL_LIST)
+        discover = OneOrMore(fields.String(), missing=MODEL_LIST)
 
         @marshmallow.post_load
         def to_cloud(self, data):
@@ -232,7 +232,7 @@ class Configuration(bases.Hashable, bases.Representable,
         @marshmallow.validates_schema(skip_on_field_errors=True)
         def check_migration_have_correct_source_and_dict(self, data):
             clouds = data['clouds']
-            migrations = data['migrations']
+            migrations = data.get('migrations', {})
             for migration_name, migration in migrations.items():
                 if migration.source not in clouds:
                     raise marshmallow.ValidationError(

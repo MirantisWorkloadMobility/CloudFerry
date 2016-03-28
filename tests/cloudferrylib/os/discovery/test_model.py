@@ -21,7 +21,7 @@ from tests.cloudferrylib.utils import test_local_db
 class ExampleReferenced(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey()
-        qux = model.fields.Integer(required=True)
+        qux = model.Integer(required=True)
 
     @classmethod
     def load_missing(cls, cloud, object_id):
@@ -40,7 +40,7 @@ class ExampleReferenced(model.Model):
 
 class ExampleNested(model.Model):
     class Schema(model.Schema):
-        foo = model.fields.String(required=True)
+        foo = model.String(required=True)
         ref = model.Dependency(ExampleReferenced, required=True)
         refs = model.Dependency(ExampleReferenced, required=True, many=True)
         ref_none = model.Dependency(ExampleReferenced, missing=None,
@@ -51,13 +51,13 @@ class ExampleNested(model.Model):
 
 class Simple(model.Model):
     class Schema(model.Schema):
-        foo = model.fields.String(required=True)
+        foo = model.String(required=True)
 
 
 class Example(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey()
-        bar = model.fields.String(required=True)
+        bar = model.String(required=True)
         baz = model.Nested(ExampleNested)
         ref = model.Dependency(ExampleReferenced, required=True)
         refs = model.Dependency(ExampleReferenced, required=True, many=True)
@@ -73,9 +73,10 @@ class Example(model.Model):
         return Example.load_from_cloud(cloud, cls.generate_cloud_data())
 
     @classmethod
-    def generate_cloud_data(cls):
+    def generate_cloud_data(cls, object_id=None):
         cls.count += 1
-        object_id = uuid.uuid5(uuid.NAMESPACE_DNS, 'test%d' % cls.count)
+        if object_id is None:
+            object_id = uuid.uuid5(uuid.NAMESPACE_DNS, 'test%d' % cls.count)
         ref1 = uuid.uuid5(uuid.NAMESPACE_DNS, 'ref1_%d' % cls.count)
         ref2 = uuid.uuid5(uuid.NAMESPACE_DNS, 'ref2_%d' % cls.count)
         return {
@@ -91,9 +92,10 @@ class Example(model.Model):
         }
 
     @classmethod
-    def generate_clean_data(cls):
+    def generate_clean_data(cls, object_id=None):
         cls.count += 1
-        object_id = uuid.uuid5(uuid.NAMESPACE_DNS, 'test%d' % cls.count)
+        if object_id is None:
+            object_id = uuid.uuid5(uuid.NAMESPACE_DNS, 'test%d' % cls.count)
         ref1 = uuid.uuid5(uuid.NAMESPACE_DNS, 'ref1_%d' % cls.count)
         ref2 = uuid.uuid5(uuid.NAMESPACE_DNS, 'ref2_%d' % cls.count)
         return {
@@ -166,17 +168,17 @@ class ModelTestCase(test_local_db.DatabaseMockingTestCase):
 
     def test_non_dirty(self):
         obj = Example.load(Example.generate_clean_data())
-        self.assertFalse(obj.is_dirty())
+        self.assertFalse(obj.is_dirty('objects'))
 
     def test_simple_dirty(self):
         obj = Example.load(Example.generate_clean_data())
         obj.bar = 'value is changed'
-        self.assertTrue(obj.is_dirty())
+        self.assertTrue(obj.is_dirty('objects'))
 
     def test_nested_dirty(self):
         obj = Example.load(Example.generate_clean_data())
         obj.baz.foo = 'value is changed'
-        self.assertTrue(obj.is_dirty())
+        self.assertTrue(obj.is_dirty('objects'))
 
     def test_ref_dirty(self):
         obj = Example.load(Example.generate_clean_data())
@@ -185,7 +187,7 @@ class ModelTestCase(test_local_db.DatabaseMockingTestCase):
             'qux': 313373,
         })
         obj.ref = ref_obj
-        self.assertTrue(obj.is_dirty())
+        self.assertTrue(obj.is_dirty('objects'))
 
     def test_refs_dirty(self):
         obj = Example.load(Example.generate_clean_data())
@@ -194,7 +196,7 @@ class ModelTestCase(test_local_db.DatabaseMockingTestCase):
             'qux': 313373,
         })
         obj.refs.append(ref_obj)
-        self.assertTrue(obj.is_dirty())
+        self.assertTrue(obj.is_dirty('objects'))
 
     def test_nested_ref_dirty(self):
         obj = Example.load(Example.generate_clean_data())
@@ -203,7 +205,7 @@ class ModelTestCase(test_local_db.DatabaseMockingTestCase):
             'qux': 313373,
         })
         obj.baz.ref = ref_obj
-        self.assertTrue(obj.is_dirty())
+        self.assertTrue(obj.is_dirty('objects'))
 
     def test_nested_refs_dirty(self):
         obj = Example.load(Example.generate_clean_data())
@@ -212,7 +214,7 @@ class ModelTestCase(test_local_db.DatabaseMockingTestCase):
             'qux': 313373,
         })
         obj.baz.refs.append(ref_obj)
-        self.assertTrue(obj.is_dirty())
+        self.assertTrue(obj.is_dirty('objects'))
 
     def test_store_retrieve(self):
         data = Example.generate_cloud_data()
@@ -311,6 +313,11 @@ class ModelTestCase(test_local_db.DatabaseMockingTestCase):
                 object_id = model.PrimaryKey()
                 ref = model.Dependency('tests.cloudferrylib.os.'
                                        'discovery.test_model.Example')
+
+        with model.Session() as session:
+            example = Example.load_from_cloud(
+                self.cloud, Example.generate_cloud_data('foo-bar-baz'))
+            session.store(example)
 
         obj = ExampleNameRef.load_from_cloud(self.cloud, {
             'object_id': 'ExampleNameRef-1',
