@@ -12,12 +12,15 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-
+import logging
 import copy
 
 from cloudferrylib.base.action import action
 from cloudferrylib.os.identity import keystone
 from cloudferrylib.utils import utils as utl
+
+
+LOG = logging.getLogger(__name__)
 
 
 CLOUD = 'cloud'
@@ -58,16 +61,32 @@ class TransportInstance(action.Action):
             }
         }
 
-        # Get next one instance
         for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
             instance = self._replace_user_ids(instance)
+            src_instance = instance['instance']
+            src_image_id = src_instance['image_id']
+            dst_image = self.get_dst_image(src_image_id)
+
+            if dst_image is None:
+                LOG.warning("Image '%s' is not present in destination, "
+                            "skipping migration of VM '%s' (%s).",
+                            src_image_id, src_instance['name'],
+                            src_instance['id'])
+                continue
+
+            if dst_image.id != src_image_id:
+                LOG.info("Using image ID '%s' to boot VM '%s (%s)'",
+                         dst_image.id, src_instance['name'],
+                         src_instance['id'])
+                src_instance['image_id'] = dst_image.id
 
             one_instance = {
                 utl.INSTANCES_TYPE: {
                     instance_id: instance
                 }
             }
-            one_instance = self.deploy_instance(self.dst_cloud, one_instance)
+
+            one_instance = self.deploy_instance(one_instance)
 
             new_info[utl.INSTANCES_TYPE].update(
                 one_instance[utl.INSTANCES_TYPE])
@@ -76,9 +95,41 @@ class TransportInstance(action.Action):
             'info': new_info
         }
 
-    def deploy_instance(self, dst_cloud, info):
+    def get_dst_image(self, src_image_id):
+        """Returns active image for VM. If not found, tries to match image
+        based on image name, tenant, checksum and size"""
+        dst_glance = self.dst_cloud.resources[utl.IMAGE_RESOURCE]
+        image = dst_glance.get_active_image_by_id(src_image_id)
+
+        if image is None:
+            src_glance = self.src_cloud.resources[utl.IMAGE_RESOURCE]
+            src_image = src_glance.get_image_by_id(src_image_id)
+
+            if src_image is None:
+                # image does not exist in source cloud, will be recreated
+                # from ephemeral
+                return
+
+            dst_tenant = keystone.get_dst_tenant_from_src_tenant_id(
+                self.src_cloud.resources[utl.IDENTITY_RESOURCE],
+                self.dst_cloud.resources[utl.IDENTITY_RESOURCE],
+                src_image.owner)
+
+            LOG.info("Image with ID '%s' was not found in destination cloud, "
+                     "looking for images in tenant '%s' with checksum '%s', "
+                     "name '%s' and size '%s'", src_image_id, dst_tenant.name,
+                     src_image.checksum, src_image.name, src_image.size)
+            image = dst_glance.get_active_image_with(
+                dst_tenant.id,
+                src_image.checksum,
+                src_image.name,
+                src_image.size)
+
+        return image
+
+    def deploy_instance(self, info):
         info = copy.deepcopy(info)
-        dst_compute = dst_cloud.resources[COMPUTE]
+        dst_compute = self.dst_cloud.resources[COMPUTE]
 
         new_ids = dst_compute.deploy(info)
         new_info = dst_compute.read_info(search_opts={'id': new_ids.keys()})

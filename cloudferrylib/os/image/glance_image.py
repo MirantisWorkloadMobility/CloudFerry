@@ -235,6 +235,26 @@ class GlanceImage(image.Image):
                         self.cloud.position)
             return None
 
+    def get_active_image_by_id(self, image_id):
+        img = self.get_image_by_id(image_id)
+
+        if img is not None:
+            if img.status.lower() == 'active':
+                return img
+            else:
+                LOG.debug("Image '%s (%s)' state is '%s', not 'active'",
+                          img.name, img.id, img.status)
+
+    def get_active_image_with(self, tenant_id, checksum, image_name, size):
+        for img in self.get_image_list():
+            image_matches = (img.name == image_name and
+                             img.size == size and
+                             img.checksum == checksum and
+                             img.owner == tenant_id and
+                             img.status.lower() == 'active')
+            if image_matches:
+                return img
+
     def get_image_by_name(self, image_name):
         for glance_image in self.get_image_list():
             if glance_image.name == image_name:
