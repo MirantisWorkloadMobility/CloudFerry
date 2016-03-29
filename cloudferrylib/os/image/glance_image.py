@@ -34,6 +34,7 @@ from cloudferrylib.utils import file_proxy
 from cloudferrylib.utils import filters
 from cloudferrylib.utils import log
 from cloudferrylib.utils import proxy_client
+from cloudferrylib.utils import retrying
 from cloudferrylib.utils import remote_runner
 from cloudferrylib.utils import sizeof_format
 from cloudferrylib.utils import utils as utl
@@ -421,12 +422,28 @@ class GlanceImage(image.Image):
     def _dst_images(self):
         dst_images = {}
         keystone = self.cloud.resources["identity"]
+        LOG.info("Retrieving list of images from destination to make sure "
+                 "images are not migrated twice. May take awhile, please be "
+                 "patient.")
         for dst_image in self.get_image_list():
-            tenant_name = keystone.try_get_tenant_name_by_id(
-                dst_image.owner, default=self.cloud.cloud_config.cloud.tenant)
-            image_key = (dst_image.name, tenant_name, dst_image.checksum,
-                         dst_image.is_public)
-            dst_images[image_key] = dst_image
+            LOG.debug("Working on destination image '%s (%s)'",
+                      dst_image.name, dst_image.id)
+            retryer = retrying.Retry(
+                max_attempts=self.config.migrate.retry,
+                reraise_original_exception=True)
+            try:
+                # Destination cloud sporadically fails with Unauthorized for
+                # random images, thus this logic; see CF-385
+                tenant_name = retryer.run(
+                    keystone.try_get_tenant_name_by_id,
+                    dst_image.owner,
+                    default=self.cloud.cloud_config.cloud.tenant)
+                image_key = (dst_image.name, tenant_name, dst_image.checksum,
+                             dst_image.is_public)
+                dst_images[image_key] = dst_image
+            except keystone_exceptions.Unauthorized:
+                LOG.warning("Authorization failed in destination keystone, "
+                            "image '%s (%s)' may be migrated twice later!")
         return dst_images
 
     def identical(self, src_image, dst_image):
