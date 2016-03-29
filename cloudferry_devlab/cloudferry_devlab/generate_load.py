@@ -397,10 +397,10 @@ class Prerequisites(base.BasePrerequisites):
             return vm_ids
 
         vms = create_vms(self.config.vms)
+
         for tenant in self.config.tenants:
             if not tenant.get('vms'):
                 continue
-
             # To create vm with proper keypair, need to switch to right user
             keypairs = set([vm['key_name'] for vm in tenant['vms']
                             if vm.get('key_name')])
@@ -429,9 +429,9 @@ class Prerequisites(base.BasePrerequisites):
             self.switch_user(user=user['name'], password=user['password'],
                              tenant=tenant['name'])
             vms.extend(create_vms(vms_wo_keypairs))
+
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
-
         self.wait_until_objects_created(vms, self.check_vm_state, TIMEOUT)
 
     def create_vm_snapshots(self):

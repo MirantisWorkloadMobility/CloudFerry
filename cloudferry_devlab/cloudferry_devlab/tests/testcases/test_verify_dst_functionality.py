@@ -26,6 +26,7 @@ from cloudferry_devlab.tests import functional_test
 
 TIMEOUT = 600
 TEST_TENANT_NAME = 'tenant4'
+TEST_EXT_ROUTER_NAME = 'ext_router'
 TEST_VM_NAME = 'VMtoVerifyDstCloudFunc'
 DEFAULT_SERVICE_PORT = 22
 
@@ -71,6 +72,7 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         # declare vars in case if condition below will not be satisfied
         image_name = ''
         nic_name = ''
+        self.external_network_id = None
         self.neutron_float_ip_quota = 0
         # create vm parameters
         flavor_name = config.flavors[0]['name']
@@ -93,13 +95,18 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
 
         self.release_fips_tenant()
 
-        self.external_networks_ids_list = (
-            [i['id'] for i in self.dst_cloud.neutronclient.list_networks(
-            )['networks'] if i.get('router:external') is True])
+        for router in self.dst_cloud.neutronclient.list_routers().get(
+                'routers'):
+            if router.get('name') == TEST_EXT_ROUTER_NAME:
+                self.external_network_id = router.get('external_gateway_info'
+                                                      ).get('network_id')
 
-        fip = self.dst_cloud.neutronclient.create_floatingip(
-            {"floatingip": {"floating_network_id":
-                            self.external_networks_ids_list[0]}})
+        try:
+            fip = self.dst_cloud.neutronclient.create_floatingip(
+                {"floatingip": {"floating_network_id": self.external_network_id
+                                }})
+        except neutron_exceptions.NeutronClientException as e:
+            self.fail("Can't find external network for floating IP: %s" % e)
 
         self.float_ip_address = fip['floatingip']['floating_ip_address']
         self.float_ip_id = fip['floatingip']['id']
@@ -333,11 +340,11 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         for _ in xrange(self.neutron_float_ip_quota):
             self.dst_cloud.neutronclient.create_floatingip(
                 {"floatingip": {"floating_network_id":
-                                self.external_networks_ids_list[0]}})
+                                self.external_network_id}})
         try:
             self.dst_cloud.neutronclient.create_floatingip(
                 {"floatingip": {"floating_network_id":
-                                self.external_networks_ids_list[0]}})
+                                self.external_network_id}})
             # if not Exception, then fip allocated, and it means test fail
             msg = 'Floating IP is allocated over neutron quota limit {0}'
             self.fail(msg.format(self.fip_quota_neutron))
