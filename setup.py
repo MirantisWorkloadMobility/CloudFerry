@@ -14,28 +14,28 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from setuptools import setup
-from setuptools import find_packages
-from pip.req import parse_requirements
+import os
+from pip import req
+import setuptools
 
-with open('version', 'r') as f:
-    setup(name='CloudFerry',
-          version=f.read().strip(),
-          description='Openstack cloud workload migration tool',
-          author='Mirantis Inc.',
-          author_email='workloadmobility@mirantis.com',
-          url='https://github.com/MirantisWorkloadMobility/CloudFerry',
-          packages=find_packages(exclude=["*.tests", "*.tests.*", "tests.*"]),
-          py_modules=['cloudferry', 'cfglib', 'data_storage', 'fabfile'],
-          entry_points={
-              'console_scripts': ['cloudferry = cloudferry:console']
-          },
-          install_requires=[str(ir.req) for ir in
-                            parse_requirements('requirements.txt')
-                            if ir.url is None],
 
-          dependency_links=[str(req_line.url) for req_line in
-                            parse_requirements('requirements.txt')
-                            if req_line.url],
-          package_data={'': ['*.ini', '*.yaml', '*.html']},
-          include_package_data=True)
+all_reqs = req.parse_requirements('requirements.txt', session=False)
+test_reqs = req.parse_requirements('test-requirements.txt', session=False)
+version = open(os.path.join(os.path.dirname(__file__),
+                            'version.txt')).read().strip()
+
+setuptools.setup(
+    name='CloudFerry',
+    version=version,
+    description='Openstack cloud workload migration tool',
+    author='Mirantis Inc.',
+    author_email='workloadmobility@mirantis.com',
+    license='Apache',
+    url='https://github.com/MirantisWorkloadMobility/CloudFerry',
+    packages=['cloudferry'],
+    entry_points={'console_scripts': ['cloudferry = cloudferry:console'],
+                  'oslo.config.opts': ['cloudferry = cfglib:list_opts']},
+    install_requires=[str(r .req) for r in all_reqs],
+    tests_require=[str(r.req) for r in test_reqs],
+    package_data={'cloudferry.templates': ['*.html']},
+    include_package_data=True)

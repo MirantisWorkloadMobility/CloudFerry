@@ -15,7 +15,7 @@
 
 import mock
 
-from cloudferrylib.scheduler import task
+from cloudferry.lib.scheduler import task
 from tests import test
 
 

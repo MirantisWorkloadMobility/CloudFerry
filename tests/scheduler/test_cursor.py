@@ -15,7 +15,7 @@
 
 import mock
 
-from cloudferrylib.scheduler import cursor
+from cloudferry.lib.scheduler import cursor
 from tests import test
 
 

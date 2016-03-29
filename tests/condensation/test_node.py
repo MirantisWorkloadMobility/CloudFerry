@@ -1,8 +1,8 @@
-from tests import test
-from condensation import node
 import mock
-from cfglib import CONF
 
+from cloudferry.cfglib import CONF
+from cloudferry.condensation import node
+from tests import test
 
 # patch settings
 CONF.condense = mock.Mock(
