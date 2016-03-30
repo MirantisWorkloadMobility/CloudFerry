@@ -185,7 +185,7 @@ class NeutronNetwork(network.Network):
 
         return list(tenant_ids)
 
-    def deploy(self, info):
+    def deploy(self, info, *args, **kwargs):
         """
         Deploy network resources to DST
 

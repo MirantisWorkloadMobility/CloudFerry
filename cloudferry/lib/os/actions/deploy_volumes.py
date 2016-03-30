@@ -23,11 +23,12 @@ OLD_ID = 'old_id'
 
 class DeployVolumes(action.Action):
 
-    def run(self, storage_info={}, identity_info={}, **kwargs):
-        storage_info = copy.deepcopy(storage_info)
+    def run(self, storage_info=None, identity_info=None, **kwargs):
+        storage_info = copy.deepcopy(storage_info) if storage_info else {}
         deploy_info = copy.deepcopy(storage_info)
-        deploy_info.update(identity_info)
-        storage_info.update(identity_info)
+        if identity_info:
+            deploy_info.update(identity_info)
+            storage_info.update(identity_info)
         volume_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
         new_ids = volume_resource.deploy(deploy_info)
         storage_info_new = {

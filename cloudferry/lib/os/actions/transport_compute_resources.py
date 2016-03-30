@@ -85,7 +85,7 @@ class TransportKeyPairs(action.Action):
      - Update DST DB with key pairs from SRC using SQL
     """
 
-    def __init__(self, init, kp_db_broker=keypairs.DBBroker, **kwargs):
+    def __init__(self, init, kp_db_broker=keypairs.DBBroker):
         super(TransportKeyPairs, self).__init__(init)
         self.kp_db_broker = kp_db_broker
 
@@ -126,7 +126,7 @@ class SetKeyPairsForInstances(action.Action):
     Keypair migration process requires key pair to be associated with a VM on
     a lower DB level.
     """
-    def __init__(self, init, kp_db_broker=keypairs.DBBroker, **kwargs):
+    def __init__(self, init, kp_db_broker=keypairs.DBBroker):
         super(SetKeyPairsForInstances, self).__init__(init)
         self.kp_db_broker = kp_db_broker
 

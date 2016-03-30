@@ -12,15 +12,10 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-__author__ = 'mirrorcoder'
-
 
 class EquInstance(object):
     def __hash__(self):
-        if hasattr(self, 'class_name'):
-            return hash(self.class_name)
-        else:
-            return hash(self.__class__.__name__)
+        return hash(getattr(self, 'class_name', self.__class__.__name__))
 
     def __eq__(self, other):
         return hash(self) == hash(other)

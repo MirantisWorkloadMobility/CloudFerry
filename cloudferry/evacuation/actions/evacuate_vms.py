@@ -32,16 +32,12 @@ class Evacuate(action.Action):
     def run(self, **kwargs):
         compute_resource = self.cloud.resources['compute']
         cloud = process.SOURCE
-        LOG.debug("getting info on cloud {cloud} "
-                  "iteration {iteration} from db".format(
-                      cloud=cloud,
-                      iteration=self.iteration))
+        LOG.debug("getting info on cloud %s iteration %s from db", cloud,
+                  self.iteration)
         info = data_storage.get(
             c_action.get_key(self.iteration, cloud))
         if not info:
-            LOG.info("cannot find info in db on {cloud}-{iteration}".format(
-                cloud=cloud,
-                iteration=self.iteration))
+            LOG.info("cannot find info in db on %s-%s", cloud, self.iteration)
             return {}
 
         actions = json.loads(info).get(c_action.CONDENSE)

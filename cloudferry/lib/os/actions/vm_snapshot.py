@@ -43,7 +43,7 @@ class VmSnapshotBasic(action.Action):
 
 class VmSnapshot(VmSnapshotBasic):
 
-    def run(self, *args, **kwargs):
+    def run(self, **kwargs):
         LOG.debug("creation of vm snapshots")
         # we gonna store only id and vm status in the state (for now)
         state_to_record = {}
@@ -69,7 +69,7 @@ class CheckPointVm(action.Action):
         self.var_info = var_info
         super(CheckPointVm, self).__init__(init)
 
-    def run(self, rollback_vars=None, *args, **kwargs):
+    def run(self, rollback_vars=None, **kwargs):
         info = kwargs[self.var_info]['instances']
         if not info.keys():
             return {}
@@ -88,7 +88,7 @@ class CheckPointVm(action.Action):
 
 class VmRestore(VmSnapshotBasic):
 
-    def run(self, rollback_vars=None, *args, **kwargs):
+    def run(self, rollback_vars=None, **kwargs):
         LOG.debug("restoring vms from snapshot")
         snapshot_from_namespace = kwargs.get(self.namespace_variable)
         compute = self.get_compute_resource()

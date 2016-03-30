@@ -17,7 +17,7 @@ from fabric.api import env
 from fabric.api import run
 from fabric.api import settings
 
-from novaclient.v1_1 import client as nova_client
+from novaclient.v2 import client as nova_client
 
 from cloudferry.lib.base import network
 from cloudferry.lib.os.compute import nova_compute
@@ -52,7 +52,7 @@ class NovaNetwork(network.Network):
         resource = {'security_groups': self.get_security_groups(instance)}
         return resource
 
-    def deploy(self, info):
+    def deploy(self, info, *args, **kwargs):
         self.upload_security_groups(info['security_groups'])
 
     def get_security_groups(self, instance=None):

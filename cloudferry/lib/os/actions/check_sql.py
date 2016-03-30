@@ -18,7 +18,7 @@ from cloudferry.lib.utils import utils
 
 class CheckSQL(action.Action):
 
-    def run(self, info=None, **kwargs):
+    def run(self, **kwargs):
         SQL = "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES LIMIT 1"
 
         nova = self.cloud.resources[utils.COMPUTE_RESOURCE]

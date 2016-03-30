@@ -24,7 +24,7 @@ class CursorTestCase(test.TestCase):
         super(CursorTestCase, self).setUp()
         self.elements = [
             mock.Mock(next_element=[None], prev_element=None, parall_elem=[],
-                      num_element=cursor.DEFAULT) for i in xrange(7)]
+                      num_element=cursor.DEFAULT) for _ in range(7)]
         self.elements[0].next_element = [self.elements[1]]
         self.elements[1].prev_element = self.elements[0]
         self.elements[1].next_element = [self.elements[4], self.elements[2],

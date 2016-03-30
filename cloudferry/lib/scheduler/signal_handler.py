@@ -15,10 +15,18 @@
 
 import signal
 
+DEFAULT_SIGNALS = [signal.SIGINT, signal.SIGTERM]
+
 
 class BaseInterruptHandler(object):
-    def __init__(self, sig_list=[signal.SIGINT, signal.SIGTERM]):
-        self.sig_list = sig_list if isinstance(sig_list, list) else [sig_list]
+    def __init__(self, sig_list=None):
+        if sig_list is None:
+            self.sig_list = DEFAULT_SIGNALS
+        else:
+            self.sig_list = (sig_list
+                             if isinstance(sig_list, list) else [sig_list])
+        self.released = None
+        self.original_handler = None
 
     def __enter__(self):
         self.released = False
@@ -53,7 +61,7 @@ class IgnoreInterruptHandler(BaseInterruptHandler):
 
 class InterruptHandler(BaseInterruptHandler):
     def enter(self):
-        def handler(signum, frame):
+        def handler(signum, frame):  # pylint: disable=unused-argument
             raise InterruptedException("Execution was interrupted by signal")
         for sig in self.sig_list:
             signal.signal(sig, handler)

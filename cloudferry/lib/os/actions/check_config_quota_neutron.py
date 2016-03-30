@@ -29,7 +29,7 @@ class CheckConfigQuotaNeutron(action.Action):
     matter.
     """
 
-    def run(self, info=None, **kwargs):
+    def run(self, **kwargs):
         src_cloud = self.src_cloud
         dst_cloud = self.dst_cloud
         network_src = src_cloud.resources[utl.NETWORK_RESOURCE]
@@ -59,11 +59,9 @@ class CheckConfigQuotaNeutron(action.Action):
         for item_quot, val_quot in quot.iteritems():
             if val_quot != quot_default_dst[item_quot]:
                 is_configs_different = True
-                LOG.info("Item %s in quotas is different "
-                         "(SRC CLOUD: %s, DST CLOUD: %s)" %
-                         (item_quot,
-                          val_quot,
-                          quot_default_dst[item_quot]))
+                LOG.info("Item %s in quotas is different (SRC CLOUD: %s, "
+                         "DST CLOUD: %s)", item_quot, val_quot,
+                         quot_default_dst[item_quot])
         if not is_configs_different:
             LOG.info("Configs on clouds is equals")
 

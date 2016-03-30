@@ -62,8 +62,7 @@ class KeyPair(dict):
         d = {}
         fields = (self.FIELDS
                   if allow_auto_fields
-                  else filter(lambda s: s not in self.AUTO_FIELDS,
-                              self.FIELDS))
+                  else [f for f in self.FIELDS if f not in self.AUTO_FIELDS])
         for key in fields:
             if getattr(self, key) is not None:
                 d[key] = getattr(self, key)
@@ -81,7 +80,7 @@ class DBBroker(object):
         db = DBBroker._get_db(cloud)
         sql = "SELECT * FROM {key_pairs} WHERE deleted = 0;".format(
             key_pairs=cls.NOVA_KEYPAIRS)
-        return map(KeyPair.from_tuple, db.execute(sql).fetchall())
+        return [KeyPair.from_tuple(e) for e in db.execute(sql).fetchall()]
 
     @classmethod
     def store_keypair(cls, key_pair, cloud):

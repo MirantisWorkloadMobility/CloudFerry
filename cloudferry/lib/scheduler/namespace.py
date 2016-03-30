@@ -12,17 +12,16 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 import copy
-__author__ = 'mirrorcoder'
 
 CHILDREN = '__children__'
 
 
 class Namespace:
 
-    def __init__(self, vars={}):
-        if CHILDREN not in vars:
-            vars[CHILDREN] = dict()
-        self.vars = vars
+    def __init__(self, vars=None):
+        self.vars = vars or {}
+        if CHILDREN not in self.vars:
+            self.vars[CHILDREN] = {}
 
     def fork(self, is_deep_copy=False):
         return Namespace(copy.copy(self.vars)) if not is_deep_copy \

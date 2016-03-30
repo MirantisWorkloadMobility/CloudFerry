@@ -69,10 +69,7 @@ def get_flavor_access_list_from_db(db, flavor_id):
 
 
 def nova_live_migrate_vm(nova_client, config, vm_id, dest_host):
-    LOG.info("migrating {vm} to {host} using nova live migrate".format(
-        vm=vm_id,
-        host=dest_host
-    ))
+    LOG.info("migrating %s to %s using nova live migrate", vm_id, dest_host)
     nova_client.servers.live_migrate(
         server=vm_id,
         host=dest_host,
@@ -86,10 +83,7 @@ def cobalt_live_migrate_vm(config, vm_id, dest_host):
     reachable through standard `novaclient.v1_1.Client()` instance
     (or at least I was unable to find a way in a reasonable timeframe). Thus
     running it as a CLI command."""
-    LOG.info("migrating {vm} to {host} using Cobalt".format(
-        vm=vm_id,
-        host=dest_host
-    ))
+    LOG.info("migrating %s to %s using Cobalt", vm_id, dest_host)
 
     host_string = "{user}@{host}".format(
         user=config.cloud.ssh_user, host=config.cloud.ssh_host)

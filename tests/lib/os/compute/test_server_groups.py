@@ -15,7 +15,7 @@
 
 import mock
 
-from novaclient.v1_1 import client as nova_client
+from novaclient.v2 import client as nova_client
 from novaclient import exceptions as nova_exc
 from oslotest import mockpatch
 

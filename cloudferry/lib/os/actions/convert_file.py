@@ -12,7 +12,7 @@ class ConvertFile(action.Action):
         image_res = self.cloud.resources[utl.IMAGE_RESOURCE]
         if image_res.config.image.convert_to_raw:
             return {}
-        for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
+        for instance_id in info[utl.INSTANCES_TYPE]:
             image_id = \
                 info[INSTANCES][instance_id][utl.INSTANCE_BODY]['image_id']
             images = image_res.get_image_by_id_converted(image_id=image_id)

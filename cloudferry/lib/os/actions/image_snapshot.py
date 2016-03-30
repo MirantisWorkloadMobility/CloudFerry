@@ -37,13 +37,13 @@ class ImageSnapshotBasic(action.Action):
 
 
 class ImageSnapshot(ImageSnapshotBasic):
-    def run(self, *args, **kwargs):
+    def run(self, **kwargs):
         LOG.info("Creation of images snapshot")
         return {NAMESPACE: self.get_images_id_list()}
 
 
 class ImageRollback(ImageSnapshotBasic):
-    def run(self, *args, **kwargs):
+    def run(self, **kwargs):
         id_from_namespace = kwargs.get(NAMESPACE, [])
         current_id = self.get_images_id_list()
         image = self.get_image_resource()

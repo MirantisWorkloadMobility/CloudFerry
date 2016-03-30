@@ -24,7 +24,7 @@ LOG = log.getLogger(__name__)
 
 
 class CheckSSH(action.Action):
-    def run(self, info=None, **kwargs):
+    def run(self, **kwargs):
 
         for node in self.get_compute_nodes():
             self.check_access(node)

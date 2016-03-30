@@ -16,22 +16,6 @@ from cloudferry.lib.base import resource
 
 
 class Network(resource.Resource):
-
     def __init__(self, config):
         self.config = config
         super(Network, self).__init__()
-
-    def get_func_mac_address(self, instance):
-        raise NotImplemented("it's base class")
-
-    def create_port(self, net_id, mac, ip, tenant_id, keep_ip, sg_ids=None):
-        raise NotImplemented("it's base class")
-
-    def delete_port(self, port_id):
-        raise NotImplemented("it's base class")
-
-    def check_existing_port(self, network_id, mac, ip_address):
-        raise NotImplemented("it's base class")
-
-    def get_security_groups(self):
-        raise NotImplemented("it's base class")

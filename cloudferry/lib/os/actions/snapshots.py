@@ -41,7 +41,7 @@ class MysqlDump(action.Action):
       - Write access for `config.dst_mysql.db_user` on DB host.
     """
 
-    def run(self, *args, **kwargs):
+    def run(self, **kwargs):
         db_host = mysql_connector.get_db_host(self.cloud.cloud_config)
 
         # dump mysql to file
@@ -75,7 +75,7 @@ class MysqlDump(action.Action):
         command = (
             "scp {cipher} -o StrictHostKeyChecking=no -i {key} "
             "{user_src}@{host_src}:{path_src} {path_dst}".format(**context))
-        LOG.info("EXECUTING {command} local".format(command=command))
+        LOG.info("EXECUTING %s local", command)
         local(command)
         return {}
 
@@ -86,7 +86,7 @@ class MysqlRestore(action.Action):
     See `MysqlDump` documentation for requirements and config options used.
     """
 
-    def run(self, *args, **kwargs):
+    def run(self, **kwargs):
         db_host = mysql_connector.get_db_host(self.cloud.cloud_config)
 
         # apply sqldump from file to mysql

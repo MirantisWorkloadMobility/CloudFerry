@@ -15,7 +15,7 @@
 
 import mock
 
-from novaclient.v1_1 import client as nova_client
+from novaclient.v2 import client as nova_client
 from oslotest import mockpatch
 
 from cloudferry.lib.os.network.nova_network import NovaNetwork

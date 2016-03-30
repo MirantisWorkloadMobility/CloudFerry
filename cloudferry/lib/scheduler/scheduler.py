@@ -57,12 +57,9 @@ class BaseScheduler(object):
         api.env.current_task = None
         return True
 
-    def event_error_task(self, task, e):
-        return True
-
     def error_task(self, task, e):
-        LOG.exception("%s TASK FAILED", task)
-        return self.event_error_task(task, e)
+        LOG.exception("%s TASK FAILED: %s", task, e)
+        return True
 
     def run_task(self, task):
         if self.event_start_task(task):
@@ -75,7 +72,7 @@ class BaseScheduler(object):
             for task in chain:
                 try:
                     self.run_task(task)
-                except Exception as e:
+                except Exception as e:  # pylint: disable=broad-except
                     if chain_name == STEP_PREPARATION:
                         self.status_error = ERROR_INITIAL_CHECK
                     if chain_name == STEP_MIGRATION:
@@ -84,7 +81,6 @@ class BaseScheduler(object):
                         self.status_error = ERROR_DURING_ROLLBACK
                     if isinstance(e, oslo_config.cfg.Error):
                         self.status_error = ERROR_INVALID_CONFIGURATION
-                    self.exception = e
                     self.error_task(task, e)
                     LOG.info("Failed processing CHAIN %s", chain_name)
                     break
@@ -105,9 +101,6 @@ class BaseScheduler(object):
 
     def task_run(self, task):
         task(namespace=self.namespace)
-
-    def addCursor(self, cursor):
-        self.cursor = cursor
 
 
 class SchedulerThread(BaseScheduler):

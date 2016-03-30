@@ -16,7 +16,7 @@ import threading
 
 from keystoneclient import exceptions as ks_exceptions
 from keystoneclient.v2_0 import client as v2_0_client
-from novaclient.v1_1 import client as nova
+from novaclient.v2 import client as nova
 from neutronclient.v2_0 import client as neutron
 from glanceclient.v1 import client as glance
 from cinderclient.v2 import client as cinder

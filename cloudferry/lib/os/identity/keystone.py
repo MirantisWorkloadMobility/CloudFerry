@@ -198,7 +198,7 @@ class KeystoneIdentity(identity.Identity):
             info['user_passwords'] = self._get_user_passwords()
         return info
 
-    def deploy(self, info):
+    def deploy(self, info, *args, **kwargs):
         LOG.info("Identity objects deployment started")
         tenants = info['tenants']
         users = info['users']

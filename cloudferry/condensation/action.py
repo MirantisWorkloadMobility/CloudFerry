@@ -83,7 +83,7 @@ class Actions(object):
             This method adds entry to MIGRATE chain
         """
         LOG.debug("migrate vm %s to node %s", vm_obj.vm_id, target_node.name)
-        payload = map(normalize, [vm_obj.vm_id, target_node.name])
+        payload = [normalize(vm_obj.vm_id), normalize(target_node.name)]
         self.data[MIGRATE].append(payload)
 
     def add_transfer_action(self, node_name):
@@ -100,7 +100,7 @@ class Actions(object):
         """
         LOG.debug("condense vm %s from node %s to node %s", vm_obj.vm_id,
                   source_node.name, target_node.name)
-        payload = map(normalize, [vm_obj.vm_id, target_node.name])
+        payload = [normalize(vm_obj.vm_id), normalize(target_node.name)]
         self.data[CONDENSE].append(payload)
 
 

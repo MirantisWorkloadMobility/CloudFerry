@@ -202,7 +202,7 @@ def convert_to_obj(obj, restore_object, namespace):
     return obj
 
 
-class GeneratorPassword:
+class GeneratorPassword(object):
     def __init__(self, length=7):
         self.length = length
         self.chars = string.ascii_letters + string.digits + '@#$%&*'
@@ -214,12 +214,13 @@ class GeneratorPassword:
         return ''.join(random.choice(self.chars) for i in range(self.length))
 
 
-class Postman:
+class Postman(object):
     def __init__(self, username, password, from_addr, mail_server):
         self.username = username
         self.password = password
         self.from_addr = from_addr
         self.mail_server = mail_server
+        self.server = None
 
     def __enter__(self):
         self.server = smtplib.SMTP(self.mail_server)
@@ -243,7 +244,7 @@ class Postman:
         self.server.quit()
 
 
-class Templater:
+class Templater(object):
     def render(self, name_file, args):
         temp_file = open(name_file, 'r')
         temp_render = temp_file.read()
@@ -352,7 +353,7 @@ def ensure_ssh_key_added(key_files):
             return True
 
 
-class wrapper_singletone_ssh_tunnel:
+class wrapper_singletone_ssh_tunnel(object):
 
     def __init__(self, interval_ssh="9000-9999", locker=Lock()):
         self.interval_ssh = [int(interval_ssh.split('-')[0]),
@@ -385,7 +386,7 @@ class wrapper_singletone_ssh_tunnel:
                                 self.free_port)
 
 
-class UpSshTunnelClass:
+class UpSshTunnelClass(object):
 
     """
         Up ssh tunnel on dest controller node for transferring data
@@ -399,6 +400,7 @@ class UpSshTunnelClass:
         self.remove_port = callback_free
         self.host = host
         self.cmd = SSH_CMD
+        self.port = None
 
     def __enter__(self):
         self.port = self.get_free_port()

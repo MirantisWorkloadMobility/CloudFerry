@@ -98,7 +98,7 @@ class Grouping(object):
                            search_opts={"all_tenants": True}))
         for instance in search_list:
             LOG.info('Processing instance %s', instance.name)
-            for (network_name, network_ips) in instance.networks.items():
+            for network_ips in instance.networks.values():
                 network = neutron.get_network_from_list(
                     ip=network_ips[0],
                     tenant_id=instance.tenant_id,
@@ -117,8 +117,8 @@ class Grouping(object):
         user_defined_vms = reduce(lambda res, x: x + res, vms, [])
 
         if validate:
-            user_defined_vms = filter(self.compute.is_nova_instance,
-                                      user_defined_vms)
+            user_defined_vms = [vm for vm in user_defined_vms
+                                if self.compute.is_nova_instance(vm)]
             # remove duplicates
             for user_group, vms_list in self.group_config.items():
                 self.group_config[user_group] = [vm for vm in set(vms_list)
@@ -141,13 +141,14 @@ class Grouping(object):
                 groups[key] = nested_func(value)
 
     def _walk_user_defined(self, groups, user_vms):
-        for key, value in groups.items():
+        for value in groups.values():
             if isinstance(value, dict):
                 self._walk_user_defined(value, user_vms)
             else:
                 if value:
                     same = set(value) & set(user_vms)
-                    [value.remove(i) for i in same if i in value]
+                    for i in same:
+                        value.remove(i)
 
     @staticmethod
     def _normalize(instance_list):

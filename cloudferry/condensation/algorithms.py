@@ -23,7 +23,7 @@ def accurate(flavors_list, max_ram, max_core):
 
     # allocate huge 4-dimensional array, filled with zeros
     state = []
-    for i in range(len(flavors_list) + 1):
+    for _ in range(len(flavors_list) + 1):
         i_array = []
         for ram in range(max_ram + 1):
             ram_array = []
@@ -80,7 +80,7 @@ def fast(flavors_list, max_ram, max_core):
     state = []
     for ram in range(max_ram + 1):
         state.append([[[0, 0], [0 for i in flavors_list]]
-                      for r in range(max_core + 1)])
+                      for _ in range(max_core + 1)])
 
     # find solution
     for i, fl_obj in enumerate(flavors_list):

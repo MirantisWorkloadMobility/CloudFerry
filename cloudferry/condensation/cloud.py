@@ -192,7 +192,7 @@ class Cloud(object):
                     # as soon as we moved vm from the node - we need to
                     # recalculate distribution on this node
                     self.node_ids_to_be_recalculated.append(node_obj.name)
-                for counter in range(flavor_count):
+                for _ in range(flavor_count):
                     if not count:
                         # we placed enough vms of this flavor to node
                         break

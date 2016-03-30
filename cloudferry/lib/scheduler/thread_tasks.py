@@ -35,13 +35,13 @@ class WaitThreadTask(Task):
         self.tt = tt
         super(WaitThreadTask, self).__init__()
 
-    def run(self, __children__={}, **kwargs):
+    def run(self, __children__=None, **kwargs):
         if __children__:
             __children__[self.tt]['process'].join()
 
 
 class WaitThreadAllTask(Task):
-    def run(self, __children__={}, **kwargs):
+    def run(self, __children__=None, **kwargs):
         if __children__:
             for p in __children__:
                 __children__[p]['process'].join()

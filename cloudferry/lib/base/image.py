@@ -60,5 +60,5 @@ def glance_image_create_cmd(config, image_name, disk_format, file_path,
         file_prefix=file_prefix,
         file_path=file_path
     )
-    return "{image_create} | grep '\<id\>'".format(
+    return r"{image_create} | grep '\<id\>'".format(
         image_create=clients.os_cli_cmd(config, 'glance', args))

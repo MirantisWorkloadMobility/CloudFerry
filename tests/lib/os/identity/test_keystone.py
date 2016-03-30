@@ -267,17 +267,17 @@ class KeystoneIdentityTestCase(test.TestCase):
         self.mock_client().roles.roles_for_user.return_value = [
             self.fake_role_1]
 
-        def tenant_create(**kwargs):
+        def tenant_create(**kwargs):  # pylint: disable=unused-argument
             self.mock_client().tenants.list.return_value.append(
                 fake_tenants_list[1])
             return fake_tenants_list[1]
 
-        def user_create(**kwars):
+        def user_create(**kwars):  # pylint: disable=unused-argument
             self.mock_client().users.list.return_value.append(
                 fake_users_list[1])
             return fake_users_list[1]
 
-        def roles_create(role_name):
+        def roles_create(role_name):  # pylint: disable=unused-argument
             self.mock_client().roles.list.return_value.append(
                 fake_roles_list[1])
             return fake_roles_list[1]

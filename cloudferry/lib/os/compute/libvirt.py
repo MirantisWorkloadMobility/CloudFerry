@@ -78,7 +78,7 @@ class DestNovaInstanceDestroyer(object):
             LOG.debug("Rolling back fake VM %s", self.nova_vm_id)
             self.dest_nova.reset_state(self.nova_vm_id)
             self.dest_nova.delete_vm_by_id(self.nova_vm_id)
-        except:
+        except RuntimeError:
             # ignoring all errors since it's a rollback
             pass
 
@@ -196,8 +196,8 @@ class LibvirtXml(object):
         :contents - XML file contents (text)
         """
         self._xml = ElementTree.fromstring(contents)
-        self._interfaces = map(LibvirtDeviceInterface,
-                               self._xml.findall('.//devices/interface'))
+        self._interfaces = [LibvirtDeviceInterface(i)
+                            for i in self._xml.findall('.//devices/interface')]
         self.disk_file = self._get('.//disk/source', 'file')
         self.serial_file = self._get('.//serial/source', 'path')
         self.console_file = self._get('.//console/source', 'path')

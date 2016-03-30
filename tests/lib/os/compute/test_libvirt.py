@@ -63,23 +63,15 @@ class LibvirtTestCase(test.TestCase):
         remote_runner = mock.Mock()
         remote_runner.run.return_value = json
         lv = libvirt.Libvirt(remote_runner)
-        try:
-            backing_file = lv.get_backing_file('inst-id')
-            self.assertIsNone(backing_file)
-        except:
-            self.fail("get_backing_file should return None if backing file is "
-                      "not present in qemu-img")
+        backing_file = lv.get_backing_file('inst-id')
+        self.assertIsNone(backing_file)
 
     def test_backing_file_returns_none_in_case_of_error(self):
         remote_runner = mock.Mock()
         remote_runner.run.return_value = None
         lv = libvirt.Libvirt(remote_runner)
-        try:
-            backing = lv.get_backing_file("some-id")
-            self.assertIsNone(backing)
-        except Exception:
-            self.fail("get_backing_volume should return None in case of "
-                      "failure")
+        backing = lv.get_backing_file("some-id")
+        self.assertIsNone(backing)
 
 
 grizzly_xml = """<domain type='qemu'>

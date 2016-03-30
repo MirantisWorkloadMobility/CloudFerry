@@ -85,9 +85,9 @@ def delete(key, connection):
 
 
 @redis_socket_to_kwargs
-def delete_batch(keys, connection):
+def delete_batch(data_keys, connection):
     pipe = connection.pipeline()
-    for key in keys:
+    for key in data_keys:
         pipe.delete(key)
     pipe.execute()
 

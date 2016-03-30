@@ -97,30 +97,27 @@ class KeyPairMigrationTestCase(test.TestCase):
     @mock.patch('cloudferry.lib.os.identity.keystone.'
                 'get_dst_user_from_src_user_id')
     def test_non_existing_user_does_not_break_migration(self, _):
-        try:
-            db_broker = mock.Mock()
-            db_broker.get_all_keypairs.return_value = [keypairs.KeyPair(),
-                                                       keypairs.KeyPair()]
+        db_broker = mock.Mock()
+        db_broker.get_all_keypairs.return_value = [keypairs.KeyPair(),
+                                                   keypairs.KeyPair()]
 
-            tkp = tcr.TransportKeyPairs(init=mock.MagicMock(),
-                                        kp_db_broker=db_broker)
+        tkp = tcr.TransportKeyPairs(init=mock.MagicMock(),
+                                    kp_db_broker=db_broker)
 
-            tkp.src_cloud = mock.MagicMock()
-            tkp.dst_cloud = mock.MagicMock()
-            tkp.cfg = mock.Mock()
-            tkp.cfg.migrate.skip_orphaned_keypairs = True
+        tkp.src_cloud = mock.MagicMock()
+        tkp.dst_cloud = mock.MagicMock()
+        tkp.cfg = mock.Mock()
+        tkp.cfg.migrate.skip_orphaned_keypairs = True
 
-            src_users = tkp.src_cloud.resources[
-                utl.IDENTITY_RESOURCE].keystone_client.users
-            src_users.find.side_effect = keystoneclient.exceptions.NotFound
+        src_users = tkp.src_cloud.resources[
+            utl.IDENTITY_RESOURCE].keystone_client.users
+        src_users.find.side_effect = keystoneclient.exceptions.NotFound
 
-            dst_users = tkp.dst_cloud.resources[
-                utl.IDENTITY_RESOURCE].keystone_client.users
-            dst_users.find.side_effect = keystoneclient.exceptions.NotFound
+        dst_users = tkp.dst_cloud.resources[
+            utl.IDENTITY_RESOURCE].keystone_client.users
+        dst_users.find.side_effect = keystoneclient.exceptions.NotFound
 
-            tkp.run()
-        except Exception as e:
-            self.fail("Unexpected exception caught: %s" % e)
+        tkp.run()
 
     def test_update_sql_gets_called_for_each_keypair(self):
         num_keypairs = 5

@@ -18,7 +18,7 @@ import copy
 import pprint
 import uuid
 
-from novaclient.v1_1 import client as nova_client
+from novaclient.v2 import client as nova_client
 from novaclient import exceptions as nova_exc
 
 from cloudferry.lib.base import compute

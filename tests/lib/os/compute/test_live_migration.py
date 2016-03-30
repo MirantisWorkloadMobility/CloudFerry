@@ -37,11 +37,7 @@ class LiveMigrationTestCase(test.TestCase):
         vm_id = "some-id"
         dest_host = "dest-host"
 
-        try:
-            instances.incloud_live_migrate(nova_client, config, vm_id,
-                                           dest_host)
-        except Exception as e:
-            self.fail("Migration should not fail for nova: %s" % e)
+        instances.incloud_live_migrate(nova_client, config, vm_id, dest_host)
 
     @mock.patch('cloudferry.lib.os.compute.instances.run', mock.MagicMock())
     @mock.patch('cloudferry.lib.os.compute.instances.clients',
@@ -54,8 +50,4 @@ class LiveMigrationTestCase(test.TestCase):
         vm_id = "some-id"
         dest_host = "dest-host"
 
-        try:
-            instances.incloud_live_migrate(nova_client, config, vm_id,
-                                           dest_host)
-        except Exception as e:
-            self.fail("Migration should not fail for cobalt: %s" % e)
+        instances.incloud_live_migrate(nova_client, config, vm_id, dest_host)

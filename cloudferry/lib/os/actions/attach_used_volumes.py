@@ -19,8 +19,9 @@ from cloudferry.lib.utils import utils as utl
 
 class AttachVolumes(action.Action):
 
-    def run(self, storage_info={}, **kwargs):
-        resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
-        for vol in storage_info[utl.VOLUMES_TYPE].itervalues():
-            resource_storage.attach_volume_to_instance(vol)
+    def run(self, storage_info=None, **kwargs):
+        if storage_info:
+            resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
+            for vol in storage_info[utl.VOLUMES_TYPE].itervalues():
+                resource_storage.attach_volume_to_instance(vol)
         return {}

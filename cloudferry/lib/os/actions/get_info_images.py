@@ -19,9 +19,9 @@ from cloudferry.lib.utils import utils as utl
 
 class GetInfoImages(action.Action):
 
-    def __init__(self, init, cloud=None, search_opts=dict()):
+    def __init__(self, init, cloud=None, search_opts=None):
         super(GetInfoImages, self).__init__(init, cloud)
-        self.search_opts = search_opts
+        self.search_opts = search_opts or {}
 
     def run(self, **kwargs):
         """Get info about images or specified image.

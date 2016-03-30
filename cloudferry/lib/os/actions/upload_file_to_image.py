@@ -34,7 +34,7 @@ class UploadFileToImage(action.Action):
         ssh_attempts = self.cloud.cloud_config.migrate.ssh_connection_attempts
         img_res = self.cloud.resources[utl.IMAGE_RESOURCE]
 
-        for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
+        for instance_id in info[utl.INSTANCES_TYPE]:
             # init
             inst_body = info[INSTANCES][instance_id][utl.INSTANCE_BODY]
             image_id = inst_body['image_id']

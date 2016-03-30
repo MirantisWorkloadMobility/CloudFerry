@@ -20,7 +20,7 @@ DEFAULT = 1
 
 
 class IsBootImageDeleted(action.Action):
-    def run(self, info=None, missing_images=None, **kwargs):
+    def run(self, missing_images=None, **kwargs):
         self.set_next_path(DEFAULT)
         if missing_images is not None:
             self.set_next_path(PATH_RECREATE_IMAGE)

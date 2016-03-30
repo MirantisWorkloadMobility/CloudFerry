@@ -20,9 +20,9 @@ from cloudferry.lib.base.action import action
 
 class ConvertVolumeToCompute(action.Action):
 
-    def run(self, storage_info, compute_ignored={}, **kwargs):
+    def run(self, storage_info, compute_ignored=None, **kwargs):
         volume_info = copy.deepcopy(storage_info)
-        instances = copy.deepcopy(compute_ignored)
+        instances = copy.deepcopy(compute_ignored) if compute_ignored else {}
         new_instance_info = {'instances': instances}
         volumes_old = volume_info['volumes']
         for volume in volumes_old.itervalues():

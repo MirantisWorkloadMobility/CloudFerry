@@ -29,9 +29,9 @@ MIGRATE_VM_PREFIX = 'migrate_vm_'
 
 def delete_relations():
     LOG.info("started deleting old VM to hypervisor relations")
-    keys = data_storage.keys(MIGRATE_VM_PREFIX + '*')
-    data_storage.delete_batch(keys)
-    LOG.info("Relation deleting done. %s records was removed." % len(keys))
+    data_keys = data_storage.keys(MIGRATE_VM_PREFIX + '*')
+    data_storage.delete_batch(data_keys)
+    LOG.info("Relation deleting done. %s records was removed.", len(data_keys))
 
 
 def check_filter_folder(filter_folder):
@@ -56,7 +56,7 @@ def make(filter_folder, images_date):
             data_storage.put(MIGRATE_VM_PREFIX + vm_id, migrate[1])
         vm_filter = {'images': {'date': images_date},
                      'instances': {'id': ids}}
-        with file("%s/filter_%s.yaml" % (filter_folder, cursor), 'w') as \
+        with open("%s/filter_%s.yaml" % (filter_folder, cursor), 'w') as \
                 filter_file:
             filter_file.write(yaml.safe_dump(vm_filter))
-    LOG.info("Creating filter files done. %s filters was created." % cursor)
+    LOG.info("Creating filter files done. %s filters was created.", cursor)

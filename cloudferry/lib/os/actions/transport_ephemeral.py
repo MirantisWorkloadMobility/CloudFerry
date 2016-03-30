@@ -70,7 +70,7 @@ class TransportEphemeral(action.Action):
         }
 
         # Get next one instance
-        for instance_id, instance in info[utl.INSTANCES_TYPE].iteritems():
+        for instance_id, instance in info[utl.INSTANCES_TYPE].items():
             is_ephemeral = instance[utl.INSTANCE_BODY]['is_ephemeral']
             one_instance = {
                 utl.INSTANCES_TYPE: {
@@ -145,7 +145,7 @@ class TransportEphemeral(action.Action):
         qemu_img_src = src_cloud.qemu_img
 
         temp_path_src = temp_src + "/%s" + utl.DISK_EPHEM
-        for inst_id, inst in instances.iteritems():
+        for inst_id, inst in instances.items():
 
             path_src_id_temp = temp_path_src % inst_id
             host_compute_dst = inst[EPHEMERAL][HOST_DST]
@@ -162,7 +162,7 @@ class TransportEphemeral(action.Action):
 
         transporter.run(info=info)
 
-        for inst_id, inst in instances.iteritems():
+        for inst in instances.values():
             host_compute_dst = inst[EPHEMERAL][HOST_DST]
             qemu_img_dst.diff_rebase(inst[EPHEMERAL][BACKING_FILE_DST],
                                      inst[EPHEMERAL][PATH_DST],

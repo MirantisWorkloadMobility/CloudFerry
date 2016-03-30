@@ -116,7 +116,7 @@ class Node(object):
         # we need this step to reduce number of available flavors
         # because we have vms assigned to this node
         flavors = copy.copy(flavors)
-        for key, value in self.vms.items():
+        for value in self.vms.values():
             if value.flavor in flavors:
                 flavors[value.flavor] -= 1
 
@@ -133,7 +133,7 @@ class Node(object):
         result_dict = {}
         if accurate:
             # convert data from dict to list of tuples (algorithm interface)
-            flavor_id, flavor_ram, flavor_core = range(3)
+            flavor_id, flavor_ram = (0, 1)
             for fl_obj, count in flavors.items():
                 flavors_dict[fl_obj.fl_id] = fl_obj
                 for i in range(count):
@@ -149,7 +149,7 @@ class Node(object):
         else:
             # use fast algorithm
             # convert data from dict to list of tuples (algorithm interface)
-            flavor_id, flavor_count, flavor_ram, flavor_core = range(4)
+            flavor_id, flavor_ram = (0, 2)
             # transform flavors to more comfortable datatype
             for fl_obj, count in flavors.items():
                 flavors_dict[fl_obj.fl_id] = fl_obj

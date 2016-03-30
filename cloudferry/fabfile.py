@@ -118,7 +118,7 @@ def get_groups(name_config=None, group_file=None, cloud_id='src',
 
 
 @task
-def condense(config=None, vm_grouping_config=None, debug=None):
+def condense(name_config=None, vm_grouping_config=None, debug=None):
     """
     When migration is done in-place (there's no spare hardware), cloud
     migration admin would want to free as many hardware nodes as possible. This
@@ -139,7 +139,7 @@ def condense(config=None, vm_grouping_config=None, debug=None):
                 `configs/groups.yaml`)
      :debug: - boolean value, enables debugging messages if set to `True`
     """
-    init(config, debug)
+    init(name_config, debug)
     data_storage.check_redis_config()
 
     LOG.info("Retrieving flavors, VMs and nodes from SRC cloud")
@@ -151,7 +151,7 @@ def condense(config=None, vm_grouping_config=None, debug=None):
     LOG.info("Retrieving groups of VMs")
 
     # get_groups stores results in group_file_path config
-    get_groups(config, vm_grouping_config)
+    get_groups(name_config, vm_grouping_config)
     groups = condense_utils.read_file(cfglib.CONF.migrate.group_file_path)
     if groups is None:
         message = ("Grouping information is missing. Make sure you have "
@@ -164,7 +164,7 @@ def condense(config=None, vm_grouping_config=None, debug=None):
     process.process(nodes=nodes, flavors=flavors, vms=vms, groups=groups)
 
     LOG.info("Starting generation of filter files for migration")
-    create_filters(config)
+    create_filters(name_config)
 
     LOG.info("Migration schedule generated. You may now want to start "
              "evacuation job: 'fab evacuate'")

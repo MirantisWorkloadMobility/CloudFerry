@@ -17,5 +17,5 @@ from cloudferry.lib.utils import utils as utl
 
 
 class CheckRabbitMQ(action.Action):
-    def run(self, info=None, **kwargs):
+    def run(self, **kwargs):
         self.cloud.resources[utl.IDENTITY_RESOURCE].check_rabbitmq()

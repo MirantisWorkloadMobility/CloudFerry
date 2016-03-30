@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from operator import attrgetter
 
 from cloudferry.lib.base.action import action
 from cloudferry.lib.base import exception as cf_exceptions
@@ -44,10 +43,8 @@ class CheckUsersAvailabilityOnSrcAndDst(action.Action):
         src_users = src_keystone_client.users.list()
         dst_users = dst_keystone_client.users.list()
 
-        src_user_names = {name.lower(): name
-                          for name in map(attrgetter('name'), src_users)}
-        dst_user_names = {name.lower(): name
-                          for name in map(attrgetter('name'), dst_users)}
+        src_user_names = {usr.name.lower(): usr.name for usr in src_users}
+        dst_user_names = {usr.name.lower(): usr.name for usr in dst_users}
 
         users_missing_on_dst = \
             set(src_user_names.keys()) - set(dst_user_names.keys())

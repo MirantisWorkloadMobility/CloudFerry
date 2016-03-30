@@ -19,5 +19,5 @@ class StartVmsIfNeeded(action.Action):
 
     def run(self, info, **kwargs):
         compute_resource = self.cloud.resources['compute']
-        for (instance_id, instance) in info['instances'].items():
+        for instance in info['instances'].values():
             compute_resource.change_status_if_needed(instance)

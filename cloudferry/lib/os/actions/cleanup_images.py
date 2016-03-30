@@ -44,7 +44,9 @@ class CleanupImages(action.Action):
                         checksum_list.append(image_checksum)
 
         for chs in checksum_list:
-            map(src_img.delete_image, src_img.get_img_id_list_by_checksum(chs))
-            map(dst_img.delete_image, dst_img.get_img_id_list_by_checksum(chs))
+            for img in src_img.get_img_id_list_by_checksum(chs):
+                src_img.delete_image(img)
+            for img in dst_img.get_img_id_list_by_checksum(chs):
+                dst_img.delete_image(img)
 
         return {}

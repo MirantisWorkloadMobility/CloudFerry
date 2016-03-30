@@ -263,9 +263,8 @@ class EMCConnector(object):
             'EMC_StorageHardwareIDManagementService')
         for hw_service in hw_services:
             if system_name == hw_service['SystemName']:
-                LOG.debug("Found Storage Hardware ID Management Service:"
-                          "%(hw_service)s"
-                          % {'hw_service': hw_service})
+                LOG.debug("Found Storage Hardware ID Management Service: %s",
+                          hw_service)
                 return hw_service
 
     def _find_or_create_initiator_group(self, masking):
@@ -300,19 +299,15 @@ class EMCConnector(object):
             storage_id = hw_instance['StorageID']
 
             if storage_id.lower() == initiator_name.lower():
-                break
-        else:
-            raise base.VolumeObjectNotFoundError('Initiator not found.')
-
-        rc, create_group = self.connection.InvokeMethod(
-            'CreateGroup',
-            masking['controllerConfigService'],
-            GroupName=masking['igGroupName'],
-            Type=pywbem.Uint16(2),
-            Members=[hw_instance_id])
-        self._wait_job_completion(rc, create_group)
-
-        return create_group['MaskingGroup']
+                rc, create_group = self.connection.InvokeMethod(
+                    'CreateGroup',
+                    masking['controllerConfigService'],
+                    GroupName=masking['igGroupName'],
+                    Type=pywbem.Uint16(2),
+                    Members=[hw_instance_id])
+                self._wait_job_completion(rc, create_group)
+                return create_group['MaskingGroup']
+        raise base.VolumeObjectNotFoundError('Initiator not found.')
 
     def _wait_job_completion(self, rc, job):
         # From ValueMap of JobState in CIM_ConcreteJob
@@ -409,11 +404,11 @@ class EmcISCSIPlugin(base.CinderMigrationPlugin):
 
     PLUGIN_NAME = "iscsi-vmax"
 
-    def __init__(self, emc_connector, cinder_db, iscsi_connector, my_ip):
+    def __init__(self, emc_connector, cinder_database, iscsi_connector, my_ip):
         self.connected_volume = None
         self.created_masking_view = None
         self.emc = emc_connector
-        self.cinder_db = cinder_db
+        self.cinder_db = cinder_database
         self.iscsi = iscsi_connector
         self.my_ip = my_ip
 

@@ -41,7 +41,7 @@ class SwiftStorage(objstorage.ObjStorage):
                                        insecure=params.insecure)
         return conn.get_auth()
 
-    def read_info(self, **kwargs):
+    def read_info(self, **_):
         info = {
             utl.OBJSTORAGE_RESOURCE: {
                 utl.CONTAINERS: {}
@@ -53,7 +53,7 @@ class SwiftStorage(objstorage.ObjStorage):
             container_info['objects'] = \
                 self.get_container(container_info['name'])[1]
             for object_info in container_info['objects']:
-                resp, object_info['data'] = \
+                _, object_info['data'] = \
                     self.get_object(container_info['name'],
                                     object_info['name'])
         return info
@@ -101,6 +101,6 @@ class SwiftStorage(objstorage.ObjStorage):
                                           self.token,
                                           container, *args)
 
-    def delete_container(self, container, *args):
+    def delete_container(self, container):
         return swift_client.delete_container(self.storage_url,
                                              self.token, container)
