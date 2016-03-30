@@ -434,7 +434,8 @@ networks = [
          {'cidr': '10.4.2.0/24', 'ip_version': 4, 'name': 'subnet_1',
           'connect_to_ext_router': True, 'routers_to_connect': ['ext_router']},
          {'cidr': '10.9.2.0/24', 'ip_version': 4, 'name': 'subnet_2',
-          'connect_to_ext_router': True, 'routers_to_connect': ['ext_router']}]
+          "dns_nameservers": ["10.9.2.1"], 'connect_to_ext_router': True,
+          'routers_to_connect': ['ext_router']}]
      },
     {'name': 'shared_net', 'admin_state_up': True, 'shared': True,
      'router:external': True, 'real_network': True,
@@ -443,6 +444,7 @@ networks = [
          {'cidr': '192.168.1.0/24', 'ip_version': 4, 'name': 'external_subnet',
           'set_as_gateway_for_routers': {'ext_router': {'enable_snat': False},
                                          'tn1_router': {}, 'tn2_router': {}},
+          'dns_nameservers': ['8.8.8.8', '8.8.4.4'],
           'allocation_pools': [
               {'start': '192.168.1.100', 'end': '192.168.1.254'}]
           }]
@@ -450,7 +452,12 @@ networks = [
 ]
 """Networks to create/delete. Only one gateway can be assigned to router.
 If two networks have the same router in 'routers_to_connect', gateway set for
-last networks (updating)"""
+last networks (updating).
+Test scenario:
+ - Create subnets with cidr, ip_version, name, allication_pools,
+  dns_nameservers attributes in source cloud
+ - Run network migration
+ - Verify all attributes migrated """
 
 pools = [
     {

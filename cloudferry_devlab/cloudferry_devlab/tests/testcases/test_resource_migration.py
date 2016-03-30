@@ -91,23 +91,12 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                 self.fail(msg.format(res=resource_name, r_name=i['name']))
 
     def validate_flavor_parameters(self, src_flavors, dst_flavors):
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='name')
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='ram')
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='vcpus')
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='disk')
         # Id can be changed, but for now in CloudFerry we moving flavor with
         # its id.
-        self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
-                                                resource_name='flavor',
-                                                parameter='id')
+        for param in ['name', 'ram', 'vcpus', 'disk', 'id']:
+            self.validate_resource_parameter_in_dst(src_flavors, dst_flavors,
+                                                    resource_name='flavor',
+                                                    parameter=param)
 
     def validate_network_name_in_port_lists(self, src_ports, dst_ports):
         dst_net_names = [self.dst_cloud.get_net_name(dst_port['network_id'])
@@ -123,12 +112,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         src_users = self.filter_users()
         dst_users = self.dst_cloud.keystoneclient.users.list()
 
-        self.validate_resource_parameter_in_dst(src_users, dst_users,
-                                                resource_name='user',
-                                                parameter='name')
-        self.validate_resource_parameter_in_dst(src_users, dst_users,
-                                                resource_name='user',
-                                                parameter='email')
+        for param in ['name', 'email']:
+            self.validate_resource_parameter_in_dst(src_users, dst_users,
+                                                    resource_name='user',
+                                                    parameter=param)
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_keystone_user_tenant_roles(self):
@@ -171,12 +158,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         filtering_data = self.filtering_utils.filter_tenants(src_tenants)
         src_tenants = filtering_data[0]
 
-        self.validate_resource_parameter_in_dst(src_tenants, dst_tenants,
-                                                resource_name='tenant',
-                                                parameter='name')
-        self.validate_resource_parameter_in_dst(src_tenants, dst_tenants,
-                                                resource_name='tenant',
-                                                parameter='description')
+        for param in ['name', 'description']:
+            self.validate_resource_parameter_in_dst(src_tenants, dst_tenants,
+                                                    resource_name='tenant',
+                                                    parameter=param)
 
     def test_migrate_nova_keypairs(self):
         """Validate keypairs were migrated with correct name and fingerprint.
@@ -184,12 +169,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         src_keypairs = self.filter_keypairs()
         dst_keypairs = self.dst_cloud.get_users_keypairs()
 
-        self.validate_resource_parameter_in_dst(src_keypairs, dst_keypairs,
-                                                resource_name='keypair',
-                                                parameter='name')
-        self.validate_resource_parameter_in_dst(src_keypairs, dst_keypairs,
-                                                resource_name='keypair',
-                                                parameter='fingerprint')
+        for param in ['name', 'fingerprint']:
+            self.validate_resource_parameter_in_dst(src_keypairs, dst_keypairs,
+                                                    resource_name='keypair',
+                                                    parameter=param)
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_nova_public_flavors(self):
@@ -223,12 +206,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         :param description: description of specific security group"""
         src_sec_gr = self.filter_security_groups()
         dst_sec_gr = self.dst_cloud.neutronclient.list_security_groups()
-        self.validate_neutron_resource_parameter_in_dst(
-            src_sec_gr, dst_sec_gr, resource_name='security_groups',
-            parameter='name')
-        self.validate_neutron_resource_parameter_in_dst(
-            src_sec_gr, dst_sec_gr, resource_name='security_groups',
-            parameter='description')
+        for param in ['name', 'description']:
+            self.validate_neutron_resource_parameter_in_dst(
+                src_sec_gr, dst_sec_gr, resource_name='security_groups',
+                parameter=param)
 
     @unittest.skipIf(functional_test.get_option_from_config_ini(
         option='keep_affinity_settings') == 'False',
@@ -316,21 +297,11 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         filtering_data = self.filtering_utils.filter_images(src_images)
         src_images = filtering_data[0]
 
-        self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                resource_name='image',
-                                                parameter='name')
-        self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                resource_name='image',
-                                                parameter='disk_format')
-        self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                resource_name='image',
-                                                parameter='container_format')
-        self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                resource_name='image',
-                                                parameter='size')
-        self.validate_resource_parameter_in_dst(src_images, dst_images,
-                                                resource_name='image',
-                                                parameter='checksum')
+        for param in ['name', 'disk_format', 'container_format', 'size',
+                      'checksum']:
+            self.validate_resource_parameter_in_dst(src_images, dst_images,
+                                                    resource_name='image',
+                                                    parameter=param)
 
         exclude_images_with_fields = {'delete_on_dst': True}
         src_images = self.filter_images(exclude_images_with_fields)
@@ -452,31 +423,25 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         src_nets = self.filter_networks()
         dst_nets = self.dst_cloud.neutronclient.list_networks()
 
-        self.validate_neutron_resource_parameter_in_dst(src_nets, dst_nets)
-        self.validate_neutron_resource_parameter_in_dst(
-            src_nets, dst_nets, parameter='provider:network_type')
-        self.validate_neutron_resource_parameter_in_dst(
-            src_nets, dst_nets, parameter='provider:segmentation_id')
-        self.validate_neutron_resource_parameter_in_dst(
-            src_nets, dst_nets, parameter='provider:physical_network')
+        for param in ['name', 'provider:network_type',
+                      'provider:segmentation_id', 'provider:physical_network']:
+            self.validate_neutron_resource_parameter_in_dst(src_nets, dst_nets,
+                                                            parameter=param)
 
     def test_migrate_neutron_subnets(self):
         """Validate subnets were migrated with correct parameters.
 
         :param name:
         :param gateway_ip:
-        :param cidr:"""
+        :param cidr:
+        :param dns_nameservers:"""
         src_subnets = self.filter_subnets()
         dst_subnets = self.dst_cloud.neutronclient.list_subnets()
 
-        self.validate_neutron_resource_parameter_in_dst(
-            src_subnets, dst_subnets, resource_name='subnets')
-        self.validate_neutron_resource_parameter_in_dst(
-            src_subnets, dst_subnets, resource_name='subnets',
-            parameter='gateway_ip')
-        self.validate_neutron_resource_parameter_in_dst(
-            src_subnets, dst_subnets, resource_name='subnets',
-            parameter='cidr')
+        for param in ['name', 'gateway_ip', 'cidr', 'dns_nameservers']:
+            self.validate_neutron_resource_parameter_in_dst(
+                src_subnets, dst_subnets, resource_name='subnets',
+                parameter=param)
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_neutron_routers(self):
@@ -506,11 +471,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         for dst_router in dst_routers['routers']:
             dst_router['external_gateway_info'] = format_external_gateway_info(
                 self.dst_cloud, dst_router['external_gateway_info'])
-        self.validate_neutron_resource_parameter_in_dst(
-            src_routers, dst_routers, resource_name='routers')
-        self.validate_neutron_resource_parameter_in_dst(
-            src_routers, dst_routers, resource_name='routers',
-            parameter='external_gateway_info')
+        for param in ['name', 'external_gateway_info']:
+            self.validate_neutron_resource_parameter_in_dst(
+                src_routers, dst_routers, resource_name='routers',
+                parameter=param)
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_validate_router_migrated_once(self):
@@ -573,12 +537,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
 
         src_vms = [vm for vm in src_vms if vm.status != 'ERROR']
 
-        self.validate_resource_parameter_in_dst(
-            src_vms, dst_vms, resource_name='VM', parameter='name')
-        self.validate_resource_parameter_in_dst(
-            src_vms, dst_vms, resource_name='VM', parameter='config_drive')
-        self.validate_resource_parameter_in_dst(
-            src_vms, dst_vms, resource_name='VM', parameter='key_name')
+        for param in ['name', 'config_drive', 'key_name']:
+            self.validate_resource_parameter_in_dst(
+                src_vms, dst_vms, resource_name='VM', parameter=param)
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_vms_with_floating(self):
@@ -619,7 +580,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         src_volume_list = ignore_default_metadata(src_volume_list)
         dst_volume_list = ignore_default_metadata(dst_volume_list)
 
-        for parameter in ('display_name', 'size', 'bootable', 'metadata'):
+        for parameter in ['display_name', 'size', 'bootable', 'metadata']:
             self.validate_resource_parameter_in_dst(
                 src_volume_list, dst_volume_list, resource_name='volume',
                 parameter=parameter)
@@ -942,9 +903,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         dst_lb_pools = self.replace_id_with_name(
             self.dst_cloud, 'pools', self.dst_cloud.neutronclient.list_pools())
 
-        parameters_to_validate = ['tenant_name', 'subnet_name', 'protocol',
-                                  'lb_method']
-        for param in parameters_to_validate:
+        for param in ['tenant_name', 'subnet_name', 'protocol', 'lb_method']:
             self.validate_neutron_resource_parameter_in_dst(
                 src_lb_pools, dst_lb_pools, resource_name='pools',
                 parameter=param)
@@ -991,10 +950,9 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         src_lb_vips = self.replace_id_with_name(self.src_cloud, 'vips', vips)
         vips = self.dst_cloud.neutronclient.list_vips()
         dst_lb_vips = self.replace_id_with_name(self.dst_cloud, 'vips', vips)
-        parameters_to_validate = ['description', 'address', 'protocol',
-                                  'protocol_port', 'connection_limit',
-                                  'pool_name', 'tenant_name', 'subnet_name']
-        for param in parameters_to_validate:
+        for param in ['description', 'address', 'protocol', 'protocol_port',
+                      'connection_limit', 'pool_name', 'tenant_name',
+                      'subnet_name']:
             self.validate_neutron_resource_parameter_in_dst(
                 src_lb_vips, dst_lb_vips, resource_name='vips',
                 parameter=param)
