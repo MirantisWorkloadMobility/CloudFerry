@@ -378,6 +378,23 @@ images = [
 ]
 """Images to create/delete"""
 
+swift_containers = [
+    {'name': 'container1',
+     'objects': [
+         {'name': 'object1',
+          'random_contents_size_in_MB': 10,
+          'metadata': {"content-type": "Superuser"}},
+         {'name': 'object2',
+          'random_contents_size_in_MB': 10,
+          'metadata': {"X-Object-Meta-Color": "Yellow"}},
+         {'name': 'treefile/subtree1',
+          'contents': 'some content for object'},
+         {'name': 'treefile/subtree2',
+          'random_contents_size_in_MB': 100},
+     ]}
+]
+"""Swift containers and ojects to create"""
+
 create_zero_image = True
 """Create zero image, without any parameters"""
 
