@@ -528,11 +528,12 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         :param name:
         :param config_drive:
         :param key_name:"""
-        src_vms = self.filter_vms()
+        src_vms = self.get_src_vm_objects_specified_in_config()
         dst_vms = self.dst_cloud.novaclient.servers.list(
             search_opts={'all_tenants': 1})
 
-        filtering_data = self.filtering_utils.filter_vms(src_vms)
+        filtering_data = self.filtering_utils\
+            .filter_vms_with_filter_config_file(src_vms)
         src_vms = filtering_data[0]
 
         src_vms = [vm for vm in src_vms if vm.status != 'ERROR']
