@@ -485,15 +485,14 @@ class NovaCompute(compute.Compute):
         Deploy compute resources except instances to the cloud.
 
         :param info: Info about compute resources to deploy,
-        :param identity_info: Identity info.
+        :param tenant_map: SRC tenant ID to DST tenant ID mapping. Format:
+                           {<src_tenant_id>: <dst_tenant_id>, ...}
+        :param user_map: SRC user ID to DST user ID mapping. Format:
+                         {<src_user_id>: <dst_user_id>, ...}
         """
 
-        identity_info = kwargs.get('identity_info')
-
-        tenant_map = {tenant['tenant']['id']: tenant['meta']['new_id'] for
-                      tenant in identity_info['tenants']}
-        user_map = {user['user']['id']: user['meta']['new_id'] for user in
-                    identity_info['users']}
+        tenant_map = kwargs.get('tenant_map')
+        user_map = kwargs.get('user_map')
 
         self._deploy_flavors(info['flavors'], tenant_map)
         if self.config['migrate']['migrate_quotas']:

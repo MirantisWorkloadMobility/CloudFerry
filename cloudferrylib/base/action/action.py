@@ -14,6 +14,7 @@
 
 
 from cloudferrylib.scheduler import task
+from cloudferrylib.utils import utils
 
 
 class Action(task.Task):
@@ -37,3 +38,52 @@ class Action(task.Task):
 
     def restore(self):
         pass
+
+    def get_similar_tenants(self):
+        """
+        Get SRC tenant ID to DST tenant ID mapping.
+
+        :return dict: {<src_tenant_id>: <dst_tenant_id>, ...}
+        """
+
+        src_identity = self.src_cloud.resources[utils.IDENTITY_RESOURCE]
+        dst_identity = self.dst_cloud.resources[utils.IDENTITY_RESOURCE]
+
+        src_tenants = src_identity.get_tenants_list()
+        dst_tenants = dst_identity.get_tenants_list()
+
+        dst_tenant_map = {tenant.name.lower(): tenant.id for tenant in
+                          dst_tenants}
+
+        similar_tenants = {}
+
+        for src_tenant in src_tenants:
+            src_tnt_name = src_tenant.name.lower()
+            if src_tnt_name in dst_tenant_map:
+                similar_tenants[src_tenant.id] = dst_tenant_map[src_tnt_name]
+
+        return similar_tenants
+
+    def get_similar_users(self):
+        """
+        Get SRC user ID to DST user ID mapping.
+
+        :return dict: {<src_user_id>: <dst_user_id>, ...}
+        """
+
+        src_identity = self.src_cloud.resources[utils.IDENTITY_RESOURCE]
+        dst_identity = self.dst_cloud.resources[utils.IDENTITY_RESOURCE]
+
+        src_users = src_identity.get_users_list()
+        dst_users = dst_identity.get_users_list()
+
+        dst_usr_map = {user.name.lower(): user.id for user in dst_users}
+
+        similar_users = {}
+
+        for src_user in src_users:
+            src_user_name = src_user.name.lower()
+            if src_user_name in dst_usr_map:
+                similar_users[src_user.id] = dst_usr_map[src_user_name]
+
+        return similar_users

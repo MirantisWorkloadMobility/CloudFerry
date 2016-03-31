@@ -36,11 +36,17 @@ def _image(uuid=DONT_CARE, tenant=DONT_CARE, is_public=True, update_time=None,
 
 
 class GlanceImageFilterTestCase(test.TestCase):
-    def apply_filter(self, images, expected_ids, tenant, image_ids, date=None,
+    def apply_filter(self, images, expected_ids, tenant, image_ids,
+                     exclude_image_ids=None, date=None,
                      glance_client=mock.MagicMock()):
         filter_yaml = mock.Mock()
         filter_yaml.get_tenant.return_value = tenant
         filter_yaml.get_image_ids.return_value = image_ids
+        if exclude_image_ids:
+            filter_yaml.get_excluded_image_ids.return_value = exclude_image_ids
+        else:
+            filter_yaml.get_excluded_image_ids.return_value = []
+
         filter_yaml.get_image_date.return_value = date
         filter_yaml.is_public_and_member_images_filtered.return_value = False
 
@@ -98,7 +104,7 @@ class GlanceImageFilterTestCase(test.TestCase):
         expected_ids = ['pub', 'private', 'private2']
         filter_date = datetime.datetime.strptime('2000-01-05T00:00:00',
                                                  "%Y-%m-%dT%H:%M:%S")
-        self.apply_filter(images, expected_ids, None, [], filter_date)
+        self.apply_filter(images, expected_ids, None, [], date=filter_date)
 
     def test_date_with_tenant(self):
         images = [_image('private', 'Foo', False, '2000-01-06T00:00:00'),
@@ -109,7 +115,7 @@ class GlanceImageFilterTestCase(test.TestCase):
         expected_ids = ['pub', 'private']
         filter_date = datetime.datetime.strptime('2000-01-05T00:00:00',
                                                  "%Y-%m-%dT%H:%M:%S")
-        self.apply_filter(images, expected_ids, 'Foo', [], filter_date)
+        self.apply_filter(images, expected_ids, 'Foo', [], date=filter_date)
 
     def test_members(self):
         images = [_image('private', 'Foo', False),
@@ -142,3 +148,17 @@ class GlanceImageFilterTestCase(test.TestCase):
         expected_ids = ['private_1', 'pub']
 
         self.apply_filter(images, expected_ids, None, [])
+
+    def test_exclude_images(self):
+        images = [_image(uuid='image1', tenant='foo', is_public=False),
+                  _image(uuid='image2', tenant='foo', is_public=False),
+                  _image(uuid='image3', tenant='bar', is_public=False),
+                  _image(uuid='image4', tenant='bar', is_public=False),
+                  _image(uuid='image5', tenant='bar', is_public=True),
+                  ]
+
+        exclude_image_ids = ['image1', 'image3']
+        expected_ids = ['image2', 'image4', 'image5']
+
+        self.apply_filter(images, expected_ids, None, [],
+                          exclude_image_ids=exclude_image_ids)

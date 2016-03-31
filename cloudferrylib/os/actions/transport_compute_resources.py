@@ -24,7 +24,7 @@ LOG = log.getLogger(__name__)
 
 
 class TransportComputeResources(action.Action):
-    def run(self, info=None, identity_info=None, **kwargs):
+    def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)
         target = 'resources'
         search_opts = {'target': target}
@@ -34,8 +34,12 @@ class TransportComputeResources(action.Action):
         dst_compute = self.dst_cloud.resources[utl.COMPUTE_RESOURCE]
 
         info_res = src_compute.read_info(**search_opts)
+
+        tenant_map = self.get_similar_tenants()
+        user_map = self.get_similar_users()
+
         new_info = dst_compute.deploy(info_res, target=target,
-                                      identity_info=identity_info)
+                                      tenant_map=tenant_map, user_map=user_map)
 
         if info:
             new_info[utl.INSTANCES_TYPE] = info[utl.INSTANCES_TYPE]

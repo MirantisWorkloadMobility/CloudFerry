@@ -1,0 +1,201 @@
+# Do not modify. This is template file. To change parameters please use 'config.ini'.
+
+[migrate]
+scenario = <scenario_file>
+tasks_mapping = <tasks_file>
+
+keep_network_interfaces_order = True
+keep_user_passwords = False
+ssh_transfer_port = 9990-9999
+key_filename = <migrate_key_filename>
+keep_ip = yes
+keep_floatingip = yes
+change_router_ips = True
+clean_router_ips_stub = True
+keep_volume_storage = False
+speed_limit = off
+file_compression = gzip
+level_compression = 9
+overwrite_user_passwords = False
+migrate_quotas = True
+migrate_users = True
+direct_compute_transfer = True
+filter_path = configs/filter.yaml
+keep_lbaas = no
+ssh_chunk_size = 100
+retry = 5
+migrate_extnets = True
+time_wait = 5
+migrate_user_quotas = False
+incloud_live_migration = nova
+ssh_connection_attempts = 3
+keep_affinity_settings = True
+keep_usage_quotas_inst = True
+copy_backend = rsync
+copy_with_md5_verification = True
+
+[src]
+type = os
+auth_url = http://<src_ip>:35357/v2.0
+host = <src_ip>
+ssh_host = <src_ip>
+ssh_user = <src_ssh_user>
+ssh_sudo_password = <src_ssh_sudo_password>
+ext_cidr = <src_ext_cidr>
+user = <src_user>
+password = <src_password>
+tenant = <src_tenant>
+
+[src_mysql]
+db_user = <src_mysql_user>
+db_password = <src_mysql_password>
+db_host = <src_ip>
+db_port = 3306
+db_connection = mysql+pymysql
+
+[src_rabbit]
+password = <src_rabbit_password>
+hosts = <src_ip>:5672
+
+[src_compute]
+service = nova
+backend = iscsi
+host_eph_drv = <src_ip>
+db_connection = mysql+pymysql
+db_host = <src_ip>
+db_port = 3306
+db_name = nova
+db_user = <src_mysql_user>
+db_password = <src_mysql_password>
+
+[src_storage]
+service = cinder
+backend = <src_storage_backend>
+db_host = <src_ip>
+db_port = 3306
+db_connection = mysql+pymysql
+db_user = <src_mysql_user>
+db_password = <src_mysql_password>
+db_name = cinder
+protocol_transfer = <src_storage_protocol_transfer>
+disk_format = qcow2
+
+[src_image]
+service = glance
+backend = swift
+disk_format = qcow2
+db_user = <src_mysql_user>
+db_password = <src_mysql_password>
+db_host = <src_ip>
+db_port = 3306
+db_connection = mysql+pymysql
+db_name = glance
+
+[src_identity]
+service = keystone
+
+[src_network]
+service = auto
+db_user = <src_mysql_user>
+db_password = <src_mysql_password>
+db_host = <src_ip>
+db_connection = mysql+pymysql
+db_name = quantum
+get_all_quota = False
+
+[src_objstorage]
+service =
+
+[dst]
+type = os
+auth_url = http://<dst_ip>:35357/v2.0
+host = <dst_ip>
+ssh_host = <dst_ip>
+ssh_user = <dst_ssh_user>
+ssh_sudo_password = <dst_ssh_sudo_password>
+ext_cidr = <dst_ext_cidr>
+user = <dst_user>
+password = <dst_password>
+tenant = <dst_tenant>
+service_tenant = service
+
+[dst_mysql]
+db_user = <dst_mysql_user>
+db_password = <dst_mysql_password>
+db_host = <dst_ip>
+db_port = 3306
+db_connection = mysql+pymysql
+
+[dst_compute]
+service = nova
+backend = iscsi
+host_eph_drv = <dst_ip>
+db_connection = mysql+pymysql
+db_host = <dst_ip>
+db_port = 3306
+db_name = nova
+db_user = <dst_mysql_user>
+db_password = <dst_mysql_password>
+
+[dst_rabbit]
+password = <dst_rabbit_password>
+hosts = <dst_ip>:5672
+
+[dst_storage]
+service = cinder
+backend = <dst_storage_backend>
+db_host = <dst_ip>
+db_port = 3306
+protocol_transfer = <dst_storage_protocol_transfer>
+db_connection = mysql+pymysql
+db_user = <dst_mysql_user>
+db_password = <dst_mysql_password>
+db_name = cinder
+
+[dst_image]
+service = glance
+convert_to_raw = False
+backend = swift
+db_user = <dst_mysql_user>
+db_password = <dst_mysql_password>
+db_host = <dst_ip>
+db_port = 3306
+db_connection = mysql+pymysql
+db_name = glance
+
+[dst_identity]
+service = keystone
+
+[dst_network]
+service=auto
+db_user = <dst_mysql_user>
+db_password = <dst_mysql_password>
+db_host = <dst_ip>
+db_connection = mysql+pymysql
+db_name = neutron
+get_all_quota = False
+
+[import_rules]
+key = {name:dest-key-1}
+
+[dst_objstorage]
+service =
+
+[snapshot]
+snapshot_path = <snapshot_snapshot_path>
+
+[initial_check]
+claimed_bandwidth = 100
+factor = 0.1
+test_file_size = 10
+
+[condense]
+group_file=
+
+[database]
+host = localhost
+port = 6379
+
+[bbcp]
+path = <bbcp_path>
+options = -P 5 -e

@@ -12,3 +12,4 @@ snapshots
 build
 dist
 CloudFerry.egg-info
+cloudferry_devlab.egg-info

@@ -52,6 +52,11 @@ class FilterYamlTestCase(test.TestCase):
         fy = filters.FilterYaml(filters_file)
         self.assertEqual(list(), fy.get_image_ids())
 
+    def test_returns_empty_list_for_get_excluded_image_ids(self):
+        filters_file = u""
+        fy = filters.FilterYaml(filters_file)
+        self.assertEqual(list(), fy.get_excluded_image_ids())
+
     def test_returns_empty_list_if_nothing_in_instance_ids(self):
         filters_file = u""
         fy = filters.FilterYaml(filters_file)
@@ -83,6 +88,23 @@ class FilterYamlTestCase(test.TestCase):
         self.assertTrue(isinstance(filtered_instances, list))
         self.assertIn(instance1, filtered_instances)
         self.assertIn(instance2, filtered_instances)
+
+    def test_returns_images_from_excluded_image_ids(self):
+        image1 = 'image1'
+        image2 = 'image2'
+        filters_file = u"""
+        images:
+            exclude_images_list:
+                - {image1}
+                - {image2}
+        """.format(image1=image1, image2=image2)
+
+        fy = filters.FilterYaml(filters_file)
+        filtered_images = fy.get_excluded_image_ids()
+
+        self.assertTrue(isinstance(filtered_images, list))
+        self.assertIn(image1, filtered_images)
+        self.assertIn(image2, filtered_images)
 
     def test_returns_images_from_image_ids(self):
         image1 = 'image1'

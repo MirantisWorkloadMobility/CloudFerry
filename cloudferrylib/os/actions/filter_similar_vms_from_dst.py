@@ -44,21 +44,6 @@ class FilterSimilarVMsFromDST(action.Action):
         self.similar_isntances = collections.defaultdict(set)
         self.conflict_instances = collections.defaultdict(set)
 
-    def get_similar_tenants(self):
-        src_identity = self.src_cloud.resources[utils.IDENTITY_RESOURCE]
-        dst_identity = self.dst_cloud.resources[utils.IDENTITY_RESOURCE]
-        src_tenants = src_identity.read_info()['tenants']
-        dst_tenants = {t['tenant']['name']: t['tenant']['id']
-                       for t in dst_identity.read_info()['tenants']}
-        similar_tenants = {}
-        for ts in src_tenants:
-            index = ts['tenant']['name']
-            if index in dst_tenants:
-                similar_tenants[ts['tenant']['id']] = dst_tenants[index]
-            else:
-                similar_tenants[ts['tenant']['id']] = ''
-        return similar_tenants
-
     def run(self, **kwargs):
         self.src_instances = kwargs['info']['instances']
         if 'identity_info' in kwargs:

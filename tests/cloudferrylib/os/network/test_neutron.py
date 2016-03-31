@@ -95,6 +95,7 @@ class NeutronTestCase(test.TestCase):
                            'provider:network_type': 'gre',
                            'provider:segmentation_id': 5,
                            'res_hash': 'fake_net_hash_1',
+                           'subnets_hash': {'fake_subnet_hash_1'},
                            'meta': {}}
 
         self.net_2_info = {'name': 'fake_network_name_2',
@@ -109,6 +110,7 @@ class NeutronTestCase(test.TestCase):
                            'provider:network_type': 'vlan',
                            'provider:segmentation_id': 10,
                            'res_hash': 'fake_net_hash_2',
+                           'subnets_hash': {'fake_subnet_hash_2'},
                            'meta': {}}
 
         self.subnet_1_info = {'name': 'fake_subnet_name_1',
@@ -124,6 +126,7 @@ class NeutronTestCase(test.TestCase):
                               'network_id': 'fake_network_id_1',
                               'tenant_name': 'fake_tenant_name_1',
                               'res_hash': 'fake_subnet_hash_1',
+                              'dns_nameservers': ['5.5.5.5'],
                               'meta': {}}
 
         self.subnet_2_info = {'name': 'fake_subnet_name_2',
@@ -431,6 +434,7 @@ class NeutronTestCase(test.TestCase):
                                          'ip_version': 4,
                                          'gateway_ip': 'fake_gateway_ip_1',
                                          'cidr': '1.1.1.0/24',
+                                         'dns_nameservers': ['5.5.5.5'],
                                          'id': 'fake_subnet_id_1'}]}
 
         self.neutron_mock_client().list_networks.return_value = fake_net_list
@@ -470,6 +474,7 @@ class NeutronTestCase(test.TestCase):
                                          'ip_version': 4,
                                          'gateway_ip': 'fake_gateway_ip_1',
                                          'cidr': '1.1.1.0/24',
+                                         'dns_nameservers': ['5.5.5.5'],
                                          'id': 'fake_subnet_id_1'}]}
 
         self.neutron_mock_client().list_subnets.return_value = fake_subnet_list

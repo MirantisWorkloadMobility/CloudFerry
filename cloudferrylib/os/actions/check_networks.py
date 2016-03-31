@@ -462,7 +462,7 @@ class NetworkInfo(object):
 class Network(object):
     def __init__(self, info):
         self.info = info
-        self.subnets_hash = set()
+        self.subnets_hash = info['subnets_hash']
         self.subnets = []
         self.id = info['id']
         self.hash = info['res_hash']
@@ -474,7 +474,6 @@ class Network(object):
 
     def add_subnet(self, info):
         self.subnets.append(info)
-        self.subnets_hash.add(info['res_hash'])
 
     def check_network_overlapping(self, network):
         for subnet in network.subnets:

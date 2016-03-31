@@ -13,5 +13,4 @@ rollback:
 process:
   - act_get_filter: True
   - act_check_filter: True
-  - act_identity_trans: True
   - act_comp_res_trans: True

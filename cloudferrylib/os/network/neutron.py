@@ -398,9 +398,12 @@ class NeutronNetwork(network.Network):
         get_tenant_name = identity_res.get_tenants_func()
 
         subnets = []
+        subnets_hash = set()
+
         for subnet in net['subnets']:
             snet = self.convert_subnets(subnet, cloud)
             subnets.append(snet)
+            subnets_hash.add(snet['res_hash'])
 
         result = {
             'name': net['name'],
@@ -414,6 +417,7 @@ class NeutronNetwork(network.Network):
             'provider:physical_network': net['provider:physical_network'],
             'provider:network_type': net['provider:network_type'],
             'provider:segmentation_id': net['provider:segmentation_id'],
+            'subnets_hash': subnets_hash,
             'meta': {},
         }
 
@@ -451,6 +455,7 @@ class NeutronNetwork(network.Network):
             'external': net['router:external'],
             'network_id': snet['network_id'],
             'tenant_name': get_tenant_name(snet['tenant_id']),
+            'dns_nameservers': snet['dns_nameservers'],
             'meta': {},
         }
 
@@ -1146,31 +1151,23 @@ class NeutronNetwork(network.Network):
         LOG.info("Creating networks on destination")
         identity = self.identity_client
 
-        existing_nets = {n['res_hash']: n for n in self.get_networks()}
-        existing_subnets = {sn['res_hash']: sn for sn in self.get_subnets()}
+        existing_networks = self.get_networks()
 
         # we need to handle duplicates in segmentation ids
-        dst_seg_ids = get_segmentation_ids_from_net_list(
-            existing_nets.values())
+        dst_seg_ids = get_segmentation_ids_from_net_list(existing_networks)
 
         for src_net in networks:
             network_detached_ports = [p for p in detached_ports
                                       if p['network_id'] == src_net['id']]
 
             # Check network for existence on destination cloud
-            if src_net['res_hash'] in existing_nets:
-                # Check all network's subnets for existence on DST cloud
-                for subnet in src_net['subnets']:
-                    if subnet['res_hash'] not in existing_subnets:
-                        break
-                else:
-                    LOG.info("DST cloud already has the same network "
-                             "with name '%s' in tenant '%s'",
-                             src_net['name'], src_net['tenant_name'])
-                    self.deploy_detached_ports(
-                        existing_nets[src_net['res_hash']],
-                        network_detached_ports)
-                    continue
+            dst_net = self.get_dst_net_by_src_net(existing_networks, src_net)
+            if dst_net:
+                LOG.info("DST cloud already has the same "
+                         "network with name '%s' in tenant '%s'",
+                         src_net['name'], src_net['tenant_name'])
+                self.deploy_detached_ports(dst_net, network_detached_ports)
+                continue
 
             LOG.debug("Trying to create network '%s'", src_net['name'])
             tenant_id = identity.get_tenant_id_by_name(src_net['tenant_name'])
@@ -1315,6 +1312,7 @@ class NeutronNetwork(network.Network):
                     'allocation_pools': snet['allocation_pools'],
                     'gateway_ip': snet['gateway_ip'],
                     'ip_version': snet['ip_version'],
+                    'dns_nameservers': snet['dns_nameservers'],
                     'tenant_id': created_net['tenant_id']
                 }
             }
@@ -1541,12 +1539,46 @@ class NeutronNetwork(network.Network):
         return hash(tuple(hash_list))
 
     def get_new_extnet_id(self, src_net_id, src_nets, dst_nets):
+        """
+        Get ID of similar external network form DST.
+
+        :param src_net_id: External network ID from SRC cloud,
+        :param src_nets: Networks list from SRC cloud,
+        :param dst_nets: Networks list from DST cloud,
+
+        :return unicode: External network ID from DST, that matches with the
+                         similar network from SRC.
+        """
+
         if src_net_id in self.ext_net_map:
             dst_net_id = self.ext_net_map[src_net_id]
         else:
-            net_hash = self.get_res_hash_by_id(src_nets, src_net_id)
-            dst_net_id = self.get_res_by_hash(dst_nets, net_hash)['id']
+            src_net = get_network_from_list_by_id(src_net_id, src_nets)
+            dst_net = self.get_dst_net_by_src_net(dst_nets, src_net)
+
+            if not dst_net:
+                return
+
+            dst_net_id = dst_net['id']
+
         return dst_net_id
+
+    @staticmethod
+    def get_dst_net_by_src_net(existing_networks, src_net):
+        """
+        Get the same Network object from DST cloud.
+
+        :param existing_networks: Existing networks list on DST cloud,
+        :param src_net: Network object from SRC,
+
+        :return dict: Network object from DST, that matches with the same
+                      network from SRC.
+        """
+
+        for net in existing_networks:
+            if (net['res_hash'] == src_net['res_hash'] and
+                    net['subnets_hash'] == src_net['subnets_hash']):
+                return net
 
 
 class Router(object):

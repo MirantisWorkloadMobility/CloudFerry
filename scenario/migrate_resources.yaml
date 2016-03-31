@@ -53,6 +53,7 @@ process:
           - act_deploy_images: True
       - act_comp_res_trans: True
       - act_network_trans: True
+      - transport_storage_resources: True
       - get_volumes_db_data: True
       - migrate_volumes: True
       - transport_key_pairs: True
