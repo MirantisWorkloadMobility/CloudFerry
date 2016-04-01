@@ -58,4 +58,6 @@ def default_ssh_options():
         '-o UserKnownHostsFile=/dev/null',
         '-o StrictHostKeyChecking=no'
     ]
+    if CONF.migrate.ssh_cipher:
+        options.append('-c ' + CONF.migrate.ssh_cipher)
     return ' '.join(options)

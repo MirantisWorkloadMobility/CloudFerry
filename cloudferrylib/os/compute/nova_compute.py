@@ -311,20 +311,17 @@ class NovaCompute(compute.Compute):
                             instance.id))]
 
         is_ceph = cfg.compute.backend.lower() == utl.CEPH
-        direct_transfer = cfg.migrate.direct_compute_transfer
 
         ssh_user = cfg.cloud.ssh_user
 
-        if direct_transfer:
+        if is_ceph:
+            host = cfg.compute.host_eph_drv
+        else:
             ext_cidr = cfg.cloud.ext_cidr
             host = node_ip.get_ext_ip(ext_cidr,
                                       cfg.cloud.ssh_host,
                                       instance_node,
                                       ssh_user)
-        elif is_ceph:
-            host = cfg.compute.host_eph_drv
-        else:
-            host = instance_node
 
         if not utl.libvirt_instance_exists(instance_name,
                                            cfg.cloud.ssh_host,
@@ -662,7 +659,7 @@ class NovaCompute(compute.Compute):
                 LOG.warning("Failed to create instance '%s'", new_id)
                 if self.instance_exists(new_id):
                     instance = self.get_instance(new_id)
-                    if instance.fault:
+                    if hasattr(instance, 'fault') and instance.fault:
                         LOG.debug("Error message of failed instance '%s': %s",
                                   new_id, instance.fault)
                 self._failed_instances.append(new_id)

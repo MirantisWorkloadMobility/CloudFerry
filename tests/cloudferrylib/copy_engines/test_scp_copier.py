@@ -24,23 +24,29 @@ from tests.cloudferrylib.copy_engines import test_base
 class SspCopierTestCase(test_base.BaseTestCase):
     copier_class = scp_copier.ScpCopier
 
-    def test_run_scp(self):
-        runner = mock.Mock()
-        with mock.patch.object(
-                self.copier, 'verify',
-                side_effect=(False, True, False)) as mock_verify:
-            self.cfg.set_override('retry', 2, 'migrate')
-            self.copier.run_scp(runner, 'fake_src_path', 'fake_dst_host',
-                                'fake_dst_path')
-            self.assertEqual(2, runner.run.call_count)
-            self.assertEqual(2, mock_verify.call_count)
+    def test_run_scp_direct_true(self):
+        with self.mock_runner() as mock_runner:
+            with mock.patch.object(
+                    self.copier, 'verify',
+                    side_effect=(False, True, False)) as mock_verify:
+                self.cfg.set_override('retry', 2, 'migrate')
+                self.copier.run_scp(**self.data)
+                self.assertEqual(2, mock_runner.run.call_count)
+                self.assertEqual(2, mock_verify.call_count)
 
-            runner.reset_mock()
-            mock_verify.reset_mock()
-            self.cfg.set_override('retry', 1, 'migrate')
-            self.assertRaises(base.FileCopyError, self.copier.run_scp, runner,
-                              'fake_src_path', 'fake_dst_host',
-                              'fake_dst_path')
+                mock_runner.reset_mock()
+                mock_verify.reset_mock()
+                self.cfg.set_override('retry', 1, 'migrate')
+                self.assertRaises(base.FileCopyError, self.copier.run_scp,
+                                  **self.data)
+
+    @mock.patch('cloudferrylib.utils.local.run')
+    def test_run_scp_direct_false(self, mock_run):
+        self.cfg.set_override('direct_transfer', False, 'migrate')
+        with mock.patch.object(self.copier, 'verify') as mock_verify:
+            self.copier.run_scp(**self.data)
+            self.assertCalledOnce(mock_run)
+            self.assertCalledOnce(mock_verify)
 
     def test_transfer(self):
         with self.mock_runner() as runner:
@@ -59,11 +65,11 @@ class SspCopierTestCase(test_base.BaseTestCase):
             runner.run.side_effect = ('10', '20', '10', '10')
             self.data['path_src'] = 'fake_path_src_1'
             self.data['path_dst'] = 'fake_path_dst_1'
-            self.assertFalse(self.copier.verify(self.data))
+            self.assertFalse(self.copier.verify(**self.data))
 
             self.data['path_src'] = 'fake_path_src_2'
             self.data['path_dst'] = 'fake_path_dst_2'
-            self.assertTrue(self.copier.verify(self.data))
+            self.assertTrue(self.copier.verify(**self.data))
 
     def test_verify_md5(self):
         self.cfg.set_override('copy_with_md5_verification', True,
@@ -72,9 +78,9 @@ class SspCopierTestCase(test_base.BaseTestCase):
             runner.run.side_effect = ('10', '10', 'md5_1', 'md5_2')
             self.data['path_src'] = 'fake_path_src_1'
             self.data['path_dst'] = 'fake_path_dst_1'
-            self.assertFalse(self.copier.verify(self.data))
+            self.assertFalse(self.copier.verify(**self.data))
 
             self.data['path_src'] = 'fake_path_src_2'
             self.data['path_dst'] = 'fake_path_dst_2'
             runner.run.side_effect = ('10', '10', 'md5_1', 'md5_1')
-            self.assertTrue(self.copier.verify(self.data))
+            self.assertTrue(self.copier.verify(**self.data))

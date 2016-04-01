@@ -30,7 +30,7 @@ class RsyncCopierTestCase(test_base.BaseTestCase):
             self.assertTrue(self.copier.check_usage(self.data))
             self.assertFalse(self.copier.check_usage(self.data))
 
-    def test_transfer(self):
+    def test_transfer_direct_true(self):
         with self.mock_runner() as runner:
             runner.run_repeat_on_errors.side_effect = (
                 None,
@@ -42,3 +42,9 @@ class RsyncCopierTestCase(test_base.BaseTestCase):
                 self.assertRaises(base.FileCopyError,
                                   self.copier.transfer, self.data)
                 self.assertCalledOnce(mock_clean_dst)
+
+    def test_transfer_direct_false(self):
+        with self.mock_runner() as mock_runner:
+            self.cfg.set_override('direct_transfer', False, 'migrate')
+            self.copier.transfer(self.data)
+            self.assertCalledOnce(mock_runner.run_repeat_on_errors)

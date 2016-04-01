@@ -24,17 +24,25 @@ LOG = logging.getLogger(__name__)
 CONF = cfg.CONF
 
 
+class RsyncRemoteTunnelOptions(remote_runner.RemoteTunnelOptions):
+    def __init__(self, host):
+        super(RsyncRemoteTunnelOptions, self).__init__(
+            remote_port=CONF.rsync.port,
+            port=22,
+            host=host
+        )
+
+
 class RsyncCopier(base.BaseCopier):
     """Uses `rsync` to copy files. Used by ephemeral drive copy process"""
 
     name = 'rsync'
 
     def transfer(self, data):
-        src_host = data['host_src']
-        src_path = data['path_src']
-        dst_host = data['host_dst']
-        dst_path = data['path_dst']
-        gateway = data.get('gateway')
+        host_src = data['host_src']
+        path_src = data['path_src']
+        host_dst = data['host_dst']
+        path_dst = data['path_dst']
 
         cmd = ("rsync "
                "--partial "
@@ -44,30 +52,33 @@ class RsyncCopier(base.BaseCopier):
                "--compress "
                "--verbose "
                "--progress "
-               "--rsh='ssh {ssh_opts} {ssh_cipher}' "
-               "{source_file} "
-               "{dst_user}@{dst_host}:{dst_path}")
-        ssh_opts = " ".join(["-o {}".format(opt)
-                             for opt in ["UserKnownHostsFile=/dev/null",
-                                         "StrictHostKeyChecking=no"]])
+               "--rsh='ssh {ssh_opts}' "
+               "{path_src} "
+               "{user_dst}@{host_dst}:{path_dst}")
+        ssh_opts = ssh_util.default_ssh_options()
 
-        src_runner = self.runner(src_host, 'src', gateway=gateway)
+        if CONF.migrate.direct_transfer:
+            remote_tunnel = None
+        else:
+            ssh_opts += " -p {port}".format(port=CONF.rsync.port)
+            remote_tunnel = RsyncRemoteTunnelOptions(host_dst)
+            host_dst = "localhost"
+
+        runner = self.runner(host_src, 'src', data.get('gateway'),
+                             remote_tunnel=remote_tunnel)
         try:
-            src_runner.run_repeat_on_errors(
-                    cmd,
-                    ssh_cipher=ssh_util.get_cipher_option(),
-                    ssh_opts=ssh_opts,
-                    source_file=src_path,
-                    dst_user=CONF.dst.ssh_user,
-                    dst_host=dst_host,
-                    dst_path=dst_path)
+            runner.run_repeat_on_errors(cmd,
+                                        ssh_opts=ssh_opts,
+                                        path_src=path_src,
+                                        user_dst=CONF.dst.ssh_user,
+                                        host_dst=host_dst,
+                                        path_dst=path_dst)
         except remote_runner.RemoteExecutionError:
-            self.clean_dst(data)
+            self.clean_dst(host_dst, path_dst)
             raise base.FileCopyError(**data)
 
     def check_usage(self, data):
-        src_host = data['host_src']
-        runner = self.runner(src_host, 'src')
+        runner = self.runner(data['host_src'], 'src')
         LOG.debug("Checking if rsync is installed")
         try:
             runner.run("rsync --help &>/dev/null")

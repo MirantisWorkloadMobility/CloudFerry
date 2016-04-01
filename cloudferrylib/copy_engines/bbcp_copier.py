@@ -26,7 +26,7 @@ from cloudferrylib.utils import ssh_util
 LOG = logging.getLogger(__name__)
 CONF = cfg.CONF
 
-BBCP_PATH = '/usr/local/bin/bbcp'
+BBCP_PATH = '/tmp/bbcp'
 
 
 class BbcpCopier(base.BaseCopier):
@@ -55,7 +55,6 @@ class BbcpCopier(base.BaseCopier):
         else:
             return
 
-        tmp_path = '/tmp/bbcp'
         if position == 'src':
             bbcp = CONF.bbcp.src_path
             user = CONF.src.ssh_user
@@ -63,29 +62,32 @@ class BbcpCopier(base.BaseCopier):
             bbcp = CONF.bbcp.dst_path
             user = CONF.dst.ssh_user
 
-        LOG.debug("Copying %s to %s:/usr/local/bin/bbcp", bbcp, host)
-        cmd = "scp {cipher} -o {opts} {bbcp} {user}@{host}:{tmp}"
-        local.run(cmd.format(opts='StrictHostKeyChecking=no',
+        LOG.debug("Copying %s to %s:%s", bbcp, host, BBCP_PATH)
+        cmd = "scp {ssh_opts} {bbcp} {user}@{host}:{tmp}"
+        local.run(cmd.format(ssh_opts=ssh_util.default_ssh_options(),
                              bbcp=bbcp,
                              user=user,
                              host=host,
-                             tmp=tmp_path,
-                             cipher=ssh_util.get_cipher_option()),
+                             tmp=BBCP_PATH),
                   capture_output=False)
-        cmd = "mv {tmp} {path} && chmod 755 {path}"
-        runner.run(cmd, tmp=tmp_path, path=BBCP_PATH)
+        cmd = "chmod 755 {path}"
+        runner.run(cmd, path=BBCP_PATH)
 
     def transfer(self, data):
-        src_host = data['host_src']
-        src_path = data['path_src']
-        dst_host = data['host_dst']
-        dst_path = data['path_dst']
+        host_src = data['host_src']
+        path_src = data['path_src']
+        host_dst = data['host_dst']
+        path_dst = data['path_dst']
+
+        cmd = "{bbcp} {options} {src} {dst} 2>&1"
 
         options = CONF.bbcp.options
         additional_options = []
         # -f: forces the copy by first unlinking the target file before
         # copying.
         # -p: preserve source mode, ownership, and dates.
+        # -S: command to start bbcp on the source node.
+        # -T: command to start bbcp on the target node.
         forced_options = ['-f', '-p']
         if CONF.migrate.copy_with_md5_verification:
             # -e: error check data for transmission errors using md5 checksum.
@@ -93,41 +95,53 @@ class BbcpCopier(base.BaseCopier):
         for o in forced_options:
             if o not in options:
                 additional_options.append(o)
-        # -S: command to start bbcp on the source node.
-        # -T: command to start bbcp on the target node.
-        for o in ('-S', '-T'):
+        run_options = ['-T']
+        if CONF.migrate.direct_transfer:
+            src = path_src
+            bbcp = BBCP_PATH
+            runner = self.runner(host_src, 'src', data.get('gateway'))
+            run = runner.run
+        else:
+            run_options += ['-S']
+            src = '{user_src}@{host_src}:{path_src}'.format(
+                user_src=CONF.src.ssh_user,
+                host_src=host_src,
+                path_src=path_src,
+            )
+            bbcp = CONF.bbcp.path
+            run = local.run
+        dst = '{user_dst}@{host_dst}:{path_dst}'.format(
+            user_dst=CONF.dst.ssh_user,
+            host_dst=host_dst,
+            path_dst=path_dst,
+        )
+        for o in run_options:
             if o not in options:
-                additional_options.append(o + " '{bbcp_cmd}'")
-        bbcp_cmd = "ssh {ssh_opts} %I -l %U %H bbcp".format(
-            ssh_opts=ssh_util.default_ssh_options())
-        options += ' ' + ' '.join(additional_options).format(bbcp_cmd=bbcp_cmd)
-        cmd = ("{bbcp} {options} "
-               "{src_user}@{src_host}:{src_path} "
-               "{dst_user}@{dst_host}:{dst_path} "
-               "2>&1")
+                additional_options.append(o + " '{remote_bbcp}'")
+        remote_bbcp = "ssh {ssh_opts} %I -l %U %H {path}".format(
+            ssh_opts=ssh_util.default_ssh_options(),
+            path=BBCP_PATH
+        )
+        options += ' ' + ' '.join(additional_options).format(
+            remote_bbcp=remote_bbcp)
+
         retrier = retrying.Retry(
             max_attempts=CONF.migrate.retry,
-            timeout=0,
+            timeout=0
         )
         try:
-            retrier.run(local.run, cmd.format(bbcp=CONF.bbcp.path,
-                                              options=options,
-                                              src_user=CONF.src.ssh_user,
-                                              dst_user=CONF.dst.ssh_user,
-                                              src_host=src_host,
-                                              dst_host=dst_host,
-                                              src_path=src_path,
-                                              dst_path=dst_path),
+            retrier.run(run, cmd.format(bbcp=bbcp, options=options, src=src,
+                                        dst=dst),
                         capture_output=False)
         except retrying.MaxAttemptsReached:
-            self.clean_dst(data)
+            self.clean_dst(host_dst, path_dst)
             raise base.FileCopyError(**data)
 
     def check_usage(self, data):
         LOG.debug('Checking if bbcp is available')
-        if not all(os.path.isfile(p) for p in {CONF.bbcp.path,
-                                               CONF.bbcp.src_path,
-                                               CONF.bbcp.dst_path}):
+        path = {CONF.bbcp.path, CONF.bbcp.src_path, CONF.bbcp.dst_path}
+        if not all(os.path.isfile(p) for p in path):
+            LOG.error("The path of bbcp are not valid: %s", path)
             return False
         for host, position, cloud in (
                 (data['host_src'], 'src', self.src_cloud),

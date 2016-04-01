@@ -35,7 +35,9 @@ class BaseTestCase(test.TestCase):
             'path_src': 'fake_path_src',
             'host_dst': 'fake_host_dst',
             'path_dst': 'fake_path_dst',
+            'gateway': 'fake_gateway'
         }
+        self.cfg.set_override('direct_transfer', True, 'migrate')
 
     @contextlib.contextmanager
     def mock_runner(self):
@@ -49,14 +51,6 @@ class BaseCopierTestCase(BaseTestCase):
     def test_runner(self):
         runner = self.copier.runner('fake_host', 'src')
         self.assertIsInstance(runner, remote_runner.RemoteRunner)
-
-    def test_runner_cache(self):
-        runner1 = self.copier.runner('fake_host', 'src')
-        runner2 = self.copier.runner('fake_host', 'src')
-        runner3 = self.copier.runner('fake_host', 'dst')
-
-        self.assertEqual(runner1, runner2)
-        self.assertIsNot(runner3, runner1)
 
     def test_check_usage(self):
         self.assertTrue(self.copier.check_usage(self.data))
@@ -72,7 +66,7 @@ class BaseCopierTestCase(BaseTestCase):
 
     def test_clean_dst(self):
         with self.mock_runner() as runner:
-            self.copier.clean_dst(self.data)
+            self.copier.clean_dst(self.data['host_dst'], self.data['path_dst'])
             self.assertCalledOnce(runner.run_ignoring_errors)
 
 
