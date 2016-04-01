@@ -3,7 +3,27 @@ Scenario
 
 ## Overview
 
-By default CloudFerry tool is going to migrate all resources and instances from the source cloud to the destination cloud.
+By default CloudFerry tool is going to migrate resources and instances,
+specified in the filter config file, from the source cloud to the destination
+cloud.
+Default location of filter config file is `configs/filter.yaml`, but it always
+can be changed by modifying main configuration file (configuration.ini).
+
+Example:
+```
+[migrate]
+filter_path = <new_filter_path>
+```
+
+If one wants to migrate ALL resources and instances from the source cloud to
+the destination cloud then need to modify main configuration file
+(configuration.ini) with:
+
+```
+[migrate]
+migrate_whole_cloud = True
+```
+
 Just use default file scenario(scenario/cold_migrate.yaml) and see README file for instructions to run migration.
 
 
