@@ -43,6 +43,31 @@ def get_flav_details(db, instance_id):
                 'ephemeral_gb': row['ephemeral_gb']}
 
 
+class FlavorAccess(object):
+    def __init__(self, flavor_id=None, tenant_id=None):
+        self.flavor_id = flavor_id
+        self.tenant_id = tenant_id
+
+    @classmethod
+    def from_db(cls, db_record):
+        return cls(flavor_id=db_record['flavorid'],
+                   tenant_id=db_record['project_id'])
+
+    @classmethod
+    def from_novaclient_object(cls, nc_flavor_access):
+        return cls(flavor_id=nc_flavor_access.flavor_id,
+                   tenant_id=nc_flavor_access.tenant_id)
+
+
+def get_flavor_access_list_from_db(db, flavor_id):
+    sql = ("SELECT it.flavorid, itp.project_id "
+           "FROM instance_types it "
+           "RIGHT JOIN instance_type_projects itp "
+           "ON it.id = itp.instance_type_id "
+           "WHERE it.flavorid = :flavor_id AND it.deleted = 0;")
+    return db.execute(sql, flavor_id=flavor_id)
+
+
 def nova_live_migrate_vm(nova_client, config, vm_id, dest_host):
     LOG.info("migrating {vm} to {host} using nova live migrate".format(
         vm=vm_id,

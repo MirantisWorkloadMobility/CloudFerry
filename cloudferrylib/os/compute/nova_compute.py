@@ -229,18 +229,13 @@ class NovaCompute(compute.Compute):
                 'project_quotas': []}
 
         for flavor in self.get_flavor_list(is_public=None):
-            try:
-                with proxy_client.expect_exception(nova_exc.NotFound):
-                    internal_flavor = self.convert(flavor, cloud=self.cloud)
-                if internal_flavor is None:
-                    continue
-                info['flavors'][flavor.id] = internal_flavor
-                LOG.info("Got flavor '%s'", flavor.name)
-                LOG.debug("%s", pprint.pformat(internal_flavor))
-            except nova_exc.NotFound:
-                # In case Nova failed with flavor-access-list obtaining
-                # particular flavor it crashes with NotFound exception
-                LOG.warning('Skipping invalid flavor %s', flavor.name)
+            with proxy_client.expect_exception(nova_exc.NotFound):
+                internal_flavor = self.convert(flavor, cloud=self.cloud)
+            if internal_flavor is None:
+                continue
+            info['flavors'][flavor.id] = internal_flavor
+            LOG.info("Got flavor '%s'", flavor.name)
+            LOG.debug("%s", pprint.pformat(internal_flavor))
 
         if self.config.migrate.migrate_quotas:
             info['default_quotas'] = self.get_default_quotas()
@@ -937,7 +932,20 @@ class NovaCompute(compute.Compute):
         self.nova_client.flavors.delete(flavor_id)
 
     def get_flavor_access_list(self, flavor_id):
-        return self.nova_client.flavor_access.list(flavor=flavor_id)
+        try:
+            fas = self.nova_client.flavor_access.list(flavor=flavor_id)
+            return [instances.FlavorAccess.from_novaclient_object(fa)
+                    for fa in fas]
+        except nova_exc.NotFound:
+            # if flavor was deleted and then created with the same ID,
+            # flavor access list fails with NotFound error, even though
+            # flavor is actually available, see CF-384
+            LOG.debug("Can't get access list for flavor '%s' via APIs, "
+                      "getting one from DB", flavor_id)
+
+            fas_db = instances.get_flavor_access_list_from_db(
+                self.mysql_connector, flavor_id)
+            return [instances.FlavorAccess.from_db(fa) for fa in fas_db]
 
     def add_flavor_access(self, flavor_id, tenant_id):
         self.nova_client.flavor_access.add_tenant_access(flavor_id, tenant_id)
