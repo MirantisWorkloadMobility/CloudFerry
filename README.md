@@ -115,6 +115,9 @@ process.
 
 ## Whole cloud migration
 
+Make sure you have `migrate_whole_cloud` option in `migrate` section of config
+is set to `True`.
+
 Use `migrate` command with config file specified:
 
 ```

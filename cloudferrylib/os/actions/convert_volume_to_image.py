@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import copy
+import logging
+
+from oslo_config import cfg
 
 from cloudferrylib.base.action import converter
-from cloudferrylib.utils import log
 from cloudferrylib.utils import utils as utl
 
-import copy
-
-LOG = log.getLogger(__name__)
+CONF = cfg.CONF
+LOG = logging.getLogger(__name__)
 CEPH = 'ceph'
 ACTIVE = 'active'
 BARE = "bare"
@@ -33,30 +35,30 @@ def require_methods(methods, obj):
 
 
 class ConvertVolumeToImage(converter.Converter):
-
-    def run(self, storage_info={}, **kwargs):
-        self.disk_format = self.cfg.migrate.disk_format
-        self.container_format = self.cfg.migrate.container_format
-        volumes_info = copy.deepcopy(storage_info)
+    def run(self, storage_info=None, **kwargs):
+        disk_format = self.cfg.migrate.disk_format
+        container_format = self.cfg.migrate.container_format
+        volumes_info = storage_info and copy.deepcopy(storage_info) or {}
         resource_storage = self.cloud.resources[utl.STORAGE_RESOURCE]
         resource_image = self.cloud.resources[utl.IMAGE_RESOURCE]
         images_info = {}
         if not require_methods(['upload_volume_to_image'], resource_storage):
             raise RuntimeError("No require methods")
         images_from_volumes = {}
-        for volume_id, volume in volumes_info[utl.VOLUMES_TYPE].iteritems():
+        for volume in volumes_info[utl.VOLUMES_TYPE].values():
             vol = volume['volume']
             LOG.debug(
-                "| | uploading volume %s [%s] to image service bootable=%s" % (
-                    vol['display_name'], vol['id'],
-                    vol['bootable'] if hasattr(vol, 'bootable') else False))
-            resp, image_id = resource_storage.upload_volume_to_image(
+                "| | uploading volume %s [%s] to image service bootable=%s",
+                vol['display_name'], vol['id'],
+                vol['bootable'] if hasattr(vol, 'bootable') else False)
+            _, image_id = resource_storage.upload_volume_to_image(
                 vol['id'], force=True, image_name=vol['id'],
-                container_format=self.container_format,
-                disk_format=self.disk_format)
+                container_format=container_format,
+                disk_format=disk_format)
+            timeout = CONF.migrate.storage_backend_timeout
             resource_image.wait_for_status(image_id,
                                            resource_image.get_status,
-                                           ACTIVE)
+                                           ACTIVE, timeout=timeout)
             resource_image.patch_image(resource_image.get_backend(), image_id)
             image_vol = resource_image.get_image_by_id_converted(image_id)
             img_new = {

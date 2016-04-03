@@ -36,7 +36,6 @@ class BaseCopier(object):
     def __init__(self, src_cloud, dst_cloud):
         self.src_cloud = src_cloud
         self.dst_cloud = dst_cloud
-        self._runners_cache = {}
 
     def transfer(self, data):
         """
@@ -47,18 +46,17 @@ class BaseCopier(object):
         """
         raise NotImplementedError()
 
-    def clean_dst(self, data):
+    def clean_dst(self, host_dst, path_dst):
         """
         Remove the file on destination.
 
-        :param data: The dictionary with necessary information
+        :param host_dst: The destination host
+        :param path_dst: The path of file on destination host
         """
-        dst_host = data['host_dst']
-        dst_path = data['path_dst']
-        files.remote_rm(self.runner(dst_host, 'dst'), dst_path,
+        files.remote_rm(self.runner(host_dst, 'dst'), path_dst,
                         ignoring_errors=True)
 
-    def runner(self, host, position, gateway=None):
+    def runner(self, host, position, gateway=None, **kwargs):
         """
         Alias for creating a RemoteRunner
 
@@ -67,23 +65,19 @@ class BaseCopier(object):
         :param gateway: Gateway for a runner
         :return: RemoteRunner
         """
-        key = (host, position)
-        runner = self._runners_cache.get(key)
-        if runner is None:
-            if position == 'src':
-                user = CONF.src.ssh_user
-                password = CONF.src.ssh_sudo_password
-            else:
-                user = CONF.dst.ssh_user
-                password = CONF.dst.ssh_sudo_password
-            runner = remote_runner.RemoteRunner(
-                host,
-                user,
-                password=password,
-                sudo=True,
-                gateway=gateway)
-            self._runners_cache[key] = runner
-        return runner
+        if position == 'src':
+            user = CONF.src.ssh_user
+            password = CONF.src.ssh_sudo_password
+        else:
+            user = CONF.dst.ssh_user
+            password = CONF.dst.ssh_sudo_password
+        return remote_runner.RemoteRunner(
+            host,
+            user,
+            password=password,
+            sudo=True,
+            gateway=gateway,
+            **kwargs)
 
     def check_usage(self, data):  # pylint: disable=unused-argument
         """

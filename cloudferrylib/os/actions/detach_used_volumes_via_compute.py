@@ -13,12 +13,15 @@
 # limitations under the License.
 
 import copy
+import logging
+
+from oslo_config import cfg
 
 from cloudferrylib.base.action import action
-from cloudferrylib.utils import log
 from cloudferrylib.utils import utils
 
-LOG = log.getLogger(__name__)
+CONF = cfg.CONF
+LOG = logging.getLogger(__name__)
 
 
 class DetachVolumesCompute(action.Action):
@@ -28,19 +31,20 @@ class DetachVolumesCompute(action.Action):
         compute_resource = self.cloud.resources[utils.COMPUTE_RESOURCE]
         storage_resource = self.cloud.resources[utils.STORAGE_RESOURCE]
         for instance in info[utils.INSTANCES_TYPE].itervalues():
-            LOG.debug("Detaching volumes for instance %s [%s]" %
-                      (instance['instance']['name'],
-                       instance['instance']['id']))
+            LOG.info("Detaching volumes for instance %s [%s]",
+                     instance['instance']['name'], instance['instance']['id'])
             if not instance['instance'][utils.VOLUMES_TYPE]:
                 continue
             for vol in instance['instance'][utils.VOLUMES_TYPE]:
                 volume_status = storage_resource.get_status(vol['id'])
-                LOG.debug("Volume %s was found. Status %s" %
-                          (vol['id'], volume_status))
+                LOG.debug("Volume %s was found. Status %s",
+                          vol['id'], volume_status)
                 if volume_status == 'in-use':
                     compute_resource.detach_volume(instance['instance']['id'],
                                                    vol['id'])
-                    LOG.debug("Detach volume %s" % vol['id'])
+                    LOG.debug("Detach volume %s", vol['id'])
+                    timeout = CONF.migrate.storage_backend_timeout
                     storage_resource.wait_for_status(
-                        vol['id'], storage_resource.get_status, 'available')
+                        vol['id'], storage_resource.get_status, 'available',
+                        timeout=timeout)
         return {}

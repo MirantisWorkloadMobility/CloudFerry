@@ -7,6 +7,7 @@ End-user CloudFerry documentation
 
     overview
     installation
+    estimate_migration
     quick_start_guide
     configuration
     identity

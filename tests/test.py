@@ -18,17 +18,30 @@ import mock
 from oslotest import base
 
 import cfglib
+from cloud import cloud
 
 
 class TestCase(base.BaseTestCase):
     """Test case base class for all unit tests."""
 
+    def __init__(self, *args, **kwargs):
+        super(TestCase, self).__init__(*args, **kwargs)
+
+        self.cfg = cfglib.CONF
+        cfglib.init_config()
+
+    def override_config(self, options):
+        for group in options:
+            for name, value in options[group].items():
+                self.cfg.set_override(name=name, override=value, group=group)
+
+    def cloud_config(self, position):
+        return cloud.Cloud.make_cloud_config(self.cfg, position)
+
     def setUp(self):
         super(TestCase, self).setUp()
         self.addCleanup(mock.patch.stopall)
-        self.cfg = cfglib.CONF
         self.addCleanup(self.cfg.reset)
-        cfglib.init_config()
 
     def assertIsZero(self, observed, message=''):
         self.assertEqual(0, observed, message)

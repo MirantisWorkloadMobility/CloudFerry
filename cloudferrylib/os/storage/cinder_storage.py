@@ -132,8 +132,7 @@ class CinderStorage(storage.Storage):
                 for snap in self.get_snapshots_list(search_opts=search_opts):
                     snapshot = self.convert_snapshot(snap,
                                                      volume,
-                                                     self.config,
-                                                     self.cloud)
+                                                     self.config)
                     snapshots[snapshot['id']] = snapshot
             info[utils.VOLUMES_TYPE][vol.id] = {utils.VOLUME_BODY: volume,
                                                 'snapshots': snapshots,
@@ -203,7 +202,7 @@ class CinderStorage(storage.Storage):
         }
         return res
 
-    def deploy(self, info, target='volumes'):
+    def deploy(self, info, target='volumes', *args, **kwargs):
         if target == 'resources':
             return self._deploy_resources(info)
         if target == 'volumes':
@@ -392,7 +391,10 @@ class CinderStorage(storage.Storage):
             vol_for_deploy = self.convert_to_params(vol)
             volume = self.create_volume(**vol_for_deploy)
             vol[utils.VOLUME_BODY]['id'] = volume.id
-            self.try_wait_for_status(volume.id, self.get_status, AVAILABLE)
+            timeout = self.config.migrate.storage_backend_timeout
+            self.try_wait_for_status(volume.id, self.get_status, AVAILABLE,
+                                     timeout=timeout)
+
             self.finish(vol)
             new_ids[volume.id] = vol_id
         return new_ids
@@ -456,7 +458,7 @@ class CinderStorage(storage.Storage):
         return volume
 
     @staticmethod
-    def convert_snapshot(snap, volume, cfg, cloud):
+    def convert_snapshot(snap, volume, cfg):
 
         snapshot = {
             'id': snap.id,

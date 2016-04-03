@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
 import logging
 
 from fabric import api
@@ -29,9 +30,49 @@ class RemoteExecutionError(exception.CFBaseException):
     pass
 
 
+class RemoteTunnelOptions(object):
+    def __init__(self, remote_port, port=None, host=None):
+        """Options to create a tunnel forwarding a locally-visible port to
+        the remote target.
+
+        :param remote_port: the port on the remote host to listen to.
+        :param port: the local or remote port to connect to. The default is
+                     same port as a remote port.
+        :param host: the locally-reachable host to connect to. The default is
+                     ``localhost`` (the controller CF is running on).
+        :param
+        """
+        self.remote_port = remote_port
+        self.port = port
+        self.host = host
+
+    @contextlib.contextmanager
+    def __call__(self):
+        kwargs = {'remote_port': self.remote_port,
+                  'local_port': self.port,
+                  'local_host': self.host}
+        # pylint: disable=not-context-manager
+        with api.remote_tunnel(**{k: v for k, v in kwargs.items()
+                                  if v is not None}):
+            yield
+
+
 class RemoteRunner(object):
     def __init__(self, host, user, password=None, sudo=False, key=None,
-                 ignore_errors=False, timeout=None, gateway=None):
+                 ignore_errors=False, timeout=None, gateway=None,
+                 remote_tunnel=None):
+        """ Runner a command on remote host.
+
+        :param host: the remote host to execute a command.
+        :param user: ssh user to connect to remote host.
+        :param password: sudo password for remote host.
+        :param sudo: execute a command as root.
+        :param key: ssh key to connect to remote host.
+        :param ignore_errors: ignore non-zero return codes.
+        :param timeout: execute timeout
+        :param gateway: ssh gateway to connect to the remote host
+        :param remote_tunnel: the object of ``RemoteTunnelOptions`` class
+        """
         self.host = host
         if key is None:
             key = CONF.migrate.key_filename
@@ -42,6 +83,7 @@ class RemoteRunner(object):
         self.ignore_errors = ignore_errors
         self.timeout = timeout
         self.gateway = gateway
+        self.remote_tunnel = remote_tunnel
 
     def run(self, cmd, **kwargs):
         abort_exception = None
@@ -52,6 +94,11 @@ class RemoteRunner(object):
             cmd = cmd.format(**kwargs)
 
         ssh_attempts = CONF.migrate.ssh_connection_attempts
+
+        if self.sudo and self.user != 'root':
+            run = api.sudo
+        else:
+            run = api.run
 
         with api.settings(warn_only=self.ignore_errors,
                           host_string=self.host,
@@ -66,10 +113,11 @@ class RemoteRunner(object):
             with utils.forward_agent(self.key):
                 LOG.debug("running '%s' on '%s' host as user '%s'",
                           cmd, self.host, self.user)
-                if self.sudo and self.user != 'root':
-                    result = api.sudo(cmd)
+                if self.remote_tunnel is not None:
+                    with self.remote_tunnel():
+                        result = run(cmd)
                 else:
-                    result = api.run(cmd)
+                    result = run(cmd)
                 LOG.debug('[%s] Command "%s" result: %s',
                           self.host, cmd, result)
                 return result

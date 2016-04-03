@@ -19,7 +19,7 @@ level_compression = 9
 overwrite_user_passwords = False
 migrate_quotas = True
 migrate_users = True
-direct_compute_transfer = True
+direct_transfer = True
 filter_path = configs/filter.yaml
 keep_lbaas = no
 ssh_chunk_size = 100
@@ -199,3 +199,6 @@ port = 6379
 [bbcp]
 path = <bbcp_path>
 options = -P 5 -e
+
+[rsync]
+port = 50000

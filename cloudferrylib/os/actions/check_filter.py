@@ -1,4 +1,3 @@
-"""CheckFilter action."""
 # Copyright (c) 2015 Mirantis Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the License);
@@ -14,144 +13,226 @@
 # limitations under the License.
 
 
-from glanceclient import exc as glance_exc
+import datetime
+import yaml
+
 from cinderclient import exceptions as cinder_exc
+from glanceclient import exc as glance_exc
 from keystoneclient import exceptions as keystone_exc
 from novaclient import exceptions as nova_exc
-from cloudferrylib.base.action import action
+
 from cloudferrylib.base import exception
+from cloudferrylib.base.action import action
 from cloudferrylib.os.storage import filters as cinder_filters
 from cloudferrylib.utils import log
 from cloudferrylib.utils import proxy_client
-from cloudferrylib.utils import utils as utl
+from cloudferrylib.utils import utils
 
-import datetime
 
 LOG = log.getLogger(__name__)
 
 
+NOT_FOUND_EXC_LIST = (nova_exc.NotFound, cinder_exc.NotFound,
+                      glance_exc.NotFound, keystone_exc.NotFound)
+
+
 class CheckFilter(action.Action):
 
-    """CheckFilter class."""
+    """
+    Check filter config file.
+
+    Check and make sure all entries are present and valid on the source cloud.
+
+    Required configuration options:
+        [migrate]
+        migrate_whole_cloud = False
+        filter_path = <path_to_filter_config_file>
+
+    Scenario:
+        preparation:
+            - pre_migration_test:
+                -act_check_filter: True
+
+    Required tasks:
+        GetFilter
+    Dependent tasks:
+        None
+    """
 
     def run(self, **kwargs):
-        """
-        Check filter file.
 
-        Check and make sure all entries are present in source cloud.
-
-        """
-        search_opts = kwargs.get('search_opts', {})
-        self._check_opts_img(kwargs.get('search_opts_img', {}))
-        self._check_opts_vol(kwargs.get('search_opts_vol', {}))
-        self._check_opts_vol_date(kwargs.get('search_opts_vol', {}))
-        self._check_opts_tenant(kwargs.get('search_opts_tenant', {}))
-
-        compute_resource = self.cloud.resources[utl.COMPUTE_RESOURCE]
-        if search_opts and search_opts.get('id'):
-            instances = search_opts['id']
-            for instance_id in instances:
-                LOG.debug('Filtered instance id: %s', instance_id)
-                try:
-                    with proxy_client.expect_exception(nova_exc.NotFound):
-                        instance = \
-                            compute_resource.nova_client.servers.get(
-                                instance_id)
-                    if instance:
-                        LOG.debug('Filter config check: Instance ID %s is OK',
-                                  instance_id)
-                except nova_exc.NotFound:
-                    LOG.error('Filter config check: Instance ID %s '
-                              'is not present in source cloud, '
-                              'please update your filter config. Aborting.',
-                              instance_id)
-                    raise
-
-    def _check_opts_vol(self, opts):
-        if not opts:
+        if self.cfg.migrate.migrate_whole_cloud:
+            LOG.info("Whole cloud migration is enabled. Ignore filtering...")
             return
-        cinder_resource = self.cloud.resources[utl.STORAGE_RESOURCE]
-        if opts.get('volumes_list'):
-            volumes_list = opts['volumes_list']
-            for vol_id in volumes_list:
-                LOG.debug('Filtered volume id: %s', vol_id)
-                try:
-                    with proxy_client.expect_exception(cinder_exc.NotFound):
-                        vol = cinder_resource.cinder_client.volumes.get(vol_id)
-                    if vol:
-                        LOG.debug('Filter config check: Volume ID %s is OK',
-                                  vol_id)
-                except cinder_exc.NotFound:
-                    LOG.error('Filter config check: Volume ID %s '
-                              'is not present in source cloud, '
-                              'please update your filter config. Aborting.',
-                              vol_id)
-                    raise
 
-    @staticmethod
-    def _check_opts_vol_date(opts):
-        if opts.get('date'):
-            volumes_date = opts['date']
-            if isinstance(volumes_date, datetime.datetime):
-                LOG.debug('Filtered datetime volume date: %s',
-                          str(volumes_date))
-            else:
-                try:
-                    volumes_date = datetime.datetime.strptime(
-                        volumes_date, cinder_filters.DATETIME_FMT)
-                    LOG.debug('Filtered str volume date: %s',
-                              str(volumes_date))
-                except ValueError:
-                    LOG.error('Filter config check: '
-                              'invalid volume date format')
-                    raise
+        filter_path = self.cfg.migrate.filter_path
 
-    def _check_opts_img(self, opts):
-        image_resource = self.cloud.resources[utl.IMAGE_RESOURCE]
-        if opts and \
-                opts.get('images_list') and opts.get('exclude_images_list'):
+        if not utils.check_file(filter_path):
             raise exception.AbortMigrationError(
-                "In the filter config file was specified "
-                "'images_list' and 'exclude_images_list'. "
-                "Must either specify - 'images_list' or "
-                "'exclude_images_list'.")
+                "Filter file '%s' has not been found. Please check filter file"
+                " path in the CloudFerry configuration file." % filter_path)
 
-        if opts and opts.get('images_list'):
-            images_list = opts['images_list']
-            for img_id in images_list:
-                LOG.debug('Filtered image id: %s', img_id)
-                try:
-                    with proxy_client.expect_exception(glance_exc.NotFound):
-                        img = image_resource.glance_client.images.get(img_id)
-                    if img:
-                        LOG.debug('Filter config check: Image ID %s is OK',
-                                  img_id)
-                except glance_exc.HTTPNotFound:
-                    LOG.error('Filter config check: Image ID %s '
-                              'is not present in source cloud, '
-                              'please update your filter config. Aborting.',
-                              img_id)
-                    raise
+        if not utils.read_yaml_file(filter_path):
+            raise exception.AbortMigrationError("Filter file '%s' is empty." %
+                                                filter_path)
 
-    def _check_opts_tenant(self, opts):
-        ident_resource = self.cloud.resources[utl.IDENTITY_RESOURCE]
-        if opts and opts.get('tenant_id'):
-            tenants = opts['tenant_id']
-            if len(tenants) > 1:
-                raise exception.AbortMigrationError(
-                    'More than one tenant in tenant filters is not supported.')
-            for tenant_id in tenants:
-                LOG.debug('Filtered tenant id: %s', tenant_id)
-                try:
-                    with proxy_client.expect_exception(keystone_exc.NotFound):
-                        tenant = ident_resource.keystone_client.tenants.find(
-                            id=tenant_id)
-                    if tenant:
-                        LOG.debug('Filter config check: Tenant ID %s is OK',
-                                  tenant_id)
-                except keystone_exc.NotFound:
-                    LOG.error('Filter config check: Tenant ID %s '
-                              'is not present in source cloud, '
-                              'please update your filter config. Aborting.',
-                              tenant_id)
-                    raise
+        try:
+            tenant_opts = kwargs['search_opts_tenant']
+            instance_opts = kwargs['search_opts']
+            volume_opts = kwargs['search_opts_vol']
+            image_opts = kwargs['search_opts_img']
+        except KeyError:
+            raise exception.AbortMigrationError(
+                "Action 'act_get_filter' should be specified prior this action"
+                " in the scenario file. Aborting migration...")
+
+        tenant = Tenant(self.cloud, tenant_opts)
+        instance = Instance(self.cloud, instance_opts)
+        volume = Volume(self.cloud, volume_opts)
+        image = Image(self.cloud, image_opts)
+
+        invalid_data = {}
+        for filter_object in [tenant, instance, volume, image]:
+            invalid_data.update(filter_object.check())
+
+        # Filter only non-empty values
+        invalid_data = {k: v for k, v in invalid_data.iteritems() if v}
+
+        if invalid_data:
+            msg = "\n\nInvalid Filter Data:\n\n%s" % yaml.dump(invalid_data)
+            LOG.critical(msg)
+            raise exception.AbortMigrationError(
+                "There is a number of invalid data specified in the filter "
+                "file '%s', so migration process can not be continued. Please "
+                "update your filter config file and try again. %s" %
+                (filter_path, msg))
+
+
+class BaseFilteredObject(object):
+    def __init__(self, name, get_method, ids_list):
+        self.name = name
+        self.get_method = get_method
+        self.ids_list = ids_list or []
+
+    def check(self):
+        non_existing_ids_list = []
+
+        for obj_id in self.ids_list:
+            LOG.debug("Filtered %s ID: '%s'", self.name, obj_id)
+            try:
+                with proxy_client.expect_exception(NOT_FOUND_EXC_LIST):
+                    obj = self.get_method(obj_id)
+                if obj:
+                    LOG.debug("Filter config check: %s ID '%s' is OK",
+                              self.name, obj_id)
+            except NOT_FOUND_EXC_LIST:
+                LOG.error("Filter config check: %s ID '%s' is not present on "
+                          "the source cloud.", self.name, obj_id)
+                non_existing_ids_list.append(obj_id)
+
+        return {"Non-existing %s IDs list" % self.name: non_existing_ids_list}
+
+
+class Tenant(BaseFilteredObject):
+    def __init__(self, cloud, opts):
+        resource = cloud.resources[utils.IDENTITY_RESOURCE]
+        get_method = resource.keystone_client.tenants.get
+        opts = opts or {}
+
+        super(Tenant, self).__init__(name='Tenant',
+                                     get_method=get_method,
+                                     ids_list=opts.get('tenant_id'))
+
+    def check_tenants_amount(self):
+        if len(self.ids_list) > 1:
+            raise exception.AbortMigrationError(
+                'More than one tenant in filter config file is not supported. '
+                'Aborting migration...')
+        elif len(self.ids_list) < 1:
+            raise exception.AbortMigrationError(
+                "Tenant ID in not specified in the filter config file. Please"
+                " either specify it or use 'migrate_whole_cloud = True' in the"
+                " main config file for the whole cloud migration.")
+
+    def check(self):
+        self.check_tenants_amount()
+        return super(Tenant, self).check()
+
+
+class Instance(BaseFilteredObject):
+    def __init__(self, cloud, opts):
+        resource = cloud.resources[utils.COMPUTE_RESOURCE]
+        get_method = resource.nova_client.servers.get
+        opts = opts or {}
+
+        super(Instance, self).__init__(name='Instance',
+                                       get_method=get_method,
+                                       ids_list=opts.get('id'))
+
+
+class Volume(BaseFilteredObject):
+    def __init__(self, cloud, opts):
+        resource = cloud.resources[utils.STORAGE_RESOURCE]
+        get_method = resource.cinder_client.volumes.get
+        self.opts = opts or {}
+
+        super(Volume, self).__init__(name='Volume',
+                                     get_method=get_method,
+                                     ids_list=self.opts.get('volumes_list'))
+
+    def check_invalid_date(self):
+        volumes_date = self.opts.get('date')
+
+        if not volumes_date:
+            return {}
+
+        if isinstance(volumes_date, datetime.datetime):
+            LOG.debug("Filtered datetime volume date: '%s'", str(volumes_date))
+        else:
+            try:
+                volumes_date = datetime.datetime.strptime(
+                    volumes_date, cinder_filters.DATETIME_FMT)
+                LOG.debug("Filtered str volume date: '%s'", str(volumes_date))
+            except ValueError:
+                LOG.error("Filter config check: invalid volume date format: "
+                          "'%s'", volumes_date)
+
+                return {"Invalid Volume Date": [volumes_date]}
+
+        return {}
+
+    def check(self):
+        invalid_volume_data = super(Volume, self).check()
+
+        invalid_volume_data.update(self.check_invalid_date())
+
+        return invalid_volume_data
+
+
+class Image(BaseFilteredObject):
+    def __init__(self, cloud, opts):
+        resource = cloud.resources[utils.IMAGE_RESOURCE]
+        get_method = resource.glance_client.images.get
+        self.opts = opts or {}
+
+        ids_list = (self.opts.get('images_list') or
+                    self.opts.get('exclude_images_list'))
+
+        super(Image, self).__init__(name='Image',
+                                    get_method=get_method,
+                                    ids_list=ids_list)
+
+    def check_conflict(self):
+        if not self.opts:
+            return
+
+        if (self.opts.get('images_list') and
+                self.opts.get('exclude_images_list')):
+            raise exception.AbortMigrationError(
+                "Options 'images_list' and 'exclude_images_list' can not be "
+                "specified together at the same time in the filter file. "
+                "Should be only one of them. Aborting migration...")
+
+    def check(self):
+        self.check_conflict()
+        return super(Image, self).check()

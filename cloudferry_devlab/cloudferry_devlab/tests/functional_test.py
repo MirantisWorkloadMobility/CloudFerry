@@ -148,7 +148,7 @@ class FunctionalTest(unittest.TestCase):
         roles = [i['name'] for i in config.roles]
         return self._get_keystone_resources('roles', roles)
 
-    def filter_vms(self):
+    def get_src_vm_objects_specified_in_config(self):
         vms = self.migration_utils.get_all_vms_from_config()
         vms_names = [vm['name'] for vm in vms if not vm.get('broken')]
         opts = {'search_opts': {'all_tenants': 1}}
@@ -264,7 +264,7 @@ class FunctionalTest(unittest.TestCase):
 
     def tenant_exists(self, keystone_client, tenant_id):
         try:
-            keystone_client.get(tenant_id)
+            keystone_client.tenants.get(tenant_id)
         except ks_exceptions.NotFound:
             return False
         return True
