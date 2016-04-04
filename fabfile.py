@@ -221,6 +221,16 @@ def estimate_migration(config_path, migration, debug=False):
 
 
 @task
+def link(config_path, debug=False):
+    """
+        :config_name - name of config yaml-file, example 'config.yaml'
+    """
+    cfg = config.load(load_yaml_config(config_path, debug))
+    stage.execute_stage('cloudferrylib.os.discovery.stages.LinkStage', cfg,
+                        force=True)
+
+
+@task
 def show_unused_resources(config_path, cloud, count=100, tenant=None,
                           debug=False):
     cfg = config.load(load_yaml_config(config_path, debug))

@@ -13,9 +13,6 @@
 # limitations under the License.
 import logging
 
-from marshmallow import fields
-from marshmallow import exceptions
-
 from cloudferrylib.os.discovery import keystone
 from cloudferrylib.os.discovery import model
 
@@ -27,19 +24,19 @@ class ImageMember(model.Model):
         object_id = model.PrimaryKey()
         image = model.Dependency('cloudferrylib.os.discovery.glance.Image')
         member = model.Dependency('cloudferrylib.os.discovery.keystone.Tenant')
-        can_share = fields.Boolean(missing=False)
+        can_share = model.Boolean(missing=False)
 
     @classmethod
     def load_from_cloud(cls, cloud, data, overrides=None):
-        return cls._get(cloud, data.image_id, data.member_id)
+        return cls.make(cloud, data.image_id, data.member_id)
 
     @classmethod
     def load_missing(cls, cloud, object_id):
         image_id, member_id = object_id.id.split(':')
-        return cls._get(cls, image_id, member_id)
+        return cls.make(cls, image_id, member_id)
 
     @classmethod
-    def _get(cls, cloud, image_id, member_id):
+    def make(cls, cloud, image_id, member_id):
         return super(ImageMember, cls).load_from_cloud(cloud, {
             'object_id': '{0}:{1}'.format(image_id, member_id),
             'image': image_id,
@@ -51,20 +48,20 @@ class ImageMember(model.Model):
 class Image(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey('id')
-        name = fields.String(required=True)
+        name = model.String(required=True)
         tenant = model.Dependency(keystone.Tenant, required=True,
                                   load_from='owner', dump_to='owner')
-        checksum = fields.String(required=True, allow_none=True)
-        size = fields.Integer(required=True)
-        virtual_size = fields.Integer(required=True, allow_none=True,
-                                      missing=None)
-        is_public = fields.Boolean(required=True)
-        protected = fields.Boolean(required=True)
-        container_format = fields.String(required=True)
-        disk_format = fields.String(required=True)
-        min_disk = fields.Integer(required=True)
-        min_ram = fields.Integer(required=True)
-        properties = fields.Dict()
+        checksum = model.String(required=True, allow_none=True)
+        size = model.Integer(required=True)
+        virtual_size = model.Integer(required=True, allow_none=True,
+                                     missing=None)
+        is_public = model.Boolean(required=True)
+        protected = model.Boolean(required=True)
+        container_format = model.String(required=True)
+        disk_format = model.String(required=True)
+        min_disk = model.Integer(required=True)
+        min_ram = model.Integer(required=True)
+        properties = model.Dict()
         members = model.Reference(ImageMember, many=True, missing=list)
 
     @classmethod
@@ -91,5 +88,16 @@ class Image(model.Model):
                         member = ImageMember.load_from_cloud(cloud, raw_member)
                         session.store(member)
                         image.members.append(member)
-                except exceptions.ValidationError as e:
+                except model.ValidationError as e:
                     LOG.warning('Invalid image %s: %s', raw_image.id, e)
+
+    def equals(self, other):
+        # pylint: disable=no-member
+        # TODO: consider comparing properties
+        return self.tenant.equals(other.tenant) and \
+            self.name == other.name and \
+            self.checksum == other.checksum and \
+            self.size == other.size and \
+            self.is_public == other.is_public and \
+            self.container_format == other.container_format and \
+            self.disk_format == other.disk_format

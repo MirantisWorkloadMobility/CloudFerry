@@ -13,8 +13,7 @@
 # limitations under the License.
 import logging
 
-from marshmallow import fields
-from cinderclient import exceptions as cinder_exceptions
+from cinderclient import exceptions
 
 from cloudferrylib.os.discovery import keystone
 from cloudferrylib.os.discovery import model
@@ -24,25 +23,23 @@ LOG = logging.getLogger(__name__)
 
 class Attachment(model.Model):
     class Schema(model.Schema):
-        server_id = fields.String(required=True)  # TODO: model.Reference
-        device = fields.String(required=True)
+        server = model.Reference('cloudferrylib.os.discovery.nova.Server')
+        device = model.String(required=True)
 
 
 @model.type_alias('volumes')
 class Volume(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey('id')
-        name = fields.String(required=True, allow_none=True)
-        description = fields.String(required=True, allow_none=True)
-        availability_zone = fields.String(required=True)
-        encrypted = fields.Boolean(missing=False)
-        host = fields.String(required=True)
-        snapshot_id = fields.String(required=True, allow_none=True)
-        source_volid = fields.String(required=True, allow_none=True)
-        size = fields.Integer(required=True)
+        name = model.String(required=True, allow_none=True)
+        description = model.String(required=True, allow_none=True)
+        availability_zone = model.String(required=True)
+        encrypted = model.Boolean(missing=False)
+        host = model.String(required=True)
+        size = model.Integer(required=True)
         tenant = model.Dependency(keystone.Tenant, required=True)
-        metadata = fields.Dict(missing=dict)
-        volume_type = fields.String(required=True)
+        metadata = model.Dict(missing=dict)
+        volume_type = model.String(required=True)
         attachments = model.Nested(Attachment, many=True, missing=list)
 
         FIELD_MAPPING = {
@@ -58,7 +55,7 @@ class Volume(model.Model):
         try:
             raw_volume = volume_client.volumes.get(object_id.id)
             return Volume.load_from_cloud(cloud, raw_volume)
-        except cinder_exceptions.NotFound:
+        except exceptions.NotFound:
             return None
 
     @classmethod
@@ -68,5 +65,8 @@ class Volume(model.Model):
             search_opts={'all_tenants': True})
         with model.Session() as session:
             for raw_volume in volumes_list:
-                volume = Volume.load_from_cloud(cloud, raw_volume)
-                session.store(volume)
+                try:
+                    volume = Volume.load_from_cloud(cloud, raw_volume)
+                    session.store(volume)
+                except model.ValidationError as e:
+                    LOG.warning('Invalid volume %s: %s', raw_volume.id, e)
