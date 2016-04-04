@@ -27,7 +27,6 @@ import os
 import inspect
 from multiprocessing import Lock
 
-from jinja2 import Environment, FileSystemLoader
 from fabric.api import run, settings, local, env, sudo
 from fabric.context_managers import hide
 import yaml
@@ -423,18 +422,6 @@ class UpSshTunnelClass:
                  self.address_dest_controller))
         time.sleep(2)
         self.remove_port(self.port)
-
-
-def render_info(info_values, template_path="templates",
-                template_file="info.html"):
-    info_env = Environment(loader=FileSystemLoader(template_path))
-    template = info_env.get_template(template_file)
-    return template.render(info_values)
-
-
-def write_info(rendered_info, info_file="source_info.html"):
-    with open(info_file, "wb") as ifile:
-        ifile.write(rendered_info)
 
 
 def libvirt_instance_exists(libvirt_name, init_host, compute_host, ssh_user,

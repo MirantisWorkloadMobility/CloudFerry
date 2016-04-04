@@ -184,9 +184,9 @@ class NeutronTestCase(test.TestCase):
             }
         }
         self.neutron_network_client.upload_quota(quota)
-        self.neutron_mock_client().update_quota\
-            .assert_called_once_with("fake_tenant_id_1",
-                                     quota['fake_tenant_name_1'])
+        (self.neutron_mock_client().update_quota.
+         assert_called_once_with("fake_tenant_id_1",
+                                 quota['fake_tenant_name_1']))
 
     def test_upload_lb_monitors(self):
         self.neutron_network_client.get_lb_monitors = mock.Mock()
