@@ -33,10 +33,10 @@ class IsNotCopyDiffFile(action.Action):
         dst_compute = self.dst_cloud.resources[utl.COMPUTE_RESOURCE]
         backend_ephem_drv_src = src_compute.config.compute.backend
         backend_ephem_drv_dst = dst_compute.config.compute.backend
-        instance_boot = \
-            info[INST].values()[0][BODY]['boot_mode']
-        if ((instance_boot == utl.BOOT_FROM_IMAGE) and
-                (backend_ephem_drv_src == ISCSI) and
-                (backend_ephem_drv_dst == ISCSI)):
-            self.set_next_path(PATH_COPY_DIFF)
+        for instance in info[INST].values():
+            instance_boot = instance[BODY]['boot_mode']
+            if ((instance_boot == utl.BOOT_FROM_IMAGE) and
+                    (backend_ephem_drv_src == ISCSI) and
+                    (backend_ephem_drv_dst == ISCSI)):
+                self.set_next_path(PATH_COPY_DIFF)
         return {}
