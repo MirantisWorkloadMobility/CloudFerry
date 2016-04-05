@@ -152,9 +152,9 @@ class GlanceImage(image.Image):
         if m:
             endpoint_glance = m.group(1)
             # for now we always use 1 version of client
-            version = 1  # m.group(2)
+            version = '1'  # m.group(2)
         else:
-            version = 1
+            version = '1'
         return glance_client.Client(
             version,
             endpoint=endpoint_glance,
@@ -258,27 +258,20 @@ class GlanceImage(image.Image):
     def get_image_status(self, image_id):
         return self.get_image_by_id(image_id).status
 
-    @staticmethod
-    def get_resp(data):
-        """Get _resp property.
-
-        :return: _resp
-
-        """
-        return getattr(data, '_resp')
-
     def get_ref_image(self, image_id):
         try:
             # ssl.ZeroReturnError happens because a size of an image is zero
             with proxy_client.expect_exception(
                 glance_exceptions.NotFound,
                 glance_exceptions.HTTPInternalServerError,
-                ssl.ZeroReturnError
+                ssl.ZeroReturnError,
+                IOError
             ):
-                return self.get_resp(self.glance_client.images.data(image_id))
+                return self.glance_client.images.data(image_id)
         except (glance_exceptions.HTTPInternalServerError,
                 glance_exceptions.HTTPNotFound,
-                ssl.ZeroReturnError):
+                ssl.ZeroReturnError,
+                IOError):
             raise exception.ImageDownloadError
 
     def get_image_checksum(self, image_id):
@@ -546,11 +539,11 @@ class GlanceImage(image.Image):
                 # and then - delete from database
 
                 try:
-                    file_obj = img['resource'].get_ref_image(img['id'])
-                    data_proxy = file_proxy.FileProxy(
-                        file_obj,
+                    data = img['resource'].get_ref_image(img['id'])
+                    data_proxy = file_proxy.IterProxy(
+                        data,
                         name="image %s ('%s')" % (img['name'], img['id']),
-                        size=img['size'])
+                        size=len(data))
 
                     created_image = self.create_image(
                         id=img['id'],
