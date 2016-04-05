@@ -24,7 +24,6 @@ from cloudferry_devlab.tests import base
 import cloudferry_devlab.tests.config as config
 from cloudferry_devlab.tests import functional_test
 
-TIMEOUT = 600
 TEST_TENANT_NAME = 'tenant4'
 TEST_EXT_ROUTER_NAME = 'ext_router'
 TEST_VM_NAME = 'VMtoVerifyDstCloudFunc'
@@ -288,14 +287,15 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         successfully."""
         vm = self.dst_cloud.novaclient.servers.create(**self.TST_IMAGE)
         base.BasePrerequisites.wait_until_objects_created(
-            [vm], self.check_vm_state, TIMEOUT)
+            [vm], self.check_vm_state, config.TIMEOUT)
 
         vm.add_floating_ip(self.float_ip_address)
 
         base.BasePrerequisites.wait_until_objects_created(
             [(vm, self.float_ip_address)],
-            base.BasePrerequisites.check_floating_ip_assigned, TIMEOUT)
-        self.wait_service_on_vm_to_be_ready(TIMEOUT, self.float_ip_address,
+            base.BasePrerequisites.check_floating_ip_assigned, config.TIMEOUT)
+        self.wait_service_on_vm_to_be_ready(config.TIMEOUT,
+                                            self.float_ip_address,
                                             DEFAULT_SERVICE_PORT, vm)
 
         CINDER_VOLUME_PARAMS['server_to_attach'] = vm.name
@@ -313,14 +313,15 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         """Validate destination cloud's VMs running successfully."""
         vm = self.dst_cloud.novaclient.servers.create(**self.TST_IMAGE)
         base.BasePrerequisites.wait_until_objects_created(
-            [vm], self.check_vm_state, TIMEOUT)
+            [vm], self.check_vm_state, config.TIMEOUT)
 
         vm.add_floating_ip(self.float_ip_address)
 
         base.BasePrerequisites.wait_until_objects_created(
             [(vm, self.float_ip_address)],
-            base.BasePrerequisites.check_floating_ip_assigned, TIMEOUT)
-        self.wait_service_on_vm_to_be_ready(TIMEOUT, self.float_ip_address,
+            base.BasePrerequisites.check_floating_ip_assigned, config.TIMEOUT)
+        self.wait_service_on_vm_to_be_ready(config.TIMEOUT,
+                                            self.float_ip_address,
                                             DEFAULT_SERVICE_PORT, vm)
 
         status_msg, status_state = self.check_vm_ssh_access(
