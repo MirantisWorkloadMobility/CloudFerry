@@ -14,6 +14,10 @@
 
 INVALID_STATUSES = ['creating', 'error', 'deleting', 'error_deleting']
 
+TIMEOUT = 600
+"""Timeout to wait for Openstack objects to create/update/be accessible.
+Value in second."""
+
 img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
 username_for_ssh = 'cirros'
 """Username for ssh access for cirros image"""

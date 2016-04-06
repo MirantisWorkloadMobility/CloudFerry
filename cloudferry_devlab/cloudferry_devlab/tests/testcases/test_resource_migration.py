@@ -22,6 +22,7 @@ from fabric.network import NetworkError
 from nose.plugins.attrib import attr
 
 import cloudferry_devlab.tests.config as config
+import cloudferry_devlab.tests.base as base
 from cloudferry_devlab.tests import functional_test
 from cloudferry_devlab.tests import test_exceptions
 
@@ -657,7 +658,10 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             vm_ip = self.migration_utils.get_vm_fip(vm)
             self.migration_utils.open_ssh_port_secgroup(self.dst_cloud,
                                                         vm.tenant_id)
-            self.migration_utils.wait_until_vm_accessible_via_ssh(vm_ip)
+            base.BasePrerequisites.wait_until_objects_created(
+                [(vm_ip, 'pwd')],
+                self.migration_utils.wait_until_vm_accessible_via_ssh,
+                config.TIMEOUT)
             check_mount_point_exists(vm_ip, volume)
             cmd = 'mount {0} {1}'.format(volume['device'],
                                          volume['mount_point'])

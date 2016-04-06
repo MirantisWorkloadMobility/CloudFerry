@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import collections
-import time
 
 from fabric import api as fabric_api
 from fabric import network
@@ -21,8 +20,6 @@ from neutronclient.common import exceptions
 import yaml
 
 import cloudferry_devlab.tests.config as config
-
-VM_ACCESSIBILITY_ATTEMPTS = 20
 
 
 def convert(data):
@@ -176,16 +173,12 @@ class MigrationUtils(object):
                 images.append(image)
         return images
 
-    def wait_until_vm_accessible_via_ssh(self, ip_addr):
-        for _ in range(VM_ACCESSIBILITY_ATTEMPTS):
-            try:
-                self.execute_command_on_vm(ip_addr, 'pwd')
-                break
-            except RuntimeError:
-                time.sleep(1)
-        else:
-            msg = 'VM with ip "{}" is not accessible via ssh after {} attempts'
-            raise RuntimeError(msg.format(ip_addr, VM_ACCESSIBILITY_ATTEMPTS))
+    def wait_until_vm_accessible_via_ssh(self, ip_addr, cmd):
+        try:
+            self.execute_command_on_vm(ip_addr, cmd)
+        except RuntimeError:
+            return False
+        return True
 
     @staticmethod
     def open_ssh_port_secgroup(client, tenant_id):
