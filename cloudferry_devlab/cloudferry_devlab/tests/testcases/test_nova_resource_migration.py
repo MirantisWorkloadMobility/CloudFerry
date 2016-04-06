@@ -101,20 +101,21 @@ class NovaResourceMigrationTests(functional_test.FunctionalTest):
             """
             qs = {}
             for t in tenants:
-                qs[t.name] = {'nova_q': {}, 'neutron_q': {}, 'cinder_q': {}}
+                qs[t.name.lower()] = {'nova_q': {}, 'neutron_q': {},
+                                      'cinder_q': {}}
                 nova_quota = client.novaclient.quotas.get(t.id).to_dict()
                 for k, v in nova_quota.iteritems():
                     if k in src_nova_quota_keys and k != 'id':
-                        qs[t.name]['nova_q'][k] = v
+                        qs[t.name.lower()]['nova_q'][k] = v
                 neutron_quota = client.neutronclient.show_quota(t.id)['quota']
                 for k, v in neutron_quota.iteritems():
                     if k in src_neutron_quota_keys:
-                        qs[t.name]['neutron_q'][k] = v
+                        qs[t.name.lower()]['neutron_q'][k] = v
                 cinder_quota = getattr(client.cinderclient.quotas.get(t.id),
                                        '_info')
                 for k, v in cinder_quota.iteritems():
                     if k in cinder_quota_keys and k != 'id':
-                        qs[t.name]['cinder_q'][k] = v
+                        qs[t.name.lower()]['cinder_q'][k] = v
             return qs
 
         src_nova_quota_keys = self.src_cloud.novaclient.quotas.get(

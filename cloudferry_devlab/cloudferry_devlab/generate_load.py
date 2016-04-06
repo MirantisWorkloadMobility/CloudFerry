@@ -859,8 +859,11 @@ class Prerequisites(base.BasePrerequisites):
         for t in self.config.tenants:
             if not t.get('deleted') and t['enabled']:
                 try:
+                    tnt_name = t['name']
+                    if t.get('uppercase'):
+                        tnt_name = t['name'].upper()
                     self.dst_cloud.keystoneclient.tenants.create(
-                        tenant_name=t['name'], description=t['description'],
+                        tenant_name=tnt_name, description=t['description'],
                         enabled=t['enabled'])
                 except ks_exceptions.Conflict:
                     pass
@@ -900,6 +903,9 @@ class Prerequisites(base.BasePrerequisites):
         self.dst_cloud.create_tenants(tenants_to_create)
         self.dst_cloud.create_users([user])
         self.dst_cloud.create_user_tenant_roles([user_tenant_role])
+
+    def create_user_in_uppercase_on_dst(self):
+        self.dst_cloud.create_users(self.config.dst_users)
 
     def create_volumes_from_images(self):
         self.create_cinder_volumes(self.config.cinder_volumes_from_images)
@@ -1093,6 +1099,8 @@ class Prerequisites(base.BasePrerequisites):
         self.create_tenant_wo_sec_group_on_dst()
         self.log.info('Create role on dst')
         self.create_user_on_dst()
+        self.log.info('Create user and tenant in upper case on dst')
+        self.create_user_in_uppercase_on_dst()
         self.log.info('Creating networks on dst')
         self.create_dst_networking()
         self.log.info('Creating vms on dst')

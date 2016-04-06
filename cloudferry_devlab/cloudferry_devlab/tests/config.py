@@ -67,6 +67,12 @@ ext_net_map = 'ext_net_map.yaml'
 """This file contains map of relationships between external networks on source
 and destination clouds."""
 
+case_sensitivity_test_user = 'user10'
+"""User to be created in upper case on DST Cloud."""
+
+case_sensitivity_test_tenant = 'tenant6'
+"""Tenant to be created in upper case on DST Cloud."""
+
 users = [
     {'name': 'user1', 'password': 'passwd1', 'email': 'mail@example.com',
      'tenant': 'tenant1', 'enabled': True},
@@ -89,14 +95,26 @@ users = [
      'tenant': 'tenant3', 'enabled': True},
     {'name': 'user9', 'password': 'passwd', 'email': 'user8@example.com',
      'tenant': 'tenant5', 'enabled': True},
+    {'name': case_sensitivity_test_user, 'password': 'passwd',
+     'email': 'user10@example.com',
+     'tenant': case_sensitivity_test_tenant, 'enabled': True},
     {'name': 'user11', 'password': 'passwd', 'email': 'user11@example.com',
      'tenant': 'tenant7', 'enabled': True}
 ]
-"""Users to create/delete"""
+"""SRC Users to create/delete"""
+
+dst_users = [
+    {'name': case_sensitivity_test_user.upper(), 'password': 'PASSWD',
+     'email': 'user_10@example.com',
+     'tenant': case_sensitivity_test_tenant.upper(), 'enabled': True}
+]
+"""DST Users to create"""
 
 user_tenant_roles = [
     {'user9': [{'tenant': 'tenant5', 'role': 'SomeRole'}]},
-    {'user1': [{'tenant': 'tenant1', 'role': 'SomeRole'}]}
+    {'user1': [{'tenant': 'tenant1', 'role': 'SomeRole'}]},
+    {case_sensitivity_test_user: [{'tenant': case_sensitivity_test_tenant,
+                                   'role': 'SecondRole'}]}
 ]
 
 roles = [
@@ -377,13 +395,23 @@ tenants = [
      'images': [{'name': 'cirros_image_for_tenant5', 'copy_from': img_url,
                  'is_public': True}],
      },
+    {'name': case_sensitivity_test_tenant, 'description': 'None',
+     'enabled': True, 'uppercase': True
+     },
     {'name': 'tenant7', 'description': 'Tenant7 filter has excluded images',
-     'enabled': True, 'exclude_images': True,
+     'enabled': True,
      'images': [{'name': 'image7', 'copy_from': img_url, 'is_public': False},
                 {'name': 'image8', 'copy_from': img_url, 'is_public': False}]
      }
 ]
-"""Tenants to create/delete"""
+"""Tenants to create/delete
+`case_sensitivity_test_tenant` covers this scenario:
+ - Create user and tenant in source cloud
+ - Create user and tenant with the same names in the uppercase in
+   destination cloud
+ - Create user roles for the user created
+ - Run identity migration
+ - Verify user roles migrated correctly"""
 
 images = [
     {'name': 'image1', 'copy_from': img_url, 'is_public': True,
