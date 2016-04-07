@@ -649,7 +649,7 @@ class NovaCompute(compute.Compute):
                 self.identity.keystone_client,
                 conf.cloud.user,
                 conf.cloud.tenant):
-            nclient = self.get_client(conf)
+            nclient = self.proxy(self.get_client(conf), conf)
             new_id = self.create_instance(nclient, **create_params)
             try:
                 self.wait_for_status(new_id, self.get_status, 'active',
