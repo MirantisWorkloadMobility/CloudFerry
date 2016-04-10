@@ -15,7 +15,6 @@
 
 import contextlib
 import copy
-import random
 import pprint
 import uuid
 
@@ -78,44 +77,6 @@ STATUSES_AFTER_MIGRATION = {ACTIVE: ACTIVE,
 
 CORRECT_STATUSES_AFTER_MIGRATION = {STATUSES_AFTER_MIGRATION[status]
                                     for status in ALLOWED_VM_STATUSES}
-
-
-class DestinationCloudNotOperational(RuntimeError):
-    pass
-
-
-class RandomSchedulerVmDeployer(object):
-    """Creates VM on destination. Tries to create VM on random compute host if
-    failed with the one picked by nova scheduler"""
-
-    def __init__(self, nova_compute_obj):
-        self.nc = nova_compute_obj
-
-    def deploy(self, create_params, client_conf):
-        LOG.info("Deploying instance '%s'", create_params['name'])
-        az = create_params['availability_zone']
-        try:
-            return self.nc.deploy_instance(create_params, client_conf)
-        except exception.TimeoutException:
-            hosts = self.nc.get_compute_hosts(availability_zone=az)
-            random.seed()
-            random.shuffle(hosts)
-
-            while hosts:
-                next_host = hosts.pop()
-                create_params['availability_zone'] = ':'.join([az, next_host])
-                LOG.info("Trying to deploy instance '%s' in '%s'",
-                         create_params['name'],
-                         create_params['availability_zone'])
-                try:
-                    return self.nc.deploy_instance(create_params, client_conf)
-                except exception.TimeoutException:
-                    pass
-
-        message = ("Unable to schedule VM '{vm}' on any of available compute "
-                   "nodes.").format(vm=create_params['name'])
-        LOG.error(message)
-        raise DestinationCloudNotOperational(message)
 
 
 class NovaCompute(compute.Compute):
@@ -515,7 +476,7 @@ class NovaCompute(compute.Compute):
         if target == 'resources':
             info = self._deploy_resources(info, **kwargs)
         elif target == 'instances':
-            info = self._deploy_instances(info)
+            info = self._deploy_instance(info, **kwargs)
         else:
             raise ValueError('Only "resources" or "instances" values allowed')
 
@@ -644,12 +605,12 @@ class NovaCompute(compute.Compute):
             self.update_quota(tenant_id=tenant_id, user_id=user_id,
                               **quota_info)
 
-    def deploy_instance(self, create_params, conf):
+    def try_deploy_instance(self, create_params, conf):
         with keystone.AddAdminUserToNonAdminTenant(
                 self.identity.keystone_client,
                 conf.cloud.user,
                 conf.cloud.tenant):
-            nclient = self.get_client(conf)
+            nclient = self.proxy(self.get_client(conf), conf)
             new_id = self.create_instance(nclient, **create_params)
             try:
                 self.wait_for_status(new_id, self.get_status, 'active',
@@ -667,59 +628,54 @@ class NovaCompute(compute.Compute):
 
         return new_id
 
-    def _deploy_instances(self, info_compute):
-        new_ids = {}
+    def get_instance_availability_zone(self, instance):
+        return self.attr_override.get_attr(
+            instance, 'availability_zone',
+            default=self.get_availability_zone(instance['availability_zone']))
 
+    def _deploy_instance(self, instance, availability_zone):
         client_conf = copy.deepcopy(self.config)
 
-        for _instance in info_compute['instances'].itervalues():
-            instance = _instance['instance']
-            with self._ensure_instance_flavor_exists(instance):
-                LOG.debug("creating instance %s", instance['name'])
-                create_params = {
-                    'name': instance['name'],
-                    'flavor': self.attr_override.get_attr(
-                        instance, 'flavor_id'),
-                    'key_name': self.attr_override.get_attr(
-                        instance, 'key_name'),
-                    'nics': instance['nics'],
-                    'image': instance['image_id'],
-                    'config_drive': instance['config_drive'],
-                    # user_id matches user_id on source
-                    'user_id': instance.get('user_id'),
-                    'availability_zone': self.attr_override.get_attr(
-                        instance, 'availability_zone',
-                        default=self.get_availability_zone(
-                            instance['availability_zone'])),
-                    'scheduler_hints': {
-                        'group': self.attr_override.get_attr(
-                            instance, 'server_group')
-                    },
-                }
-                if instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
-                    volume_id = instance['volumes'][0]['id']
-                    storage = self.cloud.resources[utl.STORAGE_RESOURCE]
-                    vol = storage.get_migrated_volume(volume_id)
+        with self._ensure_instance_flavor_exists(instance):
+            LOG.debug("creating instance %s", instance['name'])
+            create_params = {
+                'name': instance['name'],
+                'flavor': self.attr_override.get_attr(
+                    instance, 'flavor_id'),
+                'key_name': self.attr_override.get_attr(
+                    instance, 'key_name'),
+                'nics': instance['nics'],
+                'image': instance['image_id'],
+                'config_drive': instance['config_drive'],
+                # user_id matches user_id on source
+                'user_id': instance.get('user_id'),
+                'availability_zone': availability_zone,
+                'scheduler_hints': {
+                    'group': self.attr_override.get_attr(
+                        instance, 'server_group')
+                },
+            }
+            if instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
+                volume_id = instance['volumes'][0]['id']
+                storage = self.cloud.resources[utl.STORAGE_RESOURCE]
+                vol = storage.get_migrated_volume(volume_id)
 
-                    if vol:
-                        create_params["block_device_mapping_v2"] = [{
-                            "source_type": "volume",
-                            "uuid": vol.id,
-                            "destination_type": "volume",
-                            "delete_on_termination": True,
-                            "boot_index": 0
-                        }]
-                        create_params['image'] = None
-                    else:
-                        msg = ("Bootable volume for instance '%s' is "
-                               "not present, volume will NOT be attached")
-                        LOG.warning(msg, instance['name'])
+                if vol:
+                    create_params["block_device_mapping_v2"] = [{
+                        "source_type": "volume",
+                        "uuid": vol.id,
+                        "destination_type": "volume",
+                        "delete_on_termination": True,
+                        "boot_index": 0
+                    }]
+                    create_params['image'] = None
+                else:
+                    msg = ("Bootable volume for instance '%s' is "
+                           "not present, volume will NOT be attached")
+                    LOG.warning(msg, instance['name'])
 
-                client_conf.cloud.tenant = instance['tenant_name']
-                new_id = RandomSchedulerVmDeployer(self).deploy(create_params,
-                                                                client_conf)
-                new_ids[new_id] = instance['id']
-        return new_ids
+            client_conf.cloud.tenant = instance['tenant_name']
+            return self.try_deploy_instance(create_params, client_conf)
 
     def create_instance(self, nclient, **kwargs):
         # do not provide key pair as boot argument, it will be updated with the

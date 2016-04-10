@@ -101,28 +101,56 @@ class SpeedLimiter(object):
         self.sent_size += size
 
 
-class FileProxy(object):
-    def __init__(self, file_obj, speed_limit=None, size=None, name=None,
+class BaseProxy(object):
+    def __init__(self, obj, speed_limit=None, size=None, name=None,
                  chunk_size='512K'):
-        self.file_obj = file_obj
+        self.obj = obj
         self.chunk_size = sizeof_format.parse_size(chunk_size)
         self.speed_limiter = SpeedLimiter(speed_limit or
                                           CONF.migrate.speed_limit)
         if size is None:
-            size = get_file_size(file_obj)
-        name = name or getattr(file_obj, 'name', '<file object>')
+            size = self._get_size()
+        if name is None:
+            name = self._get_name()
         self.view = ProgressView(name=name, size=size)
 
-    def read(self, size=None):
-        size = size or self.chunk_size
-        data = self.file_obj.read(size)
+    def _get_size(self):
+        raise NotImplementedError()
+
+    def _get_name(self):
+        raise NotImplementedError()
+
+    def _processing(self, data):
         length_data = len(data)
         self.view(length_data)
         self.speed_limiter(length_data)
+
+
+class FileProxy(BaseProxy):
+    def _get_size(self):
+        return get_file_size(self.obj)
+
+    def _get_name(self):
+        return getattr(self.obj, 'name', '<file object>')
+
+    def read(self, size=None):  # pylint: disable=unused-argument
+        data = self.obj.read(self.chunk_size)
+        self._processing(data)
 
         return data
 
     def __getattr__(self, item):
         if item == 'seek':
             raise AttributeError()
-        return getattr(self.file_obj, item)
+        return getattr(self.obj, item)
+
+
+class IterProxy(BaseProxy):
+    def _get_name(self):
+        return '<iterable object: %s>' % self.obj
+
+    def _get_size(self):
+        return None
+
+    def read(self, size=None):  # pylint: disable=unused-argument
+        return next(self.obj)

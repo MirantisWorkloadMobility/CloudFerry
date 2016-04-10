@@ -30,23 +30,29 @@ class Stage(object):
     __metaclass__ = abc.ABCMeta
     dependencies = []
 
+    def __init__(self, config):
+        """
+        Stage constructor
+        :param config: cloudferrylib.config.Configuration instance
+        :return:
+        """
+        self.config = config
+
     @abc.abstractmethod
-    def signature(self, config):
+    def signature(self):
         """
         Returns signature for data that will be produced during this stage. If
         the signature differ from the one stored in database, then invalidate
         method will be called.
-        :param config: cloudferrylib.config.Configuration instance
         :return:
         """
         return
 
     @abc.abstractmethod
-    def execute(self, config):
+    def execute(self):
         """
         Should contain any code that is required to be executed during this
         stage.
-        :param config: cloudferrylib.config.Configuration instance
         """
         return
 
@@ -70,14 +76,14 @@ def execute_stage(class_name, config, force=False):
     # Create stage object
     cls = importutils.import_class(class_name)
     assert issubclass(cls, Stage)
-    stage = cls()
+    stage = cls(config)
 
     # Execute dependency stages
     for dependency in stage.dependencies:
         execute_stage(dependency, config)
 
     # Check if there is data from this stage in local DB
-    new_signature = stage.signature(config)
+    new_signature = stage.signature()
     old_signature = None
     need_invalidate = False
     need_execute = False
@@ -98,7 +104,7 @@ def execute_stage(class_name, config, force=False):
                        stage=class_name)
             need_execute = True
         if need_execute:
-            stage.execute(config)
+            stage.execute()
             tx.execute('INSERT INTO stages VALUES (:stage, :signature)',
                        stage=class_name,
                        signature=local_db.Json(new_signature))

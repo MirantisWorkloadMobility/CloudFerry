@@ -22,8 +22,8 @@ LOG = logging.getLogger(__name__)
 
 
 class DiscoverStage(stage.Stage):
-    def __init__(self):
-        super(DiscoverStage, self).__init__()
+    def __init__(self, config):
+        super(DiscoverStage, self).__init__(config)
         self.missing_clouds = None
 
     def invalidate(self, old_signature, new_signature, force=False):
@@ -52,23 +52,23 @@ class DiscoverStage(stage.Stage):
             for cloud in invalid_clouds:
                 session.delete(cloud=cloud)
 
-    def signature(self, config):
+    def signature(self):
         """
         Discovery signature is based on configuration. Each configured cloud
         have it's own signature.
         """
         return {n: [c.credential.auth_url, c.credential.region_name]
-                for n, c in config.clouds.items()}
+                for n, c in self.config.clouds.items()}
 
-    def execute(self, config):
+    def execute(self):
         """
         Execute discovery.
         """
         if self.missing_clouds is None:
-            self.missing_clouds = config.clouds.keys()
+            self.missing_clouds = self.config.clouds.keys()
 
         for cloud_name in self.missing_clouds:
-            cloud = config.clouds[cloud_name]
+            cloud = self.config.clouds[cloud_name]
             for class_name in cloud.discover:
                 cls = importutils.import_class(class_name)
                 LOG.info('Starting discover %s objects in %s cloud',
@@ -76,3 +76,44 @@ class DiscoverStage(stage.Stage):
                 cls.discover(cloud)
                 LOG.info('Done discovering %s objects in %s cloud',
                          cls.__name__, cloud_name)
+
+
+class LinkStage(stage.Stage):
+    dependencies = [
+        'cloudferrylib.os.discovery.stages.DiscoverStage',
+    ]
+
+    def signature(self):
+        """
+        Return list of all IDs for each migration
+        """
+        signature = {}
+        with model.Session() as session:
+            for name, migration in self.config.migrations.items():
+                query = migration.query
+                source = migration.source
+                objects = query.search(session, source)
+                src_ids = []
+                for src_obj in model.flatten_dependencies(objects):
+                    src_ids.append(src_obj.primary_key.id)
+                signature[name] = sorted(src_ids)
+        return signature
+
+    def invalidate(self, old_signature, new_signature, force=False):
+        return
+
+    def execute(self):
+        """
+        Execute migrated objects search.
+        """
+        with model.Session() as session:
+            for migration in self.config.migrations.values():
+                query = migration.query
+                src = migration.source
+                dst = migration.destination
+                objects = query.search(session, src)
+                for src_obj in model.flatten_dependencies(objects):
+                    for dst_obj in session.list(src_obj.get_class(), dst):
+                        if src_obj.equals(dst_obj):
+                            src_obj.link_to(dst_obj)
+                            break

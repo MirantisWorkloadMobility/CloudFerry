@@ -27,6 +27,13 @@ _executed_statements = set()
 _execute_once_mutex = threading.Lock()
 
 
+class _Row(sqlite3.Row):
+    def __getitem__(self, item):
+        if isinstance(item, slice):
+            return [self[i] for i in range(*item.indices(len(self)))]
+        return super(_Row, self).__getitem__(item)
+
+
 class Transaction(object):
     _tls = threading.local()
     _tls.top_level = None
@@ -71,7 +78,7 @@ class Transaction(object):
             self._conn = sqlite3.connect(
                 SQLITE3_DATABASE_FILE,
                 detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
-            self._conn.row_factory = sqlite3.Row
+            self._conn.row_factory = _Row
             self._conn.isolation_level = None
             execute_saved_statements(self._conn)
         else:
@@ -177,7 +184,7 @@ def execute_saved_statements(conn, force=False):
     with _execute_once_mutex, contextlib.closing(conn.cursor()) as cursor:
         for sql, kwargs in _execute_once_statements:
             key = (sql, tuple(sorted(kwargs.items())))
-            if key in _executed_statements or force:
+            if key not in _executed_statements or force:
                 LOG.debug('SQL execute once: %s %r', sql, kwargs)
                 cursor.execute(sql, kwargs)
                 _executed_statements.add(key)

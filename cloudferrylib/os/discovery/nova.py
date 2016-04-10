@@ -14,9 +14,6 @@
 import itertools
 import logging
 
-from marshmallow import exceptions as marshmallow_exc
-from marshmallow import fields
-
 from cloudferrylib.os.discovery import cinder
 from cloudferrylib.os.discovery import keystone
 from cloudferrylib.os.discovery import glance
@@ -41,35 +38,35 @@ class Flavor(model.Model):
 
 class SecurityGroup(model.Model):
     class Schema(model.Schema):
-        name = fields.String(required=True)
+        name = model.String(required=True)
 
 
 class EphemeralDisk(model.Model):
     class Schema(model.Schema):
-        path = fields.String(required=True)
-        size = fields.Integer(required=True)
+        path = model.String(required=True)
+        size = model.Integer(required=True)
 
 
 @model.type_alias('vms')
 class Server(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey('id')
-        name = fields.String(required=True)
+        name = model.String(required=True)
         security_groups = model.Nested(SecurityGroup, many=True, missing=list)
-        status = fields.String(required=True)
+        status = model.String(required=True)
         tenant = model.Dependency(keystone.Tenant)
         image = model.Dependency(glance.Image, allow_none=True)
         image_membership = model.Dependency(glance.ImageMember,
                                             allow_none=True)
-        user_id = fields.String(required=True)  # TODO: user reference
-        key_name = fields.String(required=True, allow_none=True)
+        user_id = model.String(required=True)  # TODO: user reference
+        key_name = model.String(required=True, allow_none=True)
         flavor = model.Dependency(Flavor)
-        config_drive = fields.String(required=True)
-        availability_zone = fields.String(required=True, allow_none=True)
-        host = fields.String(required=True)
-        hypervisor_hostname = fields.String(required=True)
-        instance_name = fields.String(required=True)
-        metadata = fields.Dict(missing=dict)
+        config_drive = model.String(required=True)
+        availability_zone = model.String(required=True, allow_none=True)
+        host = model.String(required=True)
+        hypervisor_hostname = model.String(required=True)
+        instance_name = model.String(required=True)
+        metadata = model.Dict(missing=dict)
         ephemeral_disks = model.Nested(EphemeralDisk, many=True, missing=list)
         attached_volumes = model.Dependency(cinder.Volume, many=True,
                                             missing=list)
@@ -117,14 +114,16 @@ class Server(model.Model):
                     try:
                         srv = Server.load_from_cloud(cloud, raw_server,
                                                      overrides)
-                        if srv.image and srv.image.tenant != srv.tenant:
-                            srv.image_membership = glance.ImageMember.get(
+                        if srv.image and not srv.image.is_public \
+                                and srv.image.tenant != srv.tenant:
+                            srv.image_membership = glance.ImageMember.make(
                                 cloud,
                                 srv.image.object_id.id,
                                 srv.tenant.object_id.id)
+                            session.store(srv.image_membership)
                         servers.append(srv)
                         LOG.debug('Discovered: %s', srv)
-                    except marshmallow_exc.ValidationError as e:
+                    except model.ValidationError as e:
                         LOG.warning('Server %s ignored: %s', raw_server.id, e)
                         continue
 
@@ -138,6 +137,20 @@ class Server(model.Model):
                         if ephemeral_disks is not None:
                             srv.ephemeral_disks = ephemeral_disks
                             session.store(srv)
+
+    def equals(self, other):
+        # pylint: disable=no-member
+        # TODO: consider comparing metadata
+        # TODO: consider comparing security_groups
+        if not self.tenant.equals(other.tenant):
+            return False
+        if not self.flavor.equals(other.flavor):
+            return False
+        if not self.image.equals(other.image):
+            return False
+        if self.key_name != other.key_name or self.name != other.name:
+            return False
+        return True
 
 
 def _list_ephemeral(remote, server):

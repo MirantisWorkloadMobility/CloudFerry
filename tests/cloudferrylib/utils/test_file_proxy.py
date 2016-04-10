@@ -49,15 +49,11 @@ class FileProxyTestCase(test.TestCase):
         m = mock.patch('cloudferrylib.utils.file_proxy.ProgressView')
         self.progress_view = m.start()
         self.addCleanup(m.stop)
-        m = mock.patch('cloudferrylib.utils.sizeof_format.parse_size')
-        self.parse_size = m.start()
-        self.addCleanup(m.stop)
 
     def test_init(self):
         self.get_file_size.return_value = 'fake_file_size'
         self.cfg.set_override('speed_limit', 'fake_speed_limit', 'migrate')
         file_proxy.FileProxy('fake_file')
-        self.parse_size.assert_called_once_with('512K')
         self.speed_limiter.assert_called_once_with('fake_speed_limit')
         self.get_file_size.assert_called_once_with('fake_file')
         self.progress_view.assert_called_once_with(name='<file object>',
@@ -76,9 +72,9 @@ class FileProxyTestCase(test.TestCase):
     def test_read(self):
         file_obj = mock.Mock()
         file_obj.read.return_value = 'fake data'
-        fp = file_proxy.FileProxy(file_obj)
+        fp = file_proxy.FileProxy(file_obj, chunk_size=5)
         fp.read(12345)
-        file_obj.read.assert_called_once_with(12345)
+        file_obj.read.assert_called_once_with(5)
         self.progress_view.return_value.assert_called_once_with(9)
         self.speed_limiter.return_value.assert_called_once_with(9)
 

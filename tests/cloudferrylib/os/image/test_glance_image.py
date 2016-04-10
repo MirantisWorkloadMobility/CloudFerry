@@ -48,7 +48,7 @@ class GlanceImageTestCase(test.TestCase):
         test.TestCase.setUp(self)
 
         self.glance_mock_client = mock.MagicMock()
-        self.glance_mock_client().images.data()._resp = 'fake_resp_1'
+        self.glance_mock_client().images.data().iterable = 'fake_resp_1'
 
         self.glance_client_patch = mockpatch.PatchObject(
             glance_client,
@@ -138,8 +138,9 @@ class GlanceImageTestCase(test.TestCase):
             fake_auth_token)
 
         gl_client = self.glance_image.get_client()
-        mock_calls = [mock.call(endpoint=fake_endpoint, token=fake_auth_token,
-                                insecure=FAKE_CONFIG.cloud.insecure)]
+        mock_calls = [mock.call(fake_endpoint, token=fake_auth_token,
+                                insecure=FAKE_CONFIG.cloud.insecure,
+                                session=None)]
 
         self.glance_mock_client.assert_has_calls(mock_calls)
         self.assertEqual(self.glance_mock_client(), gl_client)
@@ -203,8 +204,7 @@ class GlanceImageTestCase(test.TestCase):
                               'fake_image_id_1'))
 
     def test_get_ref_image(self):
-        fake_images = [self.fake_image_1, self.fake_image_2]
-        self.glance_mock_client().images.list.return_value = fake_images
+        self.glance_mock_client().images.data.return_value = 'fake_resp_1'
 
         self.assertEquals('fake_resp_1',
                           self.glance_image.get_ref_image('fake_image_id_1'))

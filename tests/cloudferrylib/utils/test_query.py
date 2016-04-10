@@ -13,7 +13,6 @@
 # limitations under the License.
 from cloudferrylib.os.discovery import model
 from cloudferrylib.utils import query
-from marshmallow import fields
 from tests.cloudferrylib.utils import test_local_db
 import mock
 
@@ -21,8 +20,8 @@ import mock
 class TestMode(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey('id')
-        field1 = fields.String()
-        field2 = fields.String()
+        field1 = model.String()
+        field2 = model.String()
 
 CLASS_FQN = TestMode.__module__ + '.' + TestMode.__name__
 

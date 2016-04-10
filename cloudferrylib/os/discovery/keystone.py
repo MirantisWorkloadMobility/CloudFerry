@@ -13,7 +13,6 @@
 # limitations under the License.
 import logging
 
-from marshmallow import fields
 from keystoneclient import exceptions
 
 from cloudferrylib.os.discovery import model
@@ -25,9 +24,9 @@ LOG = logging.getLogger(__name__)
 class Tenant(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey('id')
-        name = fields.String(required=True)
-        enabled = fields.Boolean(required=True)
-        description = fields.String(allow_none=True)
+        name = model.String(required=True)
+        enabled = model.Boolean(required=True)
+        description = model.String(allow_none=True)
 
     @classmethod
     def load_missing(cls, cloud, object_id):
@@ -44,3 +43,7 @@ class Tenant(model.Model):
         with model.Session() as session:
             for tenant in identity_client.tenants.list():
                 session.store(Tenant.load_from_cloud(cloud, tenant))
+
+    def equals(self, other):
+        # pylint: disable=no-member
+        return self.name.lower() == other.name.lower()

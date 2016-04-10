@@ -28,7 +28,6 @@ from cloudferry_devlab.tests import base
 from cloudferry_devlab.tests import cleanup
 import cloudferry_devlab.tests.config as conf
 
-TIMEOUT = 600
 VM_SPAWNING_LIMIT = 5
 CREATE_CLEAN_METHODS_MAP = {
     'create_tenants': 'clean_tenants',
@@ -214,13 +213,13 @@ class Prerequisites(base.BasePrerequisites):
                 dst_img_ids.append(dst_img_id)
 
         self.wait_until_objects_created(img_ids, self.check_image_state,
-                                        TIMEOUT)
+                                        conf.TIMEOUT)
 
         if dst_img_ids and self.dst_cloud:
             self.wait_until_objects_created(
                 dst_img_ids,
                 self.chech_image_state_on_dst,
-                TIMEOUT)
+                conf.TIMEOUT)
 
         tenant_list = self.keystoneclient.tenants.list()
         for image_id in img_ids:
@@ -366,7 +365,7 @@ class Prerequisites(base.BasePrerequisites):
                 set limit for vm spawning.
             """
             spawning_vms = None
-            for _ in range(TIMEOUT):
+            for _ in range(conf.TIMEOUT):
                 all_vms = self.novaclient.servers.list(
                     search_opts={'all_tenants': 1})
                 spawning_vms = [vm.id for vm in all_vms
@@ -378,7 +377,7 @@ class Prerequisites(base.BasePrerequisites):
             else:
                 raise RuntimeError(
                     'VMs with ids {0} were in "BUILD" state more than {1} '
-                    'seconds'.format(spawning_vms, TIMEOUT))
+                    'seconds'.format(spawning_vms, conf.TIMEOUT))
 
         def create_vms(vm_list):
             vm_ids = []
@@ -390,7 +389,7 @@ class Prerequisites(base.BasePrerequisites):
                 if not vm.get('fip'):
                     continue
                 self.wait_until_objects_created([_vm.id], self.check_vm_state,
-                                                TIMEOUT)
+                                                conf.TIMEOUT)
                 fip = self.neutronclient.create_floatingip(
                     {"floatingip": {"floating_network_id": self.ext_net_id}})
                 _vm.add_floating_ip(fip['floatingip']['floating_ip_address'])
@@ -432,7 +431,7 @@ class Prerequisites(base.BasePrerequisites):
 
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
-        self.wait_until_objects_created(vms, self.check_vm_state, TIMEOUT)
+        self.wait_until_objects_created(vms, self.check_vm_state, conf.TIMEOUT)
 
     def create_vm_snapshots(self):
 
@@ -445,7 +444,7 @@ class Prerequisites(base.BasePrerequisites):
                 snapshot['image_name']))
             snp_ids.append(snp.id)
         self.wait_until_objects_created(snp_ids, self.check_snapshot_state,
-                                        TIMEOUT)
+                                        conf.TIMEOUT)
 
     def create_networks(self, networks):
 
@@ -637,7 +636,10 @@ class Prerequisites(base.BasePrerequisites):
                 fip_addr = self.migration_utils.get_vm_fip(vm)
             except RuntimeError:
                 return
-            self.migration_utils.wait_until_vm_accessible_via_ssh(fip_addr)
+            base.BasePrerequisites.wait_until_objects_created(
+                [(fip_addr, 'pwd')],
+                self.migration_utils.wait_until_vm_accessible_via_ssh,
+                conf.TIMEOUT)
 
         def get_params_for_volume_creating(_volume):
             params = ['display_name', 'size', 'imageRef', 'metadata']
@@ -665,7 +667,7 @@ class Prerequisites(base.BasePrerequisites):
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
         self.wait_until_objects_created(vlm_ids, self.check_volume_state,
-                                        TIMEOUT)
+                                        conf.TIMEOUT)
         vlm_ids = []
         for volume in volumes_list:
             if 'server_to_attach' not in volume:
@@ -678,7 +680,7 @@ class Prerequisites(base.BasePrerequisites):
                 server_id=vm_id, volume_id=vlm_id, device=volume['device'])
             vlm_ids.append(vlm_id)
         self.wait_until_objects_created(vlm_ids, self.check_volume_state,
-                                        TIMEOUT)
+                                        conf.TIMEOUT)
 
     def create_cinder_snapshots(self, snapshot_list):
         for snapshot in snapshot_list:
@@ -810,7 +812,7 @@ class Prerequisites(base.BasePrerequisites):
     def generate_vm_state_list(self):
         data = {}
         for vm in self.novaclient.servers.list(search_opts={'all_tenants': 1}):
-            for _ in range(TIMEOUT):
+            for _ in range(conf.TIMEOUT):
                 _vm = self.novaclient.servers.get(vm.id)
                 if _vm.status != u'RESIZE':
                     break

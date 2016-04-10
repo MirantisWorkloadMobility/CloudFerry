@@ -46,6 +46,7 @@ handlers:
     filters: [show_current_task]
     level: INFO
   debug:
+    maxBytes: 0
     backupCount: 20
     class: cloudferrylib.utils.log.RunRotatingFileHandler
     encoding: utf-8
@@ -56,6 +57,7 @@ handlers:
     maxBytes: 100M
     filters: [show_current_task]
   info:
+    maxBytes: 0
     backupCount: 20
     class: cloudferrylib.utils.log.RunRotatingFileHandler
     encoding: utf-8

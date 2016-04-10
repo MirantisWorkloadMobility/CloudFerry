@@ -120,12 +120,12 @@ Example using ``Session`` class to store and retrieve data from database::
 """
 import collections
 import contextlib
-import json
 import logging
 import sys
 import threading
 
 import marshmallow
+from marshmallow import exceptions
 from marshmallow import fields
 from oslo_utils import importutils
 
@@ -138,10 +138,20 @@ CREATE TABLE IF NOT EXISTS objects (
     uuid TEXT,
     cloud TEXT,
     type TEXT,
-    json TEXT,
+    json JSON,
     PRIMARY KEY (uuid, cloud, type)
 )
 """)
+local_db.execute_once("""
+CREATE TABLE IF NOT EXISTS links (
+    uuid TEXT,
+    cloud TEXT,
+    type TEXT,
+    json JSON,
+    PRIMARY KEY (uuid, cloud, type)
+)
+""")
+ValidationError = exceptions.ValidationError
 
 
 class ObjectId(collections.namedtuple('ObjectId', ('id', 'cloud'))):
@@ -151,27 +161,30 @@ class ObjectId(collections.namedtuple('ObjectId', ('id', 'cloud'))):
     """
 
     @staticmethod
-    def from_cloud(cloud, value):
+    def from_cloud(cloud, value, model):
         """
         Create ObjectId based on cloud name and identifier string (used mostly
         during discover phase).
         """
         if isinstance(value, basestring):
-            return ObjectId(value, cloud.name)
+            uuid = value
         elif isinstance(value, dict) and 'id' in value:
-            return ObjectId(value['id'], cloud.name)
+            uuid = value['id']
         else:
             raise ValueError('Can\'t convert ' + repr(value) + ' to ObjectId')
+        return {
+            'id': uuid,
+            'cloud': cloud.name,
+            'type': _type_name(model),
+        }
 
     @staticmethod
-    def convert(value):
+    def from_dict(value):
         """
         Deserialize ObjectId from dictionary representation.
         """
         if isinstance(value, dict):
             return ObjectId(value['id'], value['cloud'])
-        elif isinstance(value, ObjectId):
-            return value
         else:
             raise ValueError('Can\'t convert ' + repr(value) + ' to ObjectId')
 
@@ -191,6 +204,7 @@ class DataAdapter(object):
     Data adapter class that make possible passing non-dict objects to
     Schema.load. Not for use outside of ``Model.load_from_cloud`` code.
     """
+    missing = object()
 
     def __init__(self, obj, field_mapping, transformers, overrides=None):
         self.obj = obj
@@ -200,7 +214,11 @@ class DataAdapter(object):
 
     def get(self, key, default):
         if key in self.override:
-            return self.override[key]
+            value = self.override[key]
+            if value is self.missing:
+                return default
+            else:
+                return self.override[key]
         mapped_key = self.field_mapping.get(key, key)
         if isinstance(self.obj, dict):
             value = self.obj.get(mapped_key, default)
@@ -214,6 +232,9 @@ class DataAdapter(object):
 
     def set(self, key, value):
         self.override[key] = value
+
+    def set_missing(self, key):
+        self.override[key] = self.missing
 
 
 class NotFound(Exception):
@@ -230,19 +251,91 @@ class NotFound(Exception):
             _type_name(self.cls), self.object_id)
 
 
-class Schema(marshmallow.Schema):
+class _FieldWithTable(object):
+    def __init__(self, *args, **kwargs):
+        self.table = kwargs.pop('table', 'objects')
+        super(_FieldWithTable, self).__init__(*args, **kwargs)
+
+
+class String(_FieldWithTable, fields.String):
+    pass
+
+
+class Boolean(_FieldWithTable, fields.Boolean):
+    pass
+
+
+class Integer(_FieldWithTable, fields.Integer):
+    pass
+
+
+class Dict(_FieldWithTable, fields.Dict):
+    pass
+
+
+class Reference(_FieldWithTable, fields.Field):
     """
-    Inherit this class to define object schema.
+    Field referencing one or more model instances.
     """
 
-    FIELD_MAPPING = {}
-    FIELD_VALUE_TRANSFORMERS = {}
+    def __init__(self, model_class, many=False, ensure_existence=False,
+                 convertible=True, **kwargs):
+        super(Reference, self).__init__(**kwargs)
+        if isinstance(model_class, basestring):
+            self._model_class_name = model_class
+            self._model_class = None
+        else:
+            self._model_class = model_class
+        self.many = many
+        self.ensure_existence = ensure_existence
+        self.convertible = convertible
+        # TODO: validation
 
-    def get_primary_key_field(self):
-        for name, field in self.declared_fields.items():
-            if isinstance(field, PrimaryKey):
-                return name
-        return None
+    @property
+    def model_class(self):
+        if self._model_class is None:
+            self._model_class = get_model(self._model_class_name)
+        return self._model_class
+
+    def _serialize(self, value, attr, obj):
+        if value is None:
+            return None
+        if self.many:
+            return [x.primary_key.to_dict(x.get_class())
+                    for x in value]
+        else:
+            return value.primary_key.to_dict(value.get_class())
+
+    def _deserialize(self, value, attr, data):
+        with Session.current() as session:
+            if self.many:
+                result = []
+                for obj in value:
+                    model = get_model(obj['type'])
+                    object_id = ObjectId.from_dict(obj)
+                    if session.exists(model, object_id):
+                        result.append(LazyObj(model, object_id))
+                return result
+            else:
+                model = get_model(value['type'])
+                object_id = ObjectId.from_dict(value)
+                if session.exists(model, object_id):
+                    return LazyObj(model, object_id)
+                else:
+                    return None
+
+    def get_significant_value(self, value):
+        """
+        Returns id or set of id that can be safely used for detection of
+        changes to the field. E.g. don't compare previous and current objects
+        that are referenced, only compare id/set of ids.
+        """
+        if value is None:
+            return None
+        if self.many:
+            return set(x.primary_key for x in value)
+        else:
+            return value.primary_key
 
 
 class ModelMetaclass(type):
@@ -264,14 +357,14 @@ class Model(object):
     """
 
     __metaclass__ = ModelMetaclass
-    Schema = Schema
+    Schema = None
     pk_field = None
 
     def __init__(self):
         self._original = {}
 
-    def dump(self):
-        return self.get_schema().dump(self).data
+    def dump(self, table):
+        return self.get_schema(table).dump(self).data
 
     @classmethod
     def create(cls, values, schema=None, mark_dirty=False):
@@ -325,6 +418,26 @@ class Model(object):
         :return: model class instance
         """
 
+        def find_object(object_id_dict):
+            model = get_model(object_id_dict['type'])
+            object_id = ObjectId.from_dict(object_id_dict)
+            with Session.current() as session:
+                try:
+                    if session.is_missing(model, object_id):
+                        return None
+                    else:
+                        return session.retrieve(model, object_id)
+                except NotFound:
+                    LOG.debug('Trying to load missing %s value: %s',
+                              _type_name(model), object_id)
+                    obj = model.load_missing(cloud, object_id)
+                    if obj is None:
+                        session.store_missing(model, object_id)
+                        return None
+                    else:
+                        session.store(obj)
+                        return obj
+
         def convert(field, many, old_value):
             if old_value is None:
                 return None
@@ -337,10 +450,10 @@ class Model(object):
                     convert_result.append(converted)
                 return convert_result
             else:
-                object_id = ObjectId.from_cloud(cloud, old_value)
-                if not field.ensure_existence or \
-                        field.model_class.find(cloud, object_id):
-                    return object_id
+                model = field.model_class
+                object_id_dict = ObjectId.from_cloud(cloud, old_value, model)
+                if not field.ensure_existence or find_object(object_id_dict):
+                    return object_id_dict
                 else:
                     return None
 
@@ -356,8 +469,14 @@ class Model(object):
                 if value is None:
                     continue
                 elif isinstance(field, Reference):
+                    if not field.convertible:
+                        adapted_data.set_missing(key)
+                        continue
                     new_value = convert(field, field.many, value)
                     adapted_data.set(key, new_value)
+                elif isinstance(field, PrimaryKey):
+                    adapted_data.set(
+                        key, ObjectId.from_cloud(cloud, value, cls))
                 elif isinstance(field, Nested):
                     nested_schema = field.nested_model.get_schema()
                     nested_schema.context = schema.context
@@ -388,16 +507,23 @@ class Model(object):
         return cls.create(loaded, schema=schema, mark_dirty=False)
 
     @classmethod
-    def get_schema(cls):
+    def get_schema(cls, table=None):
         """
         Returns model schema instance
         """
-        return cls.Schema(strict=True)
+        # pylint: disable=not-callable
+        schema = cls.Schema(strict=True)
+        if table is not None:
+            only = tuple(n for n, f in schema.fields.items()
+                         if f.table == table)
+            return cls.Schema(strict=True, only=only)
+        else:
+            return schema
 
     @property
     def primary_key(self):
         """
-        Returns name of primary key field if it exists, None otherwise.
+        Returns primary key value.
         """
         if self.pk_field is not None:
             return getattr(self, self.pk_field)
@@ -430,24 +556,24 @@ class Model(object):
         # pylint: disable=unused-argument
         return
 
-    def is_dirty(self):
+    def is_dirty(self, table):
         """
         Returns True if object have changed since load from database, False
         otherwise.
         """
         original = self._original
-        schema = self.get_schema()
-        for name, field in schema.declared_fields.items():
+        schema = self.get_schema(table)
+        for name, field in schema.fields.items():
             value = getattr(self, name)
             if isinstance(field, Reference):
                 if original.get(name) != field.get_significant_value(value):
                     return True
             elif isinstance(field, Nested):
                 if field.many:
-                    if any(x.is_dirty() for x in value):
+                    if any(x.is_dirty(table) for x in value):
                         return True
                 else:
-                    if value.is_dirty():
+                    if value.is_dirty(table):
                         return True
             elif value != original.get(name):
                 return True
@@ -460,7 +586,7 @@ class Model(object):
         """
         self._original.clear()
 
-    def clear_dirty(self):
+    def clear_dirty(self, table):
         """
         Update internal state of object so it's not considered dirty (e.g.
         don't need to be saved to database).
@@ -472,9 +598,9 @@ class Model(object):
                 if value is not None:
                     if field.many:
                         for elem in value:
-                            elem.clear_dirty()
+                            elem.clear_dirty(table)
                     else:
-                        value.clear_dirty()
+                        value.clear_dirty(table)
             else:
                 value = getattr(self, name, None)
                 if isinstance(field, Reference):
@@ -489,37 +615,14 @@ class Model(object):
         """
         result = []
         schema = self.get_schema()
-        for name, field in schema.declared_fields.items():
+        for name, field in schema.fields.items():
             if isinstance(field, Dependency):
-                result.append(getattr(self, name))
+                value = getattr(self, name)
+                if field.many:
+                    result.extend(value)
+                elif value is not None:
+                    result.append(value)
         return result
-
-    @classmethod
-    def find(cls, cloud, object_id):
-        """
-        Try to find object in DB, and if it's missing in DB try to fetch it
-        from cloud. Should be used during discover phase only.
-        :param cloud: cloud object that can be used to create OpenStack API
-                      clients, etc...
-        :param object_id: object identifier
-        :return object or None if it's missing even in cloud
-        """
-        with Session.current() as session:
-            try:
-                if session.is_missing(cls, object_id):
-                    return None
-                else:
-                    return session.retrieve(cls, object_id)
-            except NotFound:
-                LOG.debug('Trying to load missing %s value: %s',
-                          _type_name(cls), object_id)
-                obj = cls.load_missing(cloud, object_id)
-                if obj is None:
-                    session.store_missing(cls, object_id)
-                    return None
-                else:
-                    session.store(obj)
-                    return obj
 
     @classmethod
     def get_class(cls):
@@ -534,9 +637,47 @@ class Model(object):
         """
         return getattr(self, name, default)
 
+    def equals(self, other):
+        """
+        Returns True if objects are same even if they are in different clouds.
+        For example, same image that was manually uploaded to tenant with name
+        "admin" to different clouds are equal, and therefore don't need to be
+        migrated.
+        """
+        return self is other
+
+    def link_to(self, dst_obj):
+        """
+        Link object to object in other cloud. Linked objects are incarnations
+        of the same object in different clouds. E.g. when some object A is
+        migrated to object B, then link from object A to object B is added.
+        """
+        # pylint: disable=no-member
+        assert self.get_class() is dst_obj.get_class()
+        assert self.primary_key is not None
+        for link in self.links:
+            if link.primary_key == dst_obj.primary_key:
+                return
+        self.links.append(dst_obj)
+
+    def find_link(self, cloud):
+        """
+        Find linked object in specified cloud.
+        """
+        # pylint: disable=no-member
+        assert self.primary_key is not None
+        for link in self.links:
+            if link.primary_key.cloud == cloud:
+                return link
+        return None
+
+    @classmethod
+    def get_tables(cls):
+        return set(f.table for f in cls.get_schema().fields.values())
+
     def __repr__(self):
         schema = self.get_schema()
-        obj_fields = sorted(schema.declared_fields.keys())
+        obj_fields = sorted(schema.fields.keys())
         cls = self.__class__
         return '<{cls} {fields}>'.format(
             cls=_type_name(cls),
@@ -544,61 +685,21 @@ class Model(object):
                             for f in obj_fields))
 
 
-class Reference(fields.Field):
+class Schema(marshmallow.Schema):
     """
-    Field referencing one or more model instances.
+    Inherit this class to define object schema.
     """
+    links = Reference(Model, convertible=False, many=True, missing=list,
+                      table='links')
 
-    def __init__(self, model_class, many=False, ensure_existence=False,
-                 **kwargs):
-        super(Reference, self).__init__(**kwargs)
-        if isinstance(model_class, basestring):
-            self._model_class_name = model_class
-            self._model_class = None
-        else:
-            self._model_class = model_class
-        self.many = many
-        self.ensure_existence = ensure_existence
+    FIELD_MAPPING = {}
+    FIELD_VALUE_TRANSFORMERS = {}
 
-    @property
-    def model_class(self):
-        if self._model_class is None:
-            self._model_class = importutils.import_class(
-                self._model_class_name)
-        return self._model_class
-
-    def _serialize(self, value, attr, obj):
-        if value is None:
-            return None
-        model = self.model_class
-        pk_field = model.pk_field
-        if self.many:
-            return [getattr(x, pk_field).to_dict(model)
-                    for x in value]
-        else:
-            return getattr(value, pk_field).to_dict(model)
-
-    def _deserialize(self, value, attr, data):
-        if self.many:
-            return [LazyObj(self.model_class, ObjectId.convert(x))
-                    for x in value]
-        else:
-            return LazyObj(self.model_class, ObjectId.convert(value))
-
-    def get_significant_value(self, value):
-        """
-        Returns id or set of id that can be safely used for detection of
-        changes to the field. E.g. don't compare previous and current objects
-        that are referenced, only compare id/set of ids.
-        """
-        if value is None:
-            return None
-        model = self.model_class
-        pk_field = model.pk_field
-        if self.many:
-            return set(getattr(x, pk_field) for x in value)
-        else:
-            return getattr(value, pk_field)
+    def get_primary_key_field(self):
+        for name, field in self.fields.items():
+            if isinstance(field, PrimaryKey):
+                return name
+        return None
 
 
 class Dependency(Reference):
@@ -612,7 +713,7 @@ class Dependency(Reference):
             model_class, many=many, ensure_existence=True, **kwargs)
 
 
-class Nested(fields.Nested):
+class Nested(_FieldWithTable, fields.Nested):
     """
     Nested model field.
     """
@@ -622,7 +723,7 @@ class Nested(fields.Nested):
         self.nested_model = nested_model
 
 
-class PrimaryKey(fields.Field):
+class PrimaryKey(_FieldWithTable, fields.Field):
     """
     Primary key field. Root objects (non nested) should have one primary key
     field.
@@ -636,10 +737,7 @@ class PrimaryKey(fields.Field):
         return value.to_dict(obj.get_class())
 
     def _deserialize(self, value, attr, data):
-        cloud = self.context.get('cloud')
-        if cloud is not None:
-            value = ObjectId.from_cloud(cloud, value)
-        return ObjectId.convert(value)
+        return ObjectId.from_dict(value)
 
 
 class LazyObj(object):
@@ -650,12 +748,22 @@ class LazyObj(object):
 
     def __init__(self, cls, object_id):
         self._model = cls
-        self._object_id = object_id
         self._object = None
+        self.primary_key = object_id
+
+    def is_dirty(self, table):
+        """
+        Returns True if object have changed since load from database, False
+        otherwise.
+        """
+        if self._object is None:
+            return False
+        else:
+            return self._object.is_dirty(table)
 
     def __getattr__(self, name):
         if name == self._model.pk_field:
-            return self._object_id
+            return self.primary_key
         self._retrieve_obj()
         return getattr(self._object, name)
 
@@ -665,12 +773,12 @@ class LazyObj(object):
         else:
             cls = self.__class__
             return '<{module}.{cls} {uuid}>'.format(
-                module=cls.__module__, cls=cls.__name__, uuid=self._object_id)
+                module=cls.__module__, cls=cls.__name__, uuid=self.primary_key)
 
     def _retrieve_obj(self):
         if self._object is None:
             with Session.current() as session:
-                self._object = session.retrieve(self._model, self._object_id)
+                self._object = session.retrieve(self._model, self.primary_key)
 
     def get(self, name):
         """
@@ -732,8 +840,9 @@ class Session(object):
             if obj is None:
                 self._store_none(cls, pk)
                 continue
-            if obj.is_dirty():
-                self._update_row(obj)
+            for table in obj.get_tables():
+                if obj.is_dirty(table):
+                    self._update_row(obj, table)
 
     @classmethod
     def current(cls):
@@ -784,23 +893,40 @@ class Session(object):
         key = (cls, object_id)
         if key in self.session:
             return self.session[key]
-        result = self.tx.query_one('SELECT json FROM objects WHERE uuid=:uuid '
-                                   'AND cloud=:cloud AND type=:type_name',
-                                   uuid=object_id.id,
-                                   cloud=object_id.cloud,
-                                   type_name=_type_name(cls))
+
+        query = self._make_sql(cls, 'uuid', 'cloud', 'type')
+        result = self.tx.query_one(query, uuid=object_id.id,
+                                   cloud=object_id.cloud, type=_type_name(cls))
         if not result or not result[0]:
             raise NotFound(cls, object_id)
-        obj = cls.load(json.loads(result[0]))
+        obj = cls.load(self._merge_obj(result))
         self.session[key] = obj
         return obj
+
+    def exists(self, cls, object_id):
+        """
+        Returns True if object exists in database, False otherwise
+        :param cls: model class
+        :param object_id: model.ObjectId instance
+        :return: True or False
+        """
+        key = (cls, object_id)
+        if key in self.session:
+            return self.session[key] is not None
+        result = self.tx.query_one('SELECT EXISTS(SELECT 1 FROM objects '
+                                   'WHERE uuid=:uuid AND cloud=:cloud '
+                                   'AND type=:type LIMIT 1)',
+                                   uuid=object_id.id,
+                                   cloud=object_id.cloud,
+                                   type=_type_name(cls))
+        return bool(result[0])
 
     def is_missing(self, cls, object_id):
         """
         Check if object couldn't be found in cloud (e.g. was deleted)
         :param cls: model class
         :param object_id: model.ObjectId instance
-        :return:
+        :return: True or False
         """
         key = (cls, object_id)
         if key in self.session:
@@ -823,29 +949,26 @@ class Session(object):
         :return: list of model instances
         """
         if cloud is None:
-            query = 'SELECT uuid, cloud, json ' \
-                    'FROM objects WHERE type=:type_name'
+            query = self._make_sql(cls, 'type', list=True)
         else:
-            query = 'SELECT uuid, cloud, json ' \
-                    'FROM objects WHERE cloud=:cloud AND type=:type_name'
+            query = self._make_sql(cls, 'type', 'cloud', list=True)
         result = []
         for obj in self.session.values():
             if isinstance(obj, cls) and \
                     (cloud is None or cloud == obj.primary_key.cloud):
                 result.append(obj)
 
-        for row in self.tx.query(query, type_name=_type_name(cls),
-                                 cloud=cloud):
-            uuid, cloud, json_data = row
+        for row in self.tx.query(query, type=_type_name(cls), cloud=cloud):
+            uuid, cloud = row[:2]
             key = (cls, ObjectId(uuid, cloud))
-            if key in self.session or not json_data:
+            if key in self.session or not row[2]:
                 continue
-            obj = cls.load(json.loads(json_data))
+            obj = cls.load(self._merge_obj(row[2:]))
             self.session[key] = obj
             result.append(obj)
         return result
 
-    def delete(self, cls=None, cloud=None, object_id=None):
+    def delete(self, cls=None, cloud=None, object_id=None, table='objects'):
         """
         Deletes all objects that have cls or cloud or object_id that are equal
         to values passed as arguments. Arguments that are None are ignored.
@@ -863,19 +986,49 @@ class Session(object):
                 matched = False
             if matched:
                 del self.session[key]
-        self._delete_rows(cls, cloud, object_id)
+        self._delete_rows(cls, cloud, object_id, table)
 
-    def _update_row(self, obj):
+    @staticmethod
+    def _make_sql(model, *columns, **kwargs):
+        is_list = kwargs.get('list', False)
+        tables = model.get_tables()
+        tables.remove('objects')
+
+        query = 'SELECT '
+        if is_list:
+            query += 'objects.uuid, objects.cloud, '
+        query += 'objects.json'
+        for table in tables:
+            query += ', {0}.json'.format(table)
+        query += ' FROM objects '
+        for table in tables:
+            query += 'LEFT JOIN {0} USING (uuid, cloud, type) '.format(table)
+        if columns:
+            query += 'WHERE ' + ' AND '.join('{0} = :{0}'.format(f)
+                                             for f in columns)
+        return query
+
+    @staticmethod
+    def _merge_obj(columns):
+        data = columns[0].data
+        for col in columns[1:]:
+            if col is not None:
+                data.update(col.data)
+        return data
+
+    def _update_row(self, obj, table):
         pk = obj.primary_key
         uuid = pk.id
         cloud = pk.cloud
         type_name = _type_name(obj.get_class())
-        self.tx.execute('INSERT OR REPLACE INTO objects '
-                        'VALUES (:uuid, :cloud, :type_name, :data)',
+        sql_statement = \
+            'INSERT OR REPLACE INTO {table} ' \
+            'VALUES (:uuid, :cloud, :type_name, :data)'.format(table=table)
+        self.tx.execute(sql_statement,
                         uuid=uuid, cloud=cloud, type_name=type_name,
-                        data=json.dumps(obj.dump()))
-        obj.clear_dirty()
-        assert not obj.is_dirty()
+                        data=local_db.Json(obj.dump(table)))
+        obj.clear_dirty(table)
+        assert not obj.is_dirty(table)
 
     def _store_none(self, cls, pk):
         uuid = pk.id
@@ -885,7 +1038,7 @@ class Session(object):
                         'VALUES (:uuid, :cloud, :type_name, NULL)',
                         uuid=uuid, cloud=cloud, type_name=type_name)
 
-    def _delete_rows(self, cls, cloud, object_id):
+    def _delete_rows(self, cls, cloud, object_id, table):
         predicates = []
         kwargs = {}
         if cls is not None:
@@ -901,7 +1054,7 @@ class Session(object):
         if cloud is not None:
             predicates.append('cloud=:cloud')
             kwargs['cloud'] = cloud
-        statement = 'DELETE FROM objects WHERE'
+        statement = 'DELETE FROM {table} WHERE '.format(table=table)
         if predicates:
             statement += ' AND '.join(predicates)
         else:
@@ -932,6 +1085,24 @@ def get_model(type_name):
         return type_aliases[type_name]
     else:
         return importutils.import_class(type_name)
+
+
+def _flatten_dependencies(objects, seen):
+    for obj in objects:
+        if obj.primary_key not in seen:
+            seen.add(obj.primary_key)
+            yield obj
+        for dep in _flatten_dependencies(obj.dependencies(), seen):
+            yield dep
+
+
+def flatten_dependencies(objects):
+    """
+    Returns list of objects together with their dependencies.
+    :param objects: Iterable of Model instances
+    :return: Set of Model instances
+    """
+    return _flatten_dependencies(objects, set())
 
 
 def _type_name(cls):
