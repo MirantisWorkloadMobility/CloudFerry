@@ -80,7 +80,7 @@ class DiscoverStage(stage.Stage):
 
 class LinkStage(stage.Stage):
     dependencies = [
-        'cloudferrylib.os.discovery.stages.DiscoverStage',
+        'cloudferry.lib.os.discovery.stages.DiscoverStage',
     ]
 
     def signature(self):

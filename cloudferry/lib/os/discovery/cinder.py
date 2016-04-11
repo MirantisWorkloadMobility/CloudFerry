@@ -23,7 +23,7 @@ LOG = logging.getLogger(__name__)
 
 class Attachment(model.Model):
     class Schema(model.Schema):
-        server = model.Reference('cloudferrylib.os.discovery.nova.Server')
+        server = model.Reference('cloudferry.lib.os.discovery.nova.Server')
         device = model.String(required=True)
 
 

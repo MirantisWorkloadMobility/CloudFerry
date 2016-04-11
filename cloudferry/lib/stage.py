@@ -33,7 +33,7 @@ class Stage(object):
     def __init__(self, config):
         """
         Stage constructor
-        :param config: cloudferrylib.config.Configuration instance
+        :param config: cloudferry.lib.config.Configuration instance
         :return:
         """
         self.config = config
