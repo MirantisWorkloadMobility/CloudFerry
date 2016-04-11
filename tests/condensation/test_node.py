@@ -1,8 +1,8 @@
-from tests import test
-from condensation import node
 import mock
-from cfglib import CONF
 
+from cloudferry.cfglib import CONF
+from cloudferry.condensation import node
+from tests import test
 
 # patch settings
 CONF.condense = mock.Mock(
@@ -18,7 +18,8 @@ class NodeTest(test.TestCase):
         vms = [mock.Mock(id=i) for i in range(3)]
         n = node.Node(*range(7))
         initial_length = len(n.vms)
-        map(n.link_vm, vms)
+        for vm in vms:
+            n.link_vm(vm)
         self.assertEqual(initial_length + num, len(n.vms))
 
     def test_is_full(self):

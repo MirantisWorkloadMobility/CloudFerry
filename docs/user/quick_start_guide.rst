@@ -54,5 +54,5 @@ possible manner.
 
     cd CloudFerry
     source .venv/bin/activate
-    fab migrate:configuration.ini,debug=True
+    cloudferry migrate:configuration.ini,debug=True
 

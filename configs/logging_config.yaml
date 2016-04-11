@@ -35,7 +35,7 @@ formatters:
       CRITICAL: purple
 filters:
   show_current_task:
-    (): cloudferrylib.utils.log.CurrentTaskFilter
+    (): cloudferry.lib.utils.log.CurrentTaskFilter
     name_format: '%(name)s'
 
 handlers:
@@ -48,7 +48,7 @@ handlers:
   debug:
     maxBytes: 0
     backupCount: 20
-    class: cloudferrylib.utils.log.RunRotatingFileHandler
+    class: cloudferry.lib.utils.log.RunRotatingFileHandler
     encoding: utf-8
     filename: 'debug-%(scenario)s-%(date)s.log'
     date_format: '%F-%H-%M-%S'
@@ -59,7 +59,7 @@ handlers:
   info:
     maxBytes: 0
     backupCount: 20
-    class: cloudferrylib.utils.log.RunRotatingFileHandler
+    class: cloudferry.lib.utils.log.RunRotatingFileHandler
     encoding: utf-8
     filename: 'info-%(scenario)s-%(date)s.log'
     date_format: '%F-%H-%M-%S'
@@ -68,7 +68,7 @@ handlers:
     maxBytes: 100M
     filters: [show_current_task]
 loggers:
-  cloudferrylib:
+  cloudferry:
     level: DEBUG
     handlers: [console, info]
 

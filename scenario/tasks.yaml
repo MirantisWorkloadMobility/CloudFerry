@@ -1,4 +1,4 @@
-paths: ['cloudferrylib.base.action', 'cloudferrylib.os.actions']
+paths: ['cloudferry.lib.base.action', 'cloudferry.lib.os.actions']
 tasks:
    check_config_quota_neutron: ['CheckConfigQuotaNeutron']
    act_copy_g2g_vols: ['CopyFromGlanceToGlance']

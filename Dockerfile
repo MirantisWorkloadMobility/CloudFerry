@@ -4,17 +4,14 @@ MAINTAINER Petr Lomakin <plomakin@mirantis.com>
 ARG cf_commit_or_branch
 
 RUN apt-get update --fix-missing
+RUN apt-get install vim git nfs-common python-software-properties build-essential libssl-dev libffi-dev python-dev sqlite wget -y
 
-RUN apt-get install vim git nfs-common python-virtualenv python-software-properties -y
-
-RUN apt-get install build-essential libssl-dev libffi-dev python-dev python-pip -y
-
-RUN pip install pip==7.1.2
+RUN wget https://bootstrap.pypa.io/get-pip.py
+RUN python get-pip.py
+RUN pip install virtualenv
 
 RUN git clone https://github.com/MirantisWorkloadMobility/CloudFerry CloudFerry
-
 WORKDIR /CloudFerry
-
 RUN git checkout $cf_commit_or_branch
 
-RUN pip install -r requirements.txt -r test-requirements.txt
+RUN pip install .
