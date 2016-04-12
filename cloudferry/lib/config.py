@@ -12,17 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import collections
-import contextlib
 import logging
 
 import marshmallow
 from marshmallow import fields
 
-from cloudferry.lib.os import clients
 from cloudferry.lib.utils import bases
 from cloudferry.lib.utils import query
-from cloudferry.lib.utils import remote
-from cloudferry.lib.utils import utils
 
 LOG = logging.getLogger(__name__)
 MODEL_LIST = [
@@ -154,45 +150,6 @@ class OpenstackCloud(bases.Hashable, bases.Representable,
     def __init__(self, data):
         super(OpenstackCloud, self).__init__(data)
         self.name = None
-
-    def image_client(self, scope=None):
-        # pylint: disable=no-member
-        return clients.image_client(self.credential, scope or self.scope)
-
-    def identity_client(self, scope=None):
-        # pylint: disable=no-member
-        return clients.identity_client(self.credential, scope or self.scope)
-
-    def volume_client(self, scope=None):
-        # pylint: disable=no-member
-        return clients.volume_client(self.credential, scope or self.scope)
-
-    def compute_client(self, scope=None):
-        # pylint: disable=no-member
-        return clients.compute_client(self.credential, scope or self.scope)
-
-    @contextlib.contextmanager
-    def remote_executor(self, hostname, key_file=None, ignore_errors=False):
-        # pylint: disable=no-member
-        key_files = []
-        settings = self.ssh_settings
-        if settings.key_file is not None:
-            key_files.append(settings.key_file)
-        if key_file is not None:
-            key_files.append(key_file)
-        if key_files:
-            utils.ensure_ssh_key_added(key_files)
-        try:
-            yield remote.RemoteExecutor(
-                hostname, settings.username,
-                sudo_password=settings.sudo_password,
-                gateway=settings.gateway,
-                connection_attempts=settings.connection_attempts,
-                cipher=settings.cipher,
-                key_file=settings.key_file,
-                ignore_errors=ignore_errors)
-        finally:
-            remote.RemoteExecutor.close_connection(hostname)
 
 
 class Migration(bases.Hashable, bases.Representable):

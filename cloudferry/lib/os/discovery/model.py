@@ -63,13 +63,13 @@ Example defining cloud object schema::
 
         @classmethod
         def load_missing(cls, cloud, object_id):
-            volume_client = cloud.volume_client()
+            volume_client = clients.volume_client(cloud)
             raw_volume = volume_client.volumes.get(object_id.id)
             return Volume.load_from_cloud(cloud, raw_volume)
 
         @classmethod
         def discover(cls, cloud):
-            volume_client = cloud.volume_client()
+            volume_client = clients.volume_client(cloud)
             volumes_list = volume_client.volumes.list(
                 search_opts={'all_tenants': True})
             with model.Session() as session:

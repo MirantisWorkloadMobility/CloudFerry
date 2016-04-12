@@ -137,7 +137,16 @@ def discard_token(token):
             pass
 
 
-def identity_client(credential, scope):
+def _prepare_credential_and_scope(cloud, scope):
+    credential = cloud.credential
+    if scope is None:
+        scope = cloud.scope
+    return credential, scope
+
+
+def identity_client(cloud, scope=None):
+    credential, scope = _prepare_credential_and_scope(cloud, scope)
+
     def factory_fn(token, endpoint):
         return v2_0_client.Client(token=token,
                                   endpoint=endpoint,
@@ -148,7 +157,9 @@ def identity_client(credential, scope):
                        service_type=consts.ServiceType.IDENTITY)
 
 
-def compute_client(credential, scope):
+def compute_client(cloud, scope=None):
+    credential, scope = _prepare_credential_and_scope(cloud, scope)
+
     def factory_fn(token, endpoint):
         client = nova.Client(auth_token=token,
                              insecure=credential.https_insecure,
@@ -160,7 +171,9 @@ def compute_client(credential, scope):
                        service_type=consts.ServiceType.COMPUTE)
 
 
-def network_client(credential, scope):
+def network_client(cloud, scope=None):
+    credential, scope = _prepare_credential_and_scope(cloud, scope)
+
     def factory_fn(token, endpoint):
         return neutron.Client(token=token,
                               endpoint_url=endpoint,
@@ -171,7 +184,9 @@ def network_client(credential, scope):
                        service_type=consts.ServiceType.NETWORK)
 
 
-def image_client(credential, scope):
+def image_client(cloud, scope=None):
+    credential, scope = _prepare_credential_and_scope(cloud, scope)
+
     def factory_fn(token, endpoint):
         endpoint = re.sub(r'v(\d)/?$', '', endpoint)
         return glance.Client(endpoint=endpoint,
@@ -183,7 +198,9 @@ def image_client(credential, scope):
                        service_type=consts.ServiceType.IMAGE)
 
 
-def volume_client(credential, scope):
+def volume_client(cloud, scope=None):
+    credential, scope = _prepare_credential_and_scope(cloud, scope)
+
     def factory_fn(token, endpoint):
         client = cinder.Client(insecure=credential.https_insecure,
                                cacert=credential.https_cacert)

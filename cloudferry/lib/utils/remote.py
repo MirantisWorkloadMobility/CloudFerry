@@ -18,6 +18,8 @@ from fabric import api as fab_api
 from fabric import state as fab_state
 from fabric import network as fab_network
 
+from cloudferry.lib.utils import utils
+
 LOG = logging.getLogger(__name__)
 
 
@@ -112,3 +114,27 @@ class RemoteExecutor(object):
                 conn.close()
                 del fab_state.connections[key]
                 break
+
+
+@contextlib.contextmanager
+def executor(cloud, hostname, key_file=None, ignore_errors=False):
+    # pylint: disable=no-member
+    key_files = []
+    settings = cloud.ssh_settings
+    if settings.key_file is not None:
+        key_files.append(settings.key_file)
+    if key_file is not None:
+        key_files.append(key_file)
+    if key_files:
+        utils.ensure_ssh_key_added(key_files)
+    try:
+        yield RemoteExecutor(
+            hostname, settings.username,
+            sudo_password=settings.sudo_password,
+            gateway=settings.gateway,
+            connection_attempts=settings.connection_attempts,
+            cipher=settings.cipher,
+            key_file=settings.key_file,
+            ignore_errors=ignore_errors)
+    finally:
+        RemoteExecutor.close_connection(hostname)

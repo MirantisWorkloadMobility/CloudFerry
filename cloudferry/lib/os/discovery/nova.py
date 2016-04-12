@@ -18,6 +18,8 @@ from cloudferry.lib.os.discovery import cinder
 from cloudferry.lib.os.discovery import glance
 from cloudferry.lib.os.discovery import keystone
 from cloudferry.lib.os.discovery import model
+from cloudferry.lib.utils import remote
+from cloudferry.lib.os import clients
 
 LOG = logging.getLogger(__name__)
 
@@ -31,7 +33,7 @@ class Flavor(model.Model):
 
     @classmethod
     def load_missing(cls, cloud, object_id):
-        compute_client = cloud.compute_client()
+        compute_client = clients.compute_client(cloud)
         raw_flavor = compute_client.flavors.get(object_id.id)
         return Flavor.load_from_cloud(cloud, raw_flavor)
 
@@ -86,7 +88,7 @@ class Server(model.Model):
 
     @classmethod
     def discover(cls, cloud):
-        compute_client = cloud.compute_client()
+        compute_client = clients.compute_client(cloud)
         avail_hosts = list_available_compute_hosts(compute_client)
         with model.Session() as session:
             servers = []
@@ -114,8 +116,7 @@ class Server(model.Model):
                     try:
                         srv = Server.load_from_cloud(cloud, raw_server,
                                                      overrides)
-                        if srv.image and not srv.image.is_public \
-                                and srv.image.tenant != srv.tenant:
+                        if _need_image_membership(srv):
                             srv.image_membership = glance.ImageMember.make(
                                 cloud,
                                 srv.image.object_id.id,
@@ -131,9 +132,9 @@ class Server(model.Model):
             servers.sort(key=lambda s: s.host)
             for host, host_servers in itertools.groupby(servers,
                                                         key=lambda s: s.host):
-                with cloud.remote_executor(host, ignore_errors=True) as remote:
+                with remote.executor(cloud, host, ignore_errors=True) as r:
                     for srv in host_servers:
-                        ephemeral_disks = _list_ephemeral(remote, srv)
+                        ephemeral_disks = _list_ephemeral(r, srv)
                         if ephemeral_disks is not None:
                             srv.ephemeral_disks = ephemeral_disks
                             session.store(srv)
@@ -153,10 +154,19 @@ class Server(model.Model):
         return True
 
 
-def _list_ephemeral(remote, server):
+def _need_image_membership(srv):
+    image = srv.image
+    if image is None:
+        return False
+    if image.is_public:
+        return False
+    return image.tenant.object_id != srv.tenant.object_id
+
+
+def _list_ephemeral(remote_executor, server):
     result = []
-    output = remote.sudo('virsh domblklist {instance}',
-                         instance=server.instance_name)
+    output = remote_executor.sudo('virsh domblklist {instance}',
+                                  instance=server.instance_name)
     if not output.succeeded:
         LOG.warning('Unable to get ephemeral disks for server '
                     '%s, skipping.', server.object_id)
@@ -174,7 +184,7 @@ def _list_ephemeral(remote, server):
         target, path = split
         if target in volume_targets or not path.startswith('/'):
             continue
-        size_str = remote.sudo('stat -c %s {path}', path=path)
+        size_str = remote_executor.sudo('stat -c %s {path}', path=path)
         if not size_str.succeeded:
             LOG.warning('Unable to get size of ephemeral disk "%s" for server '
                         '%s, skipping disk.', path, server.object_id)

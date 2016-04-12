@@ -13,6 +13,7 @@
 # limitations under the License.
 import logging
 
+from cloudferry.lib.os import clients
 from cloudferry.lib.os.discovery import keystone
 from cloudferry.lib.os.discovery import model
 
@@ -67,7 +68,7 @@ class Image(model.Model):
 
     @classmethod
     def load_missing(cls, cloud, object_id):
-        image_client = cloud.image_client()
+        image_client = clients.image_client(cloud)
         raw_image = image_client.images.get(object_id.id)
         image = Image.load_from_cloud(cloud, raw_image)
         for member in image_client.image_members.list(image=raw_image):
@@ -76,7 +77,7 @@ class Image(model.Model):
 
     @classmethod
     def discover(cls, cloud):
-        image_client = cloud.image_client()
+        image_client = clients.image_client(cloud)
         with model.Session() as session:
             for raw_image in image_client.images.list(
                     filters={"is_public": None}):
