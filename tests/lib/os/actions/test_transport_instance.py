@@ -14,17 +14,17 @@
 
 import mock
 
-from cloudferrylib.base import exception
-from cloudferrylib.os.actions import transport_instance
-from cloudferrylib.utils import utils
+from cloudferry.lib.base import exception
+from cloudferry.lib.os.actions import transport_instance
+from cloudferry.lib.utils import utils
 
 from tests import test
 
 
 class DeployInstanceWithManualScheduling(test.TestCase):
 
-    @mock.patch("cloudferrylib.os.network.network_utils.prepare_networks")
-    @mock.patch("cloudferrylib.os.network.network_utils.associate_floatingip")
+    @mock.patch("cloudferry.lib.os.network.network_utils.prepare_networks")
+    @mock.patch("cloudferry.lib.os.network.network_utils.associate_floatingip")
     def test_tries_to_boot_vm_on_all_nodes(self,
                                            associate_floatingip,
                                            prepare_networks):
@@ -69,8 +69,8 @@ class DeployInstanceWithManualScheduling(test.TestCase):
         self.assertEqual(prepare_networks.call_count, num_computes)
         self.assertEqual(dst_compute.deploy.call_count, num_computes)
 
-    @mock.patch("cloudferrylib.os.network.network_utils.prepare_networks")
-    @mock.patch("cloudferrylib.os.network.network_utils.associate_floatingip")
+    @mock.patch("cloudferry.lib.os.network.network_utils.prepare_networks")
+    @mock.patch("cloudferry.lib.os.network.network_utils.associate_floatingip")
     def test_runs_only_one_boot_if_node_is_good(self,
                                                 associate_floatingip,
                                                 prepare_networks):

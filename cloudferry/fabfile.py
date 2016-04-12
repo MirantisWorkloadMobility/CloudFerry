@@ -220,7 +220,7 @@ def link(config_path, debug=False):
         :config_name - name of config yaml-file, example 'config.yaml'
     """
     cfg = config.load(load_yaml_config(config_path, debug))
-    stage.execute_stage('cloudferrylib.os.discovery.stages.LinkStage', cfg,
+    stage.execute_stage('cloudferry.lib.os.discovery.stages.LinkStage', cfg,
                         force=True)
 
 
