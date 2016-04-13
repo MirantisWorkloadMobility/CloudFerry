@@ -135,12 +135,44 @@ class Credential(bases.Hashable, bases.Representable,
             return Credential(data)
 
 
+def database_settings(database_name):
+    class_name = database_name.capitalize() + 'DatabaseSettings'
+    global_vars = globals()
+    if class_name in global_vars:
+        return global_vars[class_name]
+
+    class DatabaseSettings(bases.Hashable, bases.Representable,
+                           bases.ConstructableFromDict):
+        class Schema(marshmallow.Schema):
+            host = fields.String(missing='localhost')
+            port = fields.Integer(missing=3306)
+            username = fields.String(missing=database_name)
+            password = fields.String()
+            database = fields.String(missing=database_name)
+
+            @marshmallow.post_load
+            def to_cloud(self, data):
+                return DatabaseSettings(data)
+    DatabaseSettings.__name__ = class_name
+    global_vars[class_name] = DatabaseSettings
+    return DatabaseSettings
+
+
 class OpenstackCloud(bases.Hashable, bases.Representable,
                      bases.ConstructableFromDict):
     class Schema(marshmallow.Schema):
         credential = fields.Nested(Credential.Schema)
         scope = fields.Nested(Scope.Schema)
         ssh_settings = fields.Nested(SshSettings.Schema, load_from='ssh')
+        keystone_db = fields.Nested(database_settings('keystone').Schema)
+        nova_db = fields.Nested(database_settings('nova').Schema,
+                                required=True)
+        neutron_db = fields.Nested(database_settings('neutron').Schema,
+                                   required=True)
+        glance_db = fields.Nested(database_settings('glance').Schema,
+                                  required=True)
+        cinder_db = fields.Nested(database_settings('cinder').Schema,
+                                  required=True)
         discover = OneOrMore(fields.String(), missing=MODEL_LIST)
 
         @marshmallow.post_load
