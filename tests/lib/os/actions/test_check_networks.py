@@ -147,67 +147,6 @@ class CheckNetworksTestCase(test.TestCase):
                         'floating_ips': []}
         self.get_action(src_net_info, dst_net_info).run()
 
-    def test_diff(self):
-        src_net_info = {'networks': [{'id': 'id1',
-                                      'res_hash': 1,
-                                      'subnets_hash': {1},
-                                      "provider:physical_network": None,
-                                      'provider:network_type': 'local',
-                                      'provider:segmentation_id': None,
-                                      'router:external': False}],
-                        'subnets': [{'cidr': '10.0.0.0/24',
-                                     'res_hash': 2,
-                                     'network_id': 'id1',
-                                     'id': 'sub1',
-                                     'external': False
-                                     }],
-                        'floating_ips': []}
-        dst_net_info = {'networks': [{'id': 'id2',
-                                      'res_hash': 1,
-                                      'subnets_hash': {3},
-                                      "provider:physical_network": None,
-                                      'provider:network_type': 'local',
-                                      'provider:segmentation_id': None,
-                                      'router:external': False}],
-                        'subnets': [{'cidr': '10.0.0.0/24',
-                                     'res_hash': 3,
-                                     'network_id': 'id2',
-                                     'id': 'sub2',
-                                     'external': False}],
-                        'floating_ips': []}
-        action = self.get_action(src_net_info, dst_net_info)
-        self.assertRaises(exception.AbortMigrationError, action.run)
-
-    def test_overlap(self):
-        src_net_info = {'networks': [{'id': 'id1',
-                                      'res_hash': 1,
-                                      'subnets_hash': {2},
-                                      "provider:physical_network": None,
-                                      'provider:network_type': 'local',
-                                      'provider:segmentation_id': None,
-                                      'router:external': False}],
-                        'subnets': [{'cidr': '10.0.0.0/28',
-                                     'res_hash': 2,
-                                     'network_id': 'id1',
-                                     'id': 'sub1',
-                                     'external': False}],
-                        'floating_ips': []}
-        dst_net_info = {'networks': [{'id': 'id2',
-                                      'res_hash': 1,
-                                      'subnets_hash': {3},
-                                      "provider:physical_network": None,
-                                      'provider:network_type': 'local',
-                                      'provider:segmentation_id': None,
-                                      'router:external': False}],
-                        'subnets': [{'cidr': '10.0.0.0/24',
-                                     'res_hash': 3,
-                                     'network_id': 'id2',
-                                     'id': 'sub2',
-                                     'external': False}],
-                        'floating_ips': []}
-        action = self.get_action(src_net_info, dst_net_info)
-        self.assertRaises(exception.AbortMigrationError, action.run)
-
     def test_check_segmentation_id_overlapping_no_dst_networks(self):
         src_net_info = {'networks': [{'id': 'id1',
                                       'res_hash': 1,

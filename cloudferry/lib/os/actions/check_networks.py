@@ -74,14 +74,10 @@ class CheckNetworks(action.Action):
                 invalid_resources.update(
                     {"invalid_external_nets_ids_in_map": invalid_ext_net_ids})
 
-        # Check subnets and segmentation IDs overlap
-        LOG.info("Check networks overlapping...")
-        nets_overlapping_subnets, nets_overlapping_seg_ids = (
-            src_net_info.get_overlapping_networks(dst_net_info))
-        if nets_overlapping_subnets:
-            overlapping_resources.update(
-                {'networks_with_overlapping_subnets':
-                    nets_overlapping_subnets})
+        # Check networks' segmentation IDs overlap
+        LOG.info("Check networks' segmentation IDs overlapping...")
+        nets_overlapping_seg_ids = (src_net_info.get_overlapping_seg_ids(
+            dst_net_info))
         if nets_overlapping_seg_ids:
             LOG.warning("Networks with segmentation IDs overlapping:\n%s",
                         nets_overlapping_seg_ids)
@@ -302,37 +298,26 @@ class NetworkInfo(object):
 
         return overlapping_external_subnets
 
-    def get_overlapping_networks(self, dst_info):
+    def get_overlapping_seg_ids(self, dst_info):
         """
-        Get lists of networks, that overlap with the DST.
+        Get list of nets, that have overlapping segmentation IDs with the DST.
 
         :param dst_info: NetworkInfo instance of DST cloud
 
-        :return nets_with_overlapping_subnets, nets_with_overlapping_seg_ids:
-            Tuple of lists with overlapping networks IDs.
-             1. List of networks IDs with overlapping subnets;
-             2. List of networks IDs with overlapping segmentation IDs.
+        :return: List of networks IDs with overlapping segmentation IDs.
         """
 
         dst_net_info = dst_info.networks_info
         dst_seg_ids = neutron.get_segmentation_ids_from_net_list(dst_net_info)
-        nets_with_overlapping_subnets = []
         nets_with_overlapping_seg_ids = []
 
         for network in self.get_networks():
             dst_net = dst_info.by_hash.get(network.hash)
-            if dst_net:
-                if dst_net.external:
-                    # Skip external network due to it's checking later
-                    continue
+            if dst_net and check_equal_networks(network, dst_net):
                 # Current network matches with network on DST
                 # Have the same networks on SRC and DST
-                LOG.debug("SRC network: '%s', DST network: '%s'",
+                LOG.debug("SRC network '%s' and DST network '%s' are the same",
                           network.id, dst_net.id)
-                try:
-                    network.check_network_overlapping(dst_net)
-                except exception.AbortMigrationError:
-                    nets_with_overlapping_subnets.append(network.id)
             else:
                 # Current network does not match with any network on DST
                 # Check Segmentation ID overlapping with DST
@@ -347,11 +332,7 @@ class NetworkInfo(object):
                                'dst_net_id': dst_network.id}
                     nets_with_overlapping_seg_ids.append(overlap)
 
-        # remove duplicates, cause 1 net may have several overlapping subnets
-        nets_with_overlapping_subnets = list(
-            set(nets_with_overlapping_subnets))
-
-        return nets_with_overlapping_subnets, nets_with_overlapping_seg_ids
+        return nets_with_overlapping_seg_ids
 
     def busy_flat_physnets(self, dst_info):
         """
@@ -474,29 +455,6 @@ class Network(object):
 
     def add_subnet(self, info):
         self.subnets.append(info)
-
-    def check_network_overlapping(self, network):
-        for subnet in network.subnets:
-            LOG.debug("Work with SRC subnet: '%s'", subnet['id'])
-            if self.is_subnet_eq(subnet):
-                LOG.debug("We have the same subnet on DST by hash")
-                continue
-            overlapping_subnet = self.get_overlapping_subnet(subnet)
-            if overlapping_subnet:
-                message = ("Subnet '%s' in network '%s' on SRC overlaps with "
-                           "subnet '%s' in network '%s' on DST" % (
-                               overlapping_subnet, self.id,
-                               subnet['id'], network.id))
-                LOG.error(message)
-                raise exception.AbortMigrationError(message)
-
-    def is_subnet_eq(self, subnet):
-        return subnet['res_hash'] in self.subnets_hash
-
-    def get_overlapping_subnet(self, subnet):
-        for self_subnet in self.subnets:
-            if cidr_overlapping(self_subnet['cidr'], subnet['cidr']):
-                return self_subnet['id']
 
     def check_segmentation_id_overlapping(self, dst_seg_ids):
         """
