@@ -77,7 +77,8 @@ class GroupProcedureVerification(functional_test.FunctionalTest):
 
         with open(self.file_to_write_into, 'w') as stream:
             yaml.dump(self.pre_conf_dict, stream, default_flow_style=False)
-        cmd = 'cd {cf_folder} && fab get_groups:{config_ini},{new_file}'
+
+        cmd = 'cd {cf_folder} && cloudferry get_groups:{config_ini},{new_file}'
         cmd = cmd.format(cf_folder=self.cloudferry_dir,
                          config_ini=self.config_ini_path,
                          new_file=self.file_to_write_into)

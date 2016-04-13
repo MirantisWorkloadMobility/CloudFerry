@@ -188,6 +188,9 @@ class FunctionalTest(unittest.TestCase):
         if exclude_images_with_fields.get('broken') is None:
             exclude_images_with_fields['broken'] = True
 
+        if exclude_images_with_fields.get('upload_on_dst') is None:
+            exclude_images_with_fields['upload_on_dst'] = True
+
         def _image_exclude_filter(images):
             filtered_images_name = []
             for image in images:
@@ -268,3 +271,11 @@ class FunctionalTest(unittest.TestCase):
         except ks_exceptions.NotFound:
             return False
         return True
+
+    def set_hash_for_vms(self, vm_list):
+        for vm in vm_list:
+            nics = None
+            for net in vm.addresses:
+                nics = [(net, ip['addr']) for ip in vm.addresses.get(
+                    net) if ip['OS-EXT-IPS:type'] == 'fixed']
+            setattr(vm, 'vm_hash', (vm.name, nics))

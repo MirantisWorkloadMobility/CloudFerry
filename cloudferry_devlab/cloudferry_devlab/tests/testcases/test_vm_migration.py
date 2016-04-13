@@ -54,6 +54,8 @@ class VmMigration(functional_test.FunctionalTest):
                       "successful for resource 'VM' or it was not initiated")
 
         self.src_dst_vms = []
+        self.set_hash_for_vms(src_vms)
+        self.set_hash_for_vms(dst_vms)
         for s_vm in src_vms:
             for d_vm in dst_vms:
                 if s_vm.name == d_vm.name:
@@ -99,7 +101,7 @@ class VmMigration(functional_test.FunctionalTest):
             src_vm = vms['src_vm']
             if self.original_states[src_vm.name] == 'ACTIVE' or \
                     self.original_states[src_vm.name] == 'VERIFY_RESIZE':
-                self.assertEqual(src_vm.status, 'SHUTOFF')
+                self.assertIn(src_vm.status, ['SHUTOFF', 'ACTIVE'])
                 self.assertEqual(dst_vm.status, 'ACTIVE')
             else:
                 self.assertEqual(src_vm.status, 'SHUTOFF')
@@ -111,13 +113,13 @@ class VmMigration(functional_test.FunctionalTest):
         for vms in self.src_dst_vms:
             dst_vm = vms['dst_vm']
             src_vm = vms['src_vm']
-            for src_net in src_vm.addresses:
-                for src_net_addr, dst_net_addr in zip(src_vm.addresses
-                                                      [src_net],
-                                                      dst_vm.addresses
-                                                      [src_net]):
-                    self.assertEqual(src_net_addr['addr'],
-                                     dst_net_addr['addr'])
+            if src_vm.vm_hash == dst_vm.vm_hash:
+                for src_net in src_vm.addresses:
+                    for src_net_addr, dst_net_addr in zip(
+                            src_vm.addresses.get(src_net),
+                            dst_vm.addresses.get(src_net)):
+                        self.assertEqual(src_net_addr.get('addr'),
+                                         dst_net_addr.get('addr'))
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_cold_migrate_vm_security_groups(self):
@@ -134,3 +136,17 @@ class VmMigration(functional_test.FunctionalTest):
         for vms in self.src_dst_vms:
             self.assertEqual(vms['dst_vm'].image['id'],
                              vms['src_vm'].image['id'])
+
+    def test_vms_with_same_ip_did_not_migrate(self):
+        """Validate VMs with same ip did not migrated."""
+        vm_addrs = []
+        for vms in self.src_dst_vms:
+            for net in vms['dst_vm'].addresses:
+                vm_addrs.extend([(net, ip['addr']) for ip in vms['dst_vm']
+                                .addresses[net] if ip['OS-EXT-IPS:type'] ==
+                                 'fixed'])
+        duplicates = {vm for vm in vm_addrs if vm_addrs.count(vm) > 1}
+        if duplicates:
+            msg = ('2 or more vms exist on dst in the same net with same ip'
+                   ' address: %s')
+            self.fail(msg % duplicates)

@@ -522,13 +522,14 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
                                         'SRC %s' %
                                         (dst_tenant_name, src_tenant_name))
 
-    @attr(migrated_tenant='tenant2')
     def test_migrate_vms_parameters(self):
         """Validate VMs were migrated with correct parameters.
 
         :param name:
         :param config_drive:
-        :param key_name:"""
+        :param key_name:
+        :param security_groups:
+        :param metadata:"""
         src_vms = self.get_src_vm_objects_specified_in_config()
         dst_vms = self.dst_cloud.novaclient.servers.list(
             search_opts={'all_tenants': 1})
@@ -537,11 +538,30 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             .filter_vms_with_filter_config_file(src_vms)
         src_vms = filtering_data[0]
 
-        src_vms = [vm for vm in src_vms if vm.status != 'ERROR']
+        def compare_vm_parameter(param, vm1, vm2):
+            if getattr(vm1, param, None) != getattr(vm2, param, None):
+                error_msg = ('Parameter {param} for VM with name '
+                             '{name} is different src: {vm1}, dst: {vm2}')
+                self.fail(error_msg.format(param=param, name=vm1.name,
+                                           vm1=getattr(vm1, param),
+                                           vm2=getattr(vm2, param)))
 
-        for param in ['name', 'config_drive', 'key_name']:
-            self.validate_resource_parameter_in_dst(
-                src_vms, dst_vms, resource_name='VM', parameter=param)
+        self.set_hash_for_vms(src_vms)
+        self.set_hash_for_vms(dst_vms)
+        if not src_vms:
+            self.skipTest('Nothing to check - source resources list is empty')
+        parameters = ('config_drive', 'key_name', 'security_groups',
+                      'metadata')
+        for src_vm in src_vms:
+            for dst_vm in dst_vms:
+                if src_vm.vm_hash != dst_vm.vm_hash:
+                    continue
+                for param in parameters:
+                    compare_vm_parameter(param, src_vm, dst_vm)
+                break
+            else:
+                msg = 'VM with hash %s was not found on dst'
+                self.fail(msg % str(src_vm.vm_hash))
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_vms_with_floating(self):

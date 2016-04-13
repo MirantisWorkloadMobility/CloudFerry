@@ -56,13 +56,16 @@ Quick Start Guide
           volumes:
             - tenant.name: demo
 
-3. Run ``fab estimate_migration:/path/to/discover.yaml,grizzly_to_liberty``.
+3. Run::
+
+       cloudferry estimate_migration:/path/to/discover.yaml,grizzly_to_liberty
+
    Where ``/path/to/discover.yaml`` is path to ``discover.yaml`` configuration
    file and ``grizzly_to_liberty`` is the name of migration defined in this
    file.
    Example::
 
-    $ fab estimate_migration:/path/to/discover.yaml,grizzly_to_liberty
+    $ cloudferry estimate_migration:/path/to/discover.yaml,grizzly_to_liberty
     Migration grizzly_to_liberty estimates:
     Images:
       Size: 842.3MB
@@ -93,15 +96,15 @@ Quick Start Guide
    using ``CF_LOCAL_DB`` environment variable). This step can take long time
    (up to several hours) for large clouds with lots of VMs.
 
-   All other ``fab estimate_migration`` runs will use data stored in SQLite3 DB
-   and won't try to access cloud  API unless new cloud will be added into
-   ``discover.yaml`` or ``region_name`` or ``auth_url`` parameters of existing
-   clouds will be changed.
+   All other ``cloudferry estimate_migration`` runs will use data stored in
+   SQLite3 DB and won't try to access cloud  API unless new cloud will be added
+   into ``discover.yaml`` or ``region_name`` or ``auth_url`` parameters of
+   existing clouds will be changed.
 
 4. If you want to update information collected from clouds you will need to run
-   ``fab discover:/path/to/discover.yaml``. This will erase all previously
-   discovered information from SQLite3 DB and put updated information from
-   cloud APIs and compute nodes there.
+   ``cloudferry discover:/path/to/discover.yaml``. This will erase all
+   previously discovered information from SQLite3 DB and put updated
+   information from cloud APIs and compute nodes there.
 
 
 Object Selection for Migration

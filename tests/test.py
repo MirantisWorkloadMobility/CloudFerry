@@ -14,11 +14,10 @@
 #    under the License.
 
 import mock
-
 from oslotest import base
 
-import cfglib
-from cloud import cloud
+from cloudferry import cfglib
+from cloudferry.cloud import cloud
 
 
 class TestCase(base.BaseTestCase):

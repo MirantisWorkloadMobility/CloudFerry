@@ -1,5 +1,5 @@
 from tests import test
-from condensation import group
+from cloudferry.condensation import group
 import mock
 
 
@@ -7,7 +7,7 @@ class GroupTest(test.TestCase):
 
     def test_add_groups(self):
         num = 4
-        groups_to_be_added = [mock.Mock() for i in range(num)]
+        groups_to_be_added = [mock.Mock() for _ in range(num)]
         g = group.Group()
         initial_length = len(g.children)
         g.add_groups(groups_to_be_added)

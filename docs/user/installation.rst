@@ -21,9 +21,6 @@ python virtual environment
 
 ::
 
-    git clone https://github.com/MirantisWorkloadMobility/CloudFerry.git
-    cd CloudFerry
     virtualenv .venv
     source .venv/bin/activate
-    pip install -r requirements.txt
-
+    pip install git+git://github.com/MirantisWorkloadMobility/CloudFerry.git

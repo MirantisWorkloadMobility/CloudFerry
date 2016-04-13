@@ -75,7 +75,11 @@ sphinx-build docs/ sphinx-build
 
 
 # Installation
-Cloudferry can be prepared and installed as docker container.
+Clouderry can be prepared and installed as docker container or it can be 
+installed as a python package by pip
+```
+pip install git+git://github.com/MirantisWorkloadMobility/CloudFerry.git
+```
 
 ## Building the docker container
 ```
@@ -103,7 +107,7 @@ directory.
 All available commands can be viewed with:
 ```
 # see list of available commands
-fab list
+cloudferry list
 ```
 
 ## Configuration
@@ -121,7 +125,7 @@ is set to `True`.
 Use `migrate` command with config file specified:
 
 ```
-fab migrate:<config file>
+cloudferry migrate:<config file>
 ```
 
 ## Migrating specific instances
@@ -140,7 +144,7 @@ instances:
 
 Run migration as usual:
 ```
-fab migrate:<config file>
+cloudferry migrate:<config file>
 ```
 
 ## Playground

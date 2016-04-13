@@ -23,7 +23,7 @@ from keystoneclient import exceptions as ks_exceptions
 from keystoneclient.v2_0 import client as keystone
 from neutronclient.v2_0 import client as neutron
 from novaclient import exceptions as nova_exceptions
-from novaclient.v1_1 import client as nova
+from novaclient.v2 import client as nova
 from swiftclient import client as swift_client
 
 from cloudferry_devlab.tests import test_exceptions

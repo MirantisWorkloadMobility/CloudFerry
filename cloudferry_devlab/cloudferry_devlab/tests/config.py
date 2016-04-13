@@ -80,11 +80,14 @@ users = [
     {'name': 'user7', 'password': 'passwd', 'email': 'user7@example.com',
      'tenant': 'tenant4', 'enabled': True},
     {'name': 'user8', 'password': 'passwd', 'email': 'tenant3@example.com',
-     'tenant': 'tenant3', 'enabled': True}
+     'tenant': 'tenant3', 'enabled': True},
+    {'name': 'user9', 'password': 'passwd', 'email': 'user8@example.com',
+     'tenant': 'tenant5', 'enabled': True},
 ]
 """Users to create/delete"""
 
 user_tenant_roles = [
+    {'user9': [{'tenant': 'tenant5', 'role': 'SomeRole'}]},
     {'user1': [{'tenant': 'tenant1', 'role': 'SomeRole'}]}
 ]
 
@@ -122,7 +125,8 @@ tenants = [
          {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1',
           'server_group': 'tn1_server_group'},
          {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr',
-          'server_group': 'tn1_server_group2'}],
+          'server_group': 'tn1_server_group2'}
+     ],
      'networks': [
          {'name': 'tenantnet1', 'admin_state_up': True,
           'subnets': [
@@ -217,7 +221,8 @@ tenants = [
           'fip': True, 'key_name': 'key2', 'nics': [{'net-id': 'tenantnet2'}]},
          {'name': 'keypair_test_server', 'image': 'deleted_image',
           'flavor': 'flavorname2', 'key_name': 'key2', 'nics': [
-              {'net-id': 'tenantnet2'}], 'fip': True}],
+              {'net-id': 'tenantnet2'}], 'fip': True}
+     ],
      'networks': [
          {'name': 'tenantnet2', 'admin_state_up': True,
           'subnets': [
@@ -349,12 +354,35 @@ tenants = [
          {'name': 'sg42', 'description': 'Tenant4 blah group2'}],
      'cinder_volumes': [],
      'cinder_snapshots': []
+     },
+    {'name': 'tenant5', 'description': 'Tenant5 exists on dst and src',
+     'exists_on_dst': True, 'enabled': True,
+     'networks': [
+         {'name': 'tenant5net',  'provider:segmentation_id': 100,
+          'provider:network_type': 'gre',
+          'subnets': [
+              {'cidr': '122.2.2.0/24', 'ip_version': 4, 'name': 't5_s1'}]},
+         {'name': 'tenant5net2',  'provider:segmentation_id': 101,
+          'provider:network_type': 'gre',
+          'subnets': [
+              {'cidr': '123.2.2.0/24', 'ip_version': 4, 'name': 't5_s2'}]}],
+     'vms': [
+         {'name': 'tn5server1', 'image': 'image1', 'flavor': 'flavorname2',
+          'nics': [{'net-id': 'tenant5net', 'v4-fixed-ip': '122.2.2.100'}]},
+         {'name': 'tn5server2', 'image': 'image1', 'flavor': 'flavorname2',
+          'nics': [{'net-id': 'tenant5net2', 'v4-fixed-ip': '123.2.2.100'}]},
+         {'name': 'tn5server3', 'image': 'image1', 'flavor': 'flavorname2',
+          'nics': [{'net-id': 'tenant5net2', 'v4-fixed-ip': '123.2.2.101'}]}
+         ],
+     'images': [{'name': 'cirros_image_for_tenant5', 'copy_from': img_url,
+                 'is_public': True}],
      }
 ]
 """Tenants to create/delete"""
 
 images = [
-    {'name': 'image1', 'copy_from': img_url, 'is_public': True},
+    {'name': 'image1', 'copy_from': img_url, 'is_public': True,
+     'upload_on_dst': True},
     {'name': 'image2', 'copy_from': img_url, 'container_format': 'bare',
      'disk_format': 'qcow2', 'is_public': False},
     {'name': 'image3', 'copy_from': img_url, 'container_format': 'bare',
@@ -563,10 +591,24 @@ vms = [
 ]
 """VM's to create/delete"""
 
+dst_vms = [
+    {'name': 'tn5server1', 'image': 'image1', 'flavor': 'flavorname2',
+     'tenant': 'tenant5', 'nics': [{'net-id': 'tenant5net',
+                                    'v4-fixed-ip': '122.2.2.100'}]},
+    {'name': 'tn5server2', 'image': 'image1', 'flavor': 'flavorname2',
+     'tenant': 'tenant5', 'nics': [{'net-id': 'tenant5net2',
+                                    'v4-fixed-ip': '123.2.2.102'}]},
+    {'name': 'tn5server3', 'image': 'image1', 'flavor': 'flavorname2',
+     'nics': [{'net-id': 'tenant5net', 'v4-fixed-ip': '122.2.2.101'}],
+     'tenant': 'tenant5'},
+]
+"""VM's to create on DST environment"""
+
 vms_from_volumes = [
     {'name': 'server_from_volume', 'flavor': 'flavorname1',
      'volume': 'volume_from_image'}
 ]
+"""VM's to create from volumes"""
 
 routers = [
     {'router': {'external_gateway_info': {}, 'name': 'ext_router',

@@ -1,5 +1,5 @@
 from tests import test
-from condensation import action
+from cloudferry.condensation import action
 import mock
 
 
