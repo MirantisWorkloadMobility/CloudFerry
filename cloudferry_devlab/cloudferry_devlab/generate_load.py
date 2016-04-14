@@ -240,64 +240,52 @@ class Prerequisites(base.BasePrerequisites):
         return img.status == 'active'
 
     def update_filtering_file(self):
-        src_cloud = Prerequisites(cloud_prefix='SRC',
-                                  configuration_ini=self.configuration_ini,
-                                  config=self.config)
-        src_img = [x.__dict__ for x in
-                   src_cloud.glanceclient.images.list()]
-        src_vms = [x.__dict__ for x in
-                   src_cloud.novaclient.servers.list(
-                       search_opts={'all_tenants': 1})]
-        image_dict = {}
-        for image in src_img:
-            img_members = self.glanceclient.image_members.list(image['id'])
-            if len(img_members) > 1:
-                img_mem_list = []
-                for img_member in img_members:
-                    img_member = img_member.__dict__
-                    img_mem_list.append(img_member['member_id'])
-                image_dict[image['id']] = img_mem_list
-        vm_id_list = []
-        for vm in src_vms:
-            vm_id = vm['id']
-            vm_id_list.append(vm_id)
-        filter_dict = {
-            'tenants': {
-                'tenant_id': []
-            },
-            'instances': {
-                'id': []
-            },
-            'images': {
-                'images_list': [],
-                'dont_include_public_and_members_from_other_tenants': False
-            }
-        }
-        all_img_ids = []
-        not_incl_img = []
-        for image in src_img:
-            all_img_ids.append(image['id'])
-        for img in self.config.images_not_included_in_filter:
-            not_incl_img.append(self.get_image_id(img))
-        for key in filter_dict.keys():
-            if key == 'images':
-                for img_id in all_img_ids:
-                    if img_id not in not_incl_img:
-                        filter_dict[key]['images_list'].append(str(img_id))
-            elif key == 'instances':
-                for vm in vm_id_list:
-                    if vm != self.get_vm_id('not_in_filter'):
-                        filter_dict[key]['id'].append(str(vm))
+        not_incl_img = [self.get_image_id(img) for img in
+                        self.config.images_not_included_in_filter]
         for tenant in self.config.tenants + [{'name': self.tenant}]:
             if tenant.get('deleted'):
                 continue
+            filter_dict = {
+                'tenants': {
+                    'tenant_id': []
+                },
+                'instances': {
+                    'id': []
+                },
+                'images': {
+                    'images_list': [],
+                    'dont_include_public_and_members_from_other_tenants': False
+                }
+            }
             filter_dict['tenants']['tenant_id'] = [str(
                 self.get_tenant_id(tenant['name']))]
+            self.switch_user(user=self.username, password=self.password,
+                             tenant=tenant['name'])
+
+            vm_id_list = [x.__dict__['id'] for x in
+                          self.novaclient.servers.list()]
+
+            img_id_list = [x.__dict__['id'] for x in
+                           self.glanceclient.images.list(search_opts={
+                               'is_public': False})]
+
+            for key in filter_dict.keys():
+                if key == 'images':
+                    for img_id in img_id_list:
+                        if img_id not in not_incl_img:
+                            filter_dict[key]['images_list'].append(str(img_id))
+                elif key == 'instances':
+                    for vm in vm_id_list:
+                        if vm != self.get_vm_id('not_in_filter'):
+                            filter_dict[key]['id'].append(str(vm))
+
             file_path = self.config.filters_file_naming_template.format(
                 tenant_name=tenant['name'])
             file_path = self.get_abs_path(file_path)
             with open(file_path, "w") as f:
                 yaml.dump(filter_dict, f, default_flow_style=False)
+        self.switch_user(user=self.username, password=self.password,
+                         tenant=self.tenant)
 
     @clean_if_exists
     def create_flavors(self, flavor_list=None):
