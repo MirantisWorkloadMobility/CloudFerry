@@ -17,12 +17,9 @@ General overview of CloudFerry and it's functionality is available in brochure
 End-user documentation
 ----------------------
 
-See operator-oriented documentation below
+.. todo::
 
-.. toctree::
-    :maxdepth: 2
-
-    user/user_doc_index
+    Documentation for End-users is in progress
 
 
 Developer documentation
