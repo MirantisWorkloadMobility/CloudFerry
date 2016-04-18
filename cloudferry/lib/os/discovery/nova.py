@@ -132,9 +132,10 @@ class Server(model.Model):
             servers.sort(key=lambda s: s.host)
             for host, host_servers in itertools.groupby(servers,
                                                         key=lambda s: s.host):
-                with remote.executor(cloud, host, ignore_errors=True) as r:
+                with remote.RemoteExecutor(
+                        cloud, host, ignore_errors=True) as remote_executor:
                     for srv in host_servers:
-                        ephemeral_disks = _list_ephemeral(r, srv)
+                        ephemeral_disks = _list_ephemeral(remote_executor, srv)
                         if ephemeral_disks is not None:
                             srv.ephemeral_disks = ephemeral_disks
                             session.store(srv)
@@ -160,16 +161,17 @@ def _need_image_membership(srv):
         return False
     if image.is_public:
         return False
-    return image.tenant.object_id != srv.tenant.object_id
+    return image.tenant != srv.tenant
 
 
 def _list_ephemeral(remote_executor, server):
     result = []
-    output = remote_executor.sudo('virsh domblklist {instance}',
-                                  instance=server.instance_name)
-    if not output.succeeded:
-        LOG.warning('Unable to get ephemeral disks for server '
-                    '%s, skipping.', server.object_id)
+    try:
+        output = remote_executor.sudo('virsh domblklist {instance}',
+                                      instance=server.instance_name)
+    except remote.RemoteFailure:
+        LOG.error('Unable to get ephemeral disks for server %s, skipping.',
+                  server.object_id, exc_info=True)
         return None
     volume_targets = set()
     for volume in server.attached_volumes:
@@ -184,10 +186,12 @@ def _list_ephemeral(remote_executor, server):
         target, path = split
         if target in volume_targets or not path.startswith('/'):
             continue
-        size_str = remote_executor.sudo('stat -c %s {path}', path=path)
-        if not size_str.succeeded:
-            LOG.warning('Unable to get size of ephemeral disk "%s" for server '
-                        '%s, skipping disk.', path, server.object_id)
+        try:
+            size_str = remote_executor.sudo('stat -c %s {path}', path=path)
+        except remote.RemoteFailure:
+            LOG.error('Unable to get size of ephemeral disk "%s" for server '
+                      '%s, skipping disk.', path, server.object_id,
+                      exc_info=True)
             continue
         size = int(size_str.strip())
         eph_disk = EphemeralDisk.load({'path': path, 'size': size})

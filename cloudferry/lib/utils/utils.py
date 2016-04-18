@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import logging
+import threading
 import time
 import timeit
 import random
@@ -463,3 +464,13 @@ def import_class_by_string(name):
     for comp in module[1:]:
         mod = getattr(mod, comp)
     return getattr(mod, class_name)
+
+
+def qualname(cls):
+    """
+    Returns fully qualified name of class (something like
+    package_name.module_name.ClassName)
+    :param cls: class object
+    :return: string representing fully qualified name
+    """
+    return cls.__module__ + '.' + cls.__name__

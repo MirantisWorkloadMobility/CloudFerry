@@ -16,6 +16,7 @@ import logging
 
 import marshmallow
 from marshmallow import fields
+from oslo_utils import importutils
 
 from cloudferry.lib.utils import bases
 from cloudferry.lib.utils import query
@@ -85,19 +86,37 @@ class OneOrMore(fields.Field):
             return [self.base_type._deserialize(value, attr, data)]
 
 
+class SshGateway(bases.Hashable, bases.Representable,
+                 bases.ConstructableFromDict):
+    class Schema(marshmallow.Schema):
+        hostname = fields.String()
+        port = fields.Integer(missing=22)
+        username = fields.String()
+        password = fields.String(missing=None)
+        private_key = fields.String(missing=None)
+        gateway = fields.Nested('self', missing=None)
+        connection_attempts = fields.Integer(missing=1)
+
+        @marshmallow.post_load
+        def to_ssh_gateway(self, data):
+            return SshGateway(data)
+
+
 class SshSettings(bases.Hashable, bases.Representable,
                   bases.ConstructableFromDict):
     class Schema(marshmallow.Schema):
-        username = fields.String()
-        sudo_password = fields.String(missing=None)
-        gateway = fields.String(missing=None)
+        port = fields.Integer(missing=22)
+        username = fields.String(required=True)
+        password = fields.String(missing=None)
+        gateway = fields.Nested(SshGateway.Schema, missing=None)
         connection_attempts = fields.Integer(missing=1)
         cipher = fields.String(missing=None)
-        key_file = fields.String(missing=None)
+        private_key = fields.String(missing=None)
+        timeout = fields.Integer(missing=600)
 
         @marshmallow.post_load
-        def to_scope(self, data):
-            return Scope(data)
+        def to_ssh_settings(self, data):
+            return SshSettings(data)
 
 
 class Scope(bases.Hashable, bases.Representable, bases.ConstructableFromDict):

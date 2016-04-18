@@ -13,8 +13,6 @@
 # limitations under the License.
 import logging
 
-from oslo_utils import importutils
-
 from cloudferry.lib import stage
 from cloudferry.lib.os.discovery import model
 
@@ -70,7 +68,7 @@ class DiscoverStage(stage.Stage):
         for cloud_name in self.missing_clouds:
             cloud = self.config.clouds[cloud_name]
             for class_name in cloud.discover:
-                cls = importutils.import_class(class_name)
+                cls = model.get_model(class_name)
                 LOG.info('Starting discover %s objects in %s cloud',
                          cls.__name__, cloud_name)
                 cls.discover(cloud)

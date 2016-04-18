@@ -24,8 +24,8 @@ class ImageMember(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey()
         image = model.Dependency('cloudferry.lib.os.discovery.glance.Image')
-        member = model.Dependency('cloudferry.lib.os.discovery.keystone.'
-                                  'Tenant')
+        member = model.Dependency(
+            'cloudferry.lib.os.discovery.keystone.Tenant')
         can_share = model.Boolean(missing=False)
 
     @classmethod
@@ -50,21 +50,24 @@ class ImageMember(model.Model):
 class Image(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey('id')
-        name = model.String(required=True)
-        tenant = model.Dependency(keystone.Tenant, required=True,
-                                  load_from='owner', dump_to='owner')
-        checksum = model.String(required=True, allow_none=True)
-        size = model.Integer(required=True)
-        virtual_size = model.Integer(required=True, allow_none=True,
-                                     missing=None)
-        is_public = model.Boolean(required=True)
-        protected = model.Boolean(required=True)
-        container_format = model.String(required=True)
-        disk_format = model.String(required=True)
+        name = model.String(allow_none=True)
+        tenant = model.Dependency(keystone.Tenant)
+        checksum = model.String(allow_none=True)
+        size = model.Integer()
+        virtual_size = model.Integer(allow_none=True, missing=None)
+        is_public = model.Boolean()
+        protected = model.Boolean()
+        container_format = model.String(missing='qcow2')
+        disk_format = model.String(missing='bare')
         min_disk = model.Integer(required=True)
         min_ram = model.Integer(required=True)
         properties = model.Dict()
         members = model.Reference(ImageMember, many=True, missing=list)
+        status = model.String()
+
+        FIELD_MAPPING = {
+            'tenant': 'owner',
+        }
 
     @classmethod
     def load_missing(cls, cloud, object_id):
@@ -80,7 +83,7 @@ class Image(model.Model):
         image_client = clients.image_client(cloud)
         with model.Session() as session:
             for raw_image in image_client.images.list(
-                    filters={"is_public": None}):
+                    filters={'is_public': None, 'status': 'active'}):
                 try:
                     image = Image.load_from_cloud(cloud, raw_image)
                     session.store(image)
