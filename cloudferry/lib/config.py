@@ -28,6 +28,10 @@ MODEL_LIST = [
     'cloudferry.lib.os.discovery.cinder.Volume',
     'cloudferry.lib.os.discovery.nova.Server',
 ]
+DEFAULT_MIGRATION_LIST = [
+    'cloudferry.lib.os.migrate.keystone.TenantMigrationFlowFactory',
+    'cloudferry.lib.os.migrate.glance.ImageMigrationFlowFactory',
+]
 
 
 class DictField(fields.Field):
@@ -192,7 +196,7 @@ class OpenstackCloud(bases.Hashable, bases.Representable,
                                   required=True)
         cinder_db = fields.Nested(database_settings('cinder').Schema,
                                   required=True)
-        discover = OneOrMore(fields.String(), missing=MODEL_LIST)
+        discover = fields.List(fields.String(), missing=MODEL_LIST)
 
         @marshmallow.post_load
         def to_cloud(self, data):
@@ -216,15 +220,26 @@ class Migration(bases.Hashable, bases.Representable):
                     OneOrMore(fields.Raw())),
                 many=True),
             required=True)
+        migration_flow_factories = fields.List(fields.String(), missing=list)
 
         @marshmallow.post_load
         def to_migration(self, data):
             return Migration(**data)
 
-    def __init__(self, source, destination, objects):
+    def __init__(self, source, destination, objects, migration_flow_factories):
         self.source = source
         self.destination = destination
         self.query = query.Query(objects)
+        self.migration_flow_factories = {}
+
+        # Migration logic can be extended through migration_flow_factories
+        # migration parameter
+        migration_flow_factories = \
+            DEFAULT_MIGRATION_LIST + migration_flow_factories
+        for factory_class_name in migration_flow_factories:
+            factory_class = importutils.import_class(factory_class_name)
+            migrated_class = factory_class.migrated_class
+            self.migration_flow_factories[migrated_class] = factory_class
 
 
 class Configuration(bases.Hashable, bases.Representable,

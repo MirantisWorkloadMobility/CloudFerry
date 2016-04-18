@@ -20,6 +20,8 @@ import sqlite3
 import threading
 import time
 
+from cloudferry.lib.utils import utils
+
 LOG = logging.getLogger(__name__)
 SQLITE3_DATABASE_FILE = os.environ.get('CF_LOCAL_DB', 'migration_data.db')
 _execute_once_statements = []
@@ -35,9 +37,7 @@ class _Row(sqlite3.Row):
 
 
 class Transaction(object):
-    _tls = threading.local()
-    _tls.top_level = None
-    _tls.depth = 0
+    _tls = utils.ThreadLocalStorage(top_level=None, depth=0)
 
     def __init__(self):
         self._conn = None
@@ -46,6 +46,7 @@ class Transaction(object):
         self._depth = None
 
     def __enter__(self):
+        # pylint: disable=no-member
         self._depth = self._tls.depth
         self._tls.depth += 1
         self._initialize()
@@ -55,6 +56,7 @@ class Transaction(object):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        # pylint: disable=no-member
         exc_info = (exc_type, exc_val, exc_tb)
         try:
             if exc_info == (None, None, None):

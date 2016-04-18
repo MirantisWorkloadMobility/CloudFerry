@@ -122,7 +122,6 @@ import collections
 import contextlib
 import logging
 import sys
-import threading
 
 import marshmallow
 from marshmallow import exceptions
@@ -342,7 +341,7 @@ class Reference(_FieldWithTable, fields.Field):
 class ModelMetaclass(type):
     def __new__(mcs, name, parents, dct):
         result = super(ModelMetaclass, mcs).__new__(mcs, name, parents, dct)
-        if parents != (object,):
+        if dct['Schema'] is not None:
             result.pk_field = result.get_schema().get_primary_key_field()
         return result
 
@@ -831,8 +830,7 @@ class Session(object):
     be saved to disk.
     """
 
-    _tls = threading.local()
-    _tls.current = None
+    _tls = utils.ThreadLocalStorage(current=None)
 
     def __init__(self):
         self.session = None

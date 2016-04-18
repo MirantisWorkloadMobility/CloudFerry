@@ -36,8 +36,8 @@ class ClientProxy(object):
             path = []
         if token is None and endpoint is None:
             assert service_type is not None
-            token = _get_token(credential, scope)
-            endpoint = _get_endpoint(credential, scope, service_type)
+            token = get_token(credential, scope)
+            endpoint = get_endpoint(credential, scope, service_type)
         else:
             assert token is not None and endpoint is not None
         self._factory_fn = factory_fn
@@ -95,7 +95,7 @@ def _get_authenticated_v2_client(credential, scope):
     return client
 
 
-def _get_token(credential, scope):
+def get_token(credential, scope):
     # TODO(antonf): make it so get_token for one set of creds don't block
     # TODO(antonf): get_token for other set of creds
     with _lock:
@@ -122,7 +122,7 @@ def _get_token(credential, scope):
         return token
 
 
-def _get_endpoint(credential, scope, service_type):
+def get_endpoint(credential, scope, service_type):
     with _lock:
         return _endpoints[credential, scope, service_type]
 

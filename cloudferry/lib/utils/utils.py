@@ -474,3 +474,17 @@ def qualname(cls):
     :return: string representing fully qualified name
     """
     return cls.__module__ + '.' + cls.__name__
+
+
+class ThreadLocalStorage(object):
+    def __init__(self, **defaults):
+        self._tls = threading.local()
+        self._defaults = defaults
+
+    def __getattr__(self, item):
+        return getattr(self._tls, item, self._defaults.get(item))
+
+    def __setattr__(self, key, value):
+        if key in ('_tls', '_defaults'):
+            super(ThreadLocalStorage, self).__setattr__(key, value)
+        return setattr(self._tls, key, value)
