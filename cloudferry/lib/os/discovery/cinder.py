@@ -15,6 +15,7 @@ import logging
 
 from cinderclient import exceptions
 
+from cloudferry.lib.os import clients
 from cloudferry.lib.os.discovery import keystone
 from cloudferry.lib.os.discovery import model
 
@@ -51,7 +52,7 @@ class Volume(model.Model):
 
     @classmethod
     def load_missing(cls, cloud, object_id):
-        volume_client = cloud.volume_client()
+        volume_client = clients.volume_client(cloud)
         try:
             raw_volume = volume_client.volumes.get(object_id.id)
             return Volume.load_from_cloud(cloud, raw_volume)
@@ -60,7 +61,7 @@ class Volume(model.Model):
 
     @classmethod
     def discover(cls, cloud):
-        volume_client = cloud.volume_client()
+        volume_client = clients.volume_client(cloud)
         volumes_list = volume_client.volumes.list(
             search_opts={'all_tenants': True})
         with model.Session() as session:

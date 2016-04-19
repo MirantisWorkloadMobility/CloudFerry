@@ -168,7 +168,7 @@ class ModelTestCase(test_local_db.DatabaseMockingTestCase):
 
     def test_non_dirty(self):
         obj = Example.load(Example.generate_clean_data())
-        self.assertFalse(obj.is_dirty('objects'))
+        self.assertTrue(obj.is_dirty('objects'))
 
     def test_simple_dirty(self):
         obj = Example.load(Example.generate_clean_data())
