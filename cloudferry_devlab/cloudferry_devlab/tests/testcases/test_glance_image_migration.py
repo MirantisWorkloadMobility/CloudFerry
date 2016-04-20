@@ -50,7 +50,9 @@ class GlanceMigrationTests(functional_test.FunctionalTest):
             return sorted(_members)
 
         src_images = [img for img in self.src_cloud.glanceclient.images.list()
-                      if img.name not in config.images_not_included_in_filter]
+                      if img.name not in
+                      config.images_not_included_in_filter and
+                      img.name not in config.images_blacklisted]
         dst_images = [img for img in self.dst_cloud.glanceclient.images.list(
             is_public=None)]
 
@@ -89,8 +91,10 @@ class GlanceMigrationTests(functional_test.FunctionalTest):
         :param id: image id"""
         src_images = self.filter_images({'delete_on_dst': True})
         src_images = self.filtering_utils.filter_images(src_images)[0]
+        dst_images = [img for img in self.dst_cloud.glanceclient.images.list(
+            is_public=None)]
 
-        self.validate_resource_parameter_in_dst(src_images, self.dst_images,
+        self.validate_resource_parameter_in_dst(src_images, dst_images,
                                                 resource_name='image',
                                                 parameter=param)
 
@@ -181,6 +185,18 @@ class GlanceMigrationTests(functional_test.FunctionalTest):
             self.fail('Image migrated despite that it was not included '
                       'in filter, Images info: \n{}'.format(
                         migrated_images_not_in_filter))
+
+    @attr(migrated_tenant=['tenant7'])
+    def test_glance_images_blacklisted_did_not_migrate(self):
+        """Validate images blacklisted weren't migrated."""
+        migrated_images_blacklisted = [image for image in
+                                       config.images_blacklisted
+                                       if image in self.dst_images]
+
+        if migrated_images_blacklisted:
+            self.fail('Image migrated despite that it was blacklisted,'
+                      'Images info: \n{}'.format(
+                        migrated_images_blacklisted))
 
     @attr(migration_engine=['migrate2'])
     def test_glance_image_deleted_and_migrated_second_time_with_new_id(self):

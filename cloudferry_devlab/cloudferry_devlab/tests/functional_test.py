@@ -23,6 +23,7 @@ import cloudferry_devlab.tests.config as config
 from cloudferry_devlab import generate_load
 from cloudferry_devlab.tests import test_exceptions
 import cloudferry_devlab.tests.utils as utils
+from cloudferry_devlab.tests import base
 
 
 def suppress_dependency_logging():
@@ -61,9 +62,11 @@ class FunctionalTest(unittest.TestCase):
         self.migration_utils = utils.MigrationUtils(config)
         self.config_ini_path = config_ini['general']['configuration_ini_path']
         self.cloudferry_dir = config_ini['general']['cloudferry_dir']
+        tenant = base.get_nosetest_cmd_attribute_val('migrated_tenant')
         filter_path = config_ini['general'].get(
             'filter_path',
-            get_option_from_config_ini('filter_path'))
+            get_option_from_config_ini('filter_path')) if tenant \
+            else config.all_tenants_filter_filename
         self.filtering_utils = utils.FilteringUtils(
             os.path.join(self.cloudferry_dir, filter_path))
 
