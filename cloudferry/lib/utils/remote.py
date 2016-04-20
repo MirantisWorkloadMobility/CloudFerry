@@ -180,6 +180,10 @@ class RemoteExecutor(object):
                     while not session.closed or session.recv_ready():
                         output += session.recv(1)
                         if sudo_prompt and output.endswith(sudo_prompt):
+                            if self.settings.password is None:
+                                raise RemoteFailure(
+                                    'sudo require password, but no password '
+                                    'provided in configuration.')
                             session.sendall(self.settings.password + '\n')
                             output = output[:-len(sudo_prompt)]
 
