@@ -29,6 +29,7 @@ def estimate_copy(cfg, migration_name):
     migration = cfg.migrations[migration_name]
     query = migration.query
     src_cloud = migration.source
+    dst_cloud = migration.destination
 
     with model.Session() as session:
         total_ephemeral_size = 0
@@ -38,22 +39,30 @@ def estimate_copy(cfg, migration_name):
         accounted_images = set()
 
         for server in query.search(session, src_cloud, nova.Server):
+            if server.find_link(dst_cloud):
+                continue
             for ephemeral_disk in server.ephemeral_disks:
                 total_ephemeral_size += ephemeral_disk.size
             if server.image is not None \
-                    and server.image.object_id not in accounted_images:
+                    and server.image.object_id not in accounted_images \
+                    and not server.image.find_link(dst_cloud):
                 total_image_size += server.image.size
                 accounted_images.add(server.image.object_id)
             for volume in server.attached_volumes:
-                if volume.object_id not in accounted_volumes:
+                if volume.object_id not in accounted_volumes \
+                        and not volume.find_link(dst_cloud):
                     total_volume_size += volume.size
                     accounted_volumes.add(volume.object_id)
 
         for volume in query.search(session, src_cloud, cinder.Volume):
+            if volume.find_link(dst_cloud):
+                continue
             if volume.object_id not in accounted_volumes:
                 total_volume_size += volume.size
 
         for image in query.search(session, src_cloud, glance.Image):
+            if image.find_link(dst_cloud):
+                continue
             if image.object_id not in accounted_images:
                 total_image_size += image.size
 

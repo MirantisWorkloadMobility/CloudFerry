@@ -211,8 +211,7 @@ def estimate_migration(config_path, migration, debug=False):
             print '  -', name
         return -1
 
-    stage.execute_stage('cloudferry.lib.os.discovery.stages.DiscoverStage',
-                        cfg)
+    stage.execute_stage('cloudferry.lib.os.discovery.stages.LinkStage', cfg)
     procedures.estimate_copy(cfg, migration)
     procedures.show_largest_servers(cfg, 10, migration)
 
@@ -231,8 +230,7 @@ def link(config_path, debug=False):
 def show_unused_resources(config_path, cloud, count=100, tenant=None,
                           debug=False):
     cfg = config.load(load_yaml_config(config_path, debug))
-    stage.execute_stage('cloudferry.lib.os.discovery.stages.DiscoverStage',
-                        cfg)
+    stage.execute_stage('cloudferry.lib.os.discovery.stages.LinkStage', cfg)
     procedures.show_largest_unused_resources(int(count), cloud, tenant)
 
 

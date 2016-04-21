@@ -37,6 +37,10 @@ class Flavor(model.Model):
         raw_flavor = compute_client.flavors.get(object_id.id)
         return Flavor.load_from_cloud(cloud, raw_flavor)
 
+    def equals(self, other):
+        # TODO: replace with implementation that make sense
+        return True
+
 
 class SecurityGroup(model.Model):
     class Schema(model.Schema):
