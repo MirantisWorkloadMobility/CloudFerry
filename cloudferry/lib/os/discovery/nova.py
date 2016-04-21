@@ -132,8 +132,7 @@ class Server(model.Model):
             servers.sort(key=lambda s: s.host)
             for host, host_servers in itertools.groupby(servers,
                                                         key=lambda s: s.host):
-                with remote.RemoteExecutor(
-                        cloud, host, ignore_errors=True) as remote_executor:
+                with remote.RemoteExecutor(cloud, host) as remote_executor:
                     for srv in host_servers:
                         ephemeral_disks = _list_ephemeral(remote_executor, srv)
                         if ephemeral_disks is not None:
