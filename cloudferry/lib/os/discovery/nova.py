@@ -125,7 +125,8 @@ class Server(model.Model):
                         servers.append(srv)
                         LOG.debug('Discovered: %s', srv)
                     except model.ValidationError as e:
-                        LOG.warning('Server %s ignored: %s', raw_server.id, e)
+                        LOG.warning('Server %s ignored: %s', raw_server.id, e,
+                                    exc_info=True)
                         continue
 
             # Discover ephemeral volume info using SSH
@@ -175,7 +176,7 @@ def _list_ephemeral(remote_executor, server):
     volume_targets = set()
     for volume in server.attached_volumes:
         for attachment in volume.attachments:
-            if attachment.server_id == server.object_id.id:
+            if attachment.server == server:
                 volume_targets.add(attachment.device.replace('/dev/', ''))
 
     for line in output.splitlines():

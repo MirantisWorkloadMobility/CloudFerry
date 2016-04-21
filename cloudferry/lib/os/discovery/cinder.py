@@ -24,8 +24,13 @@ LOG = logging.getLogger(__name__)
 
 class Attachment(model.Model):
     class Schema(model.Schema):
-        server = model.Reference('cloudferry.lib.os.discovery.nova.Server')
+        server = model.Reference('cloudferry.lib.os.discovery.nova.Server',
+                                 ensure_existence=False)
         device = model.String(required=True)
+
+        FIELD_MAPPING = {
+            'server': 'server_id',
+        }
 
 
 @model.type_alias('volumes')
