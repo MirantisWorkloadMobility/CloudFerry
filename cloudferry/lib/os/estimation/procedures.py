@@ -59,11 +59,14 @@ def estimate_copy(cfg, migration_name):
 
     print 'Migration', migration_name, 'estimates:'
     print 'Images:'
-    print '  Size:', sizeof_format.sizeof_fmt(total_image_size)
+    print '  Size:', sizeof_format.sizeof_fmt(total_image_size,
+                                              target_unit='G')
     print 'Ephemeral disks:'
-    print '  Size:', sizeof_format.sizeof_fmt(total_ephemeral_size)
+    print '  Size:', sizeof_format.sizeof_fmt(total_ephemeral_size,
+                                              target_unit='G')
     print 'Volumes:'
-    print '  Size:', sizeof_format.sizeof_fmt(total_volume_size, 'G')
+    print '  Size:', sizeof_format.sizeof_fmt(total_volume_size, 'G',
+                                              target_unit='G')
 
 
 def show_largest_servers(cfg, count, migration_name):
