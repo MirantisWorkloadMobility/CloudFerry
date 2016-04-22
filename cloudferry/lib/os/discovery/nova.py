@@ -37,6 +37,10 @@ class Flavor(model.Model):
         raw_flavor = compute_client.flavors.get(object_id.id)
         return Flavor.load_from_cloud(cloud, raw_flavor)
 
+    def equals(self, other):
+        # TODO: replace with implementation that make sense
+        return True
+
 
 class SecurityGroup(model.Model):
     class Schema(model.Schema):
@@ -125,15 +129,15 @@ class Server(model.Model):
                         servers.append(srv)
                         LOG.debug('Discovered: %s', srv)
                     except model.ValidationError as e:
-                        LOG.warning('Server %s ignored: %s', raw_server.id, e)
+                        LOG.warning('Server %s ignored: %s', raw_server.id, e,
+                                    exc_info=True)
                         continue
 
             # Discover ephemeral volume info using SSH
             servers.sort(key=lambda s: s.host)
             for host, host_servers in itertools.groupby(servers,
                                                         key=lambda s: s.host):
-                with remote.RemoteExecutor(
-                        cloud, host, ignore_errors=True) as remote_executor:
+                with remote.RemoteExecutor(cloud, host) as remote_executor:
                     for srv in host_servers:
                         ephemeral_disks = _list_ephemeral(remote_executor, srv)
                         if ephemeral_disks is not None:
@@ -176,7 +180,7 @@ def _list_ephemeral(remote_executor, server):
     volume_targets = set()
     for volume in server.attached_volumes:
         for attachment in volume.attachments:
-            if attachment.server_id == server.object_id.id:
+            if attachment.server == server:
                 volume_targets.add(attachment.device.replace('/dev/', ''))
 
     for line in output.splitlines():

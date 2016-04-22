@@ -25,17 +25,18 @@ TIME_UNITS = [(29030400, ('year', 'years')),
               (1, ('second', 'seconds'))]
 
 
-def sizeof_fmt(num, unit='', suffix='B'):
+def sizeof_fmt(num, unit='', suffix='B', target_unit=None):
     """ Format the number to get the human readable version.
 
     :param num: Number
     :param unit: Current unit of the number
     :param suffix: Suffix of the result
+    :param target_unit: Desirable unit for result
     :return: String with human readable version of the number
     """
 
     for unit in UNITS[UNITS.index(unit.upper()):]:
-        if abs(num) < 1024.:
+        if target_unit is None and abs(num) < 1024. or target_unit == unit:
             return "%3.1f%s%s" % (num, unit, suffix)
         num /= 1024.
     return "%.1f%s%s" % (num, 'Y', suffix)
@@ -55,7 +56,7 @@ def parse_size(size):
                     p = UNITS.index(m.group('unit')[:1])
                 except ValueError:
                     p = 0
-                return (int(m.group('number')) * 1024 ** p)
+                return int(m.group('number')) * 1024 ** p
     return 0
 
 

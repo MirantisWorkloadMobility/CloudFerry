@@ -13,6 +13,8 @@
 # limitations under the License.
 import logging
 
+from glanceclient import exc as glance_exc
+
 from cloudferry.lib.os import clients
 from cloudferry.lib.os.discovery import keystone
 from cloudferry.lib.os.discovery import model
@@ -74,8 +76,12 @@ class Image(model.Model):
         image_client = clients.image_client(cloud)
         raw_image = image_client.images.get(object_id.id)
         image = Image.load_from_cloud(cloud, raw_image)
-        for member in image_client.image_members.list(image=raw_image):
-            image.members.append(ImageMember.load_from_cloud(cloud, member))
+        try:
+            for member in image_client.image_members.list(image=raw_image):
+                image.members.append(
+                    ImageMember.load_from_cloud(cloud, member))
+        except glance_exc.HTTPNotFound:
+            pass
         return image
 
     @classmethod

@@ -100,6 +100,7 @@ class SshGateway(bases.Hashable, bases.Representable,
         private_key = fields.String(missing=None)
         gateway = fields.Nested('self', missing=None)
         connection_attempts = fields.Integer(missing=1)
+        attempt_failure_sleep = fields.Float(missing=10.0)
 
         @marshmallow.post_load
         def to_ssh_gateway(self, data):
@@ -117,6 +118,7 @@ class SshSettings(bases.Hashable, bases.Representable,
         cipher = fields.String(missing=None)
         private_key = fields.String(missing=None)
         timeout = fields.Integer(missing=600)
+        attempt_failure_sleep = fields.Float(missing=10.0)
 
         @marshmallow.post_load
         def to_ssh_settings(self, data):

@@ -313,13 +313,15 @@ class Reference(_FieldWithTable, fields.Field):
                 for obj in value:
                     model = get_model(obj['type'])
                     object_id = ObjectId.from_dict(obj)
-                    if session.exists(model, object_id):
+                    if not self.ensure_existence or \
+                            session.exists(model, object_id):
                         result.append(LazyObj(model, object_id))
                 return result
             else:
                 model = get_model(value['type'])
                 object_id = ObjectId.from_dict(value)
-                if session.exists(model, object_id):
+                if not self.ensure_existence or \
+                        session.exists(model, object_id):
                     return LazyObj(model, object_id)
                 else:
                     return None
