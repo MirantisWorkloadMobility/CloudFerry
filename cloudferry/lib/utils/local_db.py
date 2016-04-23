@@ -79,7 +79,8 @@ class Transaction(object):
             self._tls.top_level = self
             self._conn = sqlite3.connect(
                 SQLITE3_DATABASE_FILE,
-                detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
+                detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES,
+                timeout=3600)
             self._conn.row_factory = _Row
             self._conn.isolation_level = None
             execute_saved_statements(self._conn)
