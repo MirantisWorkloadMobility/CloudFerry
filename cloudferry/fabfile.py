@@ -27,11 +27,14 @@ from cloudferry.cloud import cloud_ferry
 from cloudferry.cloud import grouping
 from cloudferry.lib import config
 from cloudferry.lib import stage
+from cloudferry.lib.os.discovery import model
 from cloudferry.lib.os.estimation import procedures
+from cloudferry.lib.os.migrate import base as migrate_base
 from cloudferry.lib.scheduler.namespace import Namespace
 from cloudferry.lib.scheduler.scenario import Scenario
 from cloudferry.lib.scheduler.scheduler import Scheduler
 from cloudferry.lib.utils import log
+from cloudferry.lib.utils import taskflow_utils
 from cloudferry.lib.utils import utils
 from cloudferry.lib.utils.errorcodes import ERROR_INVALID_CONFIGURATION
 from cloudferry.condensation import process
@@ -208,8 +211,7 @@ def estimate_migration(config_path, migration, debug=False):
             print '  -', name
         return -1
 
-    stage.execute_stage('cloudferry.lib.os.discovery.stages.DiscoverStage',
-                        cfg)
+    stage.execute_stage('cloudferry.lib.os.discovery.stages.LinkStage', cfg)
     procedures.estimate_copy(cfg, migration)
     procedures.show_largest_servers(cfg, 10, migration)
 
@@ -228,9 +230,32 @@ def link(config_path, debug=False):
 def show_unused_resources(config_path, cloud, count=100, tenant=None,
                           debug=False):
     cfg = config.load(load_yaml_config(config_path, debug))
-    stage.execute_stage('cloudferry.lib.os.discovery.stages.DiscoverStage',
-                        cfg)
+    stage.execute_stage('cloudferry.lib.os.discovery.stages.LinkStage', cfg)
     procedures.show_largest_unused_resources(int(count), cloud, tenant)
+
+
+@task
+def migrate2(config_path, name, debug=False):
+    """
+        :name_config - name of config yaml-file, example 'config.yaml'
+    """
+    cfg = config.load(load_yaml_config(config_path, debug))
+    if name not in cfg.migrations:
+        print 'No such migration:', name
+        print '\nPlease choose one of this:'
+        for name in sorted(cfg.migrations.keys()):
+            print '  -', name
+        return -1
+
+    stage.execute_stage('cloudferry.lib.os.discovery.stages.LinkStage', cfg)
+
+    with model.Session() as session:
+        migration = cfg.migrations[name]
+        objects = migration.query.search(session, migration.source)
+        graph = taskflow_utils.create_graph_flow(
+            name, objects, migrate_base.create_migration_flow, cfg, migration)
+
+    taskflow_utils.execute_flow(graph)
 
 
 def init(name_config=None, debug=None):

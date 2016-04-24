@@ -63,13 +63,13 @@ Example defining cloud object schema::
 
         @classmethod
         def load_missing(cls, cloud, object_id):
-            volume_client = cloud.volume_client()
+            volume_client = clients.volume_client(cloud)
             raw_volume = volume_client.volumes.get(object_id.id)
             return Volume.load_from_cloud(cloud, raw_volume)
 
         @classmethod
         def discover(cls, cloud):
-            volume_client = cloud.volume_client()
+            volume_client = clients.volume_client(cloud)
             volumes_list = volume_client.volumes.list(
                 search_opts={'all_tenants': True})
             with model.Session() as session:
@@ -122,7 +122,6 @@ import collections
 import contextlib
 import logging
 import sys
-import threading
 
 import marshmallow
 from marshmallow import exceptions
@@ -130,6 +129,7 @@ from marshmallow import fields
 from oslo_utils import importutils
 
 from cloudferry.lib.utils import local_db
+from cloudferry.lib.utils import utils
 
 LOG = logging.getLogger(__name__)
 type_aliases = {}
@@ -175,7 +175,7 @@ class ObjectId(collections.namedtuple('ObjectId', ('id', 'cloud'))):
         return {
             'id': uuid,
             'cloud': cloud.name,
-            'type': _type_name(model),
+            'type': utils.qualname(model),
         }
 
     @staticmethod
@@ -195,7 +195,7 @@ class ObjectId(collections.namedtuple('ObjectId', ('id', 'cloud'))):
         return {
             'id': self.id,
             'cloud': self.cloud,
-            'type': _type_name(cls),
+            'type': utils.qualname(cls),
         }
 
 
@@ -248,7 +248,7 @@ class NotFound(Exception):
 
     def __str__(self):
         return '{0} object with id {1} not found.'.format(
-            _type_name(self.cls), self.object_id)
+            utils.qualname(self.cls), self.object_id)
 
 
 class _FieldWithTable(object):
@@ -313,13 +313,15 @@ class Reference(_FieldWithTable, fields.Field):
                 for obj in value:
                     model = get_model(obj['type'])
                     object_id = ObjectId.from_dict(obj)
-                    if session.exists(model, object_id):
+                    if not self.ensure_existence or \
+                            session.exists(model, object_id):
                         result.append(LazyObj(model, object_id))
                 return result
             else:
                 model = get_model(value['type'])
                 object_id = ObjectId.from_dict(value)
-                if session.exists(model, object_id):
+                if not self.ensure_existence or \
+                        session.exists(model, object_id):
                     return LazyObj(model, object_id)
                 else:
                     return None
@@ -341,12 +343,27 @@ class Reference(_FieldWithTable, fields.Field):
 class ModelMetaclass(type):
     def __new__(mcs, name, parents, dct):
         result = super(ModelMetaclass, mcs).__new__(mcs, name, parents, dct)
-        if parents != (object,):
+        if dct['Schema'] is not None:
             result.pk_field = result.get_schema().get_primary_key_field()
         return result
 
 
-class Model(object):
+class _EqualityByPrimaryKeyMixin(object):
+    def __eq__(self, other):
+        if other is None:
+            return False
+        self_pk = self.primary_key
+        other_pk = other.primary_key
+        if self_pk is None and other_pk is None:
+            return id(self) == id(other)
+        else:
+            return self_pk == other_pk
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+
+class Model(_EqualityByPrimaryKeyMixin):
     """
     Inherit this class to define model class for OpenStack objects like
     tenants, volumes, servers, etc...
@@ -363,7 +380,7 @@ class Model(object):
     def __init__(self):
         self._original = {}
 
-    def dump(self, table):
+    def dump(self, table=None):
         return self.get_schema(table).dump(self).data
 
     @classmethod
@@ -429,7 +446,7 @@ class Model(object):
                         return session.retrieve(model, object_id)
                 except NotFound:
                     LOG.debug('Trying to load missing %s value: %s',
-                              _type_name(model), object_id)
+                              utils.qualname(model), object_id)
                     obj = model.load_missing(cloud, object_id)
                     if obj is None:
                         session.store_missing(model, object_id)
@@ -504,7 +521,7 @@ class Model(object):
         """
         schema = cls.get_schema()
         loaded, _ = schema.load(data)
-        return cls.create(loaded, schema=schema, mark_dirty=False)
+        return cls.create(loaded, schema=schema, mark_dirty=True)
 
     @classmethod
     def get_schema(cls, table=None):
@@ -631,6 +648,13 @@ class Model(object):
         """
         return cls
 
+    @classmethod
+    def get_class_qualname(cls):
+        """
+        Return fully qualified name of class (with module name, etc...)
+        """
+        return utils.qualname(cls)
+
     def get(self, name, default=None):
         """
         Returns object attribute by name.
@@ -655,9 +679,8 @@ class Model(object):
         # pylint: disable=no-member
         assert self.get_class() is dst_obj.get_class()
         assert self.primary_key is not None
-        for link in self.links:
-            if link.primary_key == dst_obj.primary_key:
-                return
+        if dst_obj in self.links:
+            return
         self.links.append(dst_obj)
 
     def find_link(self, cloud):
@@ -680,7 +703,7 @@ class Model(object):
         obj_fields = sorted(schema.fields.keys())
         cls = self.__class__
         return '<{cls} {fields}>'.format(
-            cls=_type_name(cls),
+            cls=utils.qualname(cls),
             fields=' '.join('{0}:{1}'.format(f, getattr(self, f))
                             for f in obj_fields))
 
@@ -740,7 +763,7 @@ class PrimaryKey(_FieldWithTable, fields.Field):
         return ObjectId.from_dict(value)
 
 
-class LazyObj(object):
+class LazyObj(_EqualityByPrimaryKeyMixin):
     """
     Lazy loaded object. Used internally to prevent loading whole database
     through dependencies/references.
@@ -792,6 +815,12 @@ class LazyObj(object):
         """
         return self._model
 
+    def get_class_qualname(self):
+        """
+        Return fully qualified name of class (with module name, etc...)
+        """
+        return utils.qualname(self._model)
+
 
 class Session(object):
     """
@@ -803,8 +832,7 @@ class Session(object):
     be saved to disk.
     """
 
-    _tls = threading.local()
-    _tls.current = None
+    _tls = utils.ThreadLocalStorage(current=None)
 
     def __init__(self):
         self.session = None
@@ -878,7 +906,7 @@ class Session(object):
         Stores information that object is missing in cloud
         :param object_id: model.ObjectId instance
         """
-        LOG.debug('Storing missing: %s %s', _type_name(cls), object_id)
+        LOG.debug('Storing missing: %s %s', utils.qualname(cls), object_id)
         key = (cls, object_id)
         self.session[key] = None
 
@@ -896,10 +924,13 @@ class Session(object):
 
         query = self._make_sql(cls, 'uuid', 'cloud', 'type')
         result = self.tx.query_one(query, uuid=object_id.id,
-                                   cloud=object_id.cloud, type=_type_name(cls))
+                                   cloud=object_id.cloud,
+                                   type=utils.qualname(cls))
         if not result or not result[0]:
             raise NotFound(cls, object_id)
-        obj = cls.load(self._merge_obj(result))
+        schema = cls.get_schema()
+        loaded, _ = schema.load(self._merge_obj(result))
+        obj = cls.create(loaded, schema=schema, mark_dirty=False)
         self.session[key] = obj
         return obj
 
@@ -918,7 +949,7 @@ class Session(object):
                                    'AND type=:type LIMIT 1)',
                                    uuid=object_id.id,
                                    cloud=object_id.cloud,
-                                   type=_type_name(cls))
+                                   type=utils.qualname(cls))
         return bool(result[0])
 
     def is_missing(self, cls, object_id):
@@ -935,7 +966,7 @@ class Session(object):
                                    'AND cloud=:cloud AND type=:type_name',
                                    uuid=object_id.id,
                                    cloud=object_id.cloud,
-                                   type_name=_type_name(cls))
+                                   type_name=utils.qualname(cls))
         if not result:
             raise NotFound(cls, object_id)
         return result[0] is None
@@ -958,12 +989,14 @@ class Session(object):
                     (cloud is None or cloud == obj.primary_key.cloud):
                 result.append(obj)
 
-        for row in self.tx.query(query, type=_type_name(cls), cloud=cloud):
+        schema = cls.get_schema()
+        for row in self.tx.query(query, type=utils.qualname(cls), cloud=cloud):
             uuid, cloud = row[:2]
             key = (cls, ObjectId(uuid, cloud))
             if key in self.session or not row[2]:
                 continue
-            obj = cls.load(self._merge_obj(row[2:]))
+            loaded, _ = schema.load(self._merge_obj(row[2:]))
+            obj = cls.create(loaded, schema=schema, mark_dirty=False)
             self.session[key] = obj
             result.append(obj)
         return result
@@ -1020,7 +1053,7 @@ class Session(object):
         pk = obj.primary_key
         uuid = pk.id
         cloud = pk.cloud
-        type_name = _type_name(obj.get_class())
+        type_name = utils.qualname(obj.get_class())
         sql_statement = \
             'INSERT OR REPLACE INTO {table} ' \
             'VALUES (:uuid, :cloud, :type_name, :data)'.format(table=table)
@@ -1033,7 +1066,7 @@ class Session(object):
     def _store_none(self, cls, pk):
         uuid = pk.id
         cloud = pk.cloud
-        type_name = _type_name(cls)
+        type_name = utils.qualname(cls)
         self.tx.execute('INSERT OR REPLACE INTO objects '
                         'VALUES (:uuid, :cloud, :type_name, NULL)',
                         uuid=uuid, cloud=cloud, type_name=type_name)
@@ -1043,7 +1076,7 @@ class Session(object):
         kwargs = {}
         if cls is not None:
             predicates.append('type=:type_name')
-            kwargs['type_name'] = _type_name(cls)
+            kwargs['type_name'] = utils.qualname(cls)
         if object_id is not None:
             predicates.append('uuid=:uuid')
             kwargs['uuid'] = object_id.id
@@ -1103,7 +1136,3 @@ def flatten_dependencies(objects):
     :return: Set of Model instances
     """
     return _flatten_dependencies(objects, set())
-
-
-def _type_name(cls):
-    return cls.__module__ + '.' + cls.__name__

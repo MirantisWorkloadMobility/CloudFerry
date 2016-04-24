@@ -12,17 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import collections
-import contextlib
 import logging
 
 import marshmallow
 from marshmallow import fields
+from oslo_utils import importutils
 
-from cloudferry.lib.os import clients
 from cloudferry.lib.utils import bases
 from cloudferry.lib.utils import query
-from cloudferry.lib.utils import remote
-from cloudferry.lib.utils import utils
 
 LOG = logging.getLogger(__name__)
 MODEL_LIST = [
@@ -30,6 +27,10 @@ MODEL_LIST = [
     'cloudferry.lib.os.discovery.glance.Image',
     'cloudferry.lib.os.discovery.cinder.Volume',
     'cloudferry.lib.os.discovery.nova.Server',
+]
+DEFAULT_MIGRATION_LIST = [
+    'cloudferry.lib.os.migrate.keystone.TenantMigrationFlowFactory',
+    'cloudferry.lib.os.migrate.glance.ImageMigrationFlowFactory',
 ]
 
 
@@ -89,19 +90,39 @@ class OneOrMore(fields.Field):
             return [self.base_type._deserialize(value, attr, data)]
 
 
+class SshGateway(bases.Hashable, bases.Representable,
+                 bases.ConstructableFromDict):
+    class Schema(marshmallow.Schema):
+        hostname = fields.String()
+        port = fields.Integer(missing=22)
+        username = fields.String()
+        password = fields.String(missing=None)
+        private_key = fields.String(missing=None)
+        gateway = fields.Nested('self', missing=None)
+        connection_attempts = fields.Integer(missing=1)
+        attempt_failure_sleep = fields.Float(missing=10.0)
+
+        @marshmallow.post_load
+        def to_ssh_gateway(self, data):
+            return SshGateway(data)
+
+
 class SshSettings(bases.Hashable, bases.Representable,
                   bases.ConstructableFromDict):
     class Schema(marshmallow.Schema):
-        username = fields.String()
-        sudo_password = fields.String(missing=None)
-        gateway = fields.String(missing=None)
+        port = fields.Integer(missing=22)
+        username = fields.String(required=True)
+        password = fields.String(missing=None)
+        gateway = fields.Nested(SshGateway.Schema, missing=None)
         connection_attempts = fields.Integer(missing=1)
         cipher = fields.String(missing=None)
-        key_file = fields.String(missing=None)
+        private_key = fields.String(missing=None)
+        timeout = fields.Integer(missing=600)
+        attempt_failure_sleep = fields.Float(missing=10.0)
 
         @marshmallow.post_load
-        def to_scope(self, data):
-            return Scope(data)
+        def to_ssh_settings(self, data):
+            return SshSettings(data)
 
 
 class Scope(bases.Hashable, bases.Representable, bases.ConstructableFromDict):
@@ -139,13 +160,45 @@ class Credential(bases.Hashable, bases.Representable,
             return Credential(data)
 
 
+def database_settings(database_name):
+    class_name = database_name.capitalize() + 'DatabaseSettings'
+    global_vars = globals()
+    if class_name in global_vars:
+        return global_vars[class_name]
+
+    class DatabaseSettings(bases.Hashable, bases.Representable,
+                           bases.ConstructableFromDict):
+        class Schema(marshmallow.Schema):
+            host = fields.String(missing='localhost')
+            port = fields.Integer(missing=3306)
+            username = fields.String(missing=database_name)
+            password = fields.String()
+            database = fields.String(missing=database_name)
+
+            @marshmallow.post_load
+            def to_cloud(self, data):
+                return DatabaseSettings(data)
+    DatabaseSettings.__name__ = class_name
+    global_vars[class_name] = DatabaseSettings
+    return DatabaseSettings
+
+
 class OpenstackCloud(bases.Hashable, bases.Representable,
                      bases.ConstructableFromDict):
     class Schema(marshmallow.Schema):
         credential = fields.Nested(Credential.Schema)
         scope = fields.Nested(Scope.Schema)
         ssh_settings = fields.Nested(SshSettings.Schema, load_from='ssh')
-        discover = OneOrMore(fields.String(), missing=MODEL_LIST)
+        keystone_db = fields.Nested(database_settings('keystone').Schema)
+        nova_db = fields.Nested(database_settings('nova').Schema,
+                                required=True)
+        neutron_db = fields.Nested(database_settings('neutron').Schema,
+                                   required=True)
+        glance_db = fields.Nested(database_settings('glance').Schema,
+                                  required=True)
+        cinder_db = fields.Nested(database_settings('cinder').Schema,
+                                  required=True)
+        discover = fields.List(fields.String(), missing=MODEL_LIST)
 
         @marshmallow.post_load
         def to_cloud(self, data):
@@ -154,45 +207,6 @@ class OpenstackCloud(bases.Hashable, bases.Representable,
     def __init__(self, data):
         super(OpenstackCloud, self).__init__(data)
         self.name = None
-
-    def image_client(self, scope=None):
-        # pylint: disable=no-member
-        return clients.image_client(self.credential, scope or self.scope)
-
-    def identity_client(self, scope=None):
-        # pylint: disable=no-member
-        return clients.identity_client(self.credential, scope or self.scope)
-
-    def volume_client(self, scope=None):
-        # pylint: disable=no-member
-        return clients.volume_client(self.credential, scope or self.scope)
-
-    def compute_client(self, scope=None):
-        # pylint: disable=no-member
-        return clients.compute_client(self.credential, scope or self.scope)
-
-    @contextlib.contextmanager
-    def remote_executor(self, hostname, key_file=None, ignore_errors=False):
-        # pylint: disable=no-member
-        key_files = []
-        settings = self.ssh_settings
-        if settings.key_file is not None:
-            key_files.append(settings.key_file)
-        if key_file is not None:
-            key_files.append(key_file)
-        if key_files:
-            utils.ensure_ssh_key_added(key_files)
-        try:
-            yield remote.RemoteExecutor(
-                hostname, settings.username,
-                sudo_password=settings.sudo_password,
-                gateway=settings.gateway,
-                connection_attempts=settings.connection_attempts,
-                cipher=settings.cipher,
-                key_file=settings.key_file,
-                ignore_errors=ignore_errors)
-        finally:
-            remote.RemoteExecutor.close_connection(hostname)
 
 
 class Migration(bases.Hashable, bases.Representable):
@@ -208,15 +222,26 @@ class Migration(bases.Hashable, bases.Representable):
                     OneOrMore(fields.Raw())),
                 many=True),
             required=True)
+        migration_flow_factories = fields.List(fields.String(), missing=list)
 
         @marshmallow.post_load
         def to_migration(self, data):
             return Migration(**data)
 
-    def __init__(self, source, destination, objects):
+    def __init__(self, source, destination, objects, migration_flow_factories):
         self.source = source
         self.destination = destination
         self.query = query.Query(objects)
+        self.migration_flow_factories = {}
+
+        # Migration logic can be extended through migration_flow_factories
+        # migration parameter
+        migration_flow_factories = \
+            DEFAULT_MIGRATION_LIST + migration_flow_factories
+        for factory_class_name in migration_flow_factories:
+            factory_class = importutils.import_class(factory_class_name)
+            migrated_class = factory_class.migrated_class
+            self.migration_flow_factories[migrated_class] = factory_class
 
 
 class Configuration(bases.Hashable, bases.Representable,

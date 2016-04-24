@@ -17,6 +17,7 @@ import json
 
 from cloudferry.lib.utils import cmd_cfg
 from cloudferry.lib.utils import log
+from cloudferry.lib.utils import remote
 from cloudferry.lib.utils import remote_runner
 from cloudferry.lib.utils import ssh_util
 
@@ -148,3 +149,17 @@ class QemuImg(ssh_util.SshUtil):
     def convert(self, format_to, source_path, dest_path, host_compute=None):
         cmd = self.convert_cmd(format_to, source_path, dest_path)
         return self.execute(cmd, host_compute)
+
+
+def get_disk_info(remote_executor, path):
+    try:
+        # try to use JSON first, cause it's more reliable
+        json_output = remote_executor.sudo(
+            'qemu-img info --output=json "{path}"', path=path)
+        return JsonQemuImgInfoParser(json_output)
+    except remote.RemoteFailure:
+        # old qemu version not supporting JSON, fallback to human-readable
+        # qemu-img output parser
+        plain_output = remote_executor.sudo(
+            'qemu-img info "{path}"', path=path)
+        return TextQemuImgInfoParser(plain_output)

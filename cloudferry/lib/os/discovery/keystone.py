@@ -15,6 +15,7 @@ import logging
 
 from keystoneclient import exceptions
 
+from cloudferry.lib.os import clients
 from cloudferry.lib.os.discovery import model
 
 LOG = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ class Tenant(model.Model):
 
     @classmethod
     def load_missing(cls, cloud, object_id):
-        identity_client = cloud.identity_client()
+        identity_client = clients.identity_client(cloud)
         try:
             raw_tenant = identity_client.tenants.get(object_id.id)
             return cls.load_from_cloud(cloud, raw_tenant)
@@ -39,7 +40,7 @@ class Tenant(model.Model):
 
     @classmethod
     def discover(cls, cloud):
-        identity_client = cloud.identity_client()
+        identity_client = clients.identity_client(cloud)
         with model.Session() as session:
             for tenant in identity_client.tenants.list():
                 session.store(Tenant.load_from_cloud(cloud, tenant))

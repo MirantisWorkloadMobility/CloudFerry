@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import logging
 import re
 import threading
 
@@ -24,6 +25,7 @@ from cinderclient.v2 import client as cinder
 from cloudferry.lib.os import consts
 from cloudferry.lib.utils import proxy_client
 
+LOG = logging.getLogger(__name__)
 _lock = threading.Lock()
 _tokens = {}
 _endpoints = {}
@@ -36,8 +38,8 @@ class ClientProxy(object):
             path = []
         if token is None and endpoint is None:
             assert service_type is not None
-            token = _get_token(credential, scope)
-            endpoint = _get_endpoint(credential, scope, service_type)
+            token = get_token(credential, scope)
+            endpoint = get_endpoint(credential, scope, service_type)
         else:
             assert token is not None and endpoint is not None
         self._factory_fn = factory_fn
@@ -64,6 +66,7 @@ class ClientProxy(object):
                 method = self._get_attr(self._path)
                 return method(*args, **kwargs)
             except Exception as ex:
+                LOG.debug('Error calling OpenStack client', exc_info=True)
                 http_status = getattr(ex, 'http_status', None)
                 if retry and http_status in (401, 403):
                     discard_token(self._token)
@@ -91,11 +94,16 @@ def _get_authenticated_v2_client(credential, scope):
                                 project_id=scope.project_id,
                                 tenant_id=scope.project_id)
     if client.auth_ref is None:
-        client.authenticate()
+        try:
+            client.authenticate()
+        except ks_exceptions.Unauthorized:
+            LOG.error('Authentication with credentials %r in scope %r failed.',
+                      credential, scope)
+            raise
     return client
 
 
-def _get_token(credential, scope):
+def get_token(credential, scope):
     # TODO(antonf): make it so get_token for one set of creds don't block
     # TODO(antonf): get_token for other set of creds
     with _lock:
@@ -113,6 +121,8 @@ def _get_token(credential, scope):
                         region_name=credential.region_name)
                     _endpoints[credential, scope, service_type] = service_url
                 except ks_exceptions.EndpointNotFound:
+                    LOG.error('Failed to find %s endpoint from keystone, '
+                              'check region name', service_type)
                     continue
             _tokens[token_key] = new_token
             _tokens[new_token] = token_key
@@ -122,13 +132,16 @@ def _get_token(credential, scope):
         return token
 
 
-def _get_endpoint(credential, scope, service_type):
+def get_endpoint(credential, scope, service_type):
     with _lock:
+        LOG.debug('Retrieving endpoint for credential %r for scope %r for '
+                  'service %s', credential, scope, service_type)
         return _endpoints[credential, scope, service_type]
 
 
 def discard_token(token):
     with _lock:
+        LOG.debug('Discarding token %s', token)
         try:
             key = _tokens.pop(token)
             if _tokens[key] == token:
@@ -137,7 +150,16 @@ def discard_token(token):
             pass
 
 
-def identity_client(credential, scope):
+def _prepare_credential_and_scope(cloud, scope):
+    credential = cloud.credential
+    if scope is None:
+        scope = cloud.scope
+    return credential, scope
+
+
+def identity_client(cloud, scope=None):
+    credential, scope = _prepare_credential_and_scope(cloud, scope)
+
     def factory_fn(token, endpoint):
         return v2_0_client.Client(token=token,
                                   endpoint=endpoint,
@@ -148,7 +170,9 @@ def identity_client(credential, scope):
                        service_type=consts.ServiceType.IDENTITY)
 
 
-def compute_client(credential, scope):
+def compute_client(cloud, scope=None):
+    credential, scope = _prepare_credential_and_scope(cloud, scope)
+
     def factory_fn(token, endpoint):
         client = nova.Client(auth_token=token,
                              insecure=credential.https_insecure,
@@ -160,7 +184,9 @@ def compute_client(credential, scope):
                        service_type=consts.ServiceType.COMPUTE)
 
 
-def network_client(credential, scope):
+def network_client(cloud, scope=None):
+    credential, scope = _prepare_credential_and_scope(cloud, scope)
+
     def factory_fn(token, endpoint):
         return neutron.Client(token=token,
                               endpoint_url=endpoint,
@@ -171,7 +197,9 @@ def network_client(credential, scope):
                        service_type=consts.ServiceType.NETWORK)
 
 
-def image_client(credential, scope):
+def image_client(cloud, scope=None):
+    credential, scope = _prepare_credential_and_scope(cloud, scope)
+
     def factory_fn(token, endpoint):
         endpoint = re.sub(r'v(\d)/?$', '', endpoint)
         return glance.Client(endpoint=endpoint,
@@ -183,7 +211,9 @@ def image_client(credential, scope):
                        service_type=consts.ServiceType.IMAGE)
 
 
-def volume_client(credential, scope):
+def volume_client(cloud, scope=None):
+    credential, scope = _prepare_credential_and_scope(cloud, scope)
+
     def factory_fn(token, endpoint):
         client = cinder.Client(insecure=credential.https_insecure,
                                cacert=credential.https_cacert)

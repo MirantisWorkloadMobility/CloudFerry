@@ -24,6 +24,7 @@ from cloudferry.lib.base import exception
 from cloudferry.lib.base.action import action
 from cloudferry.lib.os.network import neutron
 from cloudferry.lib.utils import log
+from cloudferry.lib.utils import proxy_client
 from cloudferry.lib.utils import utils
 
 
@@ -101,7 +102,8 @@ class CheckNetworks(action.Action):
 
         # Check busy physical networks on DST of FLAT network type
         LOG.info("Check busy physical networks for FLAT network type...")
-        busy_flat_physnets = src_net_info.busy_flat_physnets(dst_net_info)
+        busy_flat_physnets = src_net_info.busy_flat_physnets(dst_net_info,
+                                                             ext_net_map)
         if busy_flat_physnets:
             overlapping_resources.update(
                 {'busy_flat_physnets': busy_flat_physnets})
@@ -110,7 +112,7 @@ class CheckNetworks(action.Action):
         LOG.info("Check physical networks existence for VLAN network type...")
         dst_neutron_client = dst_net.neutron_client
         missing_vlan_physnets = src_net_info.missing_vlan_physnets(
-            dst_net_info, dst_neutron_client)
+            dst_net_info, dst_neutron_client, ext_net_map)
         if missing_vlan_physnets:
             overlapping_resources.update(
                 {'missing_vlan_physnets': missing_vlan_physnets})
@@ -334,11 +336,13 @@ class NetworkInfo(object):
 
         return nets_with_overlapping_seg_ids
 
-    def busy_flat_physnets(self, dst_info):
+    def busy_flat_physnets(self, dst_info, ext_net_map):
         """
         Get list of busy physical networks for FLAT network type.
 
         :param dst_info: NetworkInfo instance of DST cloud
+        :param ext_net_map: External networks mapping dictionary. Format:
+                        {<src_external_network>: <dst_external_network>, ...}
 
         :return: List of busy FLAT physnets.
         """
@@ -355,17 +359,25 @@ class NetworkInfo(object):
             if dst_net:
                 continue
 
+            if network.external and network.id in ext_net_map:
+                LOG.debug("Network '%s' is external and specified in the "
+                          "external networks mapping. Skipping network...",
+                          network.id)
+                continue
+
             if network.physnet in dst_flat_physnets:
                 busy_flat_physnets.append(network.physnet)
 
         return busy_flat_physnets
 
-    def missing_vlan_physnets(self, dst_info, dst_neutron_client):
+    def missing_vlan_physnets(self, dst_info, dst_neutron_client, ext_net_map):
         """
         Get list of missing physical networks for VLAN network type.
 
         :param dst_info: NetworkInfo instance of DST cloud
         :param dst_neutron_client: DST neutron client
+        :param ext_net_map: External networks mapping dictionary. Format:
+                        {<src_external_network>: <dst_external_network>, ...}
 
         :return: List of missing VLAN physnets.
         """
@@ -391,19 +403,26 @@ class NetworkInfo(object):
             if network.physnet in dst_vlan_physnets:
                 continue
 
-            try:
-                network_info = {
-                    'network': {
-                        'provider:physical_network': network.physnet,
-                        'provider:network_type': 'vlan',
-                        'provider:segmentation_id': free_seg_id
+            if network.external and network.id in ext_net_map:
+                LOG.debug("Network '%s' is external and specified in the "
+                          "external networks mapping. Skipping network...",
+                          network.id)
+                continue
+
+            with proxy_client.expect_exception(neutron_exc.BadRequest):
+                try:
+                    network_info = {
+                        'network': {
+                            'provider:physical_network': network.physnet,
+                            'provider:network_type': 'vlan',
+                            'provider:segmentation_id': free_seg_id
+                        }
                     }
-                }
-                new_net = dst_neutron_client.create_network(network_info)
-            except neutron_exc.NeutronClientException:
-                missing_vlan_physnets.append(network.physnet)
-            else:
-                dst_neutron_client.delete_network(new_net['network']['id'])
+                    new_net = dst_neutron_client.create_network(network_info)
+                except neutron_exc.NeutronClientException:
+                    missing_vlan_physnets.append(network.physnet)
+                else:
+                    dst_neutron_client.delete_network(new_net['network']['id'])
 
         return missing_vlan_physnets
 

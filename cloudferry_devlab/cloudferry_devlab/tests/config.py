@@ -406,7 +406,9 @@ images = [
     # and migrate it successfully
     {'name': 'deleted_on_dst', 'id': 'e38390f0-e660-42fc-b8cd-db163fce1510',
      'copy_from': img_url, 'disk_format': 'qcow2',
-     'container_format': 'bare', 'upload_on_dst': True, 'delete_on_dst': True}
+     'container_format': 'bare', 'upload_on_dst': True, 'delete_on_dst': True},
+    {'name': 'deleted_on_dst', 'copy_from': img_url, 'disk_format': 'qcow2',
+     'container_format': 'bare', 'upload_on_dst': True}
 ]
 """Images to create/delete"""
 
@@ -578,7 +580,7 @@ server_groups = [
 
 vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
-    {'name': 'server2', 'image': 'image2', 'flavor': 'flavorname1'},
+    {'name': 'server2', 'image': 'deleted_on_dst', 'flavor': 'flavorname1'},
     {'name': 'server3', 'image': 'deleted_image', 'flavor': 'flavorname2',
      'fip': True},
     {'name': 'server4', 'image': 'deleted_image', 'flavor': 'flavorname2'},
@@ -589,7 +591,7 @@ vms = [
     {'name': 'server8', 'image': 'broken_image', 'flavor': 'flavorname1',
      'server_group': 'admin_server_group'}
 ]
-"""VM's to create/delete"""
+"""VM's to create/delete on SRC cloud."""
 
 dst_vms = [
     {'name': 'tn5server1', 'image': 'image1', 'flavor': 'flavorname2',
