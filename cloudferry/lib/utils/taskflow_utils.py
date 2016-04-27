@@ -13,6 +13,7 @@
 # limitations under the License.
 import logging
 import os
+import traceback
 
 import futurist
 from taskflow import engines
@@ -76,7 +77,11 @@ def execute_flow(flow):
 
     engine.compile()
     _workaround_reverted_reset(flow_detail)
-    engine.run()
+    try:
+        engine.run()
+    except exceptions.WrappedFailure as wf:
+        for failure in wf:
+            traceback.print_exception(*failure.exc_info)
 
 
 def create_graph_flow(name, objs, subflow_factory_fn, *args, **kwargs):
@@ -126,18 +131,6 @@ def object_name(obj):
         typename=obj.get_class_qualname(),
         cloud=object_id.cloud,
         uuid=object_id.id)
-
-
-def map_object_id(obj, cloud):
-    """
-    Returns identifier of object in destination cloud.
-    :param obj: model instance
-    :param cloud: cloud object
-    :return: identifier string
-    """
-    link = obj.find_link(cloud.name)
-    assert link is not None
-    return link.primary_key.id
 
 
 class Conditional(task.Task):

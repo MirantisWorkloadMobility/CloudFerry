@@ -53,9 +53,9 @@ class EphemeralDisk(model.Model):
         path = model.String(required=True)
         size = model.Integer(required=True)
         format = model.String(required=True)
-        base_path = model.String(required=True)
-        base_size = model.Integer(required=True)
-        base_format = model.String(required=True)
+        base_path = model.String(required=True, allow_none=True)
+        base_size = model.Integer(required=True, allow_none=True)
+        base_format = model.String(required=True, allow_none=True)
 
 
 @model.type_alias('vms')
