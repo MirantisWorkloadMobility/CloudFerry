@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-
+import logging
 import multiprocessing
 
-from fabric import api
+import oslo_config.cfg
 
 from cloudferry.lib.scheduler.namespace import Namespace, CHILDREN
 from cloudferry.lib.utils.errorcodes import NO_ERROR, \
@@ -26,8 +26,8 @@ from cloudferry.lib.scheduler.cursor import Cursor
 from cloudferry.lib.scheduler import signal_handler
 from cloudferry.lib.scheduler.task import BaseTask
 from cloudferry.lib.scheduler.thread_tasks import WrapThreadTask
-import oslo_config.cfg
-LOG = log.getLogger(__name__)
+
+LOG = logging.getLogger(__name__)
 
 STEP_PREPARATION = "PREPARATION"
 STEP_MIGRATION = "MIGRATION"
@@ -35,6 +35,7 @@ STEP_ROLLBACK = "ROLLBACK"
 
 
 class BaseScheduler(object):
+
     def __init__(self, namespace=None, migration=None, preparation=None,
                  rollback=None):
         self.namespace = namespace if namespace else Namespace()
@@ -48,13 +49,13 @@ class BaseScheduler(object):
         self.map_func_task[BaseTask()] = self.task_run
 
     def event_start_task(self, task):
-        api.env.current_task = task
+        log.CurrentTaskFilter.current_task = task
         LOG.info("Start task '%s'", task)
         return True
 
     def event_end_task(self, task):
         LOG.info("End task '%s'", task)
-        api.env.current_task = None
+        log.CurrentTaskFilter.current_task = None
         return True
 
     def error_task(self, task, e):

@@ -792,3 +792,4 @@ def init_config(name_config=None):
     if name_config:
         name_configs[0] = name_config
     CONF(default_config_files=name_configs, args="")
+    return CONF

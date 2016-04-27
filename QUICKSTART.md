@@ -54,5 +54,5 @@
     ```
     cd CloudFerry
     source .venv/bin/activate
-    cloudferry migrate:configuration.ini,debug=True
+    cloudferry migrate configuration.ini --debug
     ```

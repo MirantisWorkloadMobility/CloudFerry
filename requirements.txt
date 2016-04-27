@@ -23,3 +23,4 @@ paramiko==1.16.0
 taskflow==1.30.0
 alembic==0.8.5
 SQLAlchemy-Utils==0.32.1
+cliff==2.0.0

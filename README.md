@@ -125,7 +125,7 @@ is set to `True`.
 Use `migrate` command with config file specified:
 
 ```
-cloudferry migrate:<config file>
+cloudferry migrate <config file>
 ```
 
 ## Migrating specific instances
@@ -144,7 +144,7 @@ instances:
 
 Run migration as usual:
 ```
-cloudferry migrate:<config file>
+cloudferry migrate configuration.ini --debug
 ```
 
 ## Playground
