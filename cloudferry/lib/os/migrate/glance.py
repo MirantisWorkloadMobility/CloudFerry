@@ -22,11 +22,10 @@ from cloudferry.lib.os.discovery import glance
 from cloudferry.lib.os.discovery import model
 from cloudferry.lib.os.discovery import nova
 from cloudferry.lib.os.migrate import base
-from cloudferry.lib.utils import qemu_img
 from cloudferry.lib.utils import remote
 from cloudferry.lib.utils import taskflow_utils
 
-from glanceclient import exc
+from glanceclient import exc as glance_exc
 
 LOG = logging.getLogger(__name__)
 
@@ -70,14 +69,14 @@ class ReserveImage(BaseImageMigrationTask):
                 owner=taskflow_utils.map_object_id(source.tenant, dst_cloud),
                 size=source.size,
                 properties=source.properties)
-        except exc.HTTPConflict:
+        except glance_exc.HTTPConflict:
             image = self.dst_glance.images.get(source.primary_key.id)
             if image.status == 'deleted':
-                self._reset_dst_image_status()
+                _reset_dst_image_status(self)
                 self._update_dst_image()
             else:
                 self._delete_dst_image()
-                self._reset_dst_image_status()
+                _reset_dst_image_status(self)
                 self._update_dst_image()
 
         result = glance.Image.load_from_cloud(dst_cloud, self.created_image)
@@ -106,13 +105,6 @@ class ReserveImage(BaseImageMigrationTask):
             owner=taskflow_utils.map_object_id(source.tenant, dst_cloud),
             size=source.size,
             properties=source.properties)
-
-    def _reset_dst_image_status(self):
-        dst_cloud = self.config.clouds[self.migration.destination]
-        with cloud_db.connection(dst_cloud.glance_db) as db:
-            db.execute('UPDATE images SET deleted_at=NULL, deleted=0, '
-                       'status=\'queued\' WHERE id=%(image_id)s',
-                       image_id=self.src_object.primary_key.id)
 
 
 class _FileLikeProxy(object):
@@ -144,78 +136,93 @@ class _FileLikeProxy(object):
 
 
 class UploadImage(BaseImageMigrationTask):
+    default_provides = ['need_restore_deleted']
+
     def migrate(self, dst_object, *args, **kwargs):
         if self.src_object.status == 'deleted':
-            return
+            return [True]
         image_id = dst_object.object_id.id
-        image_data = _FileLikeProxy(self.src_glance.images.data(image_id))
-        self.dst_glance.images.update(image_id, data=image_data)
+        try:
+            image_data = _FileLikeProxy(self.src_glance.images.data(image_id))
+            self.dst_glance.images.update(image_id, data=image_data)
+            return [False]
+        except glance_exc.HTTPNotFound:
+            return [True]
 
 
 class UploadDeletedImage(BaseImageMigrationTask):
-    def migrate(self, dst_object, *args, **kwargs):
-        if self.src_object.status != 'deleted':
-            return
+    default_provides = ['status']
+
+    def migrate(self, dst_object, need_restore_deleted, *args, **kwargs):
+        if not need_restore_deleted:
+            return [True]
         dst_image_id = dst_object.object_id.id
         with model.Session() as session:
-            for server in self.get_image_booted_servers(session):
-                if self.upload_server_image(server, dst_image_id):
-                    break
-            else:
-                LOG.warning('Unable to restore image %s: no servers found')
+            boot_disk_infos = self._get_boot_disk_locations(session)
 
-    def get_image_booted_servers(self, session):
-        servers = []
+        for boot_disk_info in boot_disk_infos:
+            if self.upload_server_image(boot_disk_info, dst_image_id):
+                return [True]
+        LOG.warning('Unable to restore image %s: no servers found',
+                    dst_image_id)
+        return [False]
+
+    def _get_boot_disk_locations(self, session):
+        boot_disk_infos = []
         for server in session.list(nova.Server, self.migration.source):
-            if server.image and server.image == self.src_object:
-                servers.append(server)
-        random.shuffle(servers)
-        return servers
+            if not server.image or server.image != self.src_object:
+                continue
+            for disk in server.ephemeral_disks:
+                if disk.base_path is not None and disk.path.endswith('disk'):
+                    assert disk.base_size is not None
+                    assert disk.base_format is not None
+                    boot_disk_infos.append({
+                        'host': server.hypervisor_hostname,
+                        'base_path': disk.base_path,
+                        'base_size': disk.base_size,
+                        'base_format': disk.base_format,
+                    })
+                    break
 
-    def upload_server_image(self, server, dst_image_id):
-        # pylint: disable=undefined-loop-variable
-        for disk in server.ephemeral_disks:
-            if disk.path.endswith('disk'):
-                break
-        else:
-            return False
+        random.shuffle(boot_disk_infos)
+        return boot_disk_infos
 
+    def upload_server_image(self, boot_disk_info, dst_image_id):
         src_cloud = self.config.clouds[self.migration.source]
-        with remote.RemoteExecutor(
-                src_cloud, server.hypervisor_hostname) as remote_executor:
-            disk_info = qemu_img.get_disk_info(remote_executor, disk.path)
-            image_path = disk_info.backing_filename
-            if image_path is None:
-                return False
-            image_info = qemu_img.get_disk_info(remote_executor, image_path)
-            image_format = image_info.format
-            if image_format is None:
-                return False
-            try:
-                size_str = remote_executor.sudo(
-                    'stat -c %s {path}', path=image_path)
-            except remote.RemoteFailure:
-                return False
-            cloud = self.config.clouds[self.migration.destination]
-            token = clients.get_token(cloud.credential, cloud.scope)
-            endpoint = clients.get_endpoint(cloud.credential, cloud.scope,
-                                            consts.ServiceType.IMAGE)
+        host = boot_disk_info['host']
+        image_path = boot_disk_info['base_path']
+        image_format = boot_disk_info['base_format']
+        image_size = boot_disk_info['base_size']
+        cloud = self.config.clouds[self.migration.destination]
+        token = clients.get_token(cloud.credential, cloud.scope)
+        endpoint = clients.get_endpoint(cloud.credential, cloud.scope,
+                                        consts.ServiceType.IMAGE)
+        _reset_dst_image_status(self)
+        with remote.RemoteExecutor(src_cloud, host) as remote_executor:
             curl_output = remote_executor.sudo(
                 'curl -X PUT -w "\\n\\n<http_status=%{{http_code}}>" '
                 '-H "X-Auth-Token: {token}" '
                 '-H "Content-Type: application/octet-stream" '
                 '-H "x-image-meta-disk_format: {disk_format}" '
                 '-H "x-image-meta-size: {image_size}" '
-                '--data-binary @"{image_path}" '
+                '--upload-file "{image_path}" '
                 '"{endpoint}/v1/images/{image_id}"',
                 token=token, endpoint=endpoint, image_id=dst_image_id,
                 image_path=image_path, disk_format=image_format,
-                image_size=int(size_str))
+                image_size=image_size)
             match = re.search(r'<http_status=(\d+)>', curl_output)
             if match is None or int(match.group(1)) != 200:
                 LOG.error('Failed to upload image: %s', curl_output)
                 return False
             return True
+
+
+def _reset_dst_image_status(task):
+    dst_cloud = task.config.clouds[task.migration.destination]
+    with cloud_db.connection(dst_cloud.glance_db) as db:
+        db.execute('UPDATE images SET deleted_at=NULL, deleted=0, '
+                   'status=\'queued\', checksum=NULL WHERE id=%(image_id)s',
+                   image_id=task.src_object.primary_key.id)
 
 
 class ImageMigrationFlowFactory(base.MigrationFlowFactory):
@@ -226,5 +233,5 @@ class ImageMigrationFlowFactory(base.MigrationFlowFactory):
             ReserveImage(obj, config, migration),
             UploadImage(obj, config, migration),
             UploadDeletedImage(obj, config, migration),
-            base.RememberMigration(obj),
+            taskflow_utils.Conditional('status', base.RememberMigration(obj)),
         ]
