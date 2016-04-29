@@ -330,6 +330,8 @@ class Prerequisites(base.BasePrerequisites):
         if 'server_group' in vm and self.server_groups_supported:
             params['scheduler_hints'] = {'group': self.get_server_group_id(
                 vm['server_group'])}
+        if 'config_drive' in vm:
+            params['config_drive'] = vm['config_drive']
         return params
 
     def create_server_groups(self):

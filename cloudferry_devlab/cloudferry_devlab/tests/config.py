@@ -580,7 +580,8 @@ server_groups = [
 
 vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
-    {'name': 'server2', 'image': 'deleted_on_dst', 'flavor': 'flavorname1'},
+    {'name': 'server2', 'image': 'deleted_on_dst', 'flavor': 'flavorname1',
+     'config_drive': True},
     {'name': 'server3', 'image': 'deleted_image', 'flavor': 'flavorname2',
      'fip': True},
     {'name': 'server4', 'image': 'deleted_image', 'flavor': 'flavorname2'},
