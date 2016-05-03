@@ -958,7 +958,8 @@ class Prerequisites(base.BasePrerequisites):
         images_to_delete = [image for image in all_images
                             if image.get('delete_on_dst')]
         for image in images_to_delete:
-            image_id = self.dst_cloud.get_image_id(image['name'])
+            image_id = image.get('id') or \
+                       self.dst_cloud.get_image_id(image['name'])
             self.dst_cloud.glanceclient.images.delete(image_id)
 
     def break_images(self):
