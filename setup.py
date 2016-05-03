@@ -14,41 +14,9 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-from pip import req
-import setuptools
+from setuptools import setup
 
-
-def reqs(filename):
-    return [str(r.req) for r in req.parse_requirements(filename,
-                                                       session=False)]
-
-
-TEST_REQS = reqs('test-requirements.txt')
-
-
-setuptools.setup(
-    name='CloudFerry',
-    description='Openstack cloud workload migration tool',
-    author='Mirantis Inc.',
-    author_email='workloadmobility@mirantis.com',
-    license='Apache',
-    url='https://github.com/MirantisWorkloadMobility/CloudFerry',
-    packages=setuptools.find_packages(exclude=['tests', 'tests.*']),
-    entry_points={
-        'oslo.config.opts': [
-            'cloudferry=cloudferry.cfglib:list_opts',
-        ],
-        'console_scripts': [
-            'cloudferry = cloudferry.bin.main:main'
-        ],
-    },
-    install_requires=reqs('requirements.txt'),
-    extras_require={
-        'docs': reqs('docs/doc-requirements.txt'),
-        'tests': TEST_REQS,
-    },
-    tests_require=TEST_REQS,
-    test_suite='nose.collector',
-    package_data={'cloudferry.templates': ['*.html']},
-    include_package_data=True,
+setup(
+    setup_requires=['pbr>=1.9', 'setuptools>=17.1'],
+    pbr=True,
 )
