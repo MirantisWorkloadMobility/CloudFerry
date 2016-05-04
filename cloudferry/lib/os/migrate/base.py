@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import abc
+import logging
 
 from oslo_utils import reflection
 from taskflow import retry
@@ -21,6 +22,23 @@ from taskflow.patterns import linear_flow
 from cloudferry.lib.os.discovery import model
 from cloudferry.lib.utils import taskflow_utils
 from cloudferry.lib.utils import utils
+
+LOG = logging.getLogger(__name__)
+
+
+class AbortMigration(Exception):
+    """
+    Exception that should be raised to abort migration of single resource.
+    """
+
+    def __init__(self, message, *args):
+        super(AbortMigration, self).__init__(message, *args)
+
+    def __str__(self):
+        try:
+            return self.args[0] % self.args[1:]
+        except Exception:  # pylint: disable=broad-except
+            return '{} % {}'.format(repr(self.args[0]), repr(self.args[1:]))
 
 
 class MigrationFlowFactory(object):
@@ -59,7 +77,7 @@ class MigrationFlowFactory(object):
         return []
 
 
-class ObjectTask(task.Task):
+class MigrationTask(task.Task):
     """
     Base class for object migration tasks that make it easier to write object
     migration tasks by skipping serialization/deserialization of model.Model
@@ -69,13 +87,16 @@ class ObjectTask(task.Task):
     should implement migrate method.
     """
 
-    def __init__(self, obj, **kwargs):
-        super(ObjectTask, self).__init__(
+    def __init__(self, obj, config, migration, **kwargs):
+        super(MigrationTask, self).__init__(
             name='{0}_{1}'.format(utils.qualname(self.__class__),
                                   taskflow_utils.object_name(obj)),
             requires=reflection.get_callable_args(self.migrate),
             **kwargs)
         self.src_object = obj
+        self.config = config
+        self.migration = migration
+        self.created_object = None
 
     @abc.abstractmethod
     def migrate(self, *args, **kwargs):
@@ -90,8 +111,10 @@ class ObjectTask(task.Task):
             *[self._deserialize(arg) for arg in args],
             **{key: self._deserialize(value)
                for key, value in kwargs.items()})
-        if result is not None:
+        if isinstance(result, list):
             return [self._serialize(val) for val in result]
+        elif isinstance(result, dict):
+            return [self._serialize(result[key]) for key in self.provides]
 
     @staticmethod
     def _serialize(obj):
@@ -117,16 +140,15 @@ class ObjectTask(task.Task):
         return model_cls.load(obj_dict['object'])
 
 
-class RememberMigration(ObjectTask):
+class RememberMigration(MigrationTask):
     """
     Task that will store migrated object on destination cloud to local database
     and save link between original and destination object.
     """
 
-    def __init__(self, src_object):
-        super(RememberMigration, self).__init__(src_object)
-
     def migrate(self, dst_object, *args, **kwargs):
+        LOG.debug('Remebering migration: %s -> %s',
+                  self.src_object, dst_object)
         with model.Session() as session:
             self.src_object.link_to(dst_object)
             session.store(dst_object)

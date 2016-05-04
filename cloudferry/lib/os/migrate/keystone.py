@@ -16,14 +16,8 @@ from cloudferry.lib.os.discovery import keystone
 from cloudferry.lib.os.migrate import base
 
 
-class CreateTenant(base.ObjectTask):
+class CreateTenant(base.MigrationTask):
     default_provides = ['dst_object']
-
-    def __init__(self, tenant, config, migration):
-        super(CreateTenant, self).__init__(tenant)
-        self.config = config
-        self.migration = migration
-        self.created_tenant = None
 
     @property
     def dst_identity(self):
@@ -33,17 +27,17 @@ class CreateTenant(base.ObjectTask):
     def migrate(self, *args, **kwargs):
         source = self.src_object
         dst_cloud = self.config.clouds[self.migration.destination]
-        self.created_tenant = self.dst_identity.tenants.create(
+        self.created_object = self.dst_identity.tenants.create(
             source.name, description=source.description,
             enabled=source.enabled)
         destination = keystone.Tenant.load_from_cloud(
-            dst_cloud, self.created_tenant)
-        return [destination]
+            dst_cloud, self.created_object)
+        return dict(dst_object=destination)
 
     def revert(self, *args, **kwargs):
-        if self.created_tenant is not None:
+        if self.created_object is not None:
             # TODO: retry delete
-            self.dst_identity.tenants.delete(self.created_tenant)
+            self.dst_identity.tenants.delete(self.created_object)
 
 
 class TenantMigrationFlowFactory(base.MigrationFlowFactory):
@@ -52,5 +46,5 @@ class TenantMigrationFlowFactory(base.MigrationFlowFactory):
     def create_flow(self, config, migration, obj):
         return [
             CreateTenant(obj, config, migration),
-            base.RememberMigration(obj),
+            base.RememberMigration(obj, config, migration),
         ]

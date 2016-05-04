@@ -31,6 +31,7 @@ MODEL_LIST = [
 DEFAULT_MIGRATION_LIST = [
     'cloudferry.lib.os.migrate.keystone.TenantMigrationFlowFactory',
     'cloudferry.lib.os.migrate.glance.ImageMigrationFlowFactory',
+    'cloudferry.lib.os.migrate.glance.ImageMemberMigrationFlowFactory',
 ]
 
 

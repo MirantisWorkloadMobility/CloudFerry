@@ -163,10 +163,10 @@ class RemoteExecutor(object):
                 else:
                     sudo_prompt = None
                     prefix = ''
-                full_command = '{shell_cmd} "{prefix}{escaped_cmd}"'.format(
-                    shell_cmd=SHELL,
-                    prefix=prefix,
-                    escaped_cmd=self._shell_escape(command))
+                full_command = 'LC_ALL=C {shell_cmd} "{prefix}{escaped_cmd}"'\
+                    .format(shell_cmd=SHELL,
+                            prefix=prefix,
+                            escaped_cmd=self._shell_escape(command))
 
                 session = self.client.get_transport().open_session(
                     window_size=WINDOW_SIZE)

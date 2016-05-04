@@ -23,21 +23,14 @@ from cloudferry.lib.os.discovery import model
 from cloudferry.lib.os.discovery import nova
 from cloudferry.lib.os.migrate import base
 from cloudferry.lib.utils import remote
-from cloudferry.lib.utils import taskflow_utils
 
 from glanceclient import exc as glance_exc
 
 LOG = logging.getLogger(__name__)
 
 
-class BaseImageMigrationTask(base.ObjectTask):
+class BaseImageMigrationTask(base.MigrationTask):
     # pylint: disable=abstract-method
-
-    def __init__(self, image, config, migration):
-        super(BaseImageMigrationTask, self).__init__(image)
-        self.config = config
-        self.migration = migration
-        self.created_image = None
 
     @property
     def src_glance(self):
@@ -59,14 +52,14 @@ class ReserveImage(BaseImageMigrationTask):
         source = self.src_object
         dst_cloud = self.config.clouds[self.migration.destination]
         try:
-            self.created_image = self.dst_glance.images.create(
+            self.created_object = self.dst_glance.images.create(
                 id=source.primary_key.id,
                 name=source.name,
                 container_format=source.container_format,
                 disk_format=source.disk_format,
                 is_public=source.is_public,
                 protected=source.protected,
-                owner=taskflow_utils.map_object_id(source.tenant, dst_cloud),
+                owner=source.tenant.get_uuid_in(dst_cloud.name),
                 size=source.size,
                 properties=source.properties)
         except glance_exc.HTTPConflict:
@@ -79,11 +72,11 @@ class ReserveImage(BaseImageMigrationTask):
                 _reset_dst_image_status(self)
                 self._update_dst_image()
 
-        result = glance.Image.load_from_cloud(dst_cloud, self.created_image)
-        return [result]
+        result = glance.Image.load_from_cloud(dst_cloud, self.created_object)
+        return dict(dst_object=result)
 
     def revert(self, *args, **kwargs):
-        if self.created_image is not None:
+        if self.created_object is not None:
             self._delete_dst_image()
 
     def _delete_dst_image(self):
@@ -95,14 +88,14 @@ class ReserveImage(BaseImageMigrationTask):
     def _update_dst_image(self):
         source = self.src_object
         dst_cloud = self.config.clouds[self.migration.destination]
-        self.created_image = self.dst_glance.images.update(
+        self.created_object = self.dst_glance.images.update(
             source.primary_key.id,
             name=source.name,
             container_format=source.container_format,
             disk_format=source.disk_format,
             is_public=source.is_public,
             protected=source.protected,
-            owner=taskflow_utils.map_object_id(source.tenant, dst_cloud),
+            owner=source.tenant.get_uuid_in(dst_cloud.name),
             size=source.size,
             properties=source.properties)
 
@@ -140,32 +133,30 @@ class UploadImage(BaseImageMigrationTask):
 
     def migrate(self, dst_object, *args, **kwargs):
         if self.src_object.status == 'deleted':
-            return [True]
+            return dict(need_restore_deleted=True)
         image_id = dst_object.object_id.id
         try:
             image_data = _FileLikeProxy(self.src_glance.images.data(image_id))
             self.dst_glance.images.update(image_id, data=image_data)
-            return [False]
+            return dict(need_restore_deleted=False)
         except glance_exc.HTTPNotFound:
-            return [True]
+            return dict(need_restore_deleted=True)
 
 
 class UploadDeletedImage(BaseImageMigrationTask):
-    default_provides = ['status']
-
     def migrate(self, dst_object, need_restore_deleted, *args, **kwargs):
         if not need_restore_deleted:
-            return [True]
+            return
         dst_image_id = dst_object.object_id.id
         with model.Session() as session:
             boot_disk_infos = self._get_boot_disk_locations(session)
 
         for boot_disk_info in boot_disk_infos:
             if self.upload_server_image(boot_disk_info, dst_image_id):
-                return [True]
-        LOG.warning('Unable to restore image %s: no servers found',
-                    dst_image_id)
-        return [False]
+                return
+        raise base.AbortMigration(
+            'Unable to restore deleted image %s: no servers found',
+            dst_image_id)
 
     def _get_boot_disk_locations(self, session):
         boot_disk_infos = []
@@ -233,5 +224,38 @@ class ImageMigrationFlowFactory(base.MigrationFlowFactory):
             ReserveImage(obj, config, migration),
             UploadImage(obj, config, migration),
             UploadDeletedImage(obj, config, migration),
-            taskflow_utils.Conditional('status', base.RememberMigration(obj)),
+            base.RememberMigration(obj, config, migration),
+        ]
+
+
+class MigrateImageMember(BaseImageMigrationTask):
+    default_provides = ['dst_object']
+
+    def migrate(self, *args, **kwargs):
+        src_object = self.src_object
+        dst_cloud = self.config.clouds[self.migration.destination]
+        dst_image_id = src_object.image.get_uuid_in(dst_cloud.name)
+        dst_tenant_id = src_object.member.get_uuid_in(dst_cloud.name)
+        self.dst_glance.image_members.create(dst_image_id, dst_tenant_id,
+                                             src_object.can_share)
+
+        image_member = glance.ImageMember.make(
+            dst_cloud, dst_image_id, dst_tenant_id, src_object.can_share)
+        return dict(dst_object=image_member)
+
+    def revert(self, *args, **kwargs):
+        src_object = self.src_object
+        dst_cloud = self.config.clouds[self.migration.destination]
+        dst_image_id = src_object.image.get_uuid_in(dst_cloud.name)
+        dst_tenant_id = src_object.member.get_uuid_in(dst_cloud.name)
+        self.dst_glance.image_members.delete(dst_image_id, dst_tenant_id)
+
+
+class ImageMemberMigrationFlowFactory(base.MigrationFlowFactory):
+    migrated_class = glance.ImageMember
+
+    def create_flow(self, config, migration, obj):
+        return [
+            MigrateImageMember(obj, config, migration),
+            base.RememberMigration(obj, config, migration),
         ]
