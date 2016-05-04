@@ -448,7 +448,8 @@ class Prerequisites(base.BasePrerequisites):
         def get_body_for_subnet_creating(_subnet):
             # Possible parameters for subnet creating
             params = ['name', 'cidr', 'allocation_pools', 'dns_nameservers',
-                      'host_routes', 'ip_version', 'network_id', 'tenant_id']
+                      'host_routes', 'ip_version', 'network_id', 'tenant_id',
+                      'enable_dhcp']
             return {param: _subnet[param] for param in params
                     if param in _subnet}
 

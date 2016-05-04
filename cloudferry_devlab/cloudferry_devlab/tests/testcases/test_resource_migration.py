@@ -439,7 +439,8 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         src_subnets = self.filter_subnets()
         dst_subnets = self.dst_cloud.neutronclient.list_subnets()
 
-        for param in ['name', 'gateway_ip', 'cidr', 'dns_nameservers']:
+        for param in ['name', 'gateway_ip', 'cidr', 'dns_nameservers',
+                      'enable_dhcp']:
             self.validate_neutron_resource_parameter_in_dst(
                 src_subnets, dst_subnets, resource_name='subnets',
                 parameter=param)
