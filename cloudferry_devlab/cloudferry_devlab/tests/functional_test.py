@@ -208,7 +208,7 @@ class FunctionalTest(unittest.TestCase):
         all_images = self.migration_utils.get_all_images_from_config()
         filtered_images = _image_exclude_filter(all_images)
 
-        image_list = self.src_cloud.glanceclient.images.list(is_public=None)
+        image_list = self.src_cloud.glanceclient.images.list(is_public=False)
         return [i for i in image_list if i.name in filtered_images]
 
     def filter_volumes(self):

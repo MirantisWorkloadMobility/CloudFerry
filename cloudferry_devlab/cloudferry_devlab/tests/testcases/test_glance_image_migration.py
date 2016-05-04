@@ -67,6 +67,7 @@ class GlanceMigrationTests(functional_test.FunctionalTest):
                       % missed_members)
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    @attr(migration_engine=['migrate2'])
     @generate('name', 'disk_format', 'container_format', 'size', 'checksum',
               'status', 'deleted', 'min_disk', 'protected', 'min_ram',
               'is_public', 'virtual_size', 'id')
@@ -94,6 +95,7 @@ class GlanceMigrationTests(functional_test.FunctionalTest):
                                                 parameter=param)
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    @attr(migration_engine=['migrate2'])
     def test_migrate_deleted_glance_images_only_once(self):
         """Validate deleted and broken images were migrated to dst only once.
 
@@ -168,6 +170,7 @@ class GlanceMigrationTests(functional_test.FunctionalTest):
             self.fail(msg)
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    @attr(migration_engine=['migrate2'])
     def test_glance_images_not_in_filter_did_not_migrate(self):
         """Validate images not in filter weren't migrated."""
         migrated_images_not_in_filter = [image for image in
@@ -179,6 +182,7 @@ class GlanceMigrationTests(functional_test.FunctionalTest):
                       'in filter, Images info: \n{}'.format(
                         migrated_images_not_in_filter))
 
+    @attr(migration_engine=['migrate2'])
     def test_glance_image_deleted_and_migrated_second_time_with_new_id(self):
         """Validate deleted images were migrated second time with new id."""
         src_images = []
