@@ -15,7 +15,7 @@
 import yaml
 
 from cloudferry import cfglib
-from cloudferry.lib import config
+from cloudferry import config
 from cloudferry.lib.utils import log
 
 

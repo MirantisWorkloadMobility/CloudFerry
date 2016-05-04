@@ -15,12 +15,12 @@ import logging
 import random
 import re
 
+from cloudferry import model
+from cloudferry.model import image
+from cloudferry.model import compute
 from cloudferry.lib.os import clients
 from cloudferry.lib.os import cloud_db
 from cloudferry.lib.os import consts
-from cloudferry.lib.os.discovery import glance
-from cloudferry.lib.os.discovery import model
-from cloudferry.lib.os.discovery import nova
 from cloudferry.lib.os.migrate import base
 from cloudferry.lib.utils import remote
 
@@ -59,12 +59,12 @@ class ReserveImage(BaseImageMigrationTask):
                 disk_format=source.disk_format,
                 is_public=source.is_public,
                 protected=source.protected,
-                owner=source.tenant.get_uuid_in(dst_cloud.name),
+                owner=source.tenant.get_uuid_in(dst_cloud),
                 size=source.size,
                 properties=source.properties)
         except glance_exc.HTTPConflict:
-            image = self.dst_glance.images.get(source.primary_key.id)
-            if image.status == 'deleted':
+            img = self.dst_glance.images.get(source.primary_key.id)
+            if img.status == 'deleted':
                 _reset_dst_image_status(self)
                 self._update_dst_image()
             else:
@@ -72,10 +72,12 @@ class ReserveImage(BaseImageMigrationTask):
                 _reset_dst_image_status(self)
                 self._update_dst_image()
 
-        result = glance.Image.load_from_cloud(dst_cloud, self.created_object)
+        result = self.load_from_cloud(
+            image.Image, dst_cloud, self.created_object)
         return dict(dst_object=result)
 
     def revert(self, *args, **kwargs):
+        super(ReserveImage, self).revert(*args, **kwargs)
         if self.created_object is not None:
             self._delete_dst_image()
 
@@ -95,7 +97,7 @@ class ReserveImage(BaseImageMigrationTask):
             disk_format=source.disk_format,
             is_public=source.is_public,
             protected=source.protected,
-            owner=source.tenant.get_uuid_in(dst_cloud.name),
+            owner=source.tenant.get_uuid_in(dst_cloud),
             size=source.size,
             properties=source.properties)
 
@@ -160,7 +162,8 @@ class UploadDeletedImage(BaseImageMigrationTask):
 
     def _get_boot_disk_locations(self, session):
         boot_disk_infos = []
-        for server in session.list(nova.Server, self.migration.source):
+        src_cloud = self.config.clouds[self.migration.source]
+        for server in session.list(compute.Server, src_cloud):
             if not server.image or server.image != self.src_object:
                 continue
             for disk in server.ephemeral_disks:
@@ -217,7 +220,7 @@ def _reset_dst_image_status(task):
 
 
 class ImageMigrationFlowFactory(base.MigrationFlowFactory):
-    migrated_class = glance.Image
+    migrated_class = image.Image
 
     def create_flow(self, config, migration, obj):
         return [
@@ -234,25 +237,27 @@ class MigrateImageMember(BaseImageMigrationTask):
     def migrate(self, *args, **kwargs):
         src_object = self.src_object
         dst_cloud = self.config.clouds[self.migration.destination]
-        dst_image_id = src_object.image.get_uuid_in(dst_cloud.name)
-        dst_tenant_id = src_object.member.get_uuid_in(dst_cloud.name)
+        dst_image_id = src_object.image.get_uuid_in(dst_cloud)
+        dst_tenant_id = src_object.member.get_uuid_in(dst_cloud)
         self.dst_glance.image_members.create(dst_image_id, dst_tenant_id,
                                              src_object.can_share)
-
-        image_member = glance.ImageMember.make(
-            dst_cloud, dst_image_id, dst_tenant_id, src_object.can_share)
+        image_member = self.load_from_cloud(
+            image.ImageMember, dst_cloud, dict(
+                image_id=dst_image_id, member_id=dst_tenant_id,
+                can_share=src_object.can_share))
         return dict(dst_object=image_member)
 
     def revert(self, *args, **kwargs):
+        super(MigrateImageMember, self).revert(*args, **kwargs)
         src_object = self.src_object
         dst_cloud = self.config.clouds[self.migration.destination]
-        dst_image_id = src_object.image.get_uuid_in(dst_cloud.name)
-        dst_tenant_id = src_object.member.get_uuid_in(dst_cloud.name)
+        dst_image_id = src_object.image.get_uuid_in(dst_cloud)
+        dst_tenant_id = src_object.member.get_uuid_in(dst_cloud)
         self.dst_glance.image_members.delete(dst_image_id, dst_tenant_id)
 
 
 class ImageMemberMigrationFlowFactory(base.MigrationFlowFactory):
-    migrated_class = glance.ImageMember
+    migrated_class = image.ImageMember
 
     def create_flow(self, config, migration, obj):
         return [

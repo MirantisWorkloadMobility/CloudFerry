@@ -19,7 +19,8 @@ from taskflow import retry
 from taskflow import task
 from taskflow.patterns import linear_flow
 
-from cloudferry.lib.os.discovery import model
+from cloudferry import discover
+from cloudferry import model
 from cloudferry.lib.utils import taskflow_utils
 from cloudferry.lib.utils import utils
 
@@ -139,6 +140,16 @@ class MigrationTask(task.Task):
             return obj_dict
         return model_cls.load(obj_dict['object'])
 
+    def load_from_cloud(self, model_class, cloud, data):
+        """
+        Returns new model instance based on data from cloud.
+        :param model_class: model.Model derived class
+        :param cloud: config.Cloud instance
+        :param data: data from OpenStack client
+        :return: model_class instance
+        """
+        return discover.load_from_cloud(self.config, cloud, model_class, data)
+
 
 class RememberMigration(MigrationTask):
     """
@@ -165,7 +176,7 @@ def create_migration_flow(obj, config, migration):
     :return: migration flow for an object
     """
 
-    if obj.find_link(migration.destination) is not None:
+    if obj.find_link(config.clouds[migration.destination]) is not None:
         return None
     cls = obj.get_class()
     flow_factories = migration.migration_flow_factories

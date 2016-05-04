@@ -15,108 +15,97 @@ import logging
 
 from glanceclient import exc as glance_exc
 
+from cloudferry import discover
+from cloudferry import model
+from cloudferry.model import identity
+from cloudferry.model import image
 from cloudferry.lib.os import clients
-from cloudferry.lib.os.discovery import keystone
-from cloudferry.lib.os.discovery import model
 
 LOG = logging.getLogger(__name__)
 
 
-@model.type_alias('image_members')
-class ImageMember(model.Model):
-    class Schema(model.Schema):
-        object_id = model.PrimaryKey()
-        image = model.Dependency('cloudferry.lib.os.discovery.glance.Image')
-        member = model.Dependency(
-            'cloudferry.lib.os.discovery.keystone.Tenant')
-        can_share = model.Boolean(missing=False)
+class ImageMemberDiscoverer(discover.Discoverer):
+    discovered_class = image.ImageMember
 
-    @classmethod
-    def load_from_cloud(cls, cloud, data, overrides=None):
-        return cls.make(cloud, data.image_id, data.member_id)
+    def discover_all(self):
+        # No point doing this
+        return
 
-    @classmethod
-    def load_missing(cls, cloud, object_id):
-        image_id, member_id = object_id.id.split(':')
-        return cls.make(cls, image_id, member_id)
+    def discover_one(self, uuid):
+        image_id, member_id = uuid.split(':')
+        image_member = self.load_from_cloud(
+            dict(uuid=uuid, image_id=image_id, member_id=member_id))
+        with model.Session() as session:
+            session.store(image_member)
+            return image_member
 
-    @classmethod
-    def make(cls, cloud, image_id, member_id, can_share=False):
-        return super(ImageMember, cls).load_from_cloud(cloud, {
-            'object_id': '{0}:{1}'.format(image_id, member_id),
-            'image': image_id,
-            'member': member_id,
-            'can_share': can_share,
+    def load_from_cloud(self, data):
+        uuid = data.get('uuid')
+        image_id = data['image_id']
+        member_id = data['member_id']
+        if uuid is None:
+            uuid = '{0}:{1}'.format(image_id, member_id)
+        return image.ImageMember.load({
+            'object_id': self.make_id(uuid),
+            'image': self.find_ref(image.Image, image_id),
+            'member': self.find_ref(identity.Tenant, member_id),
         })
 
-    def equals(self, other):
-        # pylint: disable=no-member
-        return self.image.equals(other.image) \
-               and self.member.equals(other.member) \
-               and self.can_share == other.can_share
 
+class ImageDiscoverer(discover.Discoverer):
+    discovered_class = image.Image
 
-@model.type_alias('images')
-class Image(model.Model):
-    class Schema(model.Schema):
-        object_id = model.PrimaryKey('id')
-        name = model.String(allow_none=True)
-        tenant = model.Dependency(keystone.Tenant)
-        checksum = model.String(allow_none=True)
-        size = model.Integer()
-        virtual_size = model.Integer(allow_none=True, missing=None)
-        is_public = model.Boolean()
-        protected = model.Boolean()
-        container_format = model.String(missing='qcow2')
-        disk_format = model.String(missing='bare')
-        min_disk = model.Integer(required=True)
-        min_ram = model.Integer(required=True)
-        properties = model.Dict()
-        members = model.Reference(ImageMember, many=True, missing=list)
-        status = model.String()
+    def discover_all(self):
+        images = []
+        image_client = clients.image_client(self.cloud)
+        raw_images = image_client.images.list(filters={'is_public': None,
+                                                       'status': 'active'})
+        for raw_image in raw_images:
+            try:
+                images.append(self.load_from_cloud(raw_image))
+            except model.ValidationError as e:
+                LOG.warning('Invalid image %s in cloud %s: %s',
+                            raw_image.id, self.cloud.name, e)
 
-        FIELD_MAPPING = {
-            'tenant': 'owner',
-        }
-
-    @classmethod
-    def load_missing(cls, cloud, object_id):
-        image_client = clients.image_client(cloud)
-        raw_image = image_client.images.get(object_id.id)
-        image = Image.load_from_cloud(cloud, raw_image)
-        try:
-            for member in image_client.image_members.list(image=raw_image):
-                image.members.append(
-                    ImageMember.load_from_cloud(cloud, member))
-        except glance_exc.HTTPNotFound:
-            pass
-        return image
-
-    @classmethod
-    def discover(cls, cloud):
-        image_client = clients.image_client(cloud)
         with model.Session() as session:
-            for raw_image in image_client.images.list(
-                    filters={'is_public': None, 'status': 'active'}):
-                try:
-                    image = Image.load_from_cloud(cloud, raw_image)
-                    session.store(image)
-                    members_list = image_client.image_members.list(
-                        image=raw_image)
-                    for raw_member in members_list:
-                        member = ImageMember.load_from_cloud(cloud, raw_member)
-                        session.store(member)
-                        image.members.append(member)
-                except model.ValidationError as e:
-                    LOG.warning('Invalid image %s: %s', raw_image.id, e)
+            for img in images:
+                session.store(img)
 
-    def equals(self, other):
-        # pylint: disable=no-member
-        # TODO: consider comparing properties
-        return self.tenant.equals(other.tenant) and \
-            self.name == other.name and \
-            self.checksum == other.checksum and \
-            self.size == other.size and \
-            self.is_public == other.is_public and \
-            self.container_format == other.container_format and \
-            self.disk_format == other.disk_format
+        for img in images:
+            self._populate_members(img, image_client)
+
+    def discover_one(self, uuid):
+        image_client = clients.image_client(self.cloud)
+        try:
+            raw_image = image_client.images.get(uuid)
+            img = self.load_from_cloud(raw_image)
+            with model.Session() as session:
+                session.store(img)
+            self._populate_members(img, image_client)
+            return img
+        except glance_exc.HTTPNotFound:
+            raise discover.NotFound()
+
+    def load_from_cloud(self, data):
+        image_dict = {
+            'object_id': self.make_id(data.id),
+            'tenant': self.find_ref(identity.Tenant, data.owner),
+        }
+        for attr_name in ('name', 'status', 'checksum', 'size', 'virtual_size',
+                          'is_public', 'protected', 'container_format',
+                          'disk_format', 'min_disk', 'min_ram', 'properties'):
+            if hasattr(data, attr_name):
+                image_dict[attr_name] = getattr(data, attr_name)
+        return image.Image.load(image_dict)
+
+    def _populate_members(self, img, image_client):
+        try:
+            raw_members = image_client.image_members.list(
+                image=img.object_id.id)
+            for raw_member in raw_members:
+                member = self.find_ref(image.ImageMember,
+                                       '{0}:{1}'.format(raw_member.image_id,
+                                                        raw_member.member_id))
+                img.members.append(member)
+        except glance_exc.HTTPNotFound:
+            return

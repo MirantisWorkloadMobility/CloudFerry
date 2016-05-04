@@ -16,9 +16,9 @@ import collections
 import heapq
 import logging
 
-from cloudferry.lib.os.discovery import model
 from cloudferry.lib.utils import query
 from cloudferry.lib.utils import sizeof_format
+from cloudferry import model
 
 LOG = logging.getLogger(__name__)
 G = sizeof_format.size_multiplier('G')
@@ -27,14 +27,15 @@ G = sizeof_format.size_multiplier('G')
 class ProcedureBase(object):
     def __init__(self, cfg, migration_name):
         self.migration = cfg.migrations[migration_name]
-        self.src = self.migration.source
-        self.dst = self.migration.destination
+        self.src_cloud = cfg.clouds[self.migration.source]
+        self.dst_cloud = cfg.clouds[self.migration.destination]
 
     def get_objects(self, model_name, exclude_objects=None):
         klass = model.get_model(model_name)
         with model.Session() as session:
-            for obj in self.migration.query.search(session, self.src, klass):
-                if (obj.find_link(self.dst) or
+            for obj in self.migration.query.search(session, self.src_cloud,
+                                                   klass):
+                if (obj.find_link(self.dst_cloud) or
                         (exclude_objects is not None and
                          obj.object_id in exclude_objects)):
                     continue

@@ -15,78 +15,35 @@
 Model module contain tools to define cloud object schema and a way to store
 this objects in database.
 
-Each model can define classmethod used to discover objects defined by model
-(``Model.discover(cloud)``) and classmethod used to retrieve object from cloud
-when there is reference/dependency pointing to it but it's not available in the
-database (``Model.load_missing(cloud)``).
-
-When creating objects based on some dictionary or object returned by OpenStack
-API ``Model.load_from_cloud(cloud, data)`` classmethod should be used as this
-allows to convert some attributes to representation that is used to store
-it to database like renaming attribute names and ensuring that dependency
-object exists in database (and retrieve it from cloud if it's not).
-
-In order to map OpenStack API object attribute names (like
-``os-vol-host-attr:host``) to something more human-friendly and compact (like
-``host``) ``FIELD_MAPPING`` dictionary can be used: keys represent final
-attribute names and values represent source attribute names.
-
 Example defining cloud object schema::
 
-    from marshmallow import fields
-    from cloudferry.lib.os.discovery import model
+    from cloudferry import model
     from cloudferry.lib.os.discovery import nova
 
 
     class Attachment(model.Model):
-        class Schema(model.Schema):
-            server = fields.Reference(nova.Server, required=True)
-            device = fields.String(required=True)
+        server = fields.Reference(nova.Server, required=True)
+        device = fields.String(required=True)
 
 
     class Volume(model.Model):
-        class Schema(model.Schema):
-            object_id = model.PrimaryKey('id')
-            name = fields.String(required=True)
-            encrypted = fields.Boolean(missing=False)
-            size = fields.Integer(required=True)
-            tenant = model.Dependency(keystone.Tenant, required=True)
-            metadata = fields.Dict(missing=dict)
-            attachments = model.Nested(Attachment, many=True, missing=list)
-
-            FIELD_MAPPING = {
-                'name': 'display_name',
-                'description': 'display_description',
-                'host': 'os-vol-host-attr:host',
-                'tenant': 'os-vol-tenant-attr:tenant_id',
-            }
-
-        @classmethod
-        def load_missing(cls, cloud, object_id):
-            volume_client = clients.volume_client(cloud)
-            raw_volume = volume_client.volumes.get(object_id.id)
-            return Volume.load_from_cloud(cloud, raw_volume)
-
-        @classmethod
-        def discover(cls, cloud):
-            volume_client = clients.volume_client(cloud)
-            volumes_list = volume_client.volumes.list(
-                search_opts={'all_tenants': True})
-            with model.Session() as session:
-                for raw_volume in volumes_list:
-                    volume = Volume.load_from_cloud(cloud, raw_volume)
-                    session.store(volume)
+        object_id = model.PrimaryKey()
+        name = fields.String(required=True)
+        encrypted = fields.Boolean(missing=False)
+        size = fields.Integer(required=True)
+        tenant = model.Dependency(keystone.Tenant, required=True)
+        metadata = fields.Dict(missing=dict)
+        attachments = model.Nested(Attachment, many=True, missing=list)
 
 
 Example using ``Session`` class to store and retrieve data from database::
 
-    from cloudferry.lib.os.discovery import model
+    from cloudferry import model
 
 
     class Tenant(model.Model):
-        class Schema(model.Schema):
-            object_id = model.PrimaryKey('id')
-            name = fields.String(required=True)
+        object_id = model.PrimaryKey()
+        name = fields.String(required=True)
 
     # Storing new item
     new_tenant = Tenant.load({
@@ -161,24 +118,6 @@ class ObjectId(collections.namedtuple('ObjectId', ('id', 'cloud'))):
     """
 
     @staticmethod
-    def from_cloud(cloud, value, model):
-        """
-        Create ObjectId based on cloud name and identifier string (used mostly
-        during discover phase).
-        """
-        if isinstance(value, basestring):
-            uuid = value
-        elif isinstance(value, dict) and 'id' in value:
-            uuid = value['id']
-        else:
-            raise ValueError('Can\'t convert ' + repr(value) + ' to ObjectId')
-        return {
-            'id': uuid,
-            'cloud': cloud.name,
-            'type': utils.qualname(model),
-        }
-
-    @staticmethod
     def from_dict(value):
         """
         Deserialize ObjectId from dictionary representation.
@@ -199,50 +138,13 @@ class ObjectId(collections.namedtuple('ObjectId', ('id', 'cloud'))):
         }
 
 
-class DataAdapter(object):
-    """
-    Data adapter class that make possible passing non-dict objects to
-    Schema.load. Not for use outside of ``Model.load_from_cloud`` code.
-    """
-    missing = object()
-
-    def __init__(self, obj, field_mapping, transformers, overrides=None):
-        self.obj = obj
-        self.field_mapping = field_mapping
-        self.transformers = transformers
-        self.override = overrides or {}
-
-    def get(self, key, default):
-        if key in self.override:
-            value = self.override[key]
-            if value is self.missing:
-                return default
-            else:
-                return self.override[key]
-        mapped_key = self.field_mapping.get(key, key)
-        if isinstance(self.obj, dict):
-            value = self.obj.get(mapped_key, default)
-        else:
-            value = getattr(self.obj, mapped_key, default)
-        transformer = self.transformers.get(key)
-        if transformer is not None:
-            return transformer(value)
-        else:
-            return value
-
-    def set(self, key, value):
-        self.override[key] = value
-
-    def set_missing(self, key):
-        self.override[key] = self.missing
-
-
 class NotFound(Exception):
     """
     NotFound exception is thrown when object not found in database.
     """
+
     def __init__(self, cls, object_id):
-        super(NotFound, self).__init__()
+        super(NotFound, self).__init__(cls, object_id)
         self.cls = cls
         self.object_id = object_id
 
@@ -328,7 +230,7 @@ class Reference(_FieldWithTable, fields.Field):
 
     def get_significant_value(self, value):
         """
-        Returns id or set of id that can be safely used for detection of
+        Returns id or set of ids that can be safely used for detection of
         changes to the field. E.g. don't compare previous and current objects
         that are referenced, only compare id/set of ids.
         """
@@ -340,17 +242,11 @@ class Reference(_FieldWithTable, fields.Field):
             return value.primary_key
 
 
-class ModelMetaclass(type):
-    def __new__(mcs, name, parents, dct):
-        result = super(ModelMetaclass, mcs).__new__(mcs, name, parents, dct)
-        if dct['Schema'] is not None:
-            result.pk_field = result.get_schema().get_primary_key_field()
-        return result
-
-
 class _EqualityByPrimaryKeyMixin(object):
     def __eq__(self, other):
-        if other is None:
+        if not isinstance(other, Model) and not isinstance(other, LazyObj):
+            return False
+        if self.get_class() is not other.get_class():
             return False
         self_pk = self.primary_key
         other_pk = other.primary_key
@@ -363,18 +259,66 @@ class _EqualityByPrimaryKeyMixin(object):
         return not self.__eq__(other)
 
 
+class Schema(marshmallow.Schema):
+    """
+    Inherit this class to define object schema.
+    """
+    links = Reference('cloudferry.model.Model', convertible=False, many=True,
+                      missing=list, table='links')
+
+    FIELD_MAPPING = {}
+    FIELD_VALUE_TRANSFORMERS = {}
+
+    def get_primary_key_field(self):
+        for name, field in self.fields.items():
+            if isinstance(field, PrimaryKey):
+                return name
+        return None
+
+
+class ModelMetaclass(type):
+    def __new__(mcs, name, parents, dct):
+        if 'schema_class' not in dct:
+            schema_fields = {}
+            for key, value in dct.items():
+                if isinstance(value, fields.FieldABC) or \
+                        hasattr(value, '__marshmallow_tags__'):
+                    schema_fields[key] = value
+            for key in schema_fields:
+                del dct[key]
+
+            model_parent = mcs._find_model_parent(parents)
+            schema_class = type(name + 'Schema', (model_parent.schema_class,),
+                                schema_fields)
+            dct['schema_class'] = schema_class
+            dct['pk_field'] = schema_class().get_primary_key_field()
+
+        return super(ModelMetaclass, mcs).__new__(mcs, name, parents, dct)
+
+    @staticmethod
+    def _find_model_parent(parents):
+        model_parent = None
+        for parent in parents:
+            if issubclass(parent, Model):
+                assert model_parent is None, 'There should be only one ' \
+                                             'model parent'
+                model_parent = parent
+        assert model_parent is not None, 'It\'s impossible to have ' \
+                                         'ModelMetaclass and not derive ' \
+                                         'from model'
+        return model_parent
+
+
 class Model(_EqualityByPrimaryKeyMixin):
     """
     Inherit this class to define model class for OpenStack objects like
     tenants, volumes, servers, etc...
-    Inherited classes must define ``Schema`` class inherited from
-    ``model.Schema`` as member.
     If model is to be used as root object saved to database (e.g. not nested),
     then schema must include ``model.PrimaryKey`` field.
     """
 
     __metaclass__ = ModelMetaclass
-    Schema = None
+    schema_class = Schema
     pk_field = None
 
     def __init__(self):
@@ -388,8 +332,7 @@ class Model(_EqualityByPrimaryKeyMixin):
         """
         Create model instance using values from ``values`` argument without
         validation. To create model class instances previously validating
-        input, ``Model.load`` or ``Model.load_from_cloud`` classmethods should
-        be used.
+        input, ``Model.load`` classmethod should be used.
 
         :param values: dictionary containing field values
         :param schema: schema instance
@@ -427,92 +370,6 @@ class Model(_EqualityByPrimaryKeyMixin):
         return obj
 
     @classmethod
-    def load_from_cloud(cls, cloud, data, overrides=None):
-        """
-        Create model class instance using data from cloud with validation.
-        :param cloud: ``context.Cloud`` object
-        :param data: dictionary or object returned by OpenStack API client
-        :return: model class instance
-        """
-
-        def find_object(object_id_dict):
-            model = get_model(object_id_dict['type'])
-            object_id = ObjectId.from_dict(object_id_dict)
-            with Session.current() as session:
-                try:
-                    if session.is_missing(model, object_id):
-                        return None
-                    else:
-                        return session.retrieve(model, object_id)
-                except NotFound:
-                    LOG.debug('Trying to load missing %s value: %s',
-                              utils.qualname(model), object_id)
-                    obj = model.load_missing(cloud, object_id)
-                    if obj is None:
-                        session.store_missing(model, object_id)
-                        return None
-                    else:
-                        session.store(obj)
-                        return obj
-
-        def convert(field, many, old_value):
-            if old_value is None:
-                return None
-            if many:
-                convert_result = []
-                for element in old_value:
-                    converted = convert(field, False, element)
-                    if converted is None:
-                        continue
-                    convert_result.append(converted)
-                return convert_result
-            else:
-                model = field.model_class
-                object_id_dict = ObjectId.from_cloud(cloud, old_value, model)
-                if not field.ensure_existence or find_object(object_id_dict):
-                    return object_id_dict
-                else:
-                    return None
-
-        def process_fields(schema, raw_data, overrides=None):
-            if raw_data is None:
-                return None
-            adapted_data = DataAdapter(raw_data, schema.FIELD_MAPPING,
-                                       schema.FIELD_VALUE_TRANSFORMERS,
-                                       overrides)
-            for name, field in schema.fields.items():
-                key = field.load_from or name
-                value = adapted_data.get(key, None)
-                if value is None:
-                    continue
-                elif isinstance(field, Reference):
-                    if not field.convertible:
-                        adapted_data.set_missing(key)
-                        continue
-                    new_value = convert(field, field.many, value)
-                    adapted_data.set(key, new_value)
-                elif isinstance(field, PrimaryKey):
-                    adapted_data.set(
-                        key, ObjectId.from_cloud(cloud, value, cls))
-                elif isinstance(field, Nested):
-                    nested_schema = field.nested_model.get_schema()
-                    nested_schema.context = schema.context
-                    if field.many:
-                        adapted_data.set(
-                            key, [process_fields(nested_schema, x)
-                                  for x in value])
-                    else:
-                        adapted_data.set(
-                            key, process_fields(nested_schema, value))
-            return adapted_data
-
-        schema = cls.get_schema()
-        schema.context = {'cloud': cloud}
-        data = process_fields(schema, data, overrides)
-        loaded, _ = schema.load(data)
-        return cls.create(loaded, schema=schema, mark_dirty=True)
-
-    @classmethod
     def load(cls, data):
         """
         Create model class instance with validation.
@@ -528,12 +385,11 @@ class Model(_EqualityByPrimaryKeyMixin):
         """
         Returns model schema instance
         """
-        # pylint: disable=not-callable
-        schema = cls.Schema(strict=True)
+        schema = cls.schema_class(strict=True)
         if table is not None:
             only = tuple(n for n, f in schema.fields.items()
                          if f.table == table)
-            return cls.Schema(strict=True, only=only)
+            return cls.schema_class(strict=True, only=only)
         else:
             return schema
 
@@ -546,32 +402,6 @@ class Model(_EqualityByPrimaryKeyMixin):
             return getattr(self, self.pk_field)
         else:
             return None
-
-    @classmethod
-    def load_missing(cls, cloud, object_id):
-        """
-        Method called by ``Model.load_from_cloud`` when it can't find
-        dependency in the database to try to load dependency from cloud.
-
-        :param cloud: cloud object that can be used to create OpenStack API
-                      clients, etc...
-        :param object_id: identifier of missing object
-        :return: model class instance
-        """
-        # pylint: disable=unused-argument
-        raise NotFound(cls, object_id)
-
-    @classmethod
-    def discover(cls, cloud):
-        """
-        Method is called to discover and save to database all objects defined
-        by model from cloud.
-        :param cloud: cloud object that can be used to create OpenStack API
-                      clients, etc...
-        :return: model class instance
-        """
-        # pylint: disable=unused-argument
-        return
 
     def is_dirty(self, table):
         """
@@ -595,13 +425,6 @@ class Model(_EqualityByPrimaryKeyMixin):
             elif value != original.get(name):
                 return True
         return False
-
-    def mark_dirty(self):
-        """
-        Mark object as dirty e.g. it will be unconditionally saved to database
-        when transaction completes.
-        """
-        self._original.clear()
 
     def clear_dirty(self, table):
         """
@@ -668,7 +491,8 @@ class Model(_EqualityByPrimaryKeyMixin):
         "admin" to different clouds are equal, and therefore don't need to be
         migrated.
         """
-        return self is other
+        # pylint: disable=no-member
+        return self == other or other in self.links
 
     def link_to(self, dst_obj):
         """
@@ -690,7 +514,7 @@ class Model(_EqualityByPrimaryKeyMixin):
         # pylint: disable=no-member
         assert self.primary_key is not None
         for link in self.links:
-            if link.primary_key.cloud == cloud:
+            if link.primary_key.cloud == cloud.name:
                 return link
         return None
 
@@ -719,23 +543,6 @@ class Model(_EqualityByPrimaryKeyMixin):
                             for f in obj_fields))
 
 
-class Schema(marshmallow.Schema):
-    """
-    Inherit this class to define object schema.
-    """
-    links = Reference(Model, convertible=False, many=True, missing=list,
-                      table='links')
-
-    FIELD_MAPPING = {}
-    FIELD_VALUE_TRANSFORMERS = {}
-
-    def get_primary_key_field(self):
-        for name, field in self.fields.items():
-            if isinstance(field, PrimaryKey):
-                return name
-        return None
-
-
 class Dependency(Reference):
     """
     Dependency field is the same as reference except that it show that object
@@ -753,7 +560,7 @@ class Nested(_FieldWithTable, fields.Nested):
     """
 
     def __init__(self, nested_model, **kwargs):
-        super(Nested, self).__init__(nested_model.Schema, **kwargs)
+        super(Nested, self).__init__(nested_model.schema_class, **kwargs)
         self.nested_model = nested_model
 
 
@@ -763,9 +570,8 @@ class PrimaryKey(_FieldWithTable, fields.Field):
     field.
     """
 
-    def __init__(self, real_name=None, **kwargs):
-        super(PrimaryKey, self).__init__(
-            load_from=real_name, dump_to=real_name, required=True, **kwargs)
+    def __init__(self, **kwargs):
+        super(PrimaryKey, self).__init__(required=True, **kwargs)
 
     def _serialize(self, value, attr, obj):
         return value.to_dict(obj.get_class())
@@ -915,6 +721,7 @@ class Session(object):
     def store_missing(self, cls, object_id):
         """
         Stores information that object is missing in cloud
+        :param cls: model class object
         :param object_id: model.ObjectId instance
         """
         LOG.debug('Storing missing: %s %s', utils.qualname(cls), object_id)
@@ -987,23 +794,26 @@ class Session(object):
         Returns list of all objects of class ``cls`` stored in the database. If
         cloud argument is not None, then list is filtered by cloud.
         :param cls: model class
-        :param cloud: cloud name or None
+        :param cloud: config.Cloud instance or None
         :return: list of model instances
         """
         if cloud is None:
+            cloud_name = None
             query = self._make_sql(cls, 'type', list=True)
         else:
+            cloud_name = cloud.name
             query = self._make_sql(cls, 'type', 'cloud', list=True)
         result = []
         for obj in self.session.values():
             if isinstance(obj, cls) and \
-                    (cloud is None or cloud == obj.primary_key.cloud):
+                    (cloud is None or cloud_name == obj.primary_key.cloud):
                 result.append(obj)
 
         schema = cls.get_schema()
-        for row in self.tx.query(query, type=utils.qualname(cls), cloud=cloud):
-            uuid, cloud = row[:2]
-            key = (cls, ObjectId(uuid, cloud))
+        for row in self.tx.query(query, type=utils.qualname(cls),
+                                 cloud=cloud_name):
+            uuid, cloud_name = row[:2]
+            key = (cls, ObjectId(uuid, cloud_name))
             if key in self.session or not row[2]:
                 continue
             loaded, _ = schema.load(self._merge_obj(row[2:]))
@@ -1018,19 +828,22 @@ class Session(object):
         to values passed as arguments. Arguments that are None are ignored.
         """
         if cloud is not None and object_id is not None:
-            assert object_id.cloud == cloud
+            assert object_id.cloud == cloud.name
         for key in self.session.keys():
             obj_cls, obj_pk = key
             matched = True
             if cls is not None and cls is not obj_cls:
                 matched = False
-            if cloud is not None and obj_pk.cloud != cloud:
+            if cloud is not None and obj_pk.cloud != cloud.name:
                 matched = False
             if object_id is not None and object_id != obj_pk:
                 matched = False
             if matched:
                 del self.session[key]
-        self._delete_rows(cls, cloud, object_id, table)
+        cloud_name = None
+        if cloud is not None:
+            cloud_name = cloud.name
+        self._delete_rows(cls, cloud_name, object_id, table)
 
     @staticmethod
     def _make_sql(model, *columns, **kwargs):
@@ -1063,26 +876,26 @@ class Session(object):
     def _update_row(self, obj, table):
         pk = obj.primary_key
         uuid = pk.id
-        cloud = pk.cloud
+        cloud_name = pk.cloud
         type_name = utils.qualname(obj.get_class())
         sql_statement = \
             'INSERT OR REPLACE INTO {table} ' \
             'VALUES (:uuid, :cloud, :type_name, :data)'.format(table=table)
         self.tx.execute(sql_statement,
-                        uuid=uuid, cloud=cloud, type_name=type_name,
+                        uuid=uuid, cloud=cloud_name, type_name=type_name,
                         data=local_db.Json(obj.dump(table)))
         obj.clear_dirty(table)
         assert not obj.is_dirty(table)
 
     def _store_none(self, cls, pk):
         uuid = pk.id
-        cloud = pk.cloud
+        cloud_name = pk.cloud
         type_name = utils.qualname(cls)
         self.tx.execute('INSERT OR REPLACE INTO objects '
                         'VALUES (:uuid, :cloud, :type_name, NULL)',
-                        uuid=uuid, cloud=cloud, type_name=type_name)
+                        uuid=uuid, cloud=cloud_name, type_name=type_name)
 
-    def _delete_rows(self, cls, cloud, object_id, table):
+    def _delete_rows(self, cls, cloud_name, object_id, table):
         predicates = []
         kwargs = {}
         if cls is not None:
@@ -1091,13 +904,13 @@ class Session(object):
         if object_id is not None:
             predicates.append('uuid=:uuid')
             kwargs['uuid'] = object_id.id
-            if cloud is None:
-                cloud = object_id.cloud
+            if cloud_name is None:
+                cloud_name = object_id.cloud
             else:
-                assert cloud == object_id.cloud
-        if cloud is not None:
+                assert cloud_name == object_id.cloud
+        if cloud_name is not None:
             predicates.append('cloud=:cloud')
-            kwargs['cloud'] = cloud
+            kwargs['cloud'] = cloud_name
         statement = 'DELETE FROM {table} WHERE '.format(table=table)
         if predicates:
             statement += ' AND '.join(predicates)

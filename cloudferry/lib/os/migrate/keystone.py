@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 from cloudferry.lib.os import clients
-from cloudferry.lib.os.discovery import keystone
 from cloudferry.lib.os.migrate import base
+from cloudferry.model import identity
 
 
 class CreateTenant(base.MigrationTask):
@@ -30,18 +30,19 @@ class CreateTenant(base.MigrationTask):
         self.created_object = self.dst_identity.tenants.create(
             source.name, description=source.description,
             enabled=source.enabled)
-        destination = keystone.Tenant.load_from_cloud(
-            dst_cloud, self.created_object)
+        destination = self.load_from_cloud(
+            identity.Tenant, dst_cloud, self.created_object)
         return dict(dst_object=destination)
 
     def revert(self, *args, **kwargs):
         if self.created_object is not None:
             # TODO: retry delete
             self.dst_identity.tenants.delete(self.created_object)
+        super(CreateTenant, self).revert(*args, **kwargs)
 
 
 class TenantMigrationFlowFactory(base.MigrationFlowFactory):
-    migrated_class = keystone.Tenant
+    migrated_class = identity.Tenant
 
     def create_flow(self, config, migration, obj):
         return [

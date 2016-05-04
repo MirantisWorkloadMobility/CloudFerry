@@ -17,14 +17,10 @@ from cliff import lister
 
 from cloudferry.cli import base
 from cloudferry.lib import stage
-from cloudferry.lib.os.discovery import model
 from cloudferry.lib.os.estimation import procedures
 from cloudferry.lib.os.migrate import base as migrate_base
 from cloudferry.lib.utils import taskflow_utils
-
-# Importing of these modules is necessary to fill model.type_aliases variable
-# pylint: disable=unused-import
-from cloudferry.lib.os.discovery import keystone, nova, cinder, glance  # noqa
+from cloudferry import model
 
 
 class Discover(base.YamlConfigMixin, command.Command):
@@ -133,10 +129,12 @@ class Migrate(MigrationBaseMixin, command.Command):
                             self.config)
 
         with model.Session() as session:
-            migration = self.config.migrations[parsed_args.name]
-            objects = migration.query.search(session, migration.source)
+            migration = self.config.migrations[parsed_args.migration]
+            src_cloud = self.config.clouds[migration.source]
+            objects = migration.query.search(session, src_cloud)
             graph = taskflow_utils.create_graph_flow(
-                parsed_args.name, objects, migrate_base.create_migration_flow,
+                parsed_args.migration, objects,
+                migrate_base.create_migration_flow,
                 self.config, migration)
 
         taskflow_utils.execute_flow(graph)

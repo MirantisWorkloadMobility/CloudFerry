@@ -14,7 +14,7 @@
 import jmespath
 import jmespath.exceptions
 
-from cloudferry.lib.os.discovery import model
+from cloudferry import model
 
 
 class DictSubQuery(object):
