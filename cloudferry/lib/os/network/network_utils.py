@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
 import copy
 
 from neutronclient.common import exceptions as neutron_exc
@@ -31,43 +32,37 @@ def prepare_networks(info, keep_ip, network_resource, identity_resource):
     tenants = get_tenants(instances)
 
     # disable DHCP in all subnets
-    reset_dhcp_in_subnets(network_resource,
-                          tenants,
-                          disable_dhcp=True)
+    with temporarily_disable_dhcp(network_resource, tenants):
+        for (id_inst, inst) in instances.iteritems():
+            params = []
+            networks_info = inst[utils.INSTANCE_BODY][utils.INTERFACES]
+            tenant_name = inst[utils.INSTANCE_BODY]['tenant_name']
+            tenant_id = identity_resource.get_tenant_id_by_name(tenant_name)
+            for src_net in networks_info:
+                dst_net = network_resource.get_network(src_net, tenant_id,
+                                                       keep_ip)
+                mac_address = src_net['mac_address']
+                ip_addresses = src_net['ip_addresses']
 
-    for (id_inst, inst) in instances.iteritems():
-        params = []
-        networks_info = inst[utils.INSTANCE_BODY][utils.INTERFACES]
-        tenant_name = inst[utils.INSTANCE_BODY]['tenant_name']
-        tenant_id = identity_resource.get_tenant_id_by_name(tenant_name)
-        for src_net in networks_info:
-            dst_net = network_resource.get_network(src_net, tenant_id,
-                                                   keep_ip)
-            mac_address = src_net['mac_address']
-            ip_addresses = src_net['ip_addresses']
+                delete_existing_ports_on_dst(network_resource,
+                                             dst_net, ip_addresses,
+                                             mac_address)
 
-            delete_existing_ports_on_dst(network_resource,
-                                         dst_net, ip_addresses,
-                                         mac_address)
+                sg_ids = get_security_groups_ids_for_tenant(network_resource,
+                                                            inst, tenant_id)
 
-            sg_ids = get_security_groups_ids_for_tenant(network_resource,
-                                                        inst, tenant_id)
+                port = network_resource.create_port(
+                    dst_net['id'], mac_address, ip_addresses, tenant_id,
+                    keep_ip, sg_ids, src_net['allowed_address_pairs'])
 
-            port = network_resource.create_port(
-                dst_net['id'], mac_address, ip_addresses, tenant_id,
-                keep_ip, sg_ids, src_net['allowed_address_pairs'])
+                floating_ip = check_floating_ip(network_resource,
+                                                src_net, port)
 
-            floating_ip = check_floating_ip(network_resource,
-                                            src_net, port)
-
-            params.append({'net-id': dst_net['id'],
-                           'port-id': port['id'],
-                           'floatingip': floating_ip})
-        instances[id_inst][utils.INSTANCE_BODY]['nics'] = params
-    info_compute[utils.INSTANCES_TYPE] = instances
-
-    # Reset DHCP to the original settings
-    reset_dhcp_in_subnets(network_resource, tenants)
+                params.append({'net-id': dst_net['id'],
+                               'port-id': port['id'],
+                               'floatingip': floating_ip})
+            instances[id_inst][utils.INSTANCE_BODY]['nics'] = params
+        info_compute[utils.INSTANCES_TYPE] = instances
 
     return info_compute
 
@@ -81,17 +76,20 @@ def get_tenants(instances):
     return tenants
 
 
-def reset_dhcp_in_subnets(network_resource, tenants, disable_dhcp=False):
+@contextlib.contextmanager
+def temporarily_disable_dhcp(network_resource, tenants):
     subnets = network_resource.get_subnets()
-    for snet in subnets:
-        if snet['tenant_name'] in tenants:
-            if disable_dhcp:
+    disabled_subnets = []
+    try:
+        for snet in subnets:
+            if snet['enable_dhcp'] and snet['tenant_name'] in tenants:
                 # disable DHCP in all subnets
                 network_resource.reset_subnet_dhcp(snet['id'], False)
-            else:
-                # Reset DHCP to the original settings
-                network_resource.reset_subnet_dhcp(snet['id'],
-                                                   snet['enable_dhcp'])
+                disabled_subnets.append(snet['id'])
+        yield
+    finally:
+        for subnet_id in reversed(disabled_subnets):
+            network_resource.reset_subnet_dhcp(subnet_id, True)
 
 
 def delete_existing_ports_on_dst(network_resource,
