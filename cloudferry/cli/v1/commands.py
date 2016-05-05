@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import logging
+import pprint
+
 from fabric.api import env
 from cliff import command
 
@@ -19,19 +22,23 @@ from cloudferry.cli import base
 from cloudferry.cloud import cloud_ferry
 from cloudferry.lib.scheduler import scenario
 from cloudferry.lib.utils import errorcodes
+from cloudferry.lib.utils import utils
 
+LOG = logging.getLogger(__name__)
 env.forward_agent = True
-env.cloud = None
 
 
 class Migrate(base.ConfigMixin, command.Command):
     """Running migration v.1"""
 
     def take_action(self, parsed_args):
+        self.config.log_opt_values(LOG, logging.DEBUG)
+        filters = utils.read_yaml_file(self.config.migrate.filter_path)
+        LOG.debug('Filters: %s', pprint.pformat(filters))
         env.key_filename = self.config.migrate.key_filename
         env.connection_attempts = self.config.migrate.ssh_connection_attempts
-        env.cloud = cloud_ferry.CloudFerry(self.config)
-        status_error = env.cloud.migrate(scenario.Scenario(
+        cloud = cloud_ferry.CloudFerry(self.config)
+        status_error = cloud.migrate(scenario.Scenario(
             path_scenario=self.config.migrate.scenario,
             path_tasks=self.config.migrate.tasks_mapping))
         if status_error != errorcodes.NO_ERROR:

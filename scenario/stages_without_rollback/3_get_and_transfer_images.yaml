@@ -2,12 +2,6 @@
 # Stage to migrate glance resources such as images, snapshots and image
 # members.
 
-preparation:
-  - print_info:
-      - print_configuration: True
-      - print_scenario: True
-      - print_filter: True
-
 process:
   - act_get_filter: True
   - act_check_filter: True

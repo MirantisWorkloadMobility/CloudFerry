@@ -4,12 +4,7 @@
 # not exist in the destination cloud until after the migration has been completed.
 # Use path to this file in the configuration.ini in block [migrate].
 
-
 preparation:
-  - print_info:
-      - print_configuration: True
-      - print_scenario: True
-      - print_filter: True
   - create_snapshot: True
 
 rollback:
