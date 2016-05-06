@@ -17,6 +17,7 @@ import heapq
 import logging
 
 from cloudferry.lib.os.discovery import model
+from cloudferry.lib.utils import query
 from cloudferry.lib.utils import sizeof_format
 
 LOG = logging.getLogger(__name__)
@@ -180,3 +181,12 @@ class ShowObjects(ProcedureBase):
                        sizeof_format.sizeof_fmt(total_size)))
 
         return result
+
+
+def show_query(cloud_name, type_name, qry):
+    data = []
+    fields = model.get_model(type_name).get_schema().fields.keys()
+    with model.Session() as session:
+        for r in query.Query({type_name: [qry]}).search(session, cloud_name):
+            data.append([str(getattr(r, f)) for f in fields])
+    return fields, data

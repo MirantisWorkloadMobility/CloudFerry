@@ -99,6 +99,30 @@ class ShowObjects(MigrationBaseMixin, lister.Lister):
         return ('Type', 'ID', 'Name', 'Size'), data
 
 
+class Query(base.YamlConfigMixin, lister.Lister):
+    """Show objects of cloud"""
+    def get_parser(self, prog_name):
+        parser = super(Query, self).get_parser(prog_name)
+        parser.add_argument('cloud', help="Name of cloud")
+        parser.add_argument('object_type',
+                            choices=procedures.model.type_aliases.keys(),
+                            help='Type of object')
+        parser.add_argument('query', default='[*]', nargs='?',
+                            help='JMESPath query')
+        return parser
+
+    def take_action(self, parsed_args):
+        if parsed_args.cloud not in self.config.clouds:
+            self.app.parser.error(
+                "Invalid cloud: '%s' (choose from %s)" % (
+                    parsed_args.cloud,
+                    "'" + "', ".join(self.config.clouds.keys()) + "'"))
+
+        return procedures.show_query(parsed_args.cloud,
+                                     parsed_args.object_type,
+                                     parsed_args.query)
+
+
 class Migrate(MigrationBaseMixin, command.Command):
     """Running migration v.2"""
 
