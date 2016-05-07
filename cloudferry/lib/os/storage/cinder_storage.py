@@ -126,28 +126,18 @@ class CinderStorage(storage.Storage):
             if vol.status not in ['available', 'in-use']:
                 continue
 
-            volume = self.convert_volume(vol, self.config, self.cloud)
+            volume = self.convert_volume(vol)
             snapshots = {}
             if self.config.migrate.keep_volume_snapshots:
                 search_opts = {'volume_id': volume['id']}
                 for snap in self.get_snapshots_list(search_opts=search_opts):
                     snapshot = self.convert_snapshot(snap,
-                                                     volume,
-                                                     self.config)
+                                                     volume)
                     snapshots[snapshot['id']] = snapshot
             info[utils.VOLUMES_TYPE][vol.id] = {utils.VOLUME_BODY: volume,
                                                 'snapshots': snapshots,
                                                 utils.META_INFO: {
                                                 }}
-        if self.config.migrate.keep_volume_storage:
-            info['volumes_db'] = {utils.VOLUMES_TYPE: '/tmp/volumes'}
-
-            # cleanup db
-            self.cloud.ssh_util.execute('rm -rf /tmp/volumes',
-                                        host_exec=self.mysql_host)
-
-            for table_name, file_name in info['volumes_db'].iteritems():
-                self.download_table_from_db_to_file(table_name, file_name)
         return info
 
     def get_quota(self, tenant_id):
@@ -444,8 +434,7 @@ class CinderStorage(storage.Storage):
         return new_ids
 
     @staticmethod
-    def convert_volume(vol, cfg, cloud):
-        compute = cloud.resources[utils.COMPUTE_RESOURCE]
+    def convert_volume(vol):
         volume = {
             'id': vol.id,
             'size': vol.size,
@@ -470,29 +459,10 @@ class CinderStorage(storage.Storage):
                 'image_name': vol.volume_image_metadata.get('image_name'),
                 'size': int(vol.volume_image_metadata.get('size', 0))
             }
-        if cfg.storage.backend == utils.CEPH:
-            volume['path'] = "%s/%s%s" % (
-                cfg.storage.rbd_pool, cfg.storage.volume_name_template, vol.id)
-            volume['host'] = (cfg.storage.host
-                              if cfg.storage.host
-                              else cfg.cloud.ssh_host)
-        elif vol.attachments and (cfg.storage.backend == utils.ISCSI):
-            instance = compute.read_info(
-                search_opts={'id': vol.attachments[0]['server_id']})
-            instance = instance[utils.INSTANCES_TYPE]
-            instance_info = instance.values()[0][utils.INSTANCE_BODY]
-            volume['host'] = instance_info['host']
-            list_disk = utils.get_libvirt_block_info(
-                instance_info['instance_name'],
-                cfg.cloud.ssh_host,
-                instance_info['host'],
-                cfg.cloud.ssh_user,
-                cfg.cloud.ssh_sudo_password)
-            volume['path'] = utils.find_element_by_in(list_disk, vol.id)
         return volume
 
     @staticmethod
-    def convert_snapshot(snap, volume, cfg):
+    def convert_snapshot(snap, volume):
 
         snapshot = {
             'id': snap.id,
@@ -504,15 +474,6 @@ class CinderStorage(storage.Storage):
             'size': snap.size,
             'vol_path': volume['path']
         }
-
-        if cfg.storage.backend == utils.CEPH:
-            snapshot['name'] = "%s%s" % (cfg.storage.snapshot_name_template,
-                                         snap.id)
-            snapshot['path'] = "%s@%s" % (snapshot['vol_path'],
-                                          snapshot['name'])
-            snapshot['host'] = (cfg.storage.host
-                                if cfg.storage.host
-                                else cfg.cloud.ssh_host)
 
         return snapshot
 

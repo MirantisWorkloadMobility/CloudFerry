@@ -103,7 +103,7 @@ class Scenario(object):
         return net
 
 
-class ScenarioChecker():
+class ScenarioChecker(object):
     def __init__(self, tasks, key, scenario):
         self.tasks = tasks
         self.key = key

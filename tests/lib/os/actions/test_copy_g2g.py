@@ -16,7 +16,7 @@
 
 import mock
 
-from cloudferry.lib.os.actions import copy_g2g
+from cloudferry.actions.image import copy_g2g
 from cloudferry.lib.utils import utils
 from tests import test
 
@@ -55,7 +55,7 @@ class CopyFromGlanceToGlanceTestCase(test.TestCase):
         self.fake_image.deploy.assert_called_once_with(
             {'images_info': self.fake_image.read_info()})
 
-    @mock.patch('cloudferry.lib.os.actions.get_info_images.GetInfoImages')
+    @mock.patch('cloudferry.actions.image.get_info_images.GetInfoImages')
     def test_run_no_info(self, mock_info):
         mock_info().run.return_value = self.fake_input_info
 

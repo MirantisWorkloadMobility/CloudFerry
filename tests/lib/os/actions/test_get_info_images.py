@@ -16,7 +16,7 @@
 
 import mock
 
-from cloudferry.lib.os.actions import get_info_images
+from cloudferry.actions.image import get_info_images
 from cloudferry.lib.utils import utils
 from tests import test
 

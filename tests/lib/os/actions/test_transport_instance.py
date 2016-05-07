@@ -14,10 +14,9 @@
 
 import mock
 
+from cloudferry.actions.compute import transport_instance
 from cloudferry.lib.base import exception
-from cloudferry.lib.os.actions import transport_instance
 from cloudferry.lib.utils import utils
-
 from tests import test
 
 

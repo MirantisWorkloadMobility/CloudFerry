@@ -18,7 +18,6 @@ import copy
 from cloudferry.lib.utils import log
 from cloudferry.lib.utils import utils
 from cloudferry.lib.utils import mysql_connector
-from cloudferry.lib.utils import rbd_util
 from cloudferry.lib.utils import qemu_img
 from cloudferry.lib.utils import ssh_util
 
@@ -51,8 +50,6 @@ class Cloud(object):
 
         cloud_config['migrate'].update(config.migrate)
         cloud_config['cloud'].update(getattr(config, position))
-        cloud_config['import_rules'].update(config.import_rules)
-        cloud_config['mail'].update(config.mail)
         cloud_config['mysql'].update(getattr(config, position + '_mysql'))
         cloud_config['rabbit'].update(getattr(config, position + '_rabbit'))
         cloud_config['snapshot'].update(config.snapshot)
@@ -87,9 +84,6 @@ class Cloud(object):
     def init_resources(self, cloud_config):
         resources = self.resources
         self.resources = dict()
-        self.rbd_util = rbd_util.RbdUtil(getattr(self.config,
-                                                 "%s" % self.position),
-                                         self.config.migrate)
         self.qemu_img = qemu_img.QemuImg(getattr(self.config,
                                                  "%s" % self.position),
                                          self.config.migrate)
@@ -109,8 +103,6 @@ class Cloud(object):
         self.resources['identity'] = identity
 
         skip_initialization = ['identity']
-        if not self.config.src_objstorage.service:
-            skip_initialization.append('objstorage')
         for resource in resources:
             if resource not in skip_initialization:
                 resource_config = self.make_resource_config(self.config,

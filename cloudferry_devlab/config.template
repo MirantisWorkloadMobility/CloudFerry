@@ -6,16 +6,12 @@ tasks_mapping = <tasks_file>
 
 keep_network_interfaces_order = True
 keep_user_passwords = False
-ssh_transfer_port = 9990-9999
 key_filename = <migrate_key_filename>
 keep_ip = yes
 keep_floatingip = yes
 change_router_ips = True
 clean_router_ips_stub = True
-keep_volume_storage = False
 speed_limit = off
-file_compression = gzip
-level_compression = 9
 overwrite_user_passwords = False
 migrate_quotas = True
 migrate_users = True
@@ -154,7 +150,6 @@ db_name = cinder
 
 [dst_image]
 service = glance
-convert_to_raw = False
 backend = swift
 db_user = <dst_mysql_user>
 db_password = <dst_mysql_password>

@@ -36,7 +36,7 @@ def get_db_host(cloud_config):
     return db_host
 
 
-class MysqlConnector():
+class MysqlConnector(object):
     def __init__(self, config, db):
         self.config = config
         self.db = db

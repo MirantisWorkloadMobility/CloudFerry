@@ -16,8 +16,8 @@
 
 import mock
 
+from cloudferry.actions.prechecks import check_networks
 from cloudferry.lib.base import exception
-from cloudferry.lib.os.actions import check_networks
 from tests import test
 
 

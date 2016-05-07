@@ -27,7 +27,6 @@ FAKE_CONFIG = {
     'src': {'user': 'fake_user',
             'password': 'fake_password',
             'tenant': 'fake_tenant',
-            'host': '1.1.1.1',
             'ssh_host': '1.1.1.10',
             'auth_url': 'http://1.1.1.1:35357/v2.0/',
             'region': None,
@@ -36,13 +35,9 @@ FAKE_CONFIG = {
             'endpoint_type': 'publicURL'},
     'migrate': {'retry': '7',
                 'time_wait': 5,
-                'keep_volume_storage': False,
                 'keep_volume_snapshots': False},
     'src_mysql': {'db_host': '1.1.1.1'},
-    'src_storage': {'backend': 'ceph',
-                    'rbd_pool': 'volumes',
-                    'volume_name_template': 'volume-',
-                    'host': '1.1.1.1'}}
+    'src_storage': {}}
 
 
 class CinderStorageTestCase(test.TestCase):
@@ -287,6 +282,5 @@ class CinderStorageTestCase(test.TestCase):
                                                    'checksum': 'checksum',
                                                    'image_name': 'name',
                                                    'size': 1024}}
-        vol = self.cinder_client.convert_volume(vol, mock.Mock(),
-                                                self.fake_cloud)
+        vol = self.cinder_client.convert_volume(vol)
         self.assertEqual(converted_vol, vol)
