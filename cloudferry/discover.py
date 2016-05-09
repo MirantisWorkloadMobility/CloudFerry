@@ -15,6 +15,7 @@ import abc
 import logging
 
 from cloudferry import model
+from cloudferry.lib.utils import bases
 from cloudferry.lib.utils import utils
 
 LOG = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ class NotFound(Exception):
     pass
 
 
-class DiscovererNotFound(Exception):
+class DiscovererNotFound(bases.ExceptionWithFormatting):
     """
     Exception that should be raised to abort migration of single resource.
     """
@@ -33,12 +34,6 @@ class DiscovererNotFound(Exception):
         super(DiscovererNotFound, self).__init__(
             'Discoverer for % not found.',
             utils.qualname(discoverer_class), *args)
-
-    def __str__(self):
-        try:
-            return self.args[0] % self.args[1:]
-        except Exception:  # pylint: disable=broad-except
-            return '{} % {}'.format(repr(self.args[0]), repr(self.args[1:]))
 
 
 class Discoverer(object):

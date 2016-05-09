@@ -50,3 +50,11 @@ class TestCase(base.BaseTestCase):
                               "Called %s times." % (mock_obj,
                                                     mock_obj.call_count))
         self.assertEqual(1, mock_obj.call_count, message)
+
+    def assertAttrs(self, obj, **attrs):
+        for name, value in attrs.items():
+            self.assertTrue(hasattr(obj, name))
+            if value is None:
+                self.assertIsNone(getattr(obj, name))
+            else:
+                self.assertEqual(value, getattr(obj, name))
