@@ -3,11 +3,5 @@
 # cinder volume as well as spinning VM using API calls.
 # After successful testing all resources and VMs are deleted.
 
-preparation:
-  - print_info:
-      - print_configuration: True
-      - print_scenario: True
-      - print_filter: True
-
 process:
   - act_check_dst_cloud: True

@@ -2,12 +2,6 @@
 # routers, FIPs, security groups, neutron quotas, 
 # LoadBalancer resources (pools, monitors, members, vips)
 
-preparation:
-  - print_info:
-      - print_configuration: True
-      - print_scenario: True
-      - print_filter: True
-
 process:
   - act_get_filter: True
   - act_check_filter: True

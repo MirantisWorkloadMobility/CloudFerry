@@ -12,14 +12,15 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import logging
+import pprint
 
 import yaml
 
 from cloudferry.lib.base.action import action
 from cloudferry.lib.utils import extensions
-from cloudferry.lib.utils import log
 
-LOG = log.getLogger(__name__)
+LOG = logging.getLogger(__name__)
 
 
 class Scenario(object):
@@ -60,14 +61,19 @@ class Scenario(object):
         with open(path_scenario) as scenario_file:
             migrate = yaml.load(scenario_file)
             self.namespace = migrate.get('namespace', {})
+            LOG.debug('Scenario namespace: %s', pprint.pformat(self.namespace))
             # "migration" yaml chain is responsible for migration
             self.migration = migrate.get("process")
+            LOG.debug('Scenario migration: %s', pprint.pformat(self.migration))
             # "preparation" yaml chain can be added to process pre-migration
             # tasks
             self.preparation = migrate.get("preparation")
+            LOG.debug('Scenario preparation: %s',
+                      pprint.pformat(self.preparation))
             # "rollback" yaml chain can be added to rollback to previous state
             #                                    in case of main chain failure
             self.rollback = migrate.get("rollback")
+            LOG.debug('Scenario rollback: %s', pprint.pformat(self.rollback))
 
     def get_net(self):
         result = {}
