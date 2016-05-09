@@ -116,14 +116,12 @@ for ((i=0;i<${#filters[@]};++i))
 # This loop is for changing filtering files in configuration.ini and executing
 # specific functional tests for each migrated tenant.
 do
-    sed -i 's|filter_path = .*|filter_path = '${CF_DIR}'/'${filters[$i]}'|g' \
-     ${CONFIGURATION_INI}
     for scenario in `ls  scenario/stages/*.yaml; ls scenario/migrate_vms.yaml`
     # This loop is for changing scenario in configuration.ini and running
     # migration process.
     do
-        sed -i 's|scenario = .*|scenario = '$scenario'|g' ${CONFIGURATION_INI}
-        cloudferry migrate configuration.ini --debug
+        cloudferry migrate configuration.ini --debug \
+            --filter-path ${CF_DIR}'/'${filters[$i]} --scenario ${scenario}
     done
     pushd ${TESTS_DIR}
     nosetests -d -v --ignore-files=test_verify_dst_functionality \
@@ -132,8 +130,10 @@ do
                 --xunit-file=nosetests.xml \
                 --tc-file ${CONFIGURATION_INI} \
                 --tc=general.cloudferry_dir:${CF_DIR} \
-                --tc=general.configuration_ini_path:${CONFIGURATION_INI}
+                --tc=general.configuration_ini_path:${CONFIGURATION_INI} \
+                --tc=general.filter_path:${filters[$i]}
     popd
+    last_filter=${filters[$i]}
 done
 ```
 
@@ -147,6 +147,7 @@ nosetests -d -v --with-xunit \
                 --tc-file ${CONFIGURATION_INI} \
                 --tc=general.cloudferry_dir:${CF_DIR} \
                 --tc=general.configuration_ini_path:${CONFIGURATION_INI}
+                --tc=general.filter_path:${last_filter}
 ```
 
 ## CloudFerry usage

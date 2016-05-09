@@ -61,9 +61,11 @@ class FunctionalTest(unittest.TestCase):
         self.migration_utils = utils.MigrationUtils(config)
         self.config_ini_path = config_ini['general']['configuration_ini_path']
         self.cloudferry_dir = config_ini['general']['cloudferry_dir']
+        filter_path = config_ini['general'].get(
+            'filter_path',
+            get_option_from_config_ini('filter_path'))
         self.filtering_utils = utils.FilteringUtils(
-            os.path.join(self.cloudferry_dir, get_option_from_config_ini(
-                'filter_path')))
+            os.path.join(self.cloudferry_dir, filter_path))
 
     def filter_networks(self):
         networks = [i['name'] for i in config.networks]

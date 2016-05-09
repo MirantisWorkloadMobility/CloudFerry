@@ -31,7 +31,28 @@ env.forward_agent = True
 class Migrate(base.ConfigMixin, command.Command):
     """Running migration v.1"""
 
+    def get_parser(self, prog_name):
+        parser = super(Migrate, self).get_parser(prog_name)
+
+        parser.add_argument('-s', '--scenario', default=None,
+                            help='Path to a scenario file.')
+        parser.add_argument('-f', '--filter-path', default=None,
+                            help='Path to the filter file.')
+        parser.add_argument('-c', '--copy-backend', default=None,
+                            choices=('rsync', 'scp', 'bbcp'),
+                            help='Copy backend.')
+        return parser
+
+    def override_config(self, group, **kwargs):
+        for name, value in kwargs.items():
+            if value is not None:
+                self.config.set_override(name, value, group)
+
     def take_action(self, parsed_args):
+        self.override_config('migrate',
+                             scenario=parsed_args.scenario,
+                             filter_path=parsed_args.filter_path,
+                             copy_backend=parsed_args.copy_backend)
         self.config.log_opt_values(LOG, logging.DEBUG)
         filters = utils.read_yaml_file(self.config.migrate.filter_path)
         LOG.debug('Filters: %s', pprint.pformat(filters))
