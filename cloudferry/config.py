@@ -22,16 +22,19 @@ from cloudferry.lib.utils import bases
 from cloudferry.lib.utils import query
 
 LOG = logging.getLogger(__name__)
-MODEL_LIST = [
-    'cloudferry.lib.os.discovery.keystone.Tenant',
-    'cloudferry.lib.os.discovery.glance.Image',
-    'cloudferry.lib.os.discovery.cinder.Volume',
-    'cloudferry.lib.os.discovery.nova.Server',
-]
 DEFAULT_MIGRATION_LIST = [
     'cloudferry.lib.os.migrate.keystone.TenantMigrationFlowFactory',
     'cloudferry.lib.os.migrate.glance.ImageMigrationFlowFactory',
     'cloudferry.lib.os.migrate.glance.ImageMemberMigrationFlowFactory',
+]
+DEFAULT_DISCOVERER_LIST = [
+    'cloudferry.lib.os.discovery.keystone.TenantDiscoverer',
+    'cloudferry.lib.os.discovery.glance.ImageDiscoverer',
+    'cloudferry.lib.os.discovery.glance.ImageMemberDiscoverer',
+    'cloudferry.lib.os.discovery.cinder.VolumeDiscoverer',
+    'cloudferry.lib.os.discovery.cinder.AttachmentDiscoverer',
+    'cloudferry.lib.os.discovery.nova.FlavorDiscoverer',
+    'cloudferry.lib.os.discovery.nova.ServerDiscoverer',
 ]
 
 
@@ -199,7 +202,7 @@ class OpenstackCloud(bases.Hashable, bases.Representable,
                                   required=True)
         cinder_db = fields.Nested(database_settings('cinder').Schema,
                                   required=True)
-        discover = fields.List(fields.String(), missing=MODEL_LIST)
+        discoverers = fields.List(fields.String(), missing=list)
 
         @marshmallow.post_load
         def to_cloud(self, data):
@@ -208,6 +211,10 @@ class OpenstackCloud(bases.Hashable, bases.Representable,
     def __init__(self, data):
         super(OpenstackCloud, self).__init__(data)
         self.name = None
+        self.discoverers = collections.OrderedDict()
+        for class_name in DEFAULT_DISCOVERER_LIST + data['discoverers']:
+            discoverer = importutils.import_class(class_name)
+            self.discoverers[discoverer.discovered_class] = discoverer
 
 
 class Migration(bases.Hashable, bases.Representable):

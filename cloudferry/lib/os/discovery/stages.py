@@ -14,7 +14,8 @@
 import logging
 
 from cloudferry.lib import stage
-from cloudferry.lib.os.discovery import model
+from cloudferry import model
+from cloudferry import discover
 
 LOG = logging.getLogger(__name__)
 
@@ -67,13 +68,7 @@ class DiscoverStage(stage.Stage):
 
         for cloud_name in self.missing_clouds:
             cloud = self.config.clouds[cloud_name]
-            for class_name in cloud.discover:
-                cls = model.get_model(class_name)
-                LOG.info('Starting discover %s objects in %s cloud',
-                         cls.__name__, cloud_name)
-                cls.discover(cloud)
-                LOG.info('Done discovering %s objects in %s cloud',
-                         cls.__name__, cloud_name)
+            discover.discover_all(self.config, cloud)
 
 
 class LinkStage(stage.Stage):
@@ -89,8 +84,8 @@ class LinkStage(stage.Stage):
         with model.Session() as session:
             for name, migration in self.config.migrations.items():
                 query = migration.query
-                source = migration.source
-                objects = query.search(session, source)
+                src_cloud = self.config.clouds[migration.source]
+                objects = query.search(session, src_cloud)
                 src_ids = []
                 for src_obj in model.flatten_dependencies(objects):
                     src_ids.append(src_obj.primary_key.id)
@@ -107,11 +102,12 @@ class LinkStage(stage.Stage):
         with model.Session() as session:
             for migration in self.config.migrations.values():
                 query = migration.query
-                src = migration.source
-                dst = migration.destination
-                objects = query.search(session, src)
+                src_cloud = self.config.clouds[migration.source]
+                dst_cloud = self.config.clouds[migration.destination]
+                objects = query.search(session, src_cloud)
                 for src_obj in model.flatten_dependencies(objects):
-                    for dst_obj in session.list(src_obj.get_class(), dst):
+                    for dst_obj in session.list(src_obj.get_class(),
+                                                dst_cloud):
                         if src_obj.equals(dst_obj):
                             src_obj.link_to(dst_obj)
                             break

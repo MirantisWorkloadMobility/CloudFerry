@@ -15,36 +15,39 @@ import logging
 
 from keystoneclient import exceptions
 
+from cloudferry import discover
+from cloudferry import model
+from cloudferry.model import identity
 from cloudferry.lib.os import clients
-from cloudferry.lib.os.discovery import model
 
 LOG = logging.getLogger(__name__)
 
 
-@model.type_alias('tenants')
-class Tenant(model.Model):
-    class Schema(model.Schema):
-        object_id = model.PrimaryKey('id')
-        name = model.String(required=True)
-        enabled = model.Boolean(required=True)
-        description = model.String(allow_none=True)
+class TenantDiscoverer(discover.Discoverer):
+    discovered_class = identity.Tenant
 
-    @classmethod
-    def load_missing(cls, cloud, object_id):
-        identity_client = clients.identity_client(cloud)
-        try:
-            raw_tenant = identity_client.tenants.get(object_id.id)
-            return cls.load_from_cloud(cloud, raw_tenant)
-        except exceptions.NotFound:
-            return None
-
-    @classmethod
-    def discover(cls, cloud):
-        identity_client = clients.identity_client(cloud)
+    def discover_all(self):
+        identity_client = clients.identity_client(self.cloud)
+        raw_tenants = identity_client.tenants.list()
         with model.Session() as session:
-            for tenant in identity_client.tenants.list():
-                session.store(Tenant.load_from_cloud(cloud, tenant))
+            for raw_tenant in raw_tenants:
+                session.store(self.load_from_cloud(raw_tenant))
 
-    def equals(self, other):
-        # pylint: disable=no-member
-        return self.name.lower() == other.name.lower()
+    def discover_one(self, uuid):
+        identity_client = clients.identity_client(self.cloud)
+        try:
+            raw_tenant = identity_client.tenants.get(uuid)
+            tenant = self.load_from_cloud(raw_tenant)
+            with model.Session() as session:
+                session.store(tenant)
+                return tenant
+        except exceptions.NotFound:
+            raise discover.NotFound()
+
+    def load_from_cloud(self, data):
+        return identity.Tenant.load({
+            'object_id': self.make_id(data.id),
+            'name': data.name,
+            'enabled': data.enabled,
+            'description': data.description,
+        })
