@@ -1060,7 +1060,7 @@ class NovaCompute(compute.Compute):
         self.mysql_connector.execute(sql)
 
     def reset_state(self, vm_id):
-        self.get_instance(vm_id).reset_state()
+        self.nova_client.servers.reset_state(vm_id)
 
 
 def host_available(compute_host):
