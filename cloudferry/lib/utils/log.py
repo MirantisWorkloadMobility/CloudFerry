@@ -19,7 +19,6 @@ from logging import handlers
 import os
 import sys
 
-from fabric import api
 from oslo_config import cfg
 import yaml
 
@@ -120,13 +119,15 @@ class CurrentTaskFilter(logging.Filter):
     Default value is %(name)s
     """
 
+    current_task = None
+
     def __init__(self, name_format='%(name)s', **kwargs):
         super(CurrentTaskFilter, self).__init__(**kwargs)
         self.name_format = name_format
 
     def filter(self, record):
         current_task = self.name_format % {
-            'name': api.env.current_task or '<NoTask>',
+            'name': self.__class__.current_task or '<NoTask>',
         }
         record.current_task = current_task
         return True

@@ -11,7 +11,9 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
+import logging
 import os
+import traceback
 
 import futurist
 from taskflow import engines
@@ -19,7 +21,9 @@ from taskflow import exceptions
 from taskflow.patterns import graph_flow
 from taskflow.persistence import backends
 from taskflow.persistence import models
+from taskflow import task
 
+LOG = logging.getLogger(__name__)
 TASK_DATABASE_FILE = os.environ.get('CF_TASK_DB', './tasks.db')
 LOGBOOK_ID = 'primary'
 MAX_WORKERS = int(os.environ.get('CF_MAX_WORKERS', 4))
@@ -55,6 +59,11 @@ def _workaround_reverted_reset(flow_detail):
 
 
 def execute_flow(flow):
+    """
+    Create all necessary prerequisites like task database and thread pool and
+    execute TaskFlow flow.
+    :param flow: TaskFlow flow instance
+    """
     backend = backends.fetch({
         'connection': 'sqlite:///' + TASK_DATABASE_FILE,
         'isolation_level': 'SERIALIZABLE'
@@ -68,10 +77,27 @@ def execute_flow(flow):
 
     engine.compile()
     _workaround_reverted_reset(flow_detail)
-    engine.run()
+    try:
+        engine.run()
+    except exceptions.WrappedFailure as wf:
+        for failure in wf:
+            traceback.print_exception(*failure.exc_info)
 
 
 def create_graph_flow(name, objs, subflow_factory_fn, *args, **kwargs):
+    """
+    Walk over model instances passed in ``objs`` list and their dependencies
+    and create graph flow using ``subflow_factory_fn`` function in order to
+    create subflow for each object and/or dependency.
+    :param name: name of resulting flow
+    :param objs: iterable of objects
+    :param subflow_factory_fn: function that will create subflows
+    :param args: additional positional arguments that will be passed to subflow
+                 factory function
+    :param kwargs: additional named arguments that will be passed to subflow
+                   factory function
+    :return: graph flow instance
+    """
     def _create_and_link_subflow(obj):
         obj_id = obj.primary_key
         if obj_id in created:
@@ -95,6 +121,11 @@ def create_graph_flow(name, objs, subflow_factory_fn, *args, **kwargs):
 
 
 def object_name(obj):
+    """
+    Create unique object name based on object type and primary key.
+    :param obj: model instance
+    :return: unique name (string)
+    """
     object_id = obj.primary_key
     return '{typename}_{cloud}_{uuid}'.format(
         typename=obj.get_class_qualname(),
@@ -102,7 +133,28 @@ def object_name(obj):
         uuid=object_id.id)
 
 
-def map_object_id(obj, cloud):
-    link = obj.find_link(cloud.name)
-    assert link is not None
-    return link.primary_key.id
+class Conditional(task.Task):
+    """
+    Task that will execute subtask only if required parameter is evaluated to
+    True.
+    """
+
+    def __init__(self, parameter_name, subtask):
+        requires = subtask.requires
+        if parameter_name not in requires:
+            requires = list(requires)
+            requires.append(parameter_name)
+        super(Conditional, self).__init__(subtask.name, requires=requires,
+                                          provides=subtask.provides)
+        self.parameter_name = parameter_name
+        self.task = subtask
+
+    def execute(self, *args, **kwargs):
+        if kwargs.pop(self.parameter_name, False):
+            LOG.debug('Running %s because \'%s\' is True', self.task.name,
+                      self.parameter_name)
+            return self.task.execute(*args, **kwargs)
+        else:
+            LOG.debug('Not running %s because \'%s\' is False', self.task.name,
+                      self.parameter_name)
+            return [None] * len(self.task.provides)

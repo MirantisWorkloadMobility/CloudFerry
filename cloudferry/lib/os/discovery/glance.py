@@ -22,6 +22,7 @@ from cloudferry.lib.os.discovery import model
 LOG = logging.getLogger(__name__)
 
 
+@model.type_alias('image_members')
 class ImageMember(model.Model):
     class Schema(model.Schema):
         object_id = model.PrimaryKey()
@@ -40,12 +41,19 @@ class ImageMember(model.Model):
         return cls.make(cls, image_id, member_id)
 
     @classmethod
-    def make(cls, cloud, image_id, member_id):
+    def make(cls, cloud, image_id, member_id, can_share=False):
         return super(ImageMember, cls).load_from_cloud(cloud, {
             'object_id': '{0}:{1}'.format(image_id, member_id),
             'image': image_id,
             'member': member_id,
+            'can_share': can_share,
         })
+
+    def equals(self, other):
+        # pylint: disable=no-member
+        return self.image.equals(other.image) \
+               and self.member.equals(other.member) \
+               and self.can_share == other.can_share
 
 
 @model.type_alias('images')

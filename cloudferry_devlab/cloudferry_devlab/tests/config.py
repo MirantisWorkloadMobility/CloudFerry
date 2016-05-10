@@ -135,7 +135,7 @@ tenants = [
          {'name': 'tenant1_net2', 'admin_state_up': True,
           'subnets': [
               {'cidr': '10.6.2.0/24', 'ip_version': 4, 'name': 't1_s2',
-               'routers_to_connect': ['tn2_router']}]
+               'enable_dhcp': False, 'routers_to_connect': ['tn2_router']}]
           }
      ],
      'routers': [
@@ -336,7 +336,8 @@ tenants = [
           'provider:network_type': 'gre',
           'subnets': [
               {'cidr': '40.40.40.0/24', 'ip_version': 4,
-               'name': 'segm_id_test_subnet_2', 'connect_to_ext_router': False,
+               'name': 'segm_id_test_subnet_2', 'enable_dhcp': False,
+               'connect_to_ext_router': False,
                }
               ]
           }],
@@ -580,7 +581,8 @@ server_groups = [
 
 vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
-    {'name': 'server2', 'image': 'deleted_on_dst', 'flavor': 'flavorname1'},
+    {'name': 'server2', 'image': 'deleted_on_dst', 'flavor': 'flavorname1',
+     'config_drive': True},
     {'name': 'server3', 'image': 'deleted_image', 'flavor': 'flavorname2',
      'fip': True},
     {'name': 'server4', 'image': 'deleted_image', 'flavor': 'flavorname2'},

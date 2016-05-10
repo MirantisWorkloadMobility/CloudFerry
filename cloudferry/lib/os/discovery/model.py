@@ -694,8 +694,19 @@ class Model(_EqualityByPrimaryKeyMixin):
                 return link
         return None
 
+    def get_uuid_in(self, cloud):
+        """
+        Find linked object in specified cloud and return it's UUID.
+        """
+        obj = self.find_link(cloud)
+        assert obj is not None
+        return obj.primary_key.id
+
     @classmethod
     def get_tables(cls):
+        """
+        Return list of tables for which fields was defined.
+        """
         return set(f.table for f in cls.get_schema().fields.values())
 
     def __repr__(self):

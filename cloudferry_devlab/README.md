@@ -123,7 +123,7 @@ do
     # migration process.
     do
         sed -i 's|scenario = .*|scenario = '$scenario'|g' ${CONFIGURATION_INI}
-        cloudferry migrate:${CONFIGURATION_INI},debug=True
+        cloudferry migrate configuration.ini --debug
     done
     pushd ${TESTS_DIR}
     nosetests -d -v --ignore-files=test_verify_dst_functionality \

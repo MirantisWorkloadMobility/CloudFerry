@@ -3,10 +3,6 @@
 # and user tenant roles to destination cloud.
 
 preparation:
-  - print_info:
-      - print_configuration: True
-      - print_scenario: True
-      - print_filter: True
   - create_snapshot: True
 
 process:

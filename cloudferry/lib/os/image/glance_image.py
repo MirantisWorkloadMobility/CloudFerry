@@ -186,6 +186,14 @@ class GlanceImage(image.Image):
     def image_exists(self, image_id):
         with proxy_client.expect_exception(glance_exceptions.HTTPNotFound):
             try:
+                img = self.get_image_raw(image_id)
+                return not img.deleted
+            except glance_exceptions.HTTPNotFound:
+                return False
+
+    def is_image_id_occupied(self, image_id):
+        with proxy_client.expect_exception(glance_exceptions.HTTPNotFound):
+            try:
                 self.get_image_raw(image_id)
                 return True
             except glance_exceptions.HTTPNotFound:
@@ -215,7 +223,7 @@ class GlanceImage(image.Image):
 
     def create_image(self, **kwargs):
         image_id = kwargs.get('id')
-        if image_id is not None and self.image_exists(image_id):
+        if image_id is not None and self.is_image_id_occupied(image_id):
             LOG.warning("Image ID will not be kept for source image "
                         "'%(name)s' (%(id)s), image ID is already present "
                         "in destination (perhaps was deleted previously).",

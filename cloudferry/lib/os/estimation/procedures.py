@@ -11,155 +11,182 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
-import heapq
 
-from cloudferry.lib.os.discovery import nova
-from cloudferry.lib.os.discovery import cinder
-from cloudferry.lib.os.discovery import glance
+import collections
+import heapq
+import logging
+
 from cloudferry.lib.os.discovery import model
+from cloudferry.lib.utils import query
 from cloudferry.lib.utils import sizeof_format
 
-
-def list_filtered(session, cls, cloud_name, tenant):
-    return (x for x in session.list(cls, cloud_name)
-            if tenant is None or tenant == x.tenant.object_id.id)
+LOG = logging.getLogger(__name__)
+G = sizeof_format.size_multiplier('G')
 
 
-def estimate_copy(cfg, migration_name):
-    migration = cfg.migrations[migration_name]
-    query = migration.query
-    src_cloud = migration.source
-    dst_cloud = migration.destination
+class ProcedureBase(object):
+    def __init__(self, cfg, migration_name):
+        self.migration = cfg.migrations[migration_name]
+        self.src = self.migration.source
+        self.dst = self.migration.destination
 
-    with model.Session() as session:
-        total_ephemeral_size = 0
-        total_volume_size = 0
-        total_image_size = 0
-        accounted_volumes = set()
-        accounted_images = set()
-
-        for server in query.search(session, src_cloud, nova.Server):
-            if server.find_link(dst_cloud):
-                continue
-            for ephemeral_disk in server.ephemeral_disks:
-                total_ephemeral_size += ephemeral_disk.size
-            if server.image is not None \
-                    and server.image.object_id not in accounted_images \
-                    and not server.image.find_link(dst_cloud):
-                total_image_size += server.image.size
-                accounted_images.add(server.image.object_id)
-            for volume in server.attached_volumes:
-                if volume.object_id not in accounted_volumes \
-                        and not volume.find_link(dst_cloud):
-                    total_volume_size += volume.size
-                    accounted_volumes.add(volume.object_id)
-
-        for volume in query.search(session, src_cloud, cinder.Volume):
-            if volume.find_link(dst_cloud):
-                continue
-            if volume.object_id not in accounted_volumes:
-                total_volume_size += volume.size
-
-        for image in query.search(session, src_cloud, glance.Image):
-            if image.find_link(dst_cloud):
-                continue
-            if image.object_id not in accounted_images:
-                total_image_size += image.size
-
-    print 'Migration', migration_name, 'estimates:'
-    print 'Images:'
-    print '  Size:', sizeof_format.sizeof_fmt(total_image_size,
-                                              target_unit='G')
-    print 'Ephemeral disks:'
-    print '  Size:', sizeof_format.sizeof_fmt(total_ephemeral_size,
-                                              target_unit='G')
-    print 'Volumes:'
-    print '  Size:', sizeof_format.sizeof_fmt(total_volume_size, 'G',
-                                              target_unit='G')
+    def get_objects(self, model_name, exclude_objects=None):
+        klass = model.get_model(model_name)
+        with model.Session() as session:
+            for obj in self.migration.query.search(session, self.src, klass):
+                if (obj.find_link(self.dst) or
+                        (exclude_objects is not None and
+                         obj.object_id in exclude_objects)):
+                    continue
+                yield obj
 
 
-def show_largest_servers(cfg, count, migration_name):
-    def server_size(server):
-        size = 0
-        if server.image is not None:
-            size += server.image.size
-        for ephemeral_disk in server.ephemeral_disks:
-            size += ephemeral_disk.size
-        for volume in server.attached_volumes:
-            size += volume.size
-        return size
-
-    output = []
-    migration = cfg.migrations[migration_name]
-    with model.Session() as session:
-        for index, server in enumerate(
-                heapq.nlargest(
-                    count,
-                    migration.query.search(session, migration.source,
-                                           nova.Server),
-                    key=server_size),
-                start=1):
-            output.append(
-                '  {0}. {1.object_id.id} {1.name} - {2}'.format(
-                    index, server,
-                    sizeof_format.sizeof_fmt(server_size(server))))
-    if output:
-        print '\n{0} largest servers:'.format(len(output))
-        for line in output:
-            print line
-
-
-def show_largest_unused_resources(count, cloud_name, tenant):
-    with model.Session() as session:
-        used_volumes = set()
+class EstimateCopy(ProcedureBase):
+    def run(self):
+        images_size, images_count = 0, 0
         used_images = set()
-        servers = list_filtered(session, nova.Server, cloud_name, tenant)
-        for server in servers:
+        images_unused_size, images_unused_count = 0, 0
+        volumes_size, volumes_count = 0, 0
+        used_volumes = set()
+        volumes_unused_size, volumes_unused_count = 0, 0
+        ephemeral_size, ephemeral_count = 0, 0
+
+        for server in self.get_objects('vms'):
             if server.image is not None:
+                images_count += 1
+                images_size += server.image.size
                 used_images.add(server.image.object_id)
+            for ephemeral_disk in server.ephemeral_disks:
+                ephemeral_count += 1
+                ephemeral_size += ephemeral_disk.size
             for volume in server.attached_volumes:
+                volumes_count += 1
+                volumes_size += volume.size * G
                 used_volumes.add(volume.object_id)
-
-        # Find unused volumes
-        volumes_output = []
-        volumes_size = 0
-        volumes = list_filtered(session, cinder.Volume, cloud_name, tenant)
-        for index, volume in enumerate(
-                heapq.nlargest(count,
-                               (v for v in volumes
-                                if v.object_id not in used_volumes),
-                               key=lambda v: v.size),
-                start=1):
-            volumes_size += volume.size
-            size = sizeof_format.sizeof_fmt(volume.size, 'G')
-            volumes_output.append(
-                '  {0:3d}. {1.object_id.id} {2:10s} {1.name}'.format(
-                    index, volume, size))
-
-        # Find unused images
-        images_output = []
-        images_size = 0
-        images = list_filtered(session, glance.Image, cloud_name, tenant)
-        for index, image in enumerate(
-                heapq.nlargest(count,
-                               (i for i in images
-                                if i.object_id not in used_images),
-                               key=lambda i: i.size),
-                start=1):
+        for image in self.get_objects('images', used_images):
+            images_count += 1
             images_size += image.size
-            size = sizeof_format.sizeof_fmt(image.size)
-            images_output.append(
-                '  {0:3d}. {1.object_id.id} {2:10s} {1.name}'.format(
-                    index, image, size))
+            images_unused_count += 1
+            images_unused_size += image.size
+        for volume in self.get_objects('volumes', used_volumes):
+            size = volume.size * G
+            volumes_count += 1
+            volumes_size += size
+            volumes_unused_count += 1
+            volumes_unused_size += size
 
-    # Output result
-    if volumes_output:
-        print '\n{0} largest unused volumes:'.format(len(volumes_output))
-        for line in volumes_output:
-            print line
-        print '  Total:', sizeof_format.sizeof_fmt(volumes_size, 'G')
-    if images_output:
-        print '\n{0} largest unused images:'.format(len(images_output))
-        for line in images_output:
-            print line
-        print '  Total:', sizeof_format.sizeof_fmt(images_size)
+        return (
+            ('Volumes', volumes_count,
+             sizeof_format.sizeof_fmt(volumes_size, target_unit='G')),
+            ('Unused volumes', volumes_unused_count,
+             sizeof_format.sizeof_fmt(volumes_unused_size, target_unit='G')),
+            ('Images', images_count,
+             sizeof_format.sizeof_fmt(images_size, target_unit='G')),
+            ('Unused images', images_unused_count,
+             sizeof_format.sizeof_fmt(images_unused_size, target_unit='G')),
+            ('Ephemeral disks', ephemeral_count,
+             sizeof_format.sizeof_fmt(ephemeral_size, target_unit='G')),
+            ('Total', volumes_count + images_count + ephemeral_count,
+             sizeof_format.sizeof_fmt(volumes_size + images_size +
+                                      ephemeral_size, target_unit='G'))
+        )
+
+
+class _Record(object):
+    def __init__(self, object_id, object_name, object_size):
+        self.id = object_id
+        self.name = object_name
+        self.size = object_size
+
+
+class ShowObjects(ProcedureBase):
+    FILTERS = ('servers', 'images', 'volumes', 'ephemeral-disks')
+
+    def __init__(self, cfg, migration_name, filters, show_unused=False,
+                 limit=None):
+        super(ShowObjects, self).__init__(cfg, migration_name)
+        self.filters = set(filters or self.FILTERS)
+        self.show_unused = show_unused
+        self.limit = limit
+        self.used_objects = dict(images=set(), volumes=set())
+        self.show_vms = 'servers' in self.filters
+        self.show_ephemeral = 'ephemeral-disks' in self.filters
+
+    def get_used_objects(self):
+        for r in self.filters.intersection({'servers', 'ephemeral-disks'}):
+            LOG.warning('%s cannot be showed because show_unused is '
+                        'selected', r)
+        for server in self.get_objects('vms'):
+            if server.image is not None:
+                self.used_objects['images'].add(server.image.object_id)
+            for volume in server.attached_volumes:
+                self.used_objects['volumes'].add(volume.object_id)
+
+    def get_data(self):
+        data = collections.defaultdict(list)
+        if self.show_ephemeral or self.show_vms:
+            for server in self.get_objects('vms'):
+                if self.show_vms:
+                    size = 0
+                    if server.image is not None:
+                        size += server.image.size
+                    for volume in server.attached_volumes:
+                        size += volume.size * G
+                    for ephemeral_disk in server.ephemeral_disks:
+                        size += ephemeral_disk.size
+                    data['Server'].append(_Record(server.object_id.id,
+                                                  server.name, size))
+                if self.show_ephemeral:
+                    for ephemeral_disk in server.ephemeral_disks:
+                        data['Ephemeral disk'].append(
+                            _Record('server.id %s' % server.object_id.id,
+                                    'server.name %s' % server.name,
+                                    ephemeral_disk.size))
+        for f in self.filters.difference({'servers', 'ephemeral-disks'}):
+            multiplier = G if f == 'volumes' else 1
+            name = f.capitalize()
+            for obj in self.get_objects(f, self.used_objects[f]):
+                data[name].append(_Record(obj.object_id.id, obj.name,
+                                          obj.size * multiplier))
+        return data
+
+    def run(self):
+        if self.show_unused:
+            self.get_used_objects()
+            self.show_vms = False
+            self.show_ephemeral = False
+
+        data = self.get_data()
+
+        result = []
+        total_cnt = 0
+        total_size = 0
+        for k, records in data.iteritems():
+            cnt = 0
+            size = 0
+            if self.limit:
+                records = heapq.nlargest(self.limit, data,
+                                         key=lambda o: o.size)
+            else:
+                records = sorted(records, key=lambda o: o.size, reverse=True)
+            for r in records:
+                result.append((k, r.id, r.name,
+                               sizeof_format.sizeof_fmt(r.size)))
+                cnt += 1
+                size += r.size
+            result.append((k, 'Total', cnt, sizeof_format.sizeof_fmt(size)))
+            total_cnt += cnt
+            total_size += size
+        result.append(('Total', '', total_cnt,
+                       sizeof_format.sizeof_fmt(total_size)))
+
+        return result
+
+
+def show_query(cloud_name, type_name, qry):
+    data = []
+    fields = model.get_model(type_name).get_schema().fields.keys()
+    with model.Session() as session:
+        for r in query.Query({type_name: [qry]}).search(session, cloud_name):
+            data.append([str(getattr(r, f)) for f in fields])
+    return fields, data

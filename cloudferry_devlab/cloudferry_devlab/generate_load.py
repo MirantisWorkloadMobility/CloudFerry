@@ -330,6 +330,8 @@ class Prerequisites(base.BasePrerequisites):
         if 'server_group' in vm and self.server_groups_supported:
             params['scheduler_hints'] = {'group': self.get_server_group_id(
                 vm['server_group'])}
+        if 'config_drive' in vm:
+            params['config_drive'] = vm['config_drive']
         return params
 
     def create_server_groups(self):
@@ -446,7 +448,8 @@ class Prerequisites(base.BasePrerequisites):
         def get_body_for_subnet_creating(_subnet):
             # Possible parameters for subnet creating
             params = ['name', 'cidr', 'allocation_pools', 'dns_nameservers',
-                      'host_routes', 'ip_version', 'network_id', 'tenant_id']
+                      'host_routes', 'ip_version', 'network_id', 'tenant_id',
+                      'enable_dhcp']
             return {param: _subnet[param] for param in params
                     if param in _subnet}
 
@@ -956,7 +959,8 @@ class Prerequisites(base.BasePrerequisites):
         images_to_delete = [image for image in all_images
                             if image.get('delete_on_dst')]
         for image in images_to_delete:
-            image_id = self.dst_cloud.get_image_id(image['name'])
+            image_id = image.get('id') or \
+                       self.dst_cloud.get_image_id(image['name'])
             self.dst_cloud.glanceclient.images.delete(image_id)
 
     def break_images(self):

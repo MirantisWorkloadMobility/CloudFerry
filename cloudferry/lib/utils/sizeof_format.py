@@ -42,6 +42,13 @@ def sizeof_fmt(num, unit='', suffix='B', target_unit=None):
     return "%.1f%s%s" % (num, 'Y', suffix)
 
 
+def size_multiplier(unit):
+    try:
+        return 1024 ** UNITS.index(unit)
+    except ValueError:
+        return 1
+
+
 def parse_size(size):
     if isinstance(size, (int, long)):
         return max((0, size))
@@ -52,11 +59,8 @@ def parse_size(size):
         else:
             m = RE_SIZE.match(size)
             if m:
-                try:
-                    p = UNITS.index(m.group('unit')[:1])
-                except ValueError:
-                    p = 0
-                return int(m.group('number')) * 1024 ** p
+                p = m.group('unit')[:1]
+                return int(m.group('number')) * size_multiplier(p)
     return 0
 
 

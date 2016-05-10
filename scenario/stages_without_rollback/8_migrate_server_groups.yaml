@@ -3,11 +3,8 @@
 # This will later allow boot VMs with proper "hint" on Destination
 # cloud and place them in correct affinity or anti-affinity groups
 # if they had any.
+
 preparation:
-  - print_info:
-      - print_configuration: True
-      - print_scenario: True
-      - print_filter: True
   - create_snapshot: True
 
 process:

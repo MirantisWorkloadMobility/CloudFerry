@@ -18,6 +18,7 @@ from cloudferry.lib.os.discovery import cinder
 from cloudferry.lib.os.discovery import glance
 from cloudferry.lib.os.discovery import keystone
 from cloudferry.lib.os.discovery import model
+from cloudferry.lib.utils import qemu_img
 from cloudferry.lib.utils import remote
 from cloudferry.lib.os import clients
 
@@ -51,6 +52,10 @@ class EphemeralDisk(model.Model):
     class Schema(model.Schema):
         path = model.String(required=True)
         size = model.Integer(required=True)
+        format = model.String(required=True)
+        base_path = model.String(required=True, allow_none=True)
+        base_size = model.Integer(required=True, allow_none=True)
+        base_format = model.String(required=True, allow_none=True)
 
 
 @model.type_alias('vms')
@@ -190,16 +195,23 @@ def _list_ephemeral(remote_executor, server):
         target, path = split
         if target in volume_targets or not path.startswith('/'):
             continue
-        try:
-            size_str = remote_executor.sudo('stat -c %s {path}', path=path)
-        except remote.RemoteFailure:
-            LOG.error('Unable to get size of ephemeral disk "%s" for server '
-                      '%s, skipping disk.', path, server.object_id,
-                      exc_info=True)
-            continue
-        size = int(size_str.strip())
-        eph_disk = EphemeralDisk.load({'path': path, 'size': size})
-        result.append(eph_disk)
+
+        size, base_path, format = _get_disk_info(remote_executor, path)
+        if base_path is not None:
+            base_size, _, base_format = _get_disk_info(
+                remote_executor, base_path)
+        else:
+            base_size = base_format = None
+        if size is not None:
+            eph_disk = EphemeralDisk.load({
+                'path': path,
+                'size': size,
+                'format': format,
+                'base_path': base_path,
+                'base_size': base_size,
+                'base_format': base_format,
+            })
+            result.append(eph_disk)
     return result
 
 
@@ -207,3 +219,14 @@ def list_available_compute_hosts(compute_client):
     return set(c.host
                for c in compute_client.services.list(binary='nova-compute')
                if c.state == 'up' and c.status == 'enabled')
+
+
+def _get_disk_info(remote_executor, path):
+    try:
+        size_str = remote_executor.sudo('stat -c %s {path}', path=path)
+    except remote.RemoteFailure:
+        LOG.error('Unable to get size of "%s", skipping disk.', path,
+                  exc_info=True)
+        return None, None, None
+    disk_info = qemu_img.get_disk_info(remote_executor, path)
+    return int(size_str.strip()), disk_info.backing_filename, disk_info.format

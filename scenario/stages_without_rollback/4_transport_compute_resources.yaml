@@ -1,13 +1,6 @@
 # NOTE: Rollback has been disabled.
 # Stage to migrate compute resources such as flavors and nova quotas.
 
-preparation:
-  - print_info:
-      - print_configuration: True
-      - print_scenario: True
-      - print_filter: True
-
-
 process:
   - act_get_filter: True
   - act_check_filter: True
