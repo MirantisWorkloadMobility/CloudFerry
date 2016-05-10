@@ -162,6 +162,14 @@ class FunctionalTest(unittest.TestCase):
         return [i for i in self.src_cloud.novaclient.servers.list(**opts)
                 if i.name in vms_names]
 
+    def get_src_vm_objects_not_on_dst_bef_mig(self):
+        vms = self.migration_utils.get_all_vms_from_config()
+        vms_names = [vm['name'] for vm in vms if not (vm.get('broken') or
+                     vm.get('already_on_dst'))]
+        opts = {'search_opts': {'all_tenants': 1}}
+        return [i for i in self.src_cloud.novaclient.servers.list(**opts)
+                if i.name in vms_names]
+
     def filter_flavors(self, filter_only_private=False):
         flavors = []
         if filter_only_private:
@@ -297,6 +305,26 @@ class FunctionalTest(unittest.TestCase):
         return param in config.PARAMS_NAMES_TO_OMIT and (
             name in config.NET_NAMES_TO_OMIT or
             name in config.SUBNET_NAMES_TO_OMIT)
+
+    def compare_vm_flavor_parameter(self, field, vm1, vm2):
+        msgs = []
+        vm1_param = getattr(vm1, 'flavor')[field]
+        vm2_param = getattr(vm2, 'flavor')[field]
+        vm1_flavor = self.src_cloud.novaclient.flavors.get(vm1_param)
+        vm2_flavor = self.dst_cloud.novaclient.flavors.get(vm2_param)
+        vm1_flavor_name = getattr(vm1_flavor, "name")
+        vm2_flavor_name = getattr(vm2_flavor, "name")
+        if vm1_flavor_name in config.flavors_deleted_after_vm_boot:
+            vm1_param = "deleted_{src_flavor_id}".format(
+                src_flavor_id=vm1_param)
+            vm2_param = vm2_flavor_name
+        if vm1_param != vm2_param:
+            error_msg = ('Flavor Field {field} for VM with name '
+                         '{name} is different src: {vm1}, dst: {vm2}')
+            msgs.append(error_msg.format(field=field, name=vm1.name,
+                                         vm1=getattr(vm1, 'flavor'),
+                                         vm2=getattr(vm2, 'flavor')))
+        return msgs
 
     def validate_resource_parameter_in_dst(self, src_list, dst_list,
                                            resource_name, parameter):

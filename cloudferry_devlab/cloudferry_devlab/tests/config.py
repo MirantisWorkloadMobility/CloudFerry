@@ -368,7 +368,8 @@ tenants = [
               {'cidr': '123.2.2.0/24', 'ip_version': 4, 'name': 't5_s2'}]}],
      'vms': [
          {'name': 'tn5server1', 'image': 'image1', 'flavor': 'flavorname2',
-          'nics': [{'net-id': 'tenant5net', 'v4-fixed-ip': '122.2.2.100'}]},
+          'nics': [{'net-id': 'tenant5net', 'v4-fixed-ip': '122.2.2.100'}],
+          'already_on_dst': True},
          {'name': 'tn5server2', 'image': 'image1', 'flavor': 'flavorname2',
           'nics': [{'net-id': 'tenant5net2', 'v4-fixed-ip': '123.2.2.100'}]},
          {'name': 'tn5server3', 'image': 'image1', 'flavor': 'flavorname2',
@@ -443,6 +444,9 @@ images_not_included_in_filter = ['image5']
 images_blacklisted = ['image7']
 """Images blacklisted"""
 
+flavors_deleted_after_vm_boot = ["del_flvr"]
+"""Flavors to be deleted after booting VM from them"""
+
 vms_not_in_filter = ['not_in_filter']
 """Instances not to be included in filter"""
 
@@ -457,6 +461,10 @@ flavors = [
      'is_public': False},
     {'name': 'flavorname2', 'disk': '2', 'ram': '48', 'vcpus': '2'},
     {'name': 'del_flvr', 'disk': '1', 'ram': '64', 'vcpus': '1'},
+    {'name': 'diffattrib_flvr', 'flavorid': '666', 'disk': '5', 'ram': '96',
+     'vcpus': '1', "ephemeral": '0', 'is_public': True, 'is_deleted': True},
+    {'name': 'diffattrib_flvr', 'flavorid': '666', 'disk': '4', 'ram': '64',
+     'vcpus': '2', "ephemeral": '0', 'is_public': False},
     {'name': 'deleted_flavor', 'flavorid': '777', 'disk': '1', 'ram': '48',
      'vcpus': '1', "ephemeral": '0', 'is_deleted': True},
     {'name': 'recreated_flavor', 'flavorid': '777', 'disk': '1', 'ram': '48',
@@ -590,7 +598,7 @@ vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'server2', 'image': 'deleted_on_dst', 'flavor': 'del_flvr',
      'server_group': 'admin_server_group', 'config_drive': True, 'fip': True},
-    {'name': 'server3', 'image': 'deleted_image', 'flavor': 'flavorname2'},
+    {'name': 'server3', 'image': 'deleted_image', 'flavor': 'diffattrib_flvr'},
     {'name': 'server4', 'image': 'broken_image', 'flavor': 'flavorname2'},
     {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1',
      'broken': True},
