@@ -76,7 +76,6 @@ Vagrant.configure(2) do |config|
                             "#{options['nfs_ip']}"
   end
 
-  config.vm.provision "shell", path: "./provision/prerequisites.sh"
   etc_hosts = nodes.map { |name, data| [data["ip"], name].join(' ') }.join("\n")
 
   nodes.each do |nodename, nodedata|
@@ -90,15 +89,17 @@ Vagrant.configure(2) do |config|
 
       case nodedata.fetch("role", "")
         when "openstack"
-          thisnode.vm.provision "shell", path: "./provision/fix_interfaces.sh"
+          thisnode.vm.provision "shell", path: "./provision/configure_networking.sh", args: ['eth1', 'br-ex', nodedata['ip']]
+          thisnode.vm.provision "shell", path: "./provision/configure_networking.sh", args: ['eth2', 'br-ex2', nodedata['ip2']]
+          thisnode.vm.provision "shell", path: "./provision/configure_openstack.sh", args: [nodedata['ip'], nodename]
           thisnode.vm.provision "shell", path: "./provision/create_disks_swift.sh"
-          if nodename == "grizzly" then
-            thisnode.vm.provision "shell", path: "./provision/qemu.sh"
-          elsif nodename == "icehouse" then
+
+          if nodename == "icehouse" then
             thisnode.vm.provision "shell", path: "./provision/cleanup_nova_instances.sh"
           end
           thisnode.vm.provision "shell", path: "./provision/libvirt.sh"
         when "lab"
+          config.vm.provision "shell", path: "./provision/prerequisites.sh"
           thisnode.vm.provision "shell",
             path: "./provision/cloudferry.sh"
           if File.exist?(File.join(Dir.home, ".ssh/id_rsa")) then
@@ -108,8 +109,8 @@ Vagrant.configure(2) do |config|
           end
       end
 
-      thisnode.vm.network "private_network", ip: nodedata['ip']
-      thisnode.vm.network "private_network", ip: nodedata['ip2']
+      thisnode.vm.network "private_network", ip: nodedata['ip'], auto_config: (nodedata.fetch("role") != "openstack")
+      thisnode.vm.network "private_network", ip: nodedata['ip2'], auto_config: (nodedata.fetch("role") != "openstack")
 
       thisnode.vm.provider "virtualbox" do |v|
         v.memory = nodedata.fetch("memory", 1024)
