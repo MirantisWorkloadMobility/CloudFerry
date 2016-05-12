@@ -34,13 +34,10 @@ preparation:
           - act_get_info_objects_dst: False
       - check_networks: True
   - create_snapshot: False
-  - create_vm_snapshot_src: True
-  - create_vm_snapshot_dst: True
   - create_image_snapshot_dst: False
 
 rollback:
-  - restore_from_vm_snapshot_dst: True
-  - restore_from_vm_snapshot_src: True
+  - restore_vms: True
 
 process:
   - transport_instances_and_dependency_resources:

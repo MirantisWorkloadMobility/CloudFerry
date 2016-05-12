@@ -12,17 +12,22 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-from cloudferry.lib.base.action import action
 import copy
+import logging
+
+from cloudferry.lib.base.action import action
+
+LOG = logging.getLogger(__name__)
 
 
 class StopVms(action.Action):
 
-    def run(self, info=None, **kwargs):
+    def run(self, info, **kwargs):
         info = copy.deepcopy(info)
         compute_resource = self.cloud.resources['compute']
-
-        for instance in info['instances']:
-            compute_resource.change_status('shutoff', instance_id=instance)
-
+        for instance_id, instance in info['instances'].items():
+            LOG.debug("Stop VM '%s' (%s) on %s", instance['instance']['name'],
+                      instance_id, self.cloud.position)
+            compute_resource.processing_instances.append(instance_id)
+            compute_resource.change_status('shutoff', instance_id=instance_id)
         return {}

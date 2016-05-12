@@ -744,6 +744,15 @@ rsync_opts = [
                     "the ports must be different."),
 ]
 
+rollback_group = cfg.OptGroup(name='rollback', title='Rollback settings')
+
+rollback_opts = [
+    cfg.BoolOpt('keep_migrated_vms', default=True,
+                help="Do not remove successfully migrated vms from dst and "
+                     "do not restore the  statuses of those vms on src "
+                     "at rollback.")
+]
+
 cfg_for_reg = [
     (src, src_opts),
     (dst, dst_opts),
@@ -774,6 +783,7 @@ cfg_for_reg = [
     (evacuation, evacuation_opts),
     (bbcp_group, bbcp_opts),
     (rsync_group, rsync_opts),
+    (rollback_group, rollback_opts),
 ]
 
 CONF = cfg.CONF
