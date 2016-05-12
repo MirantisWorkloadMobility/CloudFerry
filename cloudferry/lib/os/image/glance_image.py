@@ -290,15 +290,13 @@ class GlanceImage(image.Image):
         try:
             # ssl.ZeroReturnError happens because a size of an image is zero
             with proxy_client.expect_exception(
-                glance_exceptions.NotFound,
-                glance_exceptions.HTTPInternalServerError,
                 ssl.ZeroReturnError,
+                glance_exceptions.HTTPException,
                 IOError
             ):
                 return self.glance_client.images.data(image_id)
-        except (glance_exceptions.HTTPInternalServerError,
-                glance_exceptions.HTTPNotFound,
-                ssl.ZeroReturnError,
+        except (ssl.ZeroReturnError,
+                glance_exceptions.HTTPException,
                 IOError):
             raise exception.ImageDownloadError
 
