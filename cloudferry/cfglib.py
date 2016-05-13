@@ -188,6 +188,7 @@ migrate_opts = [
                help="Timeout booting of instance"),
     cfg.StrOpt('ssh_cipher', default=None, help='SSH cipher to use for SCP'),
     cfg.StrOpt('copy_backend', default="rsync",
+               choices=['rsync', 'scp', 'bbcp'],
                help="Allows to choose how ephemeral storage and cinder "
                     "volumes are copied over from source to destination. "
                     "Possible values: 'rsync' (default), 'scp' and 'bbcp'. "
