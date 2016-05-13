@@ -16,10 +16,12 @@ if [ -f /etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini ]; then
     service neutron-plugin-openvswitch-agent start
 fi
 
+echo "Release: ${RELEASE}"
+
 service nova-compute stop
 service nova-conductor stop
 service nova-api stop
-if [ "${RELEASE}" -eq "grizzly" ]; then
+if [[ "${RELEASE}" -eq "grizzly" ]]; then
     crudini --set /etc/nova/nova.conf DEFAULT novncproxy_base_url http://${SYSTEM_IP}:6080/vnc_auto.html
 else
     crudini --set /etc/nova/nova.conf DEFAULT vncproxy_base_url http://${SYSTEM_IP}:6080/vnc_auto.html

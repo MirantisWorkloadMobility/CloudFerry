@@ -18,21 +18,24 @@ nodes = {
     "ip" => "#{options['grizzly_ip']}",
     "ip2" => "#{options['grizzly_ip2']}",
     "memory" => 4096,
-    "role" => "openstack"
+    "role" => "openstack",
+    "cpus" => 2
   },
   "icehouse" => {
     "box" => "openstack-user/trusty-icehouse",
     "ip" => "#{options['icehouse_ip']}",
     "ip2" => "#{options['icehouse_ip2']}",
     "memory" => 4096,
-    "role" => "openstack"
+    "role" => "openstack",
+    "cpus" => 2
   },
   "juno" => {
     "box" => "openstack-user/trusty-juno",
     "ip" => "#{options['juno_ip']}",
     "ip2" => "#{options['juno_ip2']}",
     "memory" => 4096,
-    "role" => "openstack"
+    "role" => "openstack",
+    "cpus" => 2
   },
   "cloudferry" => {
     "box" => "hashicorp/precise64",
@@ -109,8 +112,8 @@ Vagrant.configure(2) do |config|
           end
       end
 
-      thisnode.vm.network "private_network", ip: nodedata['ip'], auto_config: (nodedata.fetch("role") != "openstack")
-      thisnode.vm.network "private_network", ip: nodedata['ip2'], auto_config: (nodedata.fetch("role") != "openstack")
+      thisnode.vm.network "private_network", ip: nodedata['ip'], auto_config: (nodedata.fetch("role", "") != "openstack")
+      thisnode.vm.network "private_network", ip: nodedata['ip2'], auto_config: (nodedata.fetch("role", "") != "openstack")
 
       thisnode.vm.provider "virtualbox" do |v|
         v.memory = nodedata.fetch("memory", 1024)

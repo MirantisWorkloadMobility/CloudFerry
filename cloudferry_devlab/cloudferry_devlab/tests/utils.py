@@ -143,7 +143,7 @@ class MigrationUtils(object):
                                  host_string=ip_addr, user=username,
                                  password=password, key=key,
                                  abort_on_prompts=True, connection_attempts=3,
-                                 disable_known_hosts=True, no_agent=True,
+                                 disable_known_hosts=True,
                                  warn_only=warn_only):
             try:
                 if use_sudo:
