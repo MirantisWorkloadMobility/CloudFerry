@@ -540,7 +540,11 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
         src_vms = filtering_data[0]
 
         def compare_vm_parameter(param, vm1, vm2):
-            if getattr(vm1, param, None) != getattr(vm2, param, None):
+            vm1_param = getattr(vm1, param, None)
+            vm2_param = getattr(vm2, param, None)
+            if param == "config_drive" and vm1_param == u'1':
+                vm1_param = u'True'
+            if vm1_param != vm2_param:
                 error_msg = ('Parameter {param} for VM with name '
                              '{name} is different src: {vm1}, dst: {vm2}')
                 self.fail(error_msg.format(param=param, name=vm1.name,
