@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import logging
 
 from cloudferry.lib.base.action import action
 from cloudferry.lib.copy_engines import base
 from cloudferry.lib.utils import utils
+
+LOG = logging.getLogger(__name__)
 
 
 class TaskTransfer(action.Action):
@@ -37,6 +40,18 @@ class TaskTransfer(action.Action):
 
         for item in data_for_trans.itervalues():
             data = item[self.resource_root_name]
+
+            data_is_invalid = not all([data.get(k)
+                                       for k in ('path_src', 'path_dst',
+                                                 'host_src', 'host_dst')])
+
+            if data_is_invalid:
+                LOG.warning("Cannot copy from %s:%s to %s:%s - source or "
+                            "destination path definition is invalid.",
+                            data.get('host_src'), data.get('path_src'),
+                            data.get('host_dst'), data.get('path_dst'))
+                continue
+
             if self.driver.check_usage(data):
                 self.driver.transfer(data)
 
