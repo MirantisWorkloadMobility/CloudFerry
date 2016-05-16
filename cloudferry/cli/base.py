@@ -35,11 +35,12 @@ class ConfigMixin(object):
         self.configure_logging()
         return super(ConfigMixin, self).run(parsed_args)
 
-    def configure_logging(self, log_config=None, forward_stdout=None):
+    def configure_logging(self, log_config=None, forward_stdout=None,
+                          hide_ssl_warnings=None):
         if self.app.interactive_mode:
             forward_stdout = False
         log.configure_logging(log_config, self.app.options.debug,
-                              forward_stdout)
+                              forward_stdout, hide_ssl_warnings)
 
     def init_config(self, config_path):
         conf = cfglib.init_config(config_path)
@@ -49,10 +50,13 @@ class ConfigMixin(object):
 
 
 class YamlConfigMixin(ConfigMixin):
-    def configure_logging(self, log_config=None, forward_stdout=None):
+    def configure_logging(self, log_config=None, forward_stdout=None,
+                          hide_ssl_warnings=None):
         super(YamlConfigMixin, self).configure_logging(
             log_config=log_config or 'configs/logging_config.yaml',
-            forward_stdout=forward_stdout or False)
+            forward_stdout=forward_stdout or False,
+            hide_ssl_warnings=hide_ssl_warnings or True,
+        )
 
     def init_config(self, config_path):
         def import_legacy(cloud, cfg):
