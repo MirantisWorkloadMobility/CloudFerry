@@ -280,6 +280,12 @@ class KeystoneIdentity(identity.Identity):
         return find_by_name(
             'tenant', self.keystone_client.tenants.list(), name)
 
+    def try_get_tenant_by_name(self, name):
+        try:
+            return self.get_tenant_by_name(name)
+        except ks_exceptions.NotFound:
+            return None
+
     def get_tenant_id_by_name(self, name):
         """ Getting tenant ID by name from keystone. """
         return self.get_tenant_by_name(name).id

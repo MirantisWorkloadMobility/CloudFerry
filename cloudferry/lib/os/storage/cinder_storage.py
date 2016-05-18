@@ -11,8 +11,7 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
-
-
+import copy
 from itertools import ifilter
 
 from cinderclient.v1 import client as cinder_client
@@ -149,49 +148,89 @@ class CinderStorage(storage.Storage):
                 self.download_table_from_db_to_file(table_name, file_name)
         return info
 
+    def get_quota(self, tenant_id):
+        # TODO: update to cinderclient==1.6.0 will eliminate the need in _info
+        # pylint: disable=protected-access
+        return copy.deepcopy(self.cinder_client.quotas.get(tenant_id)._info)
+
+    def update_quota(self, tenant, quota_dict):
+        # TODO: update to cinderclient==1.6.0 will eliminate the need in _info
+        try:
+            new_quota = self.cinder_client.quotas.update(tenant.id,
+                                                         **quota_dict)
+            # pylint: disable=protected-access
+            return copy.deepcopy(new_quota._info)
+        except cinder_exc.ClientException as e:
+            LOG.warning("Failed to update quota for tenant '%s' (%s): %s",
+                        tenant.name, tenant.id, e)
+
     def _read_info_quota(self):
-        admin_tenant_id = self.identity_client.get_tenant_id_by_name(
-            self.config.cloud.tenant)
-        service_tenant_id = self.identity_client.get_tenant_id_by_name(
-            self.config.cloud.service_tenant)
+        """cinderclient allows user to update cinder quotas for tenant ID
+        and tenant name, and it treats those quotas as different objects,
+        so user may get confused to see different output for `cinder
+        quota-show <tenant ID>` and `cinder quota-show <tenant name>`. This
+        behavior is ignored during migration and only quotas by tenant ID
+        are migrated."""
+
+        tenants = []
         if self.cloud.position == 'src' and self.filter_tenant_id:
-            tmp_list = \
-                [admin_tenant_id, service_tenant_id]
-            tmp_list.extend(self.filter_tenant_id)
-            tmp_list = list(set(tmp_list))
-            tenant_ids = \
-                [tenant.id for tenant in
-                 self.identity_client.get_tenants_list()
-                 if tenant.id in tmp_list]
+            if isinstance(self.filter_tenant_id, list):
+                filtered_tenants = self.filter_tenant_id
+            else:
+                filtered_tenants = [self.filter_tenant_id]
+            for t in filtered_tenants:
+                tenant = self.identity_client.try_get_tenant_by_id(t)
+                if tenant:
+                    tenants.append(tenant)
         else:
-            tenant_ids = \
-                [tenant.id for tenant in
-                 self.identity_client.get_tenants_list()
-                    if tenant.id != service_tenant_id]
+            tenants = self.identity_client.get_tenants_list()
         quotas = []
-        for tenant_id in tenant_ids:
-            quota = self.cinder_client.quotas.get(tenant_id)
-            quota_conv = self.convert_quota(quota)
-            quota_conv['tenant_id'] = tenant_id
-            quota_conv['tenant_name'] = self.identity_client\
-                .try_get_tenant_name_by_id(tenant_id)
-            quotas.append(quota_conv)
+        for t in tenants:
+            quota = self.get_quota(t.id)
+
+            # quota UUID is not required
+            quota.pop('id')
+            LOG.debug("Retrieved cinder quota for tenant '%s' (%s): %s",
+                      t.name, t.id, quota)
+
+            quota['tenant_name'] = t.name
+
+            quotas.append(quota)
         return quotas
 
     def _deploy_quota(self, quotas):
         quotas_res = []
         for quota in quotas:
-            tenant_id = self.identity_client\
-                .get_tenant_id_by_name(quota['tenant_name'])
-            quota_arg = {k: v for k, v in quota.items()
-                         if k not in ['tenant_id', 'tenant_name']}
-            quota_defaults = self.convert_quota(
-                self.cinder_client.quotas.defaults(tenant_id))
-            quota_res = {k: quota_arg[k] for k in list(set(quota_arg) &
-                                                       set(quota_defaults))}
-            quota_obj = self.convert_quota(
-                self.cinder_client.quotas.update(tenant_id, **quota_res))
-            quotas_res.append(quota_obj)
+            ks = self.identity_client
+            tenant_name = quota.pop('tenant_name')
+
+            tenant = ks.try_get_tenant_by_name(tenant_name)
+
+            if tenant is None:
+                LOG.warning("Tenant '%s' is not present in destination, "
+                            "cinder quotas migration for that tenant will be "
+                            "skipped.", tenant_name)
+                continue
+
+            tenant_id = tenant.id
+
+            existing_quotas = self.get_quota(tenant_id)
+            existing_quotas.pop('id')
+
+            quotas_identical = all([existing_quotas[k] == quota[k]
+                                    for k in quota])
+
+            if quotas_identical:
+                LOG.info("Source cloud cinder quotas for tenant '%s' (%s) "
+                         "match existing quotas in destination and will not "
+                         "be updated.", tenant_name, tenant_id)
+                continue
+
+            LOG.debug("Updating cinder quota for tenant '%s' (%s) with "
+                      "%s", tenant_name, tenant_id, quota)
+            dst_quota = self.update_quota(tenant, quota)
+            if dst_quota:
+                quotas_res.append(dst_quota)
         return quotas_res
 
     def _deploy_resources(self, info):
@@ -398,16 +437,6 @@ class CinderStorage(storage.Storage):
             self.finish(vol)
             new_ids[volume.id] = vol_id
         return new_ids
-
-    @staticmethod
-    def convert_quota(quota):
-        reprkeys = sorted(k
-                          for k in quota.__dict__.keys()
-                          if k[0] != '_' and k != 'manager')
-        quota_conv = {}
-        for k in reprkeys:
-            quota_conv[k] = quota.__dict__[k]
-        return quota_conv
 
     @staticmethod
     def convert_volume(vol, cfg, cloud):
