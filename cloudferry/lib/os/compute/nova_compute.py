@@ -589,7 +589,7 @@ class NovaCompute(compute.Compute):
                 self.wait_for_status(new_id, self.get_status, 'active',
                                      timeout=conf.migrate.boot_timeout,
                                      stop_statuses=[ERROR])
-            except (exception.TimeoutException, KeyboardInterrupt,
+            except (exception.TimeoutException,
                     signal_handler.InterruptedException):
                 LOG.warning("Failed to create instance '%s'", new_id)
                 if self.instance_exists(new_id):

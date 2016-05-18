@@ -63,4 +63,5 @@ class Migrate(base.ConfigMixin, command.Command):
             path_scenario=self.config.migrate.scenario,
             path_tasks=self.config.migrate.tasks_mapping))
         if status_error != errorcodes.NO_ERROR:
-            raise RuntimeError("Migration failed")
+            raise RuntimeError("Migration failed with exit code {code}".format(
+                code=status_error))

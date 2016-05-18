@@ -15,17 +15,13 @@
 import logging
 import multiprocessing
 
-import oslo_config.cfg
-
-from cloudferry.lib.scheduler.namespace import Namespace, CHILDREN
-from cloudferry.lib.utils.errorcodes import NO_ERROR, \
-    ERROR_INVALID_CONFIGURATION, ERROR_DURING_ROLLBACK, \
-    ERROR_MIGRATION_FAILED, ERROR_INITIAL_CHECK
+from cloudferry.lib.scheduler import namespace as scheduler_namespace
+from cloudferry.lib.utils import errorcodes
 from cloudferry.lib.utils import log
-from cloudferry.lib.scheduler.cursor import Cursor
+from cloudferry.lib.scheduler import cursor
 from cloudferry.lib.scheduler import signal_handler
-from cloudferry.lib.scheduler.task import BaseTask
-from cloudferry.lib.scheduler.thread_tasks import WrapThreadTask
+from cloudferry.lib.scheduler import task as scheduler_task
+from cloudferry.lib.scheduler import thread_tasks
 
 LOG = logging.getLogger(__name__)
 
@@ -38,15 +34,17 @@ class BaseScheduler(object):
 
     def __init__(self, namespace=None, migration=None, preparation=None,
                  rollback=None):
-        self.namespace = namespace if namespace else Namespace()
-        self.status_error = NO_ERROR
+        self.namespace = (namespace
+                          if namespace
+                          else scheduler_namespace.Namespace())
+        self.status_error = errorcodes.NO_ERROR
         self.migration = migration
         self.preparation = preparation
         self.rollback = rollback
         self.map_func_task = dict() if not hasattr(
             self,
             'map_func_task') else self.map_func_task
-        self.map_func_task[BaseTask()] = self.task_run
+        self.map_func_task[scheduler_task.BaseTask()] = self.task_run
 
     def event_start_task(self, task):
         log.CurrentTaskFilter.current_task = task
@@ -73,15 +71,14 @@ class BaseScheduler(object):
             for task in chain:
                 try:
                     self.run_task(task)
-                except Exception as e:  # pylint: disable=broad-except
+                # pylint: disable=broad-except
+                except (Exception, signal_handler.InterruptedException) as e:
                     if chain_name == STEP_PREPARATION:
-                        self.status_error = ERROR_INITIAL_CHECK
+                        self.status_error = errorcodes.ERROR_INITIAL_CHECK
                     if chain_name == STEP_MIGRATION:
-                        self.status_error = ERROR_MIGRATION_FAILED
+                        self.status_error = errorcodes.ERROR_MIGRATION_FAILED
                     if chain_name == STEP_ROLLBACK:
-                        self.status_error = ERROR_DURING_ROLLBACK
-                    if isinstance(e, oslo_config.cfg.Error):
-                        self.status_error = ERROR_INVALID_CONFIGURATION
+                        self.status_error = errorcodes.ERROR_DURING_ROLLBACK
                     self.error_task(task, e)
                     LOG.info("Failed processing CHAIN %s", chain_name)
                     break
@@ -92,12 +89,11 @@ class BaseScheduler(object):
         # try to prepare for migration
         self.process_chain(self.preparation, STEP_PREPARATION)
         # if we didn't get error during preparation task - process migration
-        if self.status_error == NO_ERROR:
-            with signal_handler.IgnoreInterruptHandler():
-                with signal_handler.InterruptHandler():
-                    self.process_chain(self.migration, STEP_MIGRATION)
+        if self.status_error == errorcodes.NO_ERROR:
+            with signal_handler.InterruptHandler():
+                self.process_chain(self.migration, STEP_MIGRATION)
                 # if we had an error during process migration - rollback
-                if self.status_error != NO_ERROR:
+                if self.status_error != errorcodes.NO_ERROR:
                     self.process_chain(self.rollback, STEP_ROLLBACK)
 
     def task_run(self, task):
@@ -110,7 +106,8 @@ class SchedulerThread(BaseScheduler):
         super(SchedulerThread, self).__init__(namespace, migration=migration,
                                               preparation=preparation,
                                               rollback=rollback)
-        self.map_func_task[WrapThreadTask()] = self.task_run_thread
+        wrap_thread_task = thread_tasks.WrapThreadTask()
+        self.map_func_task[wrap_thread_task] = self.task_run_thread
         self.child_threads = dict()
         self.thread_task = thread_task
         self.scheduler_parent = scheduler_parent
@@ -139,7 +136,8 @@ class SchedulerThread(BaseScheduler):
 
     def start_separate_thread(self):
         p = multiprocessing.Process(target=self.start_current_thread)
-        self.namespace.vars[CHILDREN][self.thread_task]['process'] = p
+        children = self.namespace.vars[scheduler_namespace.CHILDREN]
+        children[self.thread_task]['process'] = p
         p.start()
 
     def start_current_thread(self):
@@ -149,13 +147,14 @@ class SchedulerThread(BaseScheduler):
 
     def fork(self, thread_task, is_deep_copy=False):
         namespace = self.namespace.fork(is_deep_copy)
-        scheduler = self.__class__(namespace=namespace,
-                                   thread_task=thread_task,
-                                   preparation=self.preparation,
-                                   migration=Cursor(thread_task.getNet()),
-                                   rollback=self.rollback,
-                                   scheduler_parent=self)
-        self.namespace.vars[CHILDREN][thread_task] = {
+        scheduler = self.__class__(
+            namespace=namespace,
+            thread_task=thread_task,
+            preparation=self.preparation,
+            migration=cursor.Cursor(thread_task.getNet()),
+            rollback=self.rollback,
+            scheduler_parent=self)
+        self.namespace.vars[namespace.CHILDREN][thread_task] = {
             'namespace': namespace,
             'scheduler': scheduler,
             'process': None
