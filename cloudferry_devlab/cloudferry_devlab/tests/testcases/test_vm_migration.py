@@ -58,7 +58,7 @@ class VmMigration(functional_test.FunctionalTest):
         self.set_hash_for_vms(dst_vms)
         for s_vm in src_vms:
             for d_vm in dst_vms:
-                if s_vm.name == d_vm.name:
+                if s_vm.vm_hash == d_vm.vm_hash:
                     self.src_dst_vms.append({
                         'src_vm': s_vm,
                         'dst_vm': d_vm,
@@ -96,16 +96,25 @@ class VmMigration(functional_test.FunctionalTest):
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_cold_migrate_vm_state(self):
         """Validate VMs were cold migrated with correct states."""
+        msg = "Vm '%s' (%s) on %s has incorrect state '%s', should be '%s'"
         for vms in self.src_dst_vms:
             dst_vm = vms['dst_vm']
             src_vm = vms['src_vm']
-            if self.original_states[src_vm.name] == 'ACTIVE' or \
-                    self.original_states[src_vm.name] == 'VERIFY_RESIZE':
-                self.assertIn(src_vm.status, ['SHUTOFF', 'ACTIVE'])
-                self.assertEqual(dst_vm.status, 'ACTIVE')
+            if self.original_states[src_vm.name] in ['ACTIVE',
+                                                     'VERIFY_RESIZE']:
+                self.assertIn(src_vm.status, ['SHUTOFF', 'ACTIVE'],
+                              msg=msg % (src_vm.name, src_vm.id, 'SRC',
+                                         src_vm.status, ['SHUTOFF', 'ACTIVE']))
+                self.assertEqual(dst_vm.status, 'ACTIVE',
+                                 msg=msg % (dst_vm.name, dst_vm.id, 'DST',
+                                            dst_vm.status, 'ACTIVE'))
             else:
-                self.assertEqual(src_vm.status, 'SHUTOFF')
-                self.assertEqual(dst_vm.status, 'SHUTOFF')
+                self.assertEqual(src_vm.status, 'SHUTOFF',
+                                 msg=msg % (src_vm.name, src_vm.id, 'SRC',
+                                            src_vm.status, 'SHUTOFF'))
+                self.assertEqual(dst_vm.status, 'SHUTOFF',
+                                 msg=msg % (dst_vm.name, dst_vm.id, 'DST',
+                                            dst_vm.status, 'SHUTOFF'))
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_cold_migrate_vm_ip(self):

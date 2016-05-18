@@ -658,8 +658,7 @@ vm_states = [
     {'name': 'server8', 'state': 'active'},
     {'name': 'tn1server1', 'state': 'active'},
     {'name': 'tn1server2', 'state': 'active'},
-    {'name': 'tn2server1', 'state': 'active'},
-    {'name': 'tn4server1', 'state': 'active'}
+    {'name': 'tn2server1', 'state': 'active'}
 ]
 """Emulate different VM states"""
 

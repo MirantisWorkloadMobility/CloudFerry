@@ -321,12 +321,13 @@ class BasePrerequisites(object):
                 return True
         return False
 
-    def check_vm_state(self, srv_id):
+    def check_vm_state(self, srv_id, status='ACTIVE'):
+        statuses = status if isinstance(status, tuple) else (status, )
         srv = self.novaclient.servers.get(srv_id)
-        if srv.status == 'ERROR':
-            msg = 'VM with id {0} was spawned in error state'
-            raise RuntimeError(msg.format(srv_id))
-        return srv.status == 'ACTIVE'
+        if 'ERROR' not in statuses and srv.status == 'ERROR':
+            msg = 'VM with id {id} was spawned in {status} state'
+            raise RuntimeError(msg.format(id=srv_id, status=srv.status))
+        return srv.status in statuses
 
     def check_image_state(self, img_id):
         img = self.glanceclient.images.get(img_id)
@@ -363,7 +364,7 @@ class BasePrerequisites(object):
         return False
 
     @staticmethod
-    def wait_until_objects_created(obj_list, check_func, timeout):
+    def wait_until_objects(obj_list, check_func, timeout):
         obj_list = obj_list[:]
         waiting = 0
         delay = 1
