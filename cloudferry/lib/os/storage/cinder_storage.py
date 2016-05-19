@@ -217,6 +217,9 @@ class CinderStorage(storage.Storage):
             existing_quotas = self.get_quota(tenant_id)
             existing_quotas.pop('id')
 
+            for k in set(quota.keys()).difference(set(existing_quotas.keys())):
+                quota.pop(k)
+
             quotas_identical = all([existing_quotas[k] == quota[k]
                                     for k in quota])
 
