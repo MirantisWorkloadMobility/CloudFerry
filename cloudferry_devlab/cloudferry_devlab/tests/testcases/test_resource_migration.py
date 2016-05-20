@@ -683,7 +683,7 @@ class ResourceMigrationTests(functional_test.FunctionalTest):
             vm_ip = self.migration_utils.get_vm_fip(vm)
             self.migration_utils.open_ssh_port_secgroup(self.dst_cloud,
                                                         vm.tenant_id)
-            base.BasePrerequisites.wait_until_objects_created(
+            base.BasePrerequisites.wait_until_objects(
                 [(vm_ip, 'pwd')],
                 self.migration_utils.wait_until_vm_accessible_via_ssh,
                 config.TIMEOUT)

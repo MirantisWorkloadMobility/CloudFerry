@@ -26,7 +26,7 @@ import yaml
 
 from cloudferry_devlab.tests import base
 from cloudferry_devlab.tests import cleanup
-import cloudferry_devlab.tests.config as conf
+from cloudferry_devlab.tests import config as conf
 
 VM_SPAWNING_LIMIT = 5
 CREATE_CLEAN_METHODS_MAP = {
@@ -212,11 +212,11 @@ class Prerequisites(base.BasePrerequisites):
                     **image_body)
                 dst_img_ids.append(dst_img_id)
 
-        self.wait_until_objects_created(img_ids, self.check_image_state,
-                                        conf.TIMEOUT)
+        self.wait_until_objects(img_ids, self.check_image_state,
+                                conf.TIMEOUT)
 
         if dst_img_ids and self.dst_cloud:
-            self.wait_until_objects_created(
+            self.wait_until_objects(
                 dst_img_ids,
                 self.chech_image_state_on_dst,
                 conf.TIMEOUT)
@@ -378,8 +378,8 @@ class Prerequisites(base.BasePrerequisites):
             vm_ids.append(new_vm.id)
             if not vm.get('fip'):
                 continue
-            self.wait_until_objects_created([new_vm.id], self.check_vm_state,
-                                            conf.TIMEOUT)
+            self.wait_until_objects([new_vm.id], self.check_vm_state,
+                                    conf.TIMEOUT)
             fip = self.neutronclient.create_floatingip(
                 {"floatingip": {"floating_network_id": self.ext_net_id}})
             new_vm.add_floating_ip(fip['floatingip']['floating_ip_address'])
@@ -421,7 +421,7 @@ class Prerequisites(base.BasePrerequisites):
 
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
-        self.wait_until_objects_created(vms, self.check_vm_state, conf.TIMEOUT)
+        self.wait_until_objects(vms, self.check_vm_state, conf.TIMEOUT)
 
     def create_vm_snapshots(self):
 
@@ -433,8 +433,8 @@ class Prerequisites(base.BasePrerequisites):
             snp = self.glanceclient.images.get(self.get_image_id(
                 snapshot['image_name']))
             snp_ids.append(snp.id)
-        self.wait_until_objects_created(snp_ids, self.check_snapshot_state,
-                                        conf.TIMEOUT)
+        self.wait_until_objects(snp_ids, self.check_snapshot_state,
+                                conf.TIMEOUT)
 
     def create_networks(self, networks):
 
@@ -627,7 +627,7 @@ class Prerequisites(base.BasePrerequisites):
                 fip_addr = self.migration_utils.get_vm_fip(vm)
             except RuntimeError:
                 return
-            base.BasePrerequisites.wait_until_objects_created(
+            base.BasePrerequisites.wait_until_objects(
                 [(fip_addr, 'pwd')],
                 self.migration_utils.wait_until_vm_accessible_via_ssh,
                 conf.TIMEOUT)
@@ -657,8 +657,8 @@ class Prerequisites(base.BasePrerequisites):
             vlm_ids.append(vlm.id)
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
-        self.wait_until_objects_created(vlm_ids, self.check_volume_state,
-                                        conf.TIMEOUT)
+        self.wait_until_objects(vlm_ids, self.check_volume_state,
+                                conf.TIMEOUT)
         vlm_ids = []
         for volume in volumes_list:
             if 'server_to_attach' not in volume:
@@ -670,8 +670,8 @@ class Prerequisites(base.BasePrerequisites):
             self.novaclient.volumes.create_server_volume(
                 server_id=vm_id, volume_id=vlm_id, device=volume['device'])
             vlm_ids.append(vlm_id)
-        self.wait_until_objects_created(vlm_ids, self.check_volume_state,
-                                        conf.TIMEOUT)
+        self.wait_until_objects(vlm_ids, self.check_volume_state,
+                                conf.TIMEOUT)
 
     def create_cinder_snapshots(self, snapshot_list):
         for snapshot in snapshot_list:
@@ -779,26 +779,32 @@ class Prerequisites(base.BasePrerequisites):
                                            obj['metadata'])
 
     def emulate_vm_states(self):
-        for vm_state in self.config.vm_states:
+        vms = []
+        for vm in self.config.vm_states:
+            vm_id = self.get_vm_id(vm['name'])
+            vm_state = vm['state']
             # emulate error state:
-            if vm_state['state'] == u'error':
-                self.novaclient.servers.reset_state(
-                    server=self.get_vm_id(vm_state['name']),
-                    state=vm_state['state'])
+            if vm_state == u'error':
+                self.novaclient.servers.reset_state(server=vm_id,
+                                                    state=vm_state)
+                vms.append((vm_id, 'ERROR'))
             # emulate suspend state:
-            elif vm_state['state'] == u'suspend':
-                self.novaclient.servers.suspend(self.get_vm_id(
-                    vm_state['name']))
+            elif vm_state == u'suspend':
+                self.novaclient.servers.suspend(vm_id)
+                vms.append((vm_id, 'SUSPENDED'))
             # emulate resize state:
-            elif vm_state['state'] == u'pause':
-                self.novaclient.servers.pause(self.get_vm_id(vm_state['name']))
+            elif vm_state == u'pause':
+                self.novaclient.servers.pause(vm_id)
+                vms.append((vm_id, 'PAUSED'))
             # emulate stop/shutoff state:
-            elif vm_state['state'] == u'stop':
-                self.novaclient.servers.stop(self.get_vm_id(vm_state['name']))
+            elif vm_state == u'stop':
+                self.novaclient.servers.stop(vm_id)
+                vms.append((vm_id, 'SHUTOFF'))
             # emulate resize state:
-            elif vm_state['state'] == u'resize':
-                self.novaclient.servers.resize(
-                    self.get_vm_id(vm_state['name']), '2')
+            elif vm_state == u'resize':
+                self.novaclient.servers.resize(vm_id, '2')
+                vms.append((vm_id, ('VERIFY_RESIZE', 'ACTIVE', 'ERROR')))
+        self.wait_until_objects(vms, self.check_vm_state, conf.TIMEOUT)
 
     def generate_vm_state_list(self):
         data = {}

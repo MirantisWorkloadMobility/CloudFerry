@@ -286,12 +286,12 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         """Validate destination cloud's volumes running and attaching
         successfully."""
         vm = self.dst_cloud.novaclient.servers.create(**self.TST_IMAGE)
-        base.BasePrerequisites.wait_until_objects_created(
+        base.BasePrerequisites.wait_until_objects(
             [vm], self.check_vm_state, config.TIMEOUT)
 
         vm.add_floating_ip(self.float_ip_address)
 
-        base.BasePrerequisites.wait_until_objects_created(
+        base.BasePrerequisites.wait_until_objects(
             [(vm, self.float_ip_address)],
             base.BasePrerequisites.check_floating_ip_assigned, config.TIMEOUT)
         self.wait_service_on_vm_to_be_ready(config.TIMEOUT,
@@ -312,12 +312,12 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
     def test_create_vm(self):
         """Validate destination cloud's VMs running successfully."""
         vm = self.dst_cloud.novaclient.servers.create(**self.TST_IMAGE)
-        base.BasePrerequisites.wait_until_objects_created(
+        base.BasePrerequisites.wait_until_objects(
             [vm], self.check_vm_state, config.TIMEOUT)
 
         vm.add_floating_ip(self.float_ip_address)
 
-        base.BasePrerequisites.wait_until_objects_created(
+        base.BasePrerequisites.wait_until_objects(
             [(vm, self.float_ip_address)],
             base.BasePrerequisites.check_floating_ip_assigned, config.TIMEOUT)
         self.wait_service_on_vm_to_be_ready(config.TIMEOUT,
