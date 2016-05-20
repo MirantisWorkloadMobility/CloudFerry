@@ -53,16 +53,17 @@ class CheckNetworks(action.Action):
         dst_net = self.dst_cloud.resources[utils.NETWORK_RESOURCE]
         src_compute = self.src_cloud.resources[utils.COMPUTE_RESOURCE]
 
-        search_opts = kwargs.get('search_opts_tenant', {})
-        search_opts.update({'search_opts': kwargs.get('search_opts', {})})
+        tenant_ids = kwargs.get('search_opts_tenant', {}).get('tenant_id')
+        search_opts = kwargs.get('search_opts', {})
 
         LOG.debug("Retrieving Network information from Source cloud...")
         ports = src_net.get_ports_list()
-        src_net_info = NetworkInfo(src_net.read_info(**search_opts), ports)
+        src_net_info = NetworkInfo(src_net.read_info(tenant_id=tenant_ids),
+                                   ports)
         LOG.debug("Retrieving Network information from Destination cloud...")
         dst_net_info = NetworkInfo(dst_net.read_info())
         LOG.debug("Retrieving Compute information from Source cloud...")
-        src_compute_info = ComputeInfo(src_compute, search_opts)
+        src_compute_info = ComputeInfo(src_compute, search_opts, tenant_ids)
 
         ext_net_map = utils.read_yaml_file(self.cfg.migrate.ext_net_map) or {}
 
@@ -122,7 +123,8 @@ class CheckNetworks(action.Action):
         devices = src_net_info.get_devices_from_external_networks()
         vms_list = src_compute_info.list_vms_in_external_network(devices)
         if vms_list:
-            overlapping_resources.update({'vms_in_external_network': vms_list})
+            LOG.warning('Some VMs are booted directly in external networks: '
+                        '%s', vms_list)
 
         # Print LOG message with all overlapping stuff and abort migration
         if overlapping_resources or invalid_resources:
@@ -139,10 +141,9 @@ class CheckNetworks(action.Action):
 
 
 class ComputeInfo(object):
-    def __init__(self, src_compute, search_opts):
-        search_opts['all_tenants'] = True
+    def __init__(self, src_compute, search_opts, tenant_ids):
         self.instances = {s.id for s in src_compute.get_instances_list(
-            search_opts=search_opts)}
+            search_opts, tenant_ids)}
 
     def list_vms_in_external_network(self, devices):
         """
