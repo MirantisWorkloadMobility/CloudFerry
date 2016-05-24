@@ -18,6 +18,12 @@ TIMEOUT = 600
 """Timeout to wait for Openstack objects to create/update/be accessible.
 Value in second."""
 
+NET_NAMES_TO_OMIT = ['tenantnet4_segm_id_cidr1',
+                     'tenantnet4_segm_id_cidr2']
+SUBNET_NAMES_TO_OMIT = ['segm_id_test_subnet_1',
+                        'segm_id_test_subnet_2']
+PARAMS_NAMES_TO_OMIT = ['cidr', 'gateway_ip', 'provider:segmentation_id']
+
 img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
 username_for_ssh = 'cirros'
 """Username for ssh access for cirros image"""
