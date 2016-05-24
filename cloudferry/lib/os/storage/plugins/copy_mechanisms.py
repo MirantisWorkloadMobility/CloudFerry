@@ -13,10 +13,14 @@
 # limitations under the License.
 
 import abc
+import logging
+import random
 
 from cloudferry.lib.utils import files
 from cloudferry.lib.utils import remote_runner
 from cloudferry.lib.copy_engines import base
+
+LOG = logging.getLogger(__name__)
 
 
 class CopyFailed(RuntimeError):
@@ -75,37 +79,74 @@ class CopyRegularFileToBlockDevice(CopyMechanism):
     """Redirects regular file to stdout and copies over ssh tunnel to calling
     node into block device"""
 
+    @staticmethod
+    def _generate_session_name():
+        return 'copy_{}'.format(random.getrandbits(64))
+
     def copy(self, context, source_object, destination_object):
-        src_user = context.cfg.src.ssh_user
-        dst_user = context.cfg.dst.ssh_user
+        cfg_src = context.cfg.src
+        cfg_dst = context.cfg.dst
+
+        src_user = cfg_src.ssh_user
+        dst_user = cfg_dst.ssh_user
 
         src_host = source_object.host
         dst_host = destination_object.host
 
-        rr = remote_runner.RemoteRunner(src_host, src_user)
+        rr_src = remote_runner.RemoteRunner(src_host, src_user, sudo=True,
+                                            password=cfg_src.ssh_sudo_password)
+        rr_dst = remote_runner.RemoteRunner(dst_host, dst_user, sudo=True,
+                                            password=cfg_dst.ssh_sudo_password)
 
         ssh_opts = ('-o UserKnownHostsFile=/dev/null '
                     '-o StrictHostKeyChecking=no')
 
+        # Choose auxiliary port for SSH tunnel
+        aux_port_start, aux_port_end = \
+            context.cfg.migrate.ssh_transfer_port.split('-')
+        aux_port = random.randint(int(aux_port_start), int(aux_port_end))
+
+        session_name = self._generate_session_name()
         try:
             progress_view = ""
-            if files.is_installed(rr, "pv"):
-                src_file_size = files.remote_file_size(rr, source_object.path)
+            if files.is_installed(rr_src, "pv"):
+                src_file_size = files.remote_file_size(rr_src,
+                                                       source_object.path)
                 progress_view = "pv --size {size} --progress | ".format(
                     size=src_file_size)
 
-            copy = ("dd if={src_file} | {progress_view} "
-                    "ssh {ssh_opts} {dst_user}@{dst_host} "
-                    "'dd of={dst_device}'")
-            rr.run(copy.format(src_file=source_object.path,
-                               dst_user=dst_user,
-                               dst_host=dst_host,
-                               ssh_opts=ssh_opts,
-                               dst_device=destination_object.path,
-                               progress_view=progress_view))
+            # First step: prepare netcat listening on aux_port on dst and
+            # forwarding all the data to block device
+            rr_dst.run('screen -S {session_name} -d -m /bin/bash -c '
+                       '\'nc -l {aux_port} | dd of={dst_device}\'; sleep 1',
+                       session_name=session_name, aux_port=aux_port,
+                       dst_device=destination_object.path)
+
+            # Second step: create SSH tunnel between source and destination
+            rr_src.run('screen -S {session_name} -d -m ssh {ssh_opts} -L'
+                       ' {aux_port}:127.0.0.1:{aux_port} '
+                       '{dst_user}@{dst_host}; sleep 1',
+                       session_name=session_name, ssh_opts=ssh_opts,
+                       aux_port=aux_port, dst_user=dst_user,
+                       dst_host=dst_host)
+
+            # Third step: push data through the tunnel
+            rr_src.run('/bin/bash -c \'dd if={src_file} | {progress_view} '
+                       'nc 127.0.0.1 {aux_port}\'',
+                       aux_port=aux_port, progress_view=progress_view,
+                       src_file=source_object.path)
+
         except remote_runner.RemoteExecutionError as e:
             msg = "Cannot copy {src_object} to {dst_object}: {error}"
             msg = msg.format(src_object=source_object,
                              dst_object=destination_object,
                              error=e.message)
             raise CopyFailed(msg)
+        finally:
+            try:
+                rr_src.run('screen -X -S {session_name} quit || true',
+                           session_name=session_name)
+                rr_dst.run('screen -X -S {session_name} quit || true',
+                           session_name=session_name)
+            except remote_runner.RemoteExecutionError:
+                LOG.error('Failed to close copy sessions', exc_info=True)
