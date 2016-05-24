@@ -418,6 +418,30 @@ class BasePrerequisites(object):
     def get_abs_path(self, file_path):
         return os.path.join(os.path.dirname(self.results_path), file_path)
 
+    @staticmethod
+    def set_vm_state(novaclient, vm_id, vm_state):
+        # emulate error state:
+        if vm_state == u'error':
+            novaclient.servers.reset_state(server=vm_id, state=vm_state)
+            return vm_id, 'ERROR'
+        # emulate suspend state:
+        elif vm_state == u'suspend':
+            novaclient.servers.suspend(vm_id)
+            return vm_id, 'SUSPENDED'
+        # emulate resize state:
+        elif vm_state == u'pause':
+            novaclient.servers.pause(vm_id)
+            return vm_id, 'PAUSED'
+        # emulate stop/shutoff state:
+        elif vm_state == u'stop':
+            novaclient.servers.stop(vm_id)
+            return vm_id, 'SHUTOFF'
+        # emulate resize state:
+        elif vm_state == u'resize':
+            novaclient.servers.resize(vm_id, '2')
+            return vm_id, ('VERIFY_RESIZE', 'ACTIVE', 'ERROR')
+        return vm_id
+
 
 def get_dict_from_config_file(config_file):
     conf_dict = {}

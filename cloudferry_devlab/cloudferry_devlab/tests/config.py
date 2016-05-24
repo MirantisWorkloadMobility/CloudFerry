@@ -126,12 +126,8 @@ tenants = [
          {'name': 'tn1_server_group2', 'policies': ['affinity']}
      ],
      'vms': [
-         {'name': 'tn1server1', 'image': 'image1', 'flavor': 'flavorname2',
-          'key_name': 'key1', 'server_group': 'tn1_server_group'},
-         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1',
-          'server_group': 'tn1_server_group'},
-         {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr',
-          'server_group': 'tn1_server_group2'}
+         {'name': 'tn1server1', 'image': 'image1', 'flavor': 'del_flvr',
+          'key_name': 'key1', 'server_group': 'tn1_server_group'}
      ],
      'networks': [
          {'name': 'tenantnet1', 'admin_state_up': True,
@@ -223,11 +219,9 @@ tenants = [
          'subnet': 60
      },
      'vms': [
-         {'name': 'tn2server1', 'image': 'image1', 'flavor': 'flavorname2',
-          'fip': True, 'key_name': 'key2', 'nics': [{'net-id': 'tenantnet2'}]},
          {'name': 'keypair_test_server', 'image': 'deleted_image',
-          'flavor': 'flavorname2', 'key_name': 'key2', 'nics': [
-              {'net-id': 'tenantnet2'}], 'fip': True}
+          'flavor': 'flavorname2', 'fip': True, 'key_name': 'key2',
+          'nics': [{'net-id': 'tenantnet2'}]}
      ],
      'networks': [
          {'name': 'tenantnet2', 'admin_state_up': True,
@@ -242,7 +236,7 @@ tenants = [
      ],
      'cinder_volumes': [
          {'display_name': 'tn_volume1', 'size': 1, 'volume_type': 'nfs1',
-          'server_to_attach': 'tn2server1', 'device': '/dev/vdb',
+          'server_to_attach': 'keypair_test_server', 'device': '/dev/vdb',
           'mount_point': '/tmp/mount_here/',
           'write_to_file': [
               {'filename': 'test_data.txt', 'data': 'some useless string'},
@@ -449,7 +443,7 @@ img_to_add_members = ['image3', 'image4', 'image6']
 
 flavors = [
     {'name': 'flavorname1', 'disk': '1', 'ram': '64', 'vcpus': '1'},
-    {'name': 'flavorname3', 'disk': '10', 'ram': '32', 'vcpus': '1',
+    {'name': 'flavorname3', 'disk': '3', 'ram': '32', 'vcpus': '1',
      'is_public': False},
     {'name': 'flavorname2', 'disk': '2', 'ram': '48', 'vcpus': '2'},
     {'name': 'del_flvr', 'disk': '1', 'ram': '64', 'vcpus': '1'},
@@ -584,17 +578,13 @@ server_groups = [
 
 vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
-    {'name': 'server2', 'image': 'deleted_on_dst', 'flavor': 'flavorname1',
-     'config_drive': True},
-    {'name': 'server3', 'image': 'deleted_image', 'flavor': 'flavorname2',
-     'fip': True},
-    {'name': 'server4', 'image': 'deleted_image', 'flavor': 'flavorname2'},
-    {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1'},
-    {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'},
-    {'name': 'server7', 'image': 'image1', 'flavor': 'flavorname1',
+    {'name': 'server2', 'image': 'deleted_on_dst', 'flavor': 'del_flvr',
+     'server_group': 'admin_server_group', 'config_drive': True, 'fip': True},
+    {'name': 'server3', 'image': 'deleted_image', 'flavor': 'flavorname2'},
+    {'name': 'server4', 'image': 'broken_image', 'flavor': 'flavorname2'},
+    {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1',
      'broken': True},
-    {'name': 'server8', 'image': 'broken_image', 'flavor': 'flavorname1',
-     'server_group': 'admin_server_group'}
+    {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'}
 ]
 """VM's to create/delete on SRC cloud."""
 
@@ -655,16 +645,17 @@ cinder_snapshots = [
 
 vm_states = [
     {'name': 'server1', 'state': 'error'},
-    {'name': 'server2', 'state': 'stop'},
+    {'name': 'server2', 'state': 'active'},
     {'name': 'server3', 'state': 'suspend'},
     {'name': 'server4', 'state': 'pause'},
     {'name': 'server5', 'state': 'resize'},
-    {'name': 'server6', 'state': 'active'},
-    {'name': 'server7', 'state': 'shutoff'},
-    {'name': 'server8', 'state': 'active'},
+    {'name': 'not_in_filter', 'state': 'stop'},
     {'name': 'tn1server1', 'state': 'active'},
-    {'name': 'tn1server2', 'state': 'active'},
-    {'name': 'tn2server1', 'state': 'active'}
+    {'name': 'tn3server1', 'state': 'stop'},
+    {'name': 'tn5server1', 'state': 'stop'},
+    {'name': 'tn5server2', 'state': 'stop'},
+    {'name': 'tn5server3', 'state': 'stop'},
+    {'name': 'keypair_test_server', 'state': 'active'}
 ]
 """Emulate different VM states"""
 
