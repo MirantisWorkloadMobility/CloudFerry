@@ -14,6 +14,7 @@
 import logging
 
 from fabric import api
+from fabric.state import env
 
 LOG = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ def run(cmd, capture_output=True):
     try:
         LOG.debug("Running '%s' locally", cmd)
         return api.local(cmd, capture=capture_output)
-    except SystemExit as e:
+    except (SystemExit, env.abort_exception) as e:
         LOG.debug("Command '%s' failed with '%s'", cmd, e.message)
         raise LocalExecutionFailed(e.message, e.code)
 

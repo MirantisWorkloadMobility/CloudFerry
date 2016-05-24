@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import getpass
 import logging
 
 from cloudferry.lib.base import exception
@@ -37,6 +38,21 @@ class CheckVMAXPrerequisites(action.Action):
                    "mandatory for migrations with EMC VMAX cinder backend")
             LOG.error(msg)
             raise exception.AbortMigrationError(msg)
+
+    def _check_local_sudo_password_set(self):
+        current_user = getpass.getuser()
+        if current_user != 'root' and \
+                self.cfg.migrate.local_sudo_password is None:
+            try:
+                local.sudo('ls')
+            except local.LocalExecutionFailed:
+                msg = ("CloudFerry is running as '{user}' user, but "
+                       "passwordless sudo does not seem to be configured on "
+                       "current host. Please either specify password in "
+                       "`local_sudo_password` config option, or run "
+                       "CloudFerry as root user.").format(user=current_user)
+                LOG.error(msg)
+                raise exception.AbortMigrationError(msg)
 
     def _ssh_connectivity_between_controllers(self):
         src_host = self.cfg.src.ssh_host
@@ -72,3 +88,4 @@ class CheckVMAXPrerequisites(action.Action):
             return
         self._iscsiadm_is_installed_locally()
         self._ssh_connectivity_between_controllers()
+        self._check_local_sudo_password_set()
