@@ -46,7 +46,6 @@ process:
           - init_iteration_instance_copy_var: True
           - init_iteration_instance_ref: True
       - act_filter_similar_vms_from_dst: True
-      - check_needed_compute_resources: True
       - check_instances: ['rename_info_iter']
       - get_next_instance: True
       - trans_one_inst:

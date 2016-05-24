@@ -83,7 +83,6 @@ tasks:
    create_snapshot: ['MysqlDump', 'dst_cloud']
    restore_from_snapshot: ['MysqlRestore', 'dst_cloud']
    restore_vms: ['VmRestore']
-   check_needed_compute_resources: ['CheckNeededComputeResources']
    act_check_bandwidth_src: ['CheckBandwidth', 'src_cloud']
    act_check_bandwidth_dst: ['CheckBandwidth', 'dst_cloud']
    get_volumes_db_data: ["GetVolumesDb", 'src_cloud']
