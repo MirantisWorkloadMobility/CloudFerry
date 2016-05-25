@@ -606,7 +606,7 @@ dst_vms = [
      'tenant': 'tenant5', 'nics': [{'net-id': 'tenant5net2',
                                     'v4-fixed-ip': '123.2.2.102'}]},
     {'name': 'tn5server3', 'image': 'image1', 'flavor': 'flavorname2',
-     'nics': [{'net-id': 'tenant5net', 'v4-fixed-ip': '122.2.2.101'}],
+     'nics': [{'net-id': 'tenant5net', 'v4-fixed-ip': '122.2.2.110'}],
      'tenant': 'tenant5'},
 ]
 """VM's to create on DST environment"""
