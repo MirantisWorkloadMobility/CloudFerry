@@ -19,7 +19,8 @@ nodes = {
     "ip2" => "#{options['grizzly_ip2']}",
     "memory" => 4096,
     "role" => "openstack",
-    "cpus" => 2
+    "cpus" => 2,
+    "nfs_share_name" => "grizzly"
   },
   "icehouse" => {
     "box" => "openstack-user/trusty-icehouse",
@@ -27,7 +28,8 @@ nodes = {
     "ip2" => "#{options['icehouse_ip2']}",
     "memory" => 4096,
     "role" => "openstack",
-    "cpus" => 2
+    "cpus" => 2,
+    "nfs_share_name" => "icehouse"
   },
   "juno" => {
     "box" => "openstack-user/trusty-juno",
@@ -35,7 +37,8 @@ nodes = {
     "ip2" => "#{options['juno_ip2']}",
     "memory" => 4096,
     "role" => "openstack",
-    "cpus" => 2
+    "cpus" => 2,
+    "nfs_share_name" => "juno"
   },
   "cloudferry" => {
     "box" => "hashicorp/precise64",
@@ -60,7 +63,8 @@ nodes = {
     "role" => "openstack",
     "hostname" => "grizzly",
     "release" => "grizzly",
-    "cpus" => 2
+    "cpus" => 2,
+    "nfs_share_name" => "grizzly"
   },
   "grizzly_juno_dst" => {
     "box" => "grizzly_juno/dst",
@@ -71,7 +75,8 @@ nodes = {
     "role" => "openstack",
     "hostname" => "juno",
     "release" => "juno",
-    "cpus" => 2
+    "cpus" => 2,
+    "nfs_share_name" => "juno"
   },
   "grizzly_juno_nfs" => {
     "box" => "grizzly_juno/nfs",
@@ -91,7 +96,8 @@ nodes = {
     "role" => "openstack",
     "hostname" => "icehouse",
     "release" => "icehouse",
-    "cpus" => 2
+    "cpus" => 2,
+    "nfs_share_name" => "icehouse"
   },
   "icehouse_juno_dst" => {
     "box" => "icehouse_juno/dst",
@@ -102,7 +108,8 @@ nodes = {
     "role" => "openstack",
     "hostname" => "juno",
     "release" => "juno",
-    "cpus" => 2
+    "cpus" => 2,
+    "nfs_share_name" => "juno"
   },
   "icehouse_juno_nfs" => {
     "box" => "icehouse_juno/nfs",
@@ -118,6 +125,8 @@ nodes = {
 options['http_proxy'] ||= ""
 options['https_proxy'] ||= ""
 options['ftp_proxy'] ||= ""
+
+new_nfs_name = ENV.fetch("SHARED_NFS_NAME", false)
 
 Vagrant.require_version '>= 1.6.0'
 
@@ -165,6 +174,14 @@ Vagrant.configure(2) do |config|
 
           if nodename == "icehouse" then
             thisnode.vm.provision "shell", path: "./provision/cleanup_nova_instances.sh"
+          end
+
+          old_nfs_name = nodedata.fetch("nfs_share_name")
+          if new_nfs_name and new_nfs_name != old_nfs_name
+          then
+            thisnode.vm.provision "shell",
+              path: "./provision/configure_nfs.sh",
+              args: [old_nfs_name, new_nfs_name]
           end
         when "lab"
           config.vm.provision "shell", path: "./provision/prerequisites.sh"
