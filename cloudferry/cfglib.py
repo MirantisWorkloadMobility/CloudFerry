@@ -39,6 +39,20 @@ src_opts = [
                help='Openstack region name'),
     cfg.StrOpt('service_tenant', default='service',
                help='Tenant name for services'),
+    cfg.StrOpt('endpoint_type', default='publicURL',
+               choices=['publicURL', 'internalURL', 'adminURL'],
+               help="Endpoint type for all openstack services. This can be "
+                    "overridden for nova by specifying `nova_endpoint_type` "
+                    "and for cinder by specifying `cinder_endpoint_type`. "
+                    "Use your openrc for reference."),
+    cfg.StrOpt('nova_endpoint_type', default=None,
+               choices=['publicURL', 'internalURL', 'adminURL'],
+               help="Endpoint type for nova. Overrides `endpoint_type` "
+                    "value. Use your openrc for reference."),
+    cfg.StrOpt('cinder_endpoint_type', default=None,
+               choices=['publicURL', 'internalURL', 'adminURL'],
+               help="Endpoint type for cinder. Overrides `endpoint_type` "
+                    "value. Use openrc for reference."),
     cfg.StrOpt('ssh_user', default='root',
                help='user to connect via ssh'),
     cfg.StrOpt('ssh_sudo_password', default='',
@@ -72,6 +86,20 @@ dst_opts = [
                help='Openstack region name'),
     cfg.StrOpt('service_tenant', default='service',
                help='Tenant name for services'),
+    cfg.StrOpt('endpoint_type', default='publicURL',
+               choices=['publicURL', 'internalURL', 'adminURL'],
+               help="Endpoint type for all openstack services. This can be "
+                    "overridden for nova by specifying `nova_endpoint_type` "
+                    "and for cinder by specifying `cinder_endpoint_type`. "
+                    "Use your openrc for reference."),
+    cfg.StrOpt('nova_endpoint_type', default=None,
+               choices=['publicURL', 'internalURL', 'adminURL'],
+               help="Endpoint type for nova. Overrides `endpoint_type` "
+                    "value. Use your openrc for reference."),
+    cfg.StrOpt('cinder_endpoint_type', default=None,
+               choices=['publicURL', 'internalURL', 'adminURL'],
+               help="Endpoint type for cinder. Overrides `endpoint_type` "
+                    "value. Use openrc for reference."),
     cfg.StrOpt('ssh_user', default='root',
                help='user to connect via ssh'),
     cfg.StrOpt('ssh_sudo_password', default='',

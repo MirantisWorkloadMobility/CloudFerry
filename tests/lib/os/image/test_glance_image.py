@@ -31,7 +31,9 @@ FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
                                                    'ssh_host': '1.1.1.10',
                                                    'ssh_user': 'fake_user',
                                                    'cacert': '',
-                                                   'insecure': False
+                                                   'insecure': False,
+                                                   'endpoint_type':
+                                                       'privateURL'
                                                    }),
                              migrate=utils.ext_dict({'retry': '7',
                                                      'time_wait': 5}))

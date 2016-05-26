@@ -114,7 +114,9 @@ class NovaCompute(compute.Compute):
             params.cloud.auth_url,
             cacert=params.cloud.cacert,
             insecure=params.cloud.insecure,
-            region_name=params.cloud.region
+            region_name=params.cloud.region,
+            endpoint_type=(params.cloud.nova_endpoint_type or
+                           params.cloud.endpoint_type)
         )
 
         LOG.debug("Authenticating as '%s' in tenant '%s' for Nova client "

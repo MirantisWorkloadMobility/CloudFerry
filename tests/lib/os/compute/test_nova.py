@@ -87,7 +87,8 @@ class NovaComputeTestCase(BaseNovaComputeTestCase):
                                                  'fake_tenant',
                                                  'http://1.1.1.1:35357/v2.0/',
                                                  cacert='', insecure=False,
-                                                 region_name=None)
+                                                 region_name=None,
+                                                 endpoint_type='publicURL')
         self.assertEqual(self.mock_client(), client)
 
     def test_create_instance(self):
@@ -509,6 +510,7 @@ class NovaClientTestCase(test.TestCase):
         password = 'password'
         insecure = False
         cacert = ''
+        ep_type = 'internalURL'
 
         config.cloud.user = user
         config.cloud.tenant = tenant
@@ -518,6 +520,7 @@ class NovaClientTestCase(test.TestCase):
         config.cloud.insecure = insecure
         config.cloud.cacert = cacert
         config.migrate.override_rules = None
+        config.cloud.nova_endpoint_type = ep_type
 
         cloud.position = 'src'
 
@@ -526,7 +529,8 @@ class NovaClientTestCase(test.TestCase):
 
         n_client.assert_called_with(user, password, tenant, auth_url,
                                     region_name=region, cacert=cacert,
-                                    insecure=insecure)
+                                    insecure=insecure,
+                                    endpoint_type=ep_type)
 
     def test_does_not_add_region_if_not_set_in_config(self, n_client):
         cloud = mock.MagicMock()
@@ -538,6 +542,7 @@ class NovaClientTestCase(test.TestCase):
         password = 'password'
         insecure = False
         cacert = ''
+        ep_type = 'internalURL'
 
         config.cloud.region = None
         config.cloud.user = user
@@ -546,6 +551,7 @@ class NovaClientTestCase(test.TestCase):
         config.cloud.password = password
         config.cloud.insecure = insecure
         config.cloud.cacert = cacert
+        config.cloud.nova_endpoint_type = ep_type
         config.migrate.override_rules = None
 
         cloud.position = 'src'
@@ -555,4 +561,4 @@ class NovaClientTestCase(test.TestCase):
 
         n_client.assert_called_with(user, password, tenant, auth_url,
                                     cacert=cacert, insecure=insecure,
-                                    region_name=None)
+                                    region_name=None, endpoint_type=ep_type)
