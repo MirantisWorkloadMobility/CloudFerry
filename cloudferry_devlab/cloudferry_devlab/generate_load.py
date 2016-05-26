@@ -621,6 +621,8 @@ class Prerequisites(base.BasePrerequisites):
     def create_cinder_volumes(self, volumes_list):
 
         def wait_until_vms_with_fip_accessible(_vm_id):
+            self.log.debug('Waiting for VM %s to become accessible via '
+                           'floating ip', _vm_id)
             vm = self.novaclient.servers.get(_vm_id)
             self.migration_utils.open_ssh_port_secgroup(self, vm.tenant_id)
             try:
@@ -631,6 +633,7 @@ class Prerequisites(base.BasePrerequisites):
                 [(fip_addr, 'pwd')],
                 self.migration_utils.wait_until_vm_accessible_via_ssh,
                 conf.TIMEOUT)
+            self.log.debug('VM %s is now accessible via floating ip', _vm_id)
 
         def get_params_for_volume_creating(_volume):
             params = ['display_name', 'size', 'imageRef', 'metadata']
@@ -644,6 +647,7 @@ class Prerequisites(base.BasePrerequisites):
             return {param: _volume[param] for param in params
                     if param in _volume}
 
+        self.log.debug('Creating cinder volumes')
         vlm_ids = []
         for volume in volumes_list:
             if 'user' in volume:
@@ -657,8 +661,11 @@ class Prerequisites(base.BasePrerequisites):
             vlm_ids.append(vlm.id)
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
+        self.log.debug('Waiting for cinder volumes to become active')
         self.wait_until_objects(vlm_ids, self.check_volume_state,
                                 conf.TIMEOUT)
+
+        self.log.debug('Attaching volumes to VMs')
         vlm_ids = []
         for volume in volumes_list:
             if 'server_to_attach' not in volume:
@@ -670,6 +677,7 @@ class Prerequisites(base.BasePrerequisites):
             self.novaclient.volumes.create_server_volume(
                 server_id=vm_id, volume_id=vlm_id, device=volume['device'])
             vlm_ids.append(vlm_id)
+        self.log.debug('Waiting for volume attachments to become in-use')
         self.wait_until_objects(vlm_ids, self.check_volume_state,
                                 conf.TIMEOUT)
 
