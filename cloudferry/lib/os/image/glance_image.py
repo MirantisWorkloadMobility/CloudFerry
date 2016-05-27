@@ -144,7 +144,7 @@ class GlanceImage(image.Image):
         """ Getting glance client. """
         endpoint_glance = self.identity_client.get_endpoint_by_service_type(
             service_type='image',
-            endpoint_type='publicURL')
+            endpoint_type=self.config.cloud.endpoint_type)
 
         # we can figure out what version of client to use from url
         # check if we have "v1" or "v2" in the end of url

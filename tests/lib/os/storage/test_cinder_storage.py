@@ -32,7 +32,8 @@ FAKE_CONFIG = {
             'auth_url': 'http://1.1.1.1:35357/v2.0/',
             'region': None,
             'cacert': '',
-            'insecure': False},
+            'insecure': False,
+            'endpoint_type': 'publicURL'},
     'migrate': {'retry': '7',
                 'time_wait': 5,
                 'keep_volume_storage': False,
@@ -89,7 +90,8 @@ class CinderStorageTestCase(test.TestCase):
                                                  'fake_tenant',
                                                  'http://1.1.1.1:35357/v2.0/',
                                                  cacert='', insecure=False,
-                                                 region_name=None)
+                                                 region_name=None,
+                                                 endpoint_type='publicURL')
         self.assertEqual(self.mock_client(), client)
 
     def test_get_volumes_list(self):

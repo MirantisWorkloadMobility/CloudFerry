@@ -32,13 +32,15 @@ class SwiftStorage(objstorage.ObjStorage):
         if params is None:
             params = self.config.cloud
 
+        ep_type = {'endpoint_type': params.endpoint_type}
         conn = swift_client.Connection(user=params.user,
                                        key=params.password,
                                        tenant_name=params.tenant,
                                        authurl=params.auth_url,
                                        auth_version="2",
                                        cacert=params.cacert,
-                                       insecure=params.insecure)
+                                       insecure=params.insecure,
+                                       os_options=ep_type)
         return conn.get_auth()
 
     def read_info(self, **_):

@@ -92,7 +92,9 @@ class CinderStorage(storage.Storage):
             params.cloud.auth_url,
             cacert=params.cloud.cacert,
             insecure=params.cloud.insecure,
-            region_name=params.cloud.region
+            region_name=params.cloud.region,
+            endpoint_type=(params.cloud.cinder_endpoint_type or
+                           params.cloud.endpoint_type)
         )
 
     def get_filter(self):

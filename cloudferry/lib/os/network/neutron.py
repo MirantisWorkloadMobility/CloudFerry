@@ -65,7 +65,8 @@ class NeutronNetwork(network.Network):
             auth_url=self.config.cloud.auth_url,
             cacert=self.config.cloud.cacert,
             insecure=self.config.cloud.insecure,
-            region_name=self.config.cloud.region
+            region_name=self.config.cloud.region,
+            endpoint_type=self.config.cloud.endpoint_type
         )
 
     def read_info(self, **kwargs):
