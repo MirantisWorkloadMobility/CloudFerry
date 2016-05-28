@@ -17,12 +17,11 @@ import logging
 
 from cinderclient import exceptions as cinder_exceptions
 from novaclient import exceptions as nova_exceptions
-from oslo_config import cfg
 
 from cloudferry.lib.base.action import action
-from cloudferry.lib.utils import utils as utl
+from cloudferry.lib.utils import proxy_client
+from cloudferry.lib.utils import utils
 
-CONF = cfg.CONF
 LOG = logging.getLogger(__name__)
 
 
@@ -30,22 +29,23 @@ class AttachVolumesCompute(action.Action):
 
     def run(self, info, **kwargs):
         info = copy.deepcopy(info)
-        compute_res = self.cloud.resources[utl.COMPUTE_RESOURCE]
-        storage_res = self.cloud.resources[utl.STORAGE_RESOURCE]
-        for instance in info[utl.INSTANCES_TYPE].itervalues():
-            if not instance[utl.META_INFO].get(utl.VOLUME_BODY):
+        compute_res = self.cloud.resources[utils.COMPUTE_RESOURCE]
+        storage_res = self.cloud.resources[utils.STORAGE_RESOURCE]
+        for instance in info[utils.INSTANCES_TYPE].itervalues():
+            if not instance[utils.META_INFO].get(utils.VOLUME_BODY):
                 continue
-            for vol in instance[utl.META_INFO][utl.VOLUME_BODY]:
+            for vol in instance[utils.META_INFO][utils.VOLUME_BODY]:
                 volume = vol['volume']
                 volume_id = volume['id']
                 status = None
-                try:
-                    status = storage_res.get_status(volume_id)
-                except cinder_exceptions.NotFound:
-                    dst_volume = storage_res.get_migrated_volume(volume_id)
-                    if dst_volume:
-                        volume_id = dst_volume.id
-                        status = dst_volume.status
+                with proxy_client.expect_exception(cinder_exceptions.NotFound):
+                    try:
+                        status = storage_res.get_status(volume_id)
+                    except cinder_exceptions.NotFound:
+                        dst_volume = storage_res.get_migrated_volume(volume_id)
+                        if dst_volume:
+                            volume_id = dst_volume.id
+                            status = dst_volume.status
 
                 if status == 'available':
                     nova_client = compute_res.nova_client
@@ -53,7 +53,7 @@ class AttachVolumesCompute(action.Action):
                     try:
                         nova_client.volumes.create_server_volume(
                             inst['id'], volume_id, volume['device'])
-                        timeout = CONF.migrate.storage_backend_timeout
+                        timeout = self.cfg.migrate.storage_backend_timeout
                         storage_res.try_wait_for_status(volume_id,
                                                         storage_res.get_status,
                                                         'in-use',
