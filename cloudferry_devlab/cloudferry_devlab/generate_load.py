@@ -788,30 +788,17 @@ class Prerequisites(base.BasePrerequisites):
 
     def emulate_vm_states(self):
         vms = []
+        dst_vms = [vm['name'] for vm in self.config.dst_vms]
         for vm in self.config.vm_states:
             vm_id = self.get_vm_id(vm['name'])
             vm_state = vm['state']
-            # emulate error state:
-            if vm_state == u'error':
-                self.novaclient.servers.reset_state(server=vm_id,
-                                                    state=vm_state)
-                vms.append((vm_id, 'ERROR'))
-            # emulate suspend state:
-            elif vm_state == u'suspend':
-                self.novaclient.servers.suspend(vm_id)
-                vms.append((vm_id, 'SUSPENDED'))
-            # emulate resize state:
-            elif vm_state == u'pause':
-                self.novaclient.servers.pause(vm_id)
-                vms.append((vm_id, 'PAUSED'))
-            # emulate stop/shutoff state:
-            elif vm_state == u'stop':
-                self.novaclient.servers.stop(vm_id)
-                vms.append((vm_id, 'SHUTOFF'))
-            # emulate resize state:
-            elif vm_state == u'resize':
-                self.novaclient.servers.resize(vm_id, '2')
-                vms.append((vm_id, ('VERIFY_RESIZE', 'ACTIVE', 'ERROR')))
+            vms.append(self.set_vm_state(self.novaclient, vm_id, vm_state))
+            if vm['name'] in dst_vms:
+                res = self.set_vm_state(self.dst_cloud.novaclient,
+                                        self.dst_cloud.get_vm_id(vm['name']),
+                                        vm_state)
+                self.wait_until_objects([res], self.dst_cloud.check_vm_state,
+                                        conf.TIMEOUT)
         self.wait_until_objects(vms, self.check_vm_state, conf.TIMEOUT)
 
     def generate_vm_state_list(self):
@@ -1030,11 +1017,14 @@ class Prerequisites(base.BasePrerequisites):
         flavors = [f for f in self.config.flavors if f['name'] in flv_names]
         self.dst_cloud.create_flavors(flavors)
 
+        vm_ids = []
         for tenant_name, vms in tenants.iteritems():
             user = get_user_for_tenant(tenant_name)
             self.dst_cloud.switch_user(
                 user['name'], user['password'], user['tenant'])
-            self.dst_cloud.create_vms(vms)
+            vm_ids.extend(self.dst_cloud.create_vms(vms))
+        self.wait_until_objects(vm_ids, self.dst_cloud.check_vm_state,
+                                conf.TIMEOUT)
 
     def create_ext_net_map_yaml(self):
         src_ext_nets = [net['name'] for net in self.config.networks
@@ -1094,12 +1084,20 @@ class Prerequisites(base.BasePrerequisites):
         self.create_cinder_objects()
         self.log.info('Writing data into the volumes')
         self.write_data_to_volumes()
+        self.log.info('Create tenant on dst, without security group')
+        self.create_tenant_wo_sec_group_on_dst()
+        self.log.info('Create role on dst')
+        self.create_user_on_dst()
+        self.log.info('Creating networks on dst')
+        self.create_dst_networking()
+        self.log.info('Creating vms on dst')
+        self.create_vms_on_dst()
+        self.log.info('Emulating vm states')
+        self.emulate_vm_states()
         self.log.info('Creating invalid cinder objects')
         self.create_invalid_cinder_objects()
         self.log.info('Create swift containers and objects')
         self.create_swift_container_and_objects()
-        self.log.info('Emulating vm states')
-        self.emulate_vm_states()
         self.log.info('Generating vm states list')
         self.generate_vm_state_list()
         self.log.info('Deleting flavor')
@@ -1116,13 +1114,5 @@ class Prerequisites(base.BasePrerequisites):
         self.delete_users()
         self.log.info('Delete tenants which should be deleted')
         self.delete_tenants()
-        self.log.info('Create tenant on dst, without security group')
-        self.create_tenant_wo_sec_group_on_dst()
-        self.log.info('Create role on dst')
-        self.create_user_on_dst()
-        self.log.info('Creating networks on dst')
-        self.create_dst_networking()
         self.log.info('Creating networks map')
         self.create_ext_net_map_yaml()
-        self.log.info('Creating vms on dst')
-        self.create_vms_on_dst()
