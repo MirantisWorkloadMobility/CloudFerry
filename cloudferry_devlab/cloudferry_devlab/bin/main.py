@@ -50,5 +50,21 @@ def main():
         preqs.run_preparation_scenario()
 
 
+def restore_vms():
+    parser = argparse.ArgumentParser(
+        description='Script to restore pre-generated VMs state.')
+    parser.add_argument('cloudsconf', type=argparse.FileType('r'),
+                        help='Please point configuration.ini file location')
+
+    args = parser.parse_args()
+    confparser = ConfigParser.ConfigParser()
+    confparser.readfp(args.cloudsconf)
+    cloudsconf = base.get_dict_from_config_file(confparser)
+
+    preqs = generate_load.Prerequisites(config=config,
+                                        configuration_ini=cloudsconf)
+    preqs.run_restore_vms_state()
+
+
 if __name__ == '__main__':
     main()

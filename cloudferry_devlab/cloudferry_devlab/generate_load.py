@@ -792,11 +792,12 @@ class Prerequisites(base.BasePrerequisites):
         for vm in self.config.vm_states:
             vm_id = self.get_vm_id(vm['name'])
             vm_state = vm['state']
-            vms.append(self.set_vm_state(self.novaclient, vm_id, vm_state))
+            vms.append(self.set_vm_state(self.novaclient, vm_id, vm_state,
+                                         logger=self.log))
             if vm['name'] in dst_vms:
                 res = self.set_vm_state(self.dst_cloud.novaclient,
                                         self.dst_cloud.get_vm_id(vm['name']),
-                                        vm_state)
+                                        vm_state, logger=self.log)
                 self.wait_until_objects([res], self.dst_cloud.check_vm_state,
                                         conf.TIMEOUT)
         self.wait_until_objects(vms, self.check_vm_state, conf.TIMEOUT)
@@ -1116,3 +1117,8 @@ class Prerequisites(base.BasePrerequisites):
         self.delete_tenants()
         self.log.info('Creating networks map')
         self.create_ext_net_map_yaml()
+
+    def run_restore_vms_state(self):
+        self.init_dst_cloud()
+        self.log.info('Emulating vm states')
+        self.emulate_vm_states()

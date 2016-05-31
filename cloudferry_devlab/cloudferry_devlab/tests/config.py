@@ -644,18 +644,18 @@ cinder_snapshots = [
 """Cinder snapshots to create/delete"""
 
 vm_states = [
-    {'name': 'server1', 'state': 'error'},
-    {'name': 'server2', 'state': 'active'},
-    {'name': 'server3', 'state': 'suspend'},
-    {'name': 'server4', 'state': 'pause'},
-    {'name': 'server5', 'state': 'resize'},
-    {'name': 'not_in_filter', 'state': 'stop'},
-    {'name': 'tn1server1', 'state': 'active'},
-    {'name': 'tn3server1', 'state': 'stop'},
-    {'name': 'tn5server1', 'state': 'stop'},
-    {'name': 'tn5server2', 'state': 'stop'},
-    {'name': 'tn5server3', 'state': 'stop'},
-    {'name': 'keypair_test_server', 'state': 'active'}
+    {'name': 'server1', 'state': 'ERROR'},
+    {'name': 'server2', 'state': 'ACTIVE'},
+    {'name': 'server3', 'state': 'SUSPENDED'},
+    {'name': 'server4', 'state': 'PAUSED'},
+    {'name': 'server5', 'state': 'VERIFY_RESIZE'},
+    {'name': 'not_in_filter', 'state': 'SHUTOFF'},
+    {'name': 'tn1server1', 'state': 'ACTIVE'},
+    {'name': 'tn3server1', 'state': 'SHUTOFF'},
+    {'name': 'tn5server1', 'state': 'SHUTOFF'},
+    {'name': 'tn5server2', 'state': 'SHUTOFF'},
+    {'name': 'tn5server3', 'state': 'SHUTOFF'},
+    {'name': 'keypair_test_server', 'state': 'ACTIVE'}
 ]
 """Emulate different VM states"""
 
