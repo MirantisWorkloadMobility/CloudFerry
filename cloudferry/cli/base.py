@@ -59,33 +59,9 @@ class YamlConfigMixin(ConfigMixin):
         )
 
     def init_config(self, config_path):
-        def import_legacy(cloud, cfg):
-            cred = cloud.setdefault('credential', {})
-            cred['auth_url'] = cfg.auth_url
-            cred['username'] = cfg.user
-            cred['password'] = cfg.password
-            cred['region_name'] = cfg.region
-            cred['https_insecure'] = cfg.insecure
-            cred['https_cacert'] = cfg.cacert
-            scope = cloud.setdefault('scope', {})
-            scope['project_name'] = cfg.tenant
-            ssh = cloud.setdefault('ssh', {})
-            ssh['gateway'] = cfg.ssh_host
-            ssh['username'] = cfg.ssh_user
-            ssh['sudo_password'] = cfg.ssh_sudo_password
-            ssh['connection_attempts'] = \
-                cfglib.CONF.migrate.ssh_connection_attempts
-
-        prev_legacy_config_path = None
-        with open(config_path, 'r') as config_file:
-            conf = yaml.load(config_file)
-            clouds = conf.setdefault('clouds', {})
-            for value in clouds.values():
-                if 'legacy' not in value:
-                    continue
-                legacy_config_path, section = value.pop('legacy').split(':')
-                if prev_legacy_config_path != legacy_config_path:
-                    super(YamlConfigMixin, self).init_config(
-                        legacy_config_path)
-                import_legacy(value, getattr(cfglib.CONF, section))
-            return config.load(conf)
+        try:
+            with open(config_path, 'r') as config_file:
+                conf = yaml.load(config_file)
+                return config.load(conf)
+        except config.ValidationError as ex:
+            self.app.parser.error(ex)
