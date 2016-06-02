@@ -419,28 +419,29 @@ class BasePrerequisites(object):
         return os.path.join(os.path.dirname(self.results_path), file_path)
 
     @staticmethod
-    def set_vm_state(novaclient, vm_id, vm_state):
-        # emulate error state:
-        if vm_state == u'error':
-            novaclient.servers.reset_state(server=vm_id, state=vm_state)
-            return vm_id, 'ERROR'
-        # emulate suspend state:
-        elif vm_state == u'suspend':
-            novaclient.servers.suspend(vm_id)
-            return vm_id, 'SUSPENDED'
-        # emulate resize state:
-        elif vm_state == u'pause':
-            novaclient.servers.pause(vm_id)
-            return vm_id, 'PAUSED'
-        # emulate stop/shutoff state:
-        elif vm_state == u'stop':
-            novaclient.servers.stop(vm_id)
-            return vm_id, 'SHUTOFF'
-        # emulate resize state:
-        elif vm_state == u'resize':
-            novaclient.servers.resize(vm_id, '2')
-            return vm_id, ('VERIFY_RESIZE', 'ACTIVE', 'ERROR')
-        return vm_id
+    def set_vm_state(novaclient, vm_id, vm_state, logger=None):
+        try:
+            vm_status = novaclient.servers.get(vm_id).status
+            if vm_state != vm_status:
+                if vm_state == u'ERROR':
+                    novaclient.servers.reset_state(server=vm_id,
+                                                   state=vm_state.lower())
+                elif vm_state == u'SUSPENDED':
+                    novaclient.servers.suspend(vm_id)
+                elif vm_state == u'PAUSED':
+                    novaclient.servers.pause(vm_id)
+                elif vm_state == u'SHUTOFF':
+                    novaclient.servers.stop(vm_id)
+                elif vm_state == u'VERIFY_RESIZE':
+                    vm_state = ('VERIFY_RESIZE', 'ACTIVE', 'ERROR')
+                    novaclient.servers.resize(vm_id, '2')
+                elif vm_state == u'ACTIVE':
+                    novaclient.servers.start(vm_id)
+        except (nova_exceptions.Conflict, nova_exceptions.BadRequest) as e:
+            if logger:
+                logger.warning('There was some problems during state change:\n'
+                               '%s' % e)
+        return vm_id, vm_state
 
 
 def get_dict_from_config_file(config_file):
