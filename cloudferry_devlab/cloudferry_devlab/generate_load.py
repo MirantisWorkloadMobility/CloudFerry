@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import itertools
-import json
 import logging
 from logging import config as logging_config
 import os
@@ -790,6 +789,9 @@ class Prerequisites(base.BasePrerequisites):
         vms = []
         dst_vms = [vm['name'] for vm in self.config.dst_vms]
         for vm in self.config.vm_states:
+            if self.openstack_release not in ['icehouse', 'juno'] and \
+                    vm.get('skip_in_grizzly'):
+                continue
             vm_id = self.get_vm_id(vm['name'])
             vm_state = vm['state']
             vms.append(self.set_vm_state(self.novaclient, vm_id, vm_state,
@@ -801,23 +803,6 @@ class Prerequisites(base.BasePrerequisites):
                 self.wait_until_objects([res], self.dst_cloud.check_vm_state,
                                         conf.TIMEOUT)
         self.wait_until_objects(vms, self.check_vm_state, conf.TIMEOUT)
-
-    def generate_vm_state_list(self):
-        data = {}
-        for vm in self.novaclient.servers.list(search_opts={'all_tenants': 1}):
-            for _ in range(conf.TIMEOUT):
-                _vm = self.novaclient.servers.get(vm.id)
-                if _vm.status != u'RESIZE':
-                    break
-                time.sleep(1)
-            vm_state = self.novaclient.servers.get(vm.id).status
-            data[vm.name] = vm_state
-
-        file_path = conf.pre_migration_vm_states_file
-        file_path = self.get_abs_path(file_path)
-        with open(file_path, 'w') as outfile:
-            json.dump(data, outfile, sort_keys=True, indent=4,
-                      ensure_ascii=False)
 
     def delete_flavor(self, flavor='del_flvr'):
         """
@@ -1099,8 +1084,6 @@ class Prerequisites(base.BasePrerequisites):
         self.create_invalid_cinder_objects()
         self.log.info('Create swift containers and objects')
         self.create_swift_container_and_objects()
-        self.log.info('Generating vm states list')
-        self.generate_vm_state_list()
         self.log.info('Deleting flavor')
         self.delete_flavor()
         self.log.info('Modifying admin tenant quotas')

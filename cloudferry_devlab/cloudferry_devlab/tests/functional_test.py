@@ -284,6 +284,12 @@ class FunctionalTest(unittest.TestCase):
                     net) if ip['OS-EXT-IPS:type'] == 'fixed']
             setattr(vm, 'vm_hash', (vm.name, nics))
 
+    def get_vm_original_state(self, vm_name):
+        for vm in config.vm_states:
+            if vm.get('name') == vm_name:
+                return vm.get('state')
+        self.fail('Original state for VM %s was not found.' % vm_name)
+
     def _is_segm_id_test(self, param, name):
         return param in config.PARAMS_NAMES_TO_OMIT and (
             name in config.NET_NAMES_TO_OMIT or

@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import json
-import os
 import unittest
 
 from fabric.api import run, settings
@@ -69,11 +67,6 @@ class VmMigration(functional_test.FunctionalTest):
                         'dst_vm': d_vm,
                     })
 
-        file_path = os.path.join(self.cloudferry_dir,
-                                 config.pre_migration_vm_states_file)
-        with open(file_path) as data_file:
-            self.original_states = json.load(data_file)
-
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_vms_not_in_filter_stay_active_on_src(self):
         """Validate VMs which not icluded in filter stays active on SRC cloud.
@@ -85,7 +78,7 @@ class VmMigration(functional_test.FunctionalTest):
             for vm_obj in vm_list:
                 self.assertEqual(
                     vm_obj.status,
-                    self.original_states[vm_obj.name],
+                    self.get_vm_original_state(vm_obj.name),
                     msg="Vm %s has wrong state" % vm_obj.name)
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
@@ -105,8 +98,8 @@ class VmMigration(functional_test.FunctionalTest):
         for vms in self.src_dst_vms:
             dst_vm = vms['dst_vm']
             src_vm = vms['src_vm']
-            if self.original_states[src_vm.name] in ['ACTIVE',
-                                                     'VERIFY_RESIZE']:
+            if self.get_vm_original_state(src_vm.name) in ['ACTIVE',
+                                                           'VERIFY_RESIZE']:
                 self.assertIn(src_vm.status, ['SHUTOFF', 'ACTIVE'],
                               msg=msg % (src_vm.name, src_vm.id, 'SRC',
                                          src_vm.status, ['SHUTOFF', 'ACTIVE']))

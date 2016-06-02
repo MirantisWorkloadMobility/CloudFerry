@@ -60,9 +60,6 @@ logging_configuration = {
 filters_file_naming_template = 'filter_{tenant_name}.yaml'
 """Naming template for filter files."""
 
-pre_migration_vm_states_file = 'pre_migration_vm_states.json'
-"""Filename to save vm states before migration."""
-
 ext_net_map = 'ext_net_map.yaml'
 """This file contains map of relationships between external networks on source
 and destination clouds."""
@@ -655,7 +652,8 @@ vm_states = [
     {'name': 'tn5server1', 'state': 'SHUTOFF'},
     {'name': 'tn5server2', 'state': 'SHUTOFF'},
     {'name': 'tn5server3', 'state': 'SHUTOFF'},
-    {'name': 'keypair_test_server', 'state': 'ACTIVE'}
+    {'name': 'keypair_test_server', 'state': 'ACTIVE'},
+    {'name': 'server_from_volume', 'state': 'SHUTOFF', 'skip_in_grizzly': True}
 ]
 """Emulate different VM states"""
 
