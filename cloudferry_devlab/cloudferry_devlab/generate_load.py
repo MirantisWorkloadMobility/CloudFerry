@@ -1027,6 +1027,36 @@ class Prerequisites(base.BasePrerequisites):
         self.wait_until_objects(vm_ids, self.dst_cloud.check_vm_state,
                                 conf.TIMEOUT)
 
+    def adjust_initial_statuses(self):
+        for vm in itertools.chain(
+                self.novaclient.servers.list(search_opts={'all_tenants': 1}),
+                self.dst_cloud.novaclient.servers.list(
+                    search_opts={'all_tenants': 1})):
+            try:
+                if vm.status != 'SHUTOFF':
+                    if vm.status != 'ERROR':
+                        vm.reset_state()
+                    vm.stop()
+            except (nv_exceptions.Conflict, nv_exceptions.BadRequest) as e:
+                self.log.warning('There was some problems during state change:'
+                                 '\n%s', e)
+
+        dst_vms = [vm['name'] for vm in self.config.dst_vms]
+        for vm in self.config.vm_states:
+            vm_state = vm['state']
+            if vm_state in ('PAUSED', 'SUSPENDED', 'VERIFY_RESIZE'):
+                if vm['name'] not in dst_vms:
+                    vm_id = self.get_vm_id(vm['name'])
+                    self.novaclient.servers.start(vm_id)
+                    self.wait_until_objects(
+                        [(vm_id, 'ACTIVE')], self.check_vm_state, conf.TIMEOUT)
+                else:
+                    vm_id = self.dst_cloud.get_vm_id(vm['name'])
+                    self.dst_cloud.novaclient.start(vm_id)
+                    self.wait_until_objects(
+                        [(vm_id, 'ACTIVE')], self.dst_cloud.check_vm_state,
+                        conf.TIMEOUT)
+
     def create_ext_net_map_yaml(self):
         src_ext_nets = [net['name'] for net in self.config.networks
                         if net.get('router:external')]
@@ -1120,5 +1150,9 @@ class Prerequisites(base.BasePrerequisites):
 
     def run_restore_vms_state(self):
         self.init_dst_cloud()
+        self.log.info('Adjusting VM initial states')
+        self.adjust_initial_statuses()
         self.log.info('Emulating vm states')
         self.emulate_vm_states()
+        self.log.info('Breaking VMs')
+        self.break_vm()
