@@ -29,9 +29,11 @@ fi
 crudini --set /etc/nova/nova.conf DEFAULT vncserver_proxyclient_address ${SYSTEM_IP}
 crudini --set /etc/nova/nova.conf DEFAULT osapi_compute_workers 1
 crudini --set /etc/nova/nova.conf DEFAULT metadata_workers 1
+crudini --set /etc/nova/nova.conf DEFAULT allow_resize_to_same_host True
+crudini --set /etc/nova/nova.conf DEFAULT allow_migrate_to_same_host True
 crudini --set /etc/nova/nova.conf conductor workers 1
-service nova-api start
-service nova-conductor start
-service nova-compute start
+service nova-api restart
+service nova-conductor restart
+service nova-compute restart
 
 EOF
