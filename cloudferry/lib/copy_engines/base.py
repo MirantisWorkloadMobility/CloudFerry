@@ -93,6 +93,39 @@ class BaseCopier(object):
         return cls.name or cls.__name__
 
 
+class CopierAddingWritePermissionsInDestination(object):
+    """Decorates concrete copiers.
+
+    When running migration as unprivileged user (non-root), destination
+    node may not have write permissions to write file over network using
+    rsync, bbcp, or scp. This copier wrapper resolves the problem by
+    temporarily chmod'ing destination folder to 777 and reverting
+    permissions back once done."""
+
+    def __init__(self, copier, config):
+        self.config = config
+        self.copier = copier
+
+    def transfer(self, data):
+        dst_host = data['host_dst']
+        dst_path = data['path_dst']
+
+        dst_runner = remote_runner.RemoteRunner(
+            host=dst_host,
+            user=self.config.dst.ssh_user,
+            password=self.config.dst.ssh_sudo_password,
+            sudo=True)
+
+        with files.grant_all_permissions(dst_runner, dst_path):
+            self.copier.transfer(data)
+
+    def __getattr__(self, item):
+        return getattr(self.copier, item)
+
+    def __repr__(self):
+        return self.__class__.__name__ + repr(self.copier)
+
+
 class CopierNotFound(exception.AbortMigrationError):
     message = "Copier '{name}' not found"
 
@@ -118,17 +151,35 @@ def get_copier_class(name=None):
     raise CopierNotFound(name)
 
 
-def get_copier(src_cloud, dst_cloud, data):
+def get_copier(src_cloud, dst_cloud, driver=None):
     """
     Get a default copier initialize it and check the possibility of using
     the copier on the hosts.
 
-    :param src_cloud: The object of cource cloud
+    :param driver: copier driver class
+    :param src_cloud: The object of source cloud
     :param dst_cloud: The object of destination cloud
-    :param data: The data to check usage a copier on the hosts
     :return: a copier
     """
-    copier = get_copier_class()(src_cloud, dst_cloud)
+    copier_class = get_copier_class(driver)
+    unsafe_copier = copier_class(src_cloud, dst_cloud)
+    copier = CopierAddingWritePermissionsInDestination(unsafe_copier, CONF)
+    return copier
+
+
+def get_copier_checked(src_cloud, dst_cloud, data, driver=None):
+    """
+    Same as `get_copier()`, but additionally verifies if copier can be used
+    on host and raises `CopierCannotBeUsed` exception if cannot.
+
+    :param src_cloud: The object of source cloud
+    :param dst_cloud: The object of destination cloud
+    :param data: The data to check usage a copier on the hosts
+    :param driver: copier driver class
+    :raises CopierCannotBeUsed: in case
+    :return: a copier
+    """
+    copier = get_copier(src_cloud, dst_cloud, driver)
     if not copier.check_usage(data):
         raise CopierCannotBeUsed(name=copier.get_name(),
                                  host_src=data['host_src'],

@@ -57,9 +57,9 @@ class RemoteFileCopy(CopyMechanism):
         }
 
         try:
-            copier = base.get_copier(context.src_cloud,
-                                     context.dst_cloud,
-                                     data)
+            copier = base.get_copier_checked(context.src_cloud,
+                                             context.dst_cloud,
+                                             data)
 
             copier.transfer(data)
         except (base.FileCopyError,

@@ -47,8 +47,6 @@ class RsyncCopier(base.BaseCopier):
         cmd = ("rsync "
                "--partial "
                "--inplace "
-               "--perms "
-               "--times "
                "--compress "
                "--verbose "
                "--progress "

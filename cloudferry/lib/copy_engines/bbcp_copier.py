@@ -84,10 +84,9 @@ class BbcpCopier(base.BaseCopier):
         additional_options = []
         # -f: forces the copy by first unlinking the target file before
         # copying.
-        # -p: preserve source mode, ownership, and dates.
         # -S: command to start bbcp on the source node.
         # -T: command to start bbcp on the target node.
-        forced_options = ['-f', '-p']
+        forced_options = ['-f']
         if CONF.migrate.copy_with_md5_verification:
             # -e: error check data for transmission errors using md5 checksum.
             forced_options.append('-e')
