@@ -114,3 +114,4 @@ tasks:
    check_quotas: ['CheckQuotas']
    remove_bbcp: ['RemoveBBCP']
    transport_storage_resources: ['TransportStorageResources']
+   check_copy_engine_configuration: ['CheckCopyEngineConfiguration']

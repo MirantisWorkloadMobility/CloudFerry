@@ -37,6 +37,7 @@ preparation:
   - create_image_snapshot_dst: True
   - task_check_write_access:
       - act_check_dst_cloud: True
+  - check_copy_engine_configuration: True
 
 rollback:
   - restore_vms: True
