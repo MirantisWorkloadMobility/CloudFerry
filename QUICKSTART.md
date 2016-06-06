@@ -32,7 +32,6 @@
     cd CloudFerry
     virtualenv .venv
     source .venv/bin/activate
-    pip install pip==7.1.2
     pip install -r requirements.txt
     pip install -r test-requirements.txt
     ```

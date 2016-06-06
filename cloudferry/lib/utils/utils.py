@@ -14,27 +14,18 @@
 
 import logging
 import threading
-import time
 import timeit
 import random
 import re
 import string
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-import json
 import os
-import inspect
-from multiprocessing import Lock
 
-from fabric.api import run, settings, local, env, sudo
+from fabric.api import settings, local, env, sudo
 from fabric.context_managers import hide
 import yaml
 
 LOG = logging.getLogger(__name__)
 
-ISCSI = "iscsi"
-CEPH = "ceph"
 BOOT_FROM_VOLUME = "boot_volume"
 BOOT_FROM_IMAGE = "boot_image"
 ANY = "any"
@@ -120,88 +111,6 @@ class ext_dict(dict):
         raise AttributeError("Exporter has no attribute %s" % name)
 
 
-def get_snapshots_list_repository(path=PATH_TO_SNAPSHOTS):
-    path_source = path + '/source'
-    path_dest = path + '/dest'
-    s = os.listdir(path_source)
-    s.sort()
-    source = [{'path': '%s/%s' % (path_source, f),
-               'timestamp': f.replace(".snapshot", "")} for f in s]
-    d = os.listdir(path_dest)
-    d.sort()
-    dest = [{'path': '%s/%s' % (path_dest, f),
-             'timestamp': f.replace(".snapshot", "")} for f in d]
-    return {
-        'source': source,
-        'dest': dest
-    }
-
-
-def dump_to_file(path, snapshot):
-    with open(path, "w+") as f:
-        json.dump(convert_to_dict(snapshot), f)
-
-
-def load_json_from_file(file_path):
-    f = open(file_path, 'r')
-    return json.load(f)
-
-primitive = [int, long, bool, float, type(None), str, unicode]
-
-
-def convert_to_dict(obj, ident=0, limit_ident=6):
-    ident += 1
-    if type(obj) in primitive:
-        return obj
-    if isinstance(obj, inspect.types.InstanceType) or \
-            (type(obj) not in (list, tuple, dict)):
-        if ident <= limit_ident:
-            try:
-                obj = obj.convert_to_dict()
-            except AttributeError:
-                try:
-                    t = obj.__dict__
-                    t['_type_class'] = str(obj.__class__)
-                    obj = t
-                except AttributeError:
-                    return str(obj.__class__ if hasattr(obj, '__class__')
-                               else type(obj))
-        else:
-            return str(obj.__class__ if hasattr(obj, '__class__')
-                       else type(obj))
-    if type(obj) is dict:
-        res = {}
-        for item in obj:
-            if ident <= limit_ident:
-                res[item] = convert_to_dict(obj[item], ident)
-            else:
-                res[item] = str(obj[item])
-        return res
-    if type(obj) in (list, tuple):
-        res = []
-        for item in obj:
-            if ident <= limit_ident:
-                res.append(convert_to_dict(item, ident))
-            else:
-                res.append(str(item))
-        return res if type(obj) is list else tuple(res)
-
-
-def convert_to_obj(obj, restore_object, namespace):
-    if type(obj) in primitive:
-        return obj
-    if type(obj) is dict:
-        for item in obj:
-            obj[item] = convert_to_obj(obj[item], restore_object, namespace)
-        obj = restore_object.restore(obj, namespace)
-    if type(obj) in (list, tuple):
-        res = []
-        for item in obj:
-            res.append(convert_to_obj(item, restore_object, namespace))
-        obj = res if type(obj) is list else tuple(res)
-    return obj
-
-
 class GeneratorPassword(object):
     def __init__(self, length=7):
         self.length = length
@@ -212,36 +121,6 @@ class GeneratorPassword(object):
 
     def __generate_password(self):
         return ''.join(random.choice(self.chars) for i in range(self.length))
-
-
-class Postman(object):
-    def __init__(self, username, password, from_addr, mail_server):
-        self.username = username
-        self.password = password
-        self.from_addr = from_addr
-        self.mail_server = mail_server
-        self.server = None
-
-    def __enter__(self):
-        self.server = smtplib.SMTP(self.mail_server)
-        self.server.ehlo()
-        self.server.starttls()
-        self.server.login(self.username, self.password)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.server.quit()
-
-    def send(self, to, subject, msg):
-        msg_mime = MIMEMultipart('alternative')
-        msg_mime.attach(MIMEText(msg, 'html'))
-        msg_mime['Subject'] = subject
-        msg_mime['From'] = self.from_addr
-        msg_mime['To'] = to
-        self.server.sendmail(self.from_addr, to, msg_mime.as_string())
-
-    def close(self):
-        self.server.quit()
 
 
 class Templater(object):
@@ -301,79 +180,6 @@ def ensure_ssh_key_added(key_files):
             return True
 
 
-class wrapper_singletone_ssh_tunnel(object):
-
-    def __init__(self, interval_ssh="9000-9999", locker=Lock()):
-        self.interval_ssh = [int(interval_ssh.split('-')[0]),
-                             int(interval_ssh.split('-')[1])]
-        self.busy_port = []
-        self.locker = locker
-
-    def get_free_port(self):
-        with self.locker:
-            beg = self.interval_ssh[0]
-            end = self.interval_ssh[1]
-            while beg <= end:
-                if beg not in self.busy_port:
-                    self.busy_port.append(beg)
-                    return beg
-                beg += 1
-        raise RuntimeError("No free ssh port")
-
-    def free_port(self, port):
-        with self.locker:
-            if port in self.busy_port:
-                self.busy_port.remove(port)
-
-    def __call__(self, address_dest_compute, address_dest_controller, host,
-                 **kwargs):
-        return UpSshTunnelClass(address_dest_compute,
-                                address_dest_controller,
-                                host,
-                                self.get_free_port,
-                                self.free_port)
-
-
-class UpSshTunnelClass(object):
-
-    """
-        Up ssh tunnel on dest controller node for transferring data
-    """
-
-    def __init__(self, address_dest_compute, address_dest_controller, host,
-                 callback_get, callback_free):
-        self.address_dest_compute = address_dest_compute
-        self.address_dest_controller = address_dest_controller
-        self.get_free_port = callback_get
-        self.remove_port = callback_free
-        self.host = host
-        self.cmd = SSH_CMD
-        self.port = None
-
-    def __enter__(self):
-        self.port = self.get_free_port()
-        with settings(host_string=self.host,
-                      connection_attempts=env.connection_attempts):
-            run(self.cmd % (self.port,
-                            self.address_dest_compute,
-                            self.port,
-                            self.port,
-                            self.address_dest_controller) + " && sleep 2")
-        return self.port
-
-    def __exit__(self, type, value, traceback):
-        with settings(host_string=self.host,
-                      connection_attempts=env.connection_attempts):
-            run(("pkill -f '" + self.cmd + "'") %
-                (self.port,
-                 self.address_dest_compute,
-                 self.port,
-                 self.port,
-                 self.address_dest_controller))
-        time.sleep(2)
-        self.remove_port(self.port)
-
-
 def libvirt_instance_exists(libvirt_name, init_host, compute_host, ssh_user,
                             ssh_sudo_password):
     with settings(host_string=compute_host,
@@ -411,25 +217,17 @@ def find_element_by_in(list_values, word):
             return i
 
 
-def init_singletones(cfg):
-    globals()['up_ssh_tunnel'] = wrapper_singletone_ssh_tunnel(
-        cfg.migrate.ssh_transfer_port)
-
-
-def get_disk_path(instance, blk_list, is_ceph_ephemeral=False, disk=DISK):
+def get_disk_path(instance, blk_list, disk=DISK):
+    LOG.debug("get_disk_path: instance='%s', blk_list='%s', disk='%s'",
+              instance.id, blk_list, disk)
     disk_path = None
-    if not is_ceph_ephemeral:
-        disk = "/" + disk
-        for i in blk_list:
-            if instance.id + disk == i[-(LEN_UUID_INSTANCE + len(disk)):]:
-                disk_path = i
-            if instance.name + disk == i[-(len(instance.name) + len(disk)):]:
-                disk_path = i
-    else:
-        disk = "_" + disk
-        for i in blk_list:
-            if ("compute/%s%s" % (instance.id, disk)) == i:
-                disk_path = i
+    disk = "/" + disk
+    for i in blk_list:
+        if instance.id + disk == i[-(LEN_UUID_INSTANCE + len(disk)):]:
+            disk_path = i
+        if instance.name + disk == i[-(len(instance.name) + len(disk)):]:
+            disk_path = i
+    LOG.debug('get_disk_path: disk_path=%s', disk_path)
     return disk_path
 
 
@@ -453,17 +251,6 @@ def timer(func, *args, **kwargs):
     t = timeit.Timer(lambda: func(*args, **kwargs))
     elapsed = t.timeit(number=1)
     return elapsed
-
-
-def import_class_by_string(name):
-    """ This function takes string in format
-        'cloudferry.lib.os.storage.cinder_storage.CinderStorage'
-        And returns class object"""
-    module, class_name = name.split('.')[:-1], name.split('.')[-1]
-    mod = __import__(".".join(module))
-    for comp in module[1:]:
-        mod = getattr(mod, comp)
-    return getattr(mod, class_name)
 
 
 def qualname(cls):

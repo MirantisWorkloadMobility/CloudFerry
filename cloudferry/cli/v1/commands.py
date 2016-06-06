@@ -19,7 +19,7 @@ from fabric.api import env
 from cliff import command
 
 from cloudferry.cli import base
-from cloudferry.cloud import cloud_ferry
+from cloudferry.cloud import os2os
 from cloudferry.lib.scheduler import scenario
 from cloudferry.lib.utils import errorcodes
 from cloudferry.lib.utils import utils
@@ -58,9 +58,9 @@ class Migrate(base.ConfigMixin, command.Command):
         LOG.debug('Filters: %s', pprint.pformat(filters))
         env.key_filename = self.config.migrate.key_filename
         env.connection_attempts = self.config.migrate.ssh_connection_attempts
-        cloud = cloud_ferry.CloudFerry(self.config)
-        status_error = cloud.migrate(scenario.Scenario(
+        env.cloud = os2os.OS2OSFerry(self.config)
+        status_error = env.cloud.migrate(scenario.Scenario(
             path_scenario=self.config.migrate.scenario,
             path_tasks=self.config.migrate.tasks_mapping))
         if status_error != errorcodes.NO_ERROR:
-            raise RuntimeError("Migration has been failed")
+            raise RuntimeError("Migration failed")

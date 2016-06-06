@@ -261,18 +261,13 @@ class NovaCompute(compute.Compute):
                         compute_res.nova_client.volumes.get_server_volumes(
                             instance.id))]
 
-        is_ceph = cfg.compute.backend.lower() == utl.CEPH
-
         ssh_user = cfg.cloud.ssh_user
 
-        if is_ceph:
-            host = cfg.compute.host_eph_drv
-        else:
-            ext_cidr = cfg.cloud.ext_cidr
-            host = node_ip.get_ext_ip(ext_cidr,
-                                      cfg.cloud.ssh_host,
-                                      instance_node,
-                                      ssh_user)
+        ext_cidr = cfg.cloud.ext_cidr
+        host = node_ip.get_ext_ip(ext_cidr,
+                                  cfg.cloud.ssh_host,
+                                  instance_node,
+                                  ssh_user)
 
         if not utl.libvirt_instance_exists(instance_name,
                                            cfg.cloud.ssh_host,
@@ -304,7 +299,6 @@ class NovaCompute(compute.Compute):
             ephemeral_path['path_src'] = utl.get_disk_path(
                 instance,
                 instance_block_info,
-                is_ceph_ephemeral=is_ceph,
                 disk=DISK + LOCAL)
 
         diff = {
@@ -317,8 +311,7 @@ class NovaCompute(compute.Compute):
         if instance.image:
             diff['path_src'] = utl.get_disk_path(
                 instance,
-                instance_block_info,
-                is_ceph_ephemeral=is_ceph)
+                instance_block_info)
         flav_name = compute_res.get_flavor_from_id(instance.flavor['id'],
                                                    include_deleted=True).name
         flav_details.update({'name': flav_name})

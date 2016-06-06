@@ -16,9 +16,9 @@
 
 import mock
 
-from tests import test
+from cloudferry.actions.compute import verify_vms
 from cloudferry.lib.base import exception
-from cloudferry.lib.os.actions import verify_vms
+from tests import test
 
 
 class VerifyVmsTest(test.TestCase):

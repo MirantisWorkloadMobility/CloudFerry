@@ -13,11 +13,11 @@
 # limitations under the License.
 import keystoneclient
 import mock
-from cloudferry.lib.os.compute import keypairs
 
-from tests import test
-from cloudferry.lib.os.actions import transport_compute_resources as tcr
+from cloudferry.actions.compute import transport_compute_resources as tcr
+from cloudferry.lib.os.compute import keypairs
 from cloudferry.lib.utils import utils as utl
+from tests import test
 
 
 class KeyPairObjectTestCase(test.TestCase):

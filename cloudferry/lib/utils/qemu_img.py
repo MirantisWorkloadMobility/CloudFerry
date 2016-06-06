@@ -142,6 +142,8 @@ class QemuImg(ssh_util.SshUtil):
                              host_instance).backing_filename
 
     def diff_rebase(self, baseimage, disk, host_compute=None):
+        LOG.debug("rebase diff: baseimage=%s, disk=%s, host_compute=%s",
+                  baseimage, disk, host_compute)
         cmd = self.rebase_cmd(baseimage, disk)
         return self.execute(cmd, host_compute, sudo=True)
 
