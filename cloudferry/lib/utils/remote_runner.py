@@ -16,6 +16,7 @@ import contextlib
 import logging
 
 from fabric import api
+from fabric import exceptions as fabric_exceptions
 from oslo_config import cfg
 
 from cloudferry.lib.base import exception
@@ -113,11 +114,14 @@ class RemoteRunner(object):
             with utils.forward_agent(self.key):
                 LOG.debug("running '%s' on '%s' host as user '%s'",
                           cmd, self.host, self.user)
-                if self.remote_tunnel is not None:
-                    with self.remote_tunnel():
+                try:
+                    if self.remote_tunnel is not None:
+                        with self.remote_tunnel():
+                            result = run(cmd)
+                    else:
                         result = run(cmd)
-                else:
-                    result = run(cmd)
+                except fabric_exceptions.NetworkError as e:
+                    raise RemoteExecutionError(e.message)
                 LOG.debug('[%s] Command "%s" result: %s',
                           self.host, cmd, result)
                 return result
