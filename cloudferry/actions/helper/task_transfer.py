@@ -28,8 +28,7 @@ class TaskTransfer(action.Action):
                  resource_name=utils.VOLUMES_TYPE,
                  resource_root_name=utils.VOLUME_BODY):
         super(TaskTransfer, self).__init__(init)
-        self.driver = base.get_copier_class(driver)(self.src_cloud,
-                                                    self.dst_cloud)
+        self.driver = base.get_copier(self.src_cloud, self.dst_cloud, driver)
         self.resource_name = resource_name
         self.resource_root_name = resource_root_name
         self.input_info = input_info

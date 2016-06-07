@@ -95,12 +95,12 @@ class GetCopierTestCase(test.TestCase):
 
     def get_copier(self, name):
         self.cfg.set_override('copy_backend', name, 'migrate')
-        return base.get_copier('fake_src_cloud', 'fake_dst_cloud',
-                               {'host_src': 'fake_host_src',
-                                'host_dst': 'fake_host_dst'})
+        return base.get_copier_checked('fake_src_cloud', 'fake_dst_cloud',
+                                       {'host_src': 'fake_host_src',
+                                        'host_dst': 'fake_host_dst'})
 
     def test_get_copier(self):
-        self.assertIsInstance(self.get_copier('fake'), FakeCopier)
+        self.assertIsInstance(self.get_copier('fake').copier, FakeCopier)
 
     def test_get_copier_not_found(self):
         self.assertRaises(base.CopierNotFound, self.get_copier, 'fake_fake')
