@@ -220,21 +220,13 @@ class NovaCompute(compute.Compute):
         if target != 'instances':
             raise ValueError('Only "resources" or "instances" values allowed')
 
-        search_opts = kwargs.get('search_opts') or {}
-        search_opts.update(all_tenants=True)
-        if self.filter_tenant_id:
-            search_opts.update(tenant_id=self.filter_tenant_id)
-
         info = {'instances': {}}
-
-        for instance in self.get_instances_list(search_opts=search_opts):
-            if instance.status in ALLOWED_VM_STATUSES:
-                if (self.filter_tenant_id is None or
-                        self.filter_tenant_id == instance.tenant_id):
-                    converted = self.convert(instance, self.config, self.cloud)
-                    if converted is None:
-                        continue
-                    info['instances'][instance.id] = converted
+        for instance in self.get_instances_list(kwargs.get('search_opts'),
+                                                [self.filter_tenant_id]):
+            converted = self.convert(instance, self.config, self.cloud)
+            if converted is None:
+                continue
+            info['instances'][instance.id] = converted
 
         return info
 
@@ -702,24 +694,31 @@ class NovaCompute(compute.Compute):
         LOG.debug("Created instance '%s'", created_instance.id)
         return created_instance.id
 
-    def get_instances_list(self, detailed=True, search_opts=None, marker=None,
-                           limit=None):
+    def get_instances_list(self, search_opts=None, tenant_ids=None,
+                           detailed=True):
         """
         Get a list of servers.
 
-        :param detailed: Whether to return detailed server info (optional).
-        :param search_opts: Search options to filter out servers (optional).
-        :param marker: Begin returning servers that appear later in the server
-                       list than that represented by this server id (optional).
-        :param limit: Maximum number of servers to return (optional).
+        :param search_opts: Search options to filter out servers.
+        :param tenant_ids: The list of ids of tenants to filter out servers.
+        :param detailed: Whether to return detailed server info.
 
         :rtype: list of :class:`Server`
         """
-        ids = search_opts.get('id', None) if search_opts else None
+        if search_opts is None:
+            search_opts = {}
+        ids = search_opts.get('id')
         if not ids:
-            servers = self.nova_client.servers.list(
-                detailed=detailed, search_opts=search_opts, marker=marker,
-                limit=limit)
+            search_opts.update(all_tenants=True)
+            if not tenant_ids:
+                servers = self.nova_client.servers.list(
+                    detailed=detailed, search_opts=search_opts)
+            else:
+                servers = []
+                for t in tenant_ids:
+                    search_opts.update(tenant_id=t)
+                    servers.extend(self.nova_client.servers.list(
+                        detailed=detailed, search_opts=search_opts))
         else:
             ids = ids if isinstance(ids, list) else [ids]
             servers = []
@@ -732,17 +731,19 @@ class NovaCompute(compute.Compute):
 
         active_computes = self.get_compute_hosts()
         active_servers = []
-
         for server in servers:
-            server_host = getattr(server, INSTANCE_HOST_ATTRIBUTE)
-            if server_host in active_computes:
-                active_servers.append(server)
+            if server.status not in ALLOWED_VM_STATUSES:
+                LOG.debug("Instance '%s' has been excluded from VMs list, "
+                          "because the status '%s' is not allowed.",
+                          server.id, server.status)
                 continue
-
-            LOG.debug("Instance '%s' has been excluded from VMs list, because "
-                      "it is running on non-active compute host '%s'.",
-                      server.id, server_host)
-
+            server_host = getattr(server, INSTANCE_HOST_ATTRIBUTE)
+            if server_host not in active_computes:
+                LOG.debug("Instance '%s' has been excluded from VMs list, "
+                          "because it is booted on non-active compute host "
+                          "'%s'.", server.id, server_host)
+                continue
+            active_servers.append(server)
         return active_servers
 
     def is_nova_instance(self, object_id):
