@@ -381,6 +381,18 @@ class BasePrerequisites(object):
         msg = 'Objects {0} has not become in active state after timeout.'
         raise RuntimeError(msg.format(obj_list))
 
+    def wait_until_vms_with_fip_accessible(self, vm_id):
+        vm = self.novaclient.servers.get(vm_id)
+        self.migration_utils.open_ssh_port_secgroup(self, vm.tenant_id)
+        try:
+            fip_addr = self.migration_utils.get_vm_fip(vm)
+        except RuntimeError:
+            return
+        self.wait_until_objects([(fip_addr, 'pwd')],
+                                self.migration_utils
+                                .wait_until_vm_accessible_via_ssh,
+                                self.config.TIMEOUT)
+
     def tenant_exists(self, tenant_name=None, tenant_id=None):
         self.switch_user(self.username, self.password, self.tenant)
         try:

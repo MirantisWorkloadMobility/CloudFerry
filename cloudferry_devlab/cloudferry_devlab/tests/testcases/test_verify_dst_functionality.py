@@ -300,6 +300,7 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
 
         CINDER_VOLUME_PARAMS['server_to_attach'] = vm.name
         self.dst_cloud.create_cinder_volumes([CINDER_VOLUME_PARAMS])
+        self.dst_cloud.attach_volume_to_vm(volume=CINDER_VOLUME_PARAMS, vm=vm)
 
         status_msg, status_state = \
             self.check_cinder_volume_on_vm(
