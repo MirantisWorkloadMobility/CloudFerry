@@ -787,81 +787,76 @@ class NovaCompute(compute.Compute):
             instance = self.nova_client.servers.get(instance_id)
         curr = self.get_status(instance.id).lower()
         will = status.lower()
-        # TODO (svilgelm): Refactor this ASAP
-        func_restore = {
-            'start': lambda instance: instance.start(),
-            'stop': lambda instance: instance.stop(),
-            'resume': lambda instance: instance.resume(),
-            'paused': lambda instance: instance.pause(),
-            'unpaused': lambda instance: instance.unpause(),
-            'suspended': lambda instance: instance.suspend(),
-            'confirm_resize': lambda instance: instance.confirm_resize(),
-            'status': lambda status: lambda instance: self.wait_for_status(
-                instance_id,
-                self.get_status,
-                status, timeout=self.config.migrate.boot_timeout)
-        }
-        map_status = {
-            'paused': {
-                'active': (func_restore['unpaused'],
-                           func_restore['status']('active')),
-                'shutoff': (func_restore['unpaused'],
-                            func_restore['status']('active'),
-                            func_restore['stop'],
-                            func_restore['status']('shutoff')),
-                'suspended': (func_restore['unpaused'],
-                              func_restore['status']('active'),
-                              func_restore['suspended'],
-                              func_restore['status']('suspended'))
-            },
-            'suspended': {
-                'active': (func_restore['resume'],
-                           func_restore['status']('active')),
-                'shutoff': (func_restore['resume'],
-                            func_restore['status']('active'),
-                            func_restore['stop'],
-                            func_restore['status']('shutoff')),
-                'paused': (func_restore['resume'],
-                           func_restore['status']('active'),
-                           func_restore['paused'],
-                           func_restore['status']('paused'))
-            },
-            'active': {
-                'paused': (func_restore['paused'],
-                           func_restore['status']('paused')),
-                'suspended': (func_restore['suspended'],
-                              func_restore['status']('suspended')),
-                'shutoff': (func_restore['stop'],
-                            func_restore['status']('shutoff'))
-            },
-            'shutoff': {
-                'active': (func_restore['start'],
-                           func_restore['status']('active')),
-                'paused': (func_restore['start'],
-                           func_restore['status']('active'),
-                           func_restore['paused'],
-                           func_restore['status']('paused')),
-                'suspended': (func_restore['start'],
-                              func_restore['status']('active'),
-                              func_restore['suspended'],
-                              func_restore['status']('suspended')),
-                'verify_resize': (func_restore['start'],
-                                  func_restore['status']('active'))
-            },
-            'verify_resize': {
-                'shutoff': (func_restore['confirm_resize'],
-                            func_restore['status']('active'),
-                            func_restore['stop'],
-                            func_restore['status']('shutoff'))
-            }
-        }
-        if curr != will:
-            try:
-                reduce(lambda res, f: f(instance), map_status[curr][will],
-                       None)
-            except exception.TimeoutException:
-                LOG.warning("Failed to change state from '%s' to '%s' for VM "
-                            "'%s'", curr, will, instance.name)
+
+        def wait_status(status):
+            return self.wait_for_status(
+                instance.id, self.get_status, status,
+                timeout=self.config.migrate.boot_timeout)
+
+        try:
+            if curr == 'paused' and will == 'active':
+                self.nova_client.servers.unpause(instance)
+                wait_status('active')
+            elif curr == 'paused' and will == 'shutoff':
+                self.nova_client.servers.unpause(instance)
+                wait_status('active')
+                self.nova_client.servers.stop(instance)
+                wait_status('shutoff')
+            elif curr == 'paused' and will == 'suspended':
+                self.nova_client.servers.unpause(instance)
+                wait_status('active')
+                self.nova_client.servers.suspend(instance)
+                wait_status('suspended')
+            elif curr == 'suspended' and will == 'active':
+                self.nova_client.servers.resume(instance)
+                wait_status('active')
+            elif curr == 'suspended' and will == 'shutoff':
+                self.nova_client.servers.resume(instance)
+                wait_status('active')
+                self.nova_client.servers.stop(instance)
+                wait_status('shutoff')
+            elif curr == 'suspended' and will == 'paused':
+                self.nova_client.servers.resume(instance)
+                wait_status('active')
+                self.nova_client.servers.pause(instance)
+                wait_status('paused')
+            elif curr == 'active' and will == 'paused':
+                self.nova_client.servers.pause(instance)
+                wait_status('paused')
+            elif curr == 'active' and will == 'suspended':
+                self.nova_client.servers.suspend(instance)
+                wait_status('suspended')
+            elif curr == 'active' and will == 'shutoff':
+                self.nova_client.servers.stop(instance)
+                wait_status('shutoff')
+            elif curr == 'shutoff' and will == 'active':
+                self.nova_client.servers.start(instance)
+                wait_status('active')
+            elif curr == 'shutoff' and will == 'paused':
+                self.nova_client.servers.start(instance)
+                wait_status('active')
+                self.nova_client.servers.pause(instance)
+                wait_status('paused')
+            elif curr == 'shutoff' and will == 'suspended':
+                self.nova_client.servers.start(instance)
+                wait_status('active')
+                self.nova_client.servers.suspend(instance)
+                wait_status('suspended')
+            elif curr == 'shutoff' and will == 'verify_resize':
+                self.nova_client.servers.start(instance)
+                wait_status('active')
+            elif curr == 'verify_resize' and will == 'shutoff':
+                self.nova_client.servers.confirm_resize(instance)
+                wait_status('active')
+                self.nova_client.servers.stop(instance)
+                wait_status('shutoff')
+            elif curr != will:
+                raise exception.AbortMigrationError(
+                    'Invalid state change: {curr} -> {will}',
+                    curr=curr, will=will)
+        except exception.TimeoutException:
+            LOG.warning("Failed to change state from '%s' to '%s' for VM "
+                        "'%s'", curr, will, instance.name)
 
     def get_flavor_from_id(self, flavor_id, include_deleted=False):
         if include_deleted:
