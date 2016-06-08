@@ -967,14 +967,14 @@ class Prerequisites(base.BasePrerequisites):
         flavors = [f for f in self.config.flavors if f['name'] in flv_names]
         self.dst_cloud.create_flavors(flavors)
 
-        vm_ids = []
         for tenant_name, vms in tenants.iteritems():
             user = get_user_for_tenant(tenant_name)
             self.dst_cloud.switch_user(
                 user['name'], user['password'], user['tenant'])
-            vm_ids.extend(self.dst_cloud.create_vms(vms))
-        self.wait_until_objects(vm_ids, self.dst_cloud.check_vm_state,
-                                conf.TIMEOUT)
+            self.dst_cloud.create_vms(vms)
+        self.dst_cloud.switch_user(user=self.dst_cloud.username,
+                                   password=self.dst_cloud.password,
+                                   tenant=self.dst_cloud.tenant)
 
     def adjust_initial_statuses(self):
         for vm in itertools.chain(
