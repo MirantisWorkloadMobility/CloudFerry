@@ -75,23 +75,26 @@ sphinx-build docs/ sphinx-build
 
 
 # Installation
-Clouderry can be prepared and installed as docker container or it can be 
-installed as a python package by pip
+CloudFerry can be installed as docker container or it can be installed as a 
+python package by pip
+
+## Installation with pip
 ```
 pip install git+git://github.com/MirantisWorkloadMobility/CloudFerry.git
 ```
 
-## Building the docker container
+## Installation with docker
+### Building the docker container
 ```
 docker build --build-arg cf_commit_or_branch=origin/master -t <username>/cf-in-docker .
 ```
 
-## Container running
+### Start container
 ```
 docker run -it <username>/cf-in-docker
 ```
 
-## Saving and loading the container files
+### Saving and loading the container files
 ```
 docker save --output=/path/to/save/CloudFerry.img <username>/cf-in-docker
 docker load --input=/path/to/save/CloudFerry.img
@@ -101,8 +104,8 @@ docker load --input=/path/to/save/CloudFerry.img
 
 ## Overview
 
-CloudFerry tool is used by running python fabric scripts from the CloudFerry 
-directory.
+CloudFerry tool is used by running python `cloudferry` executable from the 
+command line.
 
 All available commands can be viewed with:
 ```
@@ -112,7 +115,10 @@ cloudferry list
 
 ## Configuration
 
-You can find sample configs in `configs/config.ini`
+Sample config can be generated with
+```
+oslo-config-generator --namespace cloudferry
+```
 
 Configuration process is quite complex and mostly manual try-and-see-if-works
 process.
