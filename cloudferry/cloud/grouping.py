@@ -78,8 +78,7 @@ class Grouping(object):
 
         tenant_list = self.identity.get_tenants_list()
         search_list = (instances_list if instances_list else
-                       self.compute.get_instances_list(
-                           search_opts={"all_tenants": True}))
+                       self.compute.get_instances_list())
         for tenant in tenant_list:
             LOG.info('Processing tenant %s', tenant.id)
             groups[str(tenant.id)] = [vm for vm in search_list
@@ -94,8 +93,7 @@ class Grouping(object):
         subnets_list = self.network.get_subnets_list()
 
         search_list = (instances_list if instances_list else
-                       self.compute.get_instances_list(
-                           search_opts={"all_tenants": True}))
+                       self.compute.get_instances_list())
         for instance in search_list:
             LOG.info('Processing instance %s', instance.name)
             for network_ips in instance.networks.values():

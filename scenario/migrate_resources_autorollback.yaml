@@ -22,7 +22,6 @@ preparation:
           - act_check_bandwidth_src: True
           - check_src_sql: True
           - check_src_rabbit: True
-          - act_get_info_objects_src: False
       - dst_test:
           - act_check_image_api_dst: True
           - act_check_compute_api_dst: True
@@ -32,7 +31,6 @@ preparation:
           - act_check_bandwidth_dst: True
           - check_dst_sql: True
           - check_dst_rabbit: True
-          - act_get_info_objects_dst: False
       - check_networks: True
   - check_users_availability: True
   - create_snapshot: True
@@ -50,7 +48,7 @@ process:
           - act_deploy_images: True
       - act_comp_res_trans: True
       - act_network_trans: True
-      - get_volumes_db_data: True
+      - get_volumes_from_source: True
       - transport_storage_resources: True
       - migrate_volumes: True
       - transport_key_pairs: True

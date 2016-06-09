@@ -321,12 +321,13 @@ class BasePrerequisites(object):
                 return True
         return False
 
-    def check_vm_state(self, srv_id):
+    def check_vm_state(self, srv_id, status='ACTIVE'):
+        statuses = status if isinstance(status, tuple) else (status, )
         srv = self.novaclient.servers.get(srv_id)
-        if srv.status == 'ERROR':
-            msg = 'VM with id {0} was spawned in error state'
-            raise RuntimeError(msg.format(srv_id))
-        return srv.status == 'ACTIVE'
+        if 'ERROR' not in statuses and srv.status == 'ERROR':
+            msg = 'VM with id {id} was spawned in {status} state'
+            raise RuntimeError(msg.format(id=srv_id, status=srv.status))
+        return srv.status in statuses
 
     def check_image_state(self, img_id):
         img = self.glanceclient.images.get(img_id)
@@ -363,7 +364,7 @@ class BasePrerequisites(object):
         return False
 
     @staticmethod
-    def wait_until_objects_created(obj_list, check_func, timeout):
+    def wait_until_objects(obj_list, check_func, timeout):
         obj_list = obj_list[:]
         waiting = 0
         delay = 1
@@ -379,6 +380,18 @@ class BasePrerequisites(object):
             delay *= 2
         msg = 'Objects {0} has not become in active state after timeout.'
         raise RuntimeError(msg.format(obj_list))
+
+    def wait_until_vms_with_fip_accessible(self, vm_id):
+        vm = self.novaclient.servers.get(vm_id)
+        self.migration_utils.open_ssh_port_secgroup(self, vm.tenant_id)
+        try:
+            fip_addr = self.migration_utils.get_vm_fip(vm)
+        except RuntimeError:
+            return
+        self.wait_until_objects([(fip_addr, 'pwd')],
+                                self.migration_utils
+                                .wait_until_vm_accessible_via_ssh,
+                                self.config.TIMEOUT)
 
     def tenant_exists(self, tenant_name=None, tenant_id=None):
         self.switch_user(self.username, self.password, self.tenant)
@@ -416,6 +429,31 @@ class BasePrerequisites(object):
 
     def get_abs_path(self, file_path):
         return os.path.join(os.path.dirname(self.results_path), file_path)
+
+    @staticmethod
+    def set_vm_state(novaclient, vm_id, vm_state, logger=None):
+        try:
+            vm_status = novaclient.servers.get(vm_id).status
+            if vm_state != vm_status:
+                if vm_state == u'ERROR':
+                    novaclient.servers.reset_state(server=vm_id,
+                                                   state=vm_state.lower())
+                elif vm_state == u'SUSPENDED':
+                    novaclient.servers.suspend(vm_id)
+                elif vm_state == u'PAUSED':
+                    novaclient.servers.pause(vm_id)
+                elif vm_state == u'SHUTOFF':
+                    novaclient.servers.stop(vm_id)
+                elif vm_state == u'VERIFY_RESIZE':
+                    vm_state = ('VERIFY_RESIZE', 'ACTIVE', 'ERROR')
+                    novaclient.servers.resize(vm_id, '2')
+                elif vm_state == u'ACTIVE':
+                    novaclient.servers.start(vm_id)
+        except (nova_exceptions.Conflict, nova_exceptions.BadRequest) as e:
+            if logger:
+                logger.warning('There was some problems during state change:\n'
+                               '%s' % e)
+        return vm_id, vm_state
 
 
 def get_dict_from_config_file(config_file):

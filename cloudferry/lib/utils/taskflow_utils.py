@@ -81,7 +81,10 @@ def execute_flow(flow):
         engine.run()
     except exceptions.WrappedFailure as wf:
         for failure in wf:
-            traceback.print_exception(*failure.exc_info)
+            if failure.exc_info is not None:
+                traceback.print_exception(*failure.exc_info)
+            else:
+                print failure
 
 
 def create_graph_flow(name, objs, subflow_factory_fn, *args, **kwargs):

@@ -28,6 +28,7 @@ from cloudferry.lib.os.compute import instance_info_caches
 from cloudferry.lib.os.compute import cold_evacuate
 from cloudferry.lib.os.compute import server_groups
 from cloudferry.lib.os.identity import keystone
+from cloudferry.lib.scheduler import signal_handler
 from cloudferry.lib.utils import log
 from cloudferry.lib.utils import mysql_connector
 from cloudferry.lib.utils import node_ip
@@ -75,9 +76,6 @@ STATUSES_AFTER_MIGRATION = {ACTIVE: ACTIVE,
                             SHELVED_OFFLOADED: SHUTOFF,
                             VERIFY_RESIZE: ACTIVE}
 
-CORRECT_STATUSES_AFTER_MIGRATION = {STATUSES_AFTER_MIGRATION[status]
-                                    for status in ALLOWED_VM_STATUSES}
-
 
 class NovaCompute(compute.Compute):
     """The main class for working with Openstack Nova Compute Service. """
@@ -90,7 +88,8 @@ class NovaCompute(compute.Compute):
         self.identity = cloud.resources['identity']
         self.mysql_connector = cloud.mysql_connector('nova')
         # List of instance IDs which failed to create
-        self._failed_instances = []
+        self.processing_instances = []
+        self.failed_instances = []
         self.instance_info_caches = instance_info_caches.InstanceInfoCaches(
             self.get_db_connection())
         if config.migrate.override_rules is None:
@@ -102,12 +101,6 @@ class NovaCompute(compute.Compute):
     @property
     def nova_client(self):
         return self.proxy(self.get_client(), self.config)
-
-    @property
-    def failed_instances(self):
-        return [vm_id for vm_id in self._failed_instances
-                if self.instance_exists(vm_id) and
-                self.get_status(vm_id) not in CORRECT_STATUSES_AFTER_MIGRATION]
 
     def get_client(self, params=None):
         """Getting nova client. """
@@ -121,7 +114,9 @@ class NovaCompute(compute.Compute):
             params.cloud.auth_url,
             cacert=params.cloud.cacert,
             insecure=params.cloud.insecure,
-            region_name=params.cloud.region
+            region_name=params.cloud.region,
+            endpoint_type=(params.cloud.nova_endpoint_type or
+                           params.cloud.endpoint_type)
         )
 
         LOG.debug("Authenticating as '%s' in tenant '%s' for Nova client "
@@ -225,21 +220,13 @@ class NovaCompute(compute.Compute):
         if target != 'instances':
             raise ValueError('Only "resources" or "instances" values allowed')
 
-        search_opts = kwargs.get('search_opts') or {}
-        search_opts.update(all_tenants=True)
-        if self.filter_tenant_id:
-            search_opts.update(tenant_id=self.filter_tenant_id)
-
         info = {'instances': {}}
-
-        for instance in self.get_instances_list(search_opts=search_opts):
-            if instance.status in ALLOWED_VM_STATUSES:
-                if (self.filter_tenant_id is None or
-                        self.filter_tenant_id == instance.tenant_id):
-                    converted = self.convert(instance, self.config, self.cloud)
-                    if converted is None:
-                        continue
-                    info['instances'][instance.id] = converted
+        for instance in self.get_instances_list(kwargs.get('search_opts'),
+                                                [self.filter_tenant_id]):
+            converted = self.convert(instance, self.config, self.cloud)
+            if converted is None:
+                continue
+            info['instances'][instance.id] = converted
 
         return info
 
@@ -266,18 +253,13 @@ class NovaCompute(compute.Compute):
                         compute_res.nova_client.volumes.get_server_volumes(
                             instance.id))]
 
-        is_ceph = cfg.compute.backend.lower() == utl.CEPH
-
         ssh_user = cfg.cloud.ssh_user
 
-        if is_ceph:
-            host = cfg.compute.host_eph_drv
-        else:
-            ext_cidr = cfg.cloud.ext_cidr
-            host = node_ip.get_ext_ip(ext_cidr,
-                                      cfg.cloud.ssh_host,
-                                      instance_node,
-                                      ssh_user)
+        ext_cidr = cfg.cloud.ext_cidr
+        host = node_ip.get_ext_ip(ext_cidr,
+                                  cfg.cloud.ssh_host,
+                                  instance_node,
+                                  ssh_user)
 
         if not utl.libvirt_instance_exists(instance_name,
                                            cfg.cloud.ssh_host,
@@ -309,7 +291,6 @@ class NovaCompute(compute.Compute):
             ephemeral_path['path_src'] = utl.get_disk_path(
                 instance,
                 instance_block_info,
-                is_ceph_ephemeral=is_ceph,
                 disk=DISK + LOCAL)
 
         diff = {
@@ -322,8 +303,7 @@ class NovaCompute(compute.Compute):
         if instance.image:
             diff['path_src'] = utl.get_disk_path(
                 instance,
-                instance_block_info,
-                is_ceph_ephemeral=is_ceph)
+                instance_block_info)
         flav_name = compute_res.get_flavor_from_id(instance.flavor['id'],
                                                    include_deleted=True).name
         flav_details.update({'name': flav_name})
@@ -611,15 +591,18 @@ class NovaCompute(compute.Compute):
                 self.wait_for_status(new_id, self.get_status, 'active',
                                      timeout=conf.migrate.boot_timeout,
                                      stop_statuses=[ERROR])
-            except exception.TimeoutException:
+            except (exception.TimeoutException, KeyboardInterrupt,
+                    signal_handler.InterruptedException):
                 LOG.warning("Failed to create instance '%s'", new_id)
                 if self.instance_exists(new_id):
+                    self.reset_state(new_id)
                     instance = self.get_instance(new_id)
                     if hasattr(instance, 'fault') and instance.fault:
                         LOG.debug("Error message of failed instance '%s': %s",
                                   new_id, instance.fault)
-                self._failed_instances.append(new_id)
+                self.failed_instances.append(new_id)
                 raise
+            self.processing_instances.append(new_id)
 
         return new_id
 
@@ -711,24 +694,31 @@ class NovaCompute(compute.Compute):
         LOG.debug("Created instance '%s'", created_instance.id)
         return created_instance.id
 
-    def get_instances_list(self, detailed=True, search_opts=None, marker=None,
-                           limit=None):
+    def get_instances_list(self, search_opts=None, tenant_ids=None,
+                           detailed=True):
         """
         Get a list of servers.
 
-        :param detailed: Whether to return detailed server info (optional).
-        :param search_opts: Search options to filter out servers (optional).
-        :param marker: Begin returning servers that appear later in the server
-                       list than that represented by this server id (optional).
-        :param limit: Maximum number of servers to return (optional).
+        :param search_opts: Search options to filter out servers.
+        :param tenant_ids: The list of ids of tenants to filter out servers.
+        :param detailed: Whether to return detailed server info.
 
         :rtype: list of :class:`Server`
         """
-        ids = search_opts.get('id', None) if search_opts else None
+        if search_opts is None:
+            search_opts = {}
+        ids = search_opts.get('id')
         if not ids:
-            servers = self.nova_client.servers.list(
-                detailed=detailed, search_opts=search_opts, marker=marker,
-                limit=limit)
+            search_opts.update(all_tenants=True)
+            if not tenant_ids:
+                servers = self.nova_client.servers.list(
+                    detailed=detailed, search_opts=search_opts)
+            else:
+                servers = []
+                for t in tenant_ids:
+                    search_opts.update(tenant_id=t)
+                    servers.extend(self.nova_client.servers.list(
+                        detailed=detailed, search_opts=search_opts))
         else:
             ids = ids if isinstance(ids, list) else [ids]
             servers = []
@@ -741,17 +731,19 @@ class NovaCompute(compute.Compute):
 
         active_computes = self.get_compute_hosts()
         active_servers = []
-
         for server in servers:
-            server_host = getattr(server, INSTANCE_HOST_ATTRIBUTE)
-            if server_host in active_computes:
-                active_servers.append(server)
+            if server.status not in ALLOWED_VM_STATUSES:
+                LOG.debug("Instance '%s' has been excluded from VMs list, "
+                          "because the status '%s' is not allowed.",
+                          server.id, server.status)
                 continue
-
-            LOG.debug("Instance '%s' has been excluded from VMs list, because "
-                      "it is running on non-active compute host '%s'.",
-                      server.id, server_host)
-
+            server_host = getattr(server, INSTANCE_HOST_ATTRIBUTE)
+            if server_host not in active_computes:
+                LOG.debug("Instance '%s' has been excluded from VMs list, "
+                          "because it is booted on non-active compute host "
+                          "'%s'.", server.id, server_host)
+                continue
+            active_servers.append(server)
         return active_servers
 
     def is_nova_instance(self, object_id):
@@ -796,81 +788,76 @@ class NovaCompute(compute.Compute):
             instance = self.nova_client.servers.get(instance_id)
         curr = self.get_status(instance.id).lower()
         will = status.lower()
-        # TODO (svilgelm): Refactor this ASAP
-        func_restore = {
-            'start': lambda instance: instance.start(),
-            'stop': lambda instance: instance.stop(),
-            'resume': lambda instance: instance.resume(),
-            'paused': lambda instance: instance.pause(),
-            'unpaused': lambda instance: instance.unpause(),
-            'suspended': lambda instance: instance.suspend(),
-            'confirm_resize': lambda instance: instance.confirm_resize(),
-            'status': lambda status: lambda instance: self.wait_for_status(
-                instance_id,
-                self.get_status,
-                status, timeout=self.config.migrate.boot_timeout)
-        }
-        map_status = {
-            'paused': {
-                'active': (func_restore['unpaused'],
-                           func_restore['status']('active')),
-                'shutoff': (func_restore['unpaused'],
-                            func_restore['status']('active'),
-                            func_restore['stop'],
-                            func_restore['status']('shutoff')),
-                'suspended': (func_restore['unpaused'],
-                              func_restore['status']('active'),
-                              func_restore['suspended'],
-                              func_restore['status']('suspended'))
-            },
-            'suspended': {
-                'active': (func_restore['resume'],
-                           func_restore['status']('active')),
-                'shutoff': (func_restore['resume'],
-                            func_restore['status']('active'),
-                            func_restore['stop'],
-                            func_restore['status']('shutoff')),
-                'paused': (func_restore['resume'],
-                           func_restore['status']('active'),
-                           func_restore['paused'],
-                           func_restore['status']('paused'))
-            },
-            'active': {
-                'paused': (func_restore['paused'],
-                           func_restore['status']('paused')),
-                'suspended': (func_restore['suspended'],
-                              func_restore['status']('suspended')),
-                'shutoff': (func_restore['stop'],
-                            func_restore['status']('shutoff'))
-            },
-            'shutoff': {
-                'active': (func_restore['start'],
-                           func_restore['status']('active')),
-                'paused': (func_restore['start'],
-                           func_restore['status']('active'),
-                           func_restore['paused'],
-                           func_restore['status']('paused')),
-                'suspended': (func_restore['start'],
-                              func_restore['status']('active'),
-                              func_restore['suspended'],
-                              func_restore['status']('suspended')),
-                'verify_resize': (func_restore['start'],
-                                  func_restore['status']('active'))
-            },
-            'verify_resize': {
-                'shutoff': (func_restore['confirm_resize'],
-                            func_restore['status']('active'),
-                            func_restore['stop'],
-                            func_restore['status']('shutoff'))
-            }
-        }
-        if curr != will:
-            try:
-                reduce(lambda res, f: f(instance), map_status[curr][will],
-                       None)
-            except exception.TimeoutException:
-                LOG.warning("Failed to change state from '%s' to '%s' for VM "
-                            "'%s'", curr, will, instance.name)
+
+        def wait_status(status):
+            return self.wait_for_status(
+                instance.id, self.get_status, status,
+                timeout=self.config.migrate.boot_timeout)
+
+        try:
+            if curr == 'paused' and will == 'active':
+                self.nova_client.servers.unpause(instance)
+                wait_status('active')
+            elif curr == 'paused' and will == 'shutoff':
+                self.nova_client.servers.unpause(instance)
+                wait_status('active')
+                self.nova_client.servers.stop(instance)
+                wait_status('shutoff')
+            elif curr == 'paused' and will == 'suspended':
+                self.nova_client.servers.unpause(instance)
+                wait_status('active')
+                self.nova_client.servers.suspend(instance)
+                wait_status('suspended')
+            elif curr == 'suspended' and will == 'active':
+                self.nova_client.servers.resume(instance)
+                wait_status('active')
+            elif curr == 'suspended' and will == 'shutoff':
+                self.nova_client.servers.resume(instance)
+                wait_status('active')
+                self.nova_client.servers.stop(instance)
+                wait_status('shutoff')
+            elif curr == 'suspended' and will == 'paused':
+                self.nova_client.servers.resume(instance)
+                wait_status('active')
+                self.nova_client.servers.pause(instance)
+                wait_status('paused')
+            elif curr == 'active' and will == 'paused':
+                self.nova_client.servers.pause(instance)
+                wait_status('paused')
+            elif curr == 'active' and will == 'suspended':
+                self.nova_client.servers.suspend(instance)
+                wait_status('suspended')
+            elif curr == 'active' and will == 'shutoff':
+                self.nova_client.servers.stop(instance)
+                wait_status('shutoff')
+            elif curr == 'shutoff' and will == 'active':
+                self.nova_client.servers.start(instance)
+                wait_status('active')
+            elif curr == 'shutoff' and will == 'paused':
+                self.nova_client.servers.start(instance)
+                wait_status('active')
+                self.nova_client.servers.pause(instance)
+                wait_status('paused')
+            elif curr == 'shutoff' and will == 'suspended':
+                self.nova_client.servers.start(instance)
+                wait_status('active')
+                self.nova_client.servers.suspend(instance)
+                wait_status('suspended')
+            elif curr == 'shutoff' and will == 'verify_resize':
+                self.nova_client.servers.start(instance)
+                wait_status('active')
+            elif curr == 'verify_resize' and will == 'shutoff':
+                self.nova_client.servers.confirm_resize(instance)
+                wait_status('active')
+                self.nova_client.servers.stop(instance)
+                wait_status('shutoff')
+            elif curr != will:
+                raise exception.AbortMigrationError(
+                    'Invalid state change: {curr} -> {will}',
+                    curr=curr, will=will)
+        except exception.TimeoutException:
+            LOG.warning("Failed to change state from '%s' to '%s' for VM "
+                        "'%s'", curr, will, instance.name)
 
     def get_flavor_from_id(self, flavor_id, include_deleted=False):
         if include_deleted:
@@ -1026,8 +1013,12 @@ class NovaCompute(compute.Compute):
 
         :param vm_id: ID of instance
         """
-        self.reset_state(vm_id)
-        self.delete_vm_by_id(vm_id)
+        with proxy_client.expect_exception(nova_exc.NotFound):
+            try:
+                self.reset_state(vm_id)
+                self.delete_vm_by_id(vm_id)
+            except nova_exc.NotFound:
+                pass
 
     def delete_vm_by_id(self, vm_id):
         self.nova_client.servers.delete(vm_id)

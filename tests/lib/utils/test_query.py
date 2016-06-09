@@ -13,44 +13,51 @@
 # limitations under the License.
 import mock
 
-from cloudferry.lib.os.discovery import model
+from cloudferry import model
 from cloudferry.lib.utils import query
 from tests.lib.utils import test_local_db
 
 
 class TestMode(model.Model):
-    class Schema(model.Schema):
-        object_id = model.PrimaryKey('id')
-        field1 = model.String()
-        field2 = model.String()
+    object_id = model.PrimaryKey()
+    field1 = model.String()
+    field2 = model.String()
 
 CLASS_FQN = TestMode.__module__ + '.' + TestMode.__name__
 
 
 class StageTestCase(test_local_db.DatabaseMockingTestCase):
+    @staticmethod
+    def _make_id(model_class, uuid, cloud='test_cloud'):
+        return {
+            'id': uuid,
+            'cloud': cloud,
+            'type': model_class.get_class_qualname(),
+        }
+
     def setUp(self):
         super(StageTestCase, self).setUp()
 
         self.cloud = mock.MagicMock()
         self.cloud.name = 'test_cloud'
 
-        self.obj1 = TestMode.load_from_cloud(self.cloud, {
-            'id': 'id1',
+        self.obj1 = TestMode.load({
+            'object_id': self._make_id(TestMode, 'id1'),
             'field1': 'a',
             'field2': 'a',
         })
-        self.obj2 = TestMode.load_from_cloud(self.cloud, {
-            'id': 'id2',
+        self.obj2 = TestMode.load({
+            'object_id': self._make_id(TestMode, 'id2'),
             'field1': 'a',
             'field2': 'b',
         })
-        self.obj3 = TestMode.load_from_cloud(self.cloud, {
-            'id': 'id3',
+        self.obj3 = TestMode.load({
+            'object_id': self._make_id(TestMode, 'id3'),
             'field1': 'b',
             'field2': 'a',
         })
-        self.obj4 = TestMode.load_from_cloud(self.cloud, {
-            'id': 'id4',
+        self.obj4 = TestMode.load({
+            'object_id': self._make_id(TestMode, 'id4'),
             'field1': 'b',
             'field2': 'b',
         })

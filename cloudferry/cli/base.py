@@ -15,7 +15,7 @@
 import yaml
 
 from cloudferry import cfglib
-from cloudferry.lib import config
+from cloudferry import config
 from cloudferry.lib.utils import log
 
 
@@ -35,11 +35,12 @@ class ConfigMixin(object):
         self.configure_logging()
         return super(ConfigMixin, self).run(parsed_args)
 
-    def configure_logging(self, log_config=None, forward_stdout=None):
+    def configure_logging(self, log_config=None, forward_stdout=None,
+                          hide_ssl_warnings=None):
         if self.app.interactive_mode:
             forward_stdout = False
         log.configure_logging(log_config, self.app.options.debug,
-                              forward_stdout)
+                              forward_stdout, hide_ssl_warnings)
 
     def init_config(self, config_path):
         conf = cfglib.init_config(config_path)
@@ -49,39 +50,18 @@ class ConfigMixin(object):
 
 
 class YamlConfigMixin(ConfigMixin):
-    def configure_logging(self, log_config=None, forward_stdout=None):
+    def configure_logging(self, log_config=None, forward_stdout=None,
+                          hide_ssl_warnings=None):
         super(YamlConfigMixin, self).configure_logging(
             log_config=log_config or 'configs/logging_config.yaml',
-            forward_stdout=forward_stdout or False)
+            forward_stdout=forward_stdout or False,
+            hide_ssl_warnings=hide_ssl_warnings or True,
+        )
 
     def init_config(self, config_path):
-        def import_legacy(cloud, cfg):
-            cred = cloud.setdefault('credential', {})
-            cred['auth_url'] = cfg.auth_url
-            cred['username'] = cfg.user
-            cred['password'] = cfg.password
-            cred['region_name'] = cfg.region
-            cred['https_insecure'] = cfg.insecure
-            cred['https_cacert'] = cfg.cacert
-            scope = cloud.setdefault('scope', {})
-            scope['project_name'] = cfg.tenant
-            ssh = cloud.setdefault('ssh', {})
-            ssh['gateway'] = cfg.ssh_host
-            ssh['username'] = cfg.ssh_user
-            ssh['sudo_password'] = cfg.ssh_sudo_password
-            ssh['connection_attempts'] = \
-                cfglib.CONF.migrate.ssh_connection_attempts
-
-        prev_legacy_config_path = None
-        with open(config_path, 'r') as config_file:
-            conf = yaml.load(config_file)
-            clouds = conf.setdefault('clouds', {})
-            for value in clouds.values():
-                if 'legacy' not in value:
-                    continue
-                legacy_config_path, section = value.pop('legacy').split(':')
-                if prev_legacy_config_path != legacy_config_path:
-                    super(YamlConfigMixin, self).init_config(
-                        legacy_config_path)
-                import_legacy(value, getattr(cfglib.CONF, section))
-            return config.load(conf)
+        try:
+            with open(config_path, 'r') as config_file:
+                conf = yaml.load(config_file)
+                return config.load(conf)
+        except config.ValidationError as ex:
+            self.app.parser.error(ex)

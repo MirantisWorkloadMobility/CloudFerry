@@ -13,11 +13,9 @@
 # limitations under the License.
 
 import itertools
-import json
 import logging
 from logging import config as logging_config
 import os
-import time
 
 from keystoneclient import exceptions as ks_exceptions
 from neutronclient.common import exceptions as nt_exceptions
@@ -26,7 +24,7 @@ import yaml
 
 from cloudferry_devlab.tests import base
 from cloudferry_devlab.tests import cleanup
-import cloudferry_devlab.tests.config as conf
+from cloudferry_devlab.tests import config as conf
 
 VM_SPAWNING_LIMIT = 5
 CREATE_CLEAN_METHODS_MAP = {
@@ -212,13 +210,13 @@ class Prerequisites(base.BasePrerequisites):
                     **image_body)
                 dst_img_ids.append(dst_img_id)
 
-        self.wait_until_objects_created(img_ids, self.check_image_state,
-                                        conf.TIMEOUT)
+        self.wait_until_objects(img_ids, self.check_image_state,
+                                conf.TIMEOUT)
 
         if dst_img_ids and self.dst_cloud:
-            self.wait_until_objects_created(
+            self.wait_until_objects(
                 dst_img_ids,
-                self.chech_image_state_on_dst,
+                self.check_image_state_on_dst,
                 conf.TIMEOUT)
 
         tenant_list = self.keystoneclient.tenants.list()
@@ -235,7 +233,7 @@ class Prerequisites(base.BasePrerequisites):
         if getattr(self.config, 'create_zero_image', None):
             self.glanceclient.images.create()
 
-    def chech_image_state_on_dst(self, img_id):
+    def check_image_state_on_dst(self, img_id):
         img = self.dst_cloud.glanceclient.images.get(img_id)
         return img.status == 'active'
 
@@ -348,45 +346,49 @@ class Prerequisites(base.BasePrerequisites):
         self.switch_user(self.username, self.password, self.tenant)
 
     def create_vms(self, vm_list):
-
-        def wait_for_vm_creating():
-            """ When limit for creating vms in nova is reached, we receive
-                exception from nova: 'novaclient.exceptions.OverLimit:
-                This request was rate-limited. (HTTP 413)'. To handle this we
-                set limit for vm spawning.
-            """
-            spawning_vms = None
-            for _ in range(conf.TIMEOUT):
-                all_vms = self.novaclient.servers.list(
-                    search_opts={'all_tenants': 1})
-                spawning_vms = [vm.id for vm in all_vms
-                                if vm.status == 'BUILD']
-                if len(spawning_vms) >= VM_SPAWNING_LIMIT:
-                    time.sleep(1)
-                else:
-                    break
-            else:
-                raise RuntimeError(
-                    'VMs with ids {0} were in "BUILD" state more than {1} '
-                    'seconds'.format(spawning_vms, conf.TIMEOUT))
-
         vm_ids = []
+        volumes = [vlm for vlm in self.config.cinder_volumes if
+                   'server_to_attach' in vlm]
+        for tenant in self.config.tenants:
+            if 'cinder_volumes' in tenant:
+                volumes.extend([vlm for vlm in tenant['cinder_volumes'] if
+                                'server_to_attach' in vlm])
+
         for vm in vm_list:
-            wait_for_vm_creating()
+            self.log.info("Creating VM with name %s", vm.get('name'))
             new_vm = self.novaclient.servers.create(
                 **self._get_parameters_for_vm_creating(vm))
             vm_ids.append(new_vm.id)
-            if not vm.get('fip'):
-                continue
-            self.wait_until_objects_created([new_vm.id], self.check_vm_state,
+            self.wait_until_objects([new_vm.id], self.check_vm_state,
+                                    conf.TIMEOUT)
+            if vm.get('fip'):
+                fip = self.neutronclient.create_floatingip(
+                    {"floatingip": {"floating_network_id": self.ext_net_id}})
+                fip = fip['floatingip']['floating_ip_address']
+                msg = 'Assigning Floating IP {} to VM {}'.format(fip,
+                                                                 new_vm.name)
+                self.log.info(msg)
+                new_vm.add_floating_ip(fip)
+                for volume in volumes:
+                    if new_vm.name == volume['server_to_attach']:
+                        self.attach_volume_to_vm(volume=volume, vm=new_vm)
+                        if volume.get('write_to_file'):
+                            self.write_data_to_volumes(fip, volume)
+            if vm.get('broken'):
+                self.break_vm(new_vm.id)
+            for vm_with_state in self.config.vm_states:
+                if new_vm.name == vm_with_state.get('name'):
+                    msg = 'Changing the VM {} state to {}'\
+                        .format(new_vm.name, vm_with_state.get('state'))
+                    self.log.info(msg)
+                    res = self.set_vm_state(self.novaclient, new_vm.id,
+                                            vm_with_state.get('state'),
+                                            logger=self.log)
+                    self.wait_until_objects([res], self.check_vm_state,
                                             conf.TIMEOUT)
-            fip = self.neutronclient.create_floatingip(
-                {"floatingip": {"floating_network_id": self.ext_net_id}})
-            new_vm.add_floating_ip(fip['floatingip']['floating_ip_address'])
-        return vm_ids
 
     def create_all_vms(self):
-        vms = self.create_vms(self.config.vms)
+        self.create_vms(self.config.vms)
         for tenant in self.config.tenants:
             if not tenant.get('vms'):
                 continue
@@ -411,17 +413,16 @@ class Prerequisites(base.BasePrerequisites):
                     raise RuntimeError(msg.format(keypair[0], tenant['name']))
                 self.switch_user(user=user['name'], password=user['password'],
                                  tenant=tenant['name'])
-                vms.extend(self.create_vms(keypairs_vms[keypair]))
+                self.create_vms(keypairs_vms[keypair])
             # Create vms without keypair
             user = [u for u in self.config.users
                     if u.get('tenant') == tenant['name']][0]
             self.switch_user(user=user['name'], password=user['password'],
                              tenant=tenant['name'])
-            vms.extend(self.create_vms(vms_wo_keypairs))
+            self.create_vms(vms_wo_keypairs)
 
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
-        self.wait_until_objects_created(vms, self.check_vm_state, conf.TIMEOUT)
 
     def create_vm_snapshots(self):
 
@@ -433,8 +434,8 @@ class Prerequisites(base.BasePrerequisites):
             snp = self.glanceclient.images.get(self.get_image_id(
                 snapshot['image_name']))
             snp_ids.append(snp.id)
-        self.wait_until_objects_created(snp_ids, self.check_snapshot_state,
-                                        conf.TIMEOUT)
+        self.wait_until_objects(snp_ids, self.check_snapshot_state,
+                                conf.TIMEOUT)
 
     def create_networks(self, networks):
 
@@ -620,18 +621,6 @@ class Prerequisites(base.BasePrerequisites):
 
     def create_cinder_volumes(self, volumes_list):
 
-        def wait_until_vms_with_fip_accessible(_vm_id):
-            vm = self.novaclient.servers.get(_vm_id)
-            self.migration_utils.open_ssh_port_secgroup(self, vm.tenant_id)
-            try:
-                fip_addr = self.migration_utils.get_vm_fip(vm)
-            except RuntimeError:
-                return
-            base.BasePrerequisites.wait_until_objects_created(
-                [(fip_addr, 'pwd')],
-                self.migration_utils.wait_until_vm_accessible_via_ssh,
-                conf.TIMEOUT)
-
         def get_params_for_volume_creating(_volume):
             params = ['display_name', 'size', 'imageRef', 'metadata']
             vt_exists = 'volume_type' in _volume and \
@@ -644,6 +633,7 @@ class Prerequisites(base.BasePrerequisites):
             return {param: _volume[param] for param in params
                     if param in _volume}
 
+        self.log.debug('Creating cinder volumes')
         vlm_ids = []
         for volume in volumes_list:
             if 'user' in volume:
@@ -657,21 +647,24 @@ class Prerequisites(base.BasePrerequisites):
             vlm_ids.append(vlm.id)
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
-        self.wait_until_objects_created(vlm_ids, self.check_volume_state,
-                                        conf.TIMEOUT)
-        vlm_ids = []
-        for volume in volumes_list:
-            if 'server_to_attach' not in volume:
-                continue
-            vlm_id = self.get_volume_id(volume['display_name'])
-            vm_id = self.get_vm_id(volume['server_to_attach'])
-            # To correct attaching volume, vm should be fully ready
-            wait_until_vms_with_fip_accessible(vm_id)
-            self.novaclient.volumes.create_server_volume(
-                server_id=vm_id, volume_id=vlm_id, device=volume['device'])
-            vlm_ids.append(vlm_id)
-        self.wait_until_objects_created(vlm_ids, self.check_volume_state,
-                                        conf.TIMEOUT)
+        self.log.debug('Waiting for cinder volumes to become active')
+        self.wait_until_objects(vlm_ids, self.check_volume_state,
+                                conf.TIMEOUT)
+
+    def attach_volume_to_vm(self, volume, vm):
+        vlm_id = self.get_volume_id(volume['display_name'])
+        # To correct attaching volume, vm should be fully ready
+        self.wait_until_vms_with_fip_accessible(vm.id)
+        self.novaclient.volumes.create_server_volume(server_id=vm.id,
+                                                     volume_id=vlm_id,
+                                                     device=volume['device'])
+        msg = 'Waiting for volume {} to become in-use with ' \
+              'VM {}'.format(volume['display_name'],
+                             vm.name)
+        self.log.info(msg)
+        self.wait_until_objects([vlm_id],
+                                self.check_volume_state,
+                                conf.TIMEOUT)
 
     def create_cinder_snapshots(self, snapshot_list):
         for snapshot in snapshot_list:
@@ -690,47 +683,31 @@ class Prerequisites(base.BasePrerequisites):
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
-    def write_data_to_volumes(self):
+    def write_data_to_volumes(self, vm_ip, volume):
         """Method creates file and md5sum of this file on volume
-        """
-        volumes = self.config.cinder_volumes
-        volumes += itertools.chain(*[tenant['cinder_volumes'] for tenant
-                                     in self.config.tenants if 'cinder_volumes'
-                                     in tenant])
-        for volume in volumes:
-            attached_volume = volume.get('server_to_attach')
-            if not volume.get('write_to_file') or not attached_volume:
-                continue
-            if not volume.get('mount_point'):
-                msg = 'Please specify mount point for volume %s'
-                raise RuntimeError(msg % volume['name'])
-
-            vm = self.novaclient.servers.get(
-                self.get_vm_id(volume['server_to_attach']))
-            vm_ip = self.migration_utils.get_vm_fip(vm)
-            # Make filesystem on volume. The OS assigns the volume to the next
-            # available device, which /dev/vda
-            cmd = '/usr/sbin/mkfs.ext2 /dev/vdb'
-            self.migration_utils.execute_command_on_vm(vm_ip, cmd)
-            # Create directory for mount point
-            cmd = 'mkdir -p %s' % volume['mount_point']
-            self.migration_utils.execute_command_on_vm(vm_ip, cmd)
-            # Mount volume
-            cmd = 'mount {0} {1}'.format(volume['device'],
-                                         volume['mount_point'])
-            self.migration_utils.execute_command_on_vm(vm_ip, cmd)
-            for _file in volume['write_to_file']:
-                _path, filename = os.path.split(_file['filename'])
-                path = '{0}/{1}'.format(volume['mount_point'], _path)
-                if _path:
-                    cmd = 'mkdir -p {path}'.format(path=path)
-                    self.migration_utils.execute_command_on_vm(vm_ip, cmd)
-                cmd = 'sh -c "echo \'{content}\' > {path}/{filename}"'
-                self.migration_utils.execute_command_on_vm(vm_ip, cmd.format(
-                    path=path, content=_file['data'], filename=filename))
-                cmd = 'sh -c "md5sum {path}/{_file} > {path}/{_file}_md5"'
-                self.migration_utils.execute_command_on_vm(vm_ip, cmd.format(
-                    path=path, _file=filename))
+        Make filesystem on volume. The OS assigns the volume to the next
+        available device, which /dev/vda"""
+        cmd = '/usr/sbin/mkfs.ext2 /dev/vdb'
+        self.migration_utils.execute_command_on_vm(vm_ip, cmd)
+        # Create directory for mount point
+        cmd = 'mkdir -p %s' % volume['mount_point']
+        self.migration_utils.execute_command_on_vm(vm_ip, cmd)
+        # Mount volume
+        cmd = 'mount {0} {1}'.format(volume['device'],
+                                     volume['mount_point'])
+        self.migration_utils.execute_command_on_vm(vm_ip, cmd)
+        for _file in volume['write_to_file']:
+            _path, filename = os.path.split(_file['filename'])
+            path = '{0}/{1}'.format(volume['mount_point'], _path)
+            if _path:
+                cmd = 'mkdir -p {path}'.format(path=path)
+                self.migration_utils.execute_command_on_vm(vm_ip, cmd)
+            cmd = 'sh -c "echo \'{content}\' > {path}/{filename}"'
+            self.migration_utils.execute_command_on_vm(vm_ip, cmd.format(
+                path=path, content=_file['data'], filename=filename))
+            cmd = 'sh -c "md5sum {path}/{_file} > {path}/{_file}_md5"'
+            self.migration_utils.execute_command_on_vm(vm_ip, cmd.format(
+                path=path, _file=filename))
 
     def create_invalid_cinder_objects(self):
         invalid_volume_tmlt = 'cinder_volume_%s'
@@ -779,43 +756,23 @@ class Prerequisites(base.BasePrerequisites):
                                            obj['metadata'])
 
     def emulate_vm_states(self):
-        for vm_state in self.config.vm_states:
-            # emulate error state:
-            if vm_state['state'] == u'error':
-                self.novaclient.servers.reset_state(
-                    server=self.get_vm_id(vm_state['name']),
-                    state=vm_state['state'])
-            # emulate suspend state:
-            elif vm_state['state'] == u'suspend':
-                self.novaclient.servers.suspend(self.get_vm_id(
-                    vm_state['name']))
-            # emulate resize state:
-            elif vm_state['state'] == u'pause':
-                self.novaclient.servers.pause(self.get_vm_id(vm_state['name']))
-            # emulate stop/shutoff state:
-            elif vm_state['state'] == u'stop':
-                self.novaclient.servers.stop(self.get_vm_id(vm_state['name']))
-            # emulate resize state:
-            elif vm_state['state'] == u'resize':
-                self.novaclient.servers.resize(
-                    self.get_vm_id(vm_state['name']), '2')
-
-    def generate_vm_state_list(self):
-        data = {}
-        for vm in self.novaclient.servers.list(search_opts={'all_tenants': 1}):
-            for _ in range(conf.TIMEOUT):
-                _vm = self.novaclient.servers.get(vm.id)
-                if _vm.status != u'RESIZE':
-                    break
-                time.sleep(1)
-            vm_state = self.novaclient.servers.get(vm.id).status
-            data[vm.name] = vm_state
-
-        file_path = conf.pre_migration_vm_states_file
-        file_path = self.get_abs_path(file_path)
-        with open(file_path, 'w') as outfile:
-            json.dump(data, outfile, sort_keys=True, indent=4,
-                      ensure_ascii=False)
+        vms = []
+        dst_vms = [vm['name'] for vm in self.config.dst_vms]
+        for vm in self.config.vm_states:
+            if self.openstack_release not in ['icehouse', 'juno'] and \
+                    vm.get('skip_in_grizzly'):
+                continue
+            vm_id = self.get_vm_id(vm['name'])
+            vm_state = vm['state']
+            vms.append(self.set_vm_state(self.novaclient, vm_id, vm_state,
+                                         logger=self.log))
+            if vm['name'] in dst_vms:
+                res = self.set_vm_state(self.dst_cloud.novaclient,
+                                        self.dst_cloud.get_vm_id(vm['name']),
+                                        vm_state, logger=self.log)
+                self.wait_until_objects([res], self.dst_cloud.check_vm_state,
+                                        conf.TIMEOUT)
+        self.wait_until_objects(vms, self.check_vm_state, conf.TIMEOUT)
 
     def delete_flavor(self, flavor='del_flvr'):
         """
@@ -933,21 +890,15 @@ class Prerequisites(base.BasePrerequisites):
             )
             self.novaclient.servers.create(**params)
 
-    def break_vm(self):
+    def break_vm(self, vm_id):
         """ Method delete vm via virsh to emulate situation, when vm is valid
         and active in nova db, but in fact does not exist
         """
-        vms_to_break = []
-        for vm in self.migration_utils.get_all_vms_from_config():
-            if vm.get('broken'):
-                vms_to_break.append(self.get_vm_id(vm['name']))
-
-        for vm in vms_to_break:
-            inst_name = getattr(self.novaclient.servers.get(vm),
-                                'OS-EXT-SRV-ATTR:instance_name')
-            cmd = 'virsh destroy {0} && virsh undefine {0}'.format(inst_name)
-            self.migration_utils.execute_command_on_vm(
-                self.get_vagrant_vm_ip(), cmd, username='root', password='')
+        inst_name = getattr(self.novaclient.servers.get(vm_id),
+                            'OS-EXT-SRV-ATTR:instance_name')
+        cmd = 'virsh destroy {0} && virsh undefine {0}'.format(inst_name)
+        self.migration_utils.execute_command_on_vm(
+            self.get_vagrant_vm_ip(), cmd, username='root', password='')
 
     def delete_image_on_dst(self):
         """ Method delete images with a 'delete_on_dst' flag on
@@ -1021,6 +972,39 @@ class Prerequisites(base.BasePrerequisites):
             self.dst_cloud.switch_user(
                 user['name'], user['password'], user['tenant'])
             self.dst_cloud.create_vms(vms)
+        self.dst_cloud.switch_user(user=self.dst_cloud.username,
+                                   password=self.dst_cloud.password,
+                                   tenant=self.dst_cloud.tenant)
+
+    def adjust_initial_statuses(self):
+        for vm in itertools.chain(
+                self.novaclient.servers.list(search_opts={'all_tenants': 1}),
+                self.dst_cloud.novaclient.servers.list(
+                    search_opts={'all_tenants': 1})):
+            try:
+                if vm.status != 'SHUTOFF':
+                    if vm.status != 'ERROR':
+                        vm.reset_state()
+                    vm.stop()
+            except (nv_exceptions.Conflict, nv_exceptions.BadRequest) as e:
+                self.log.warning('There was some problems during state change:'
+                                 '\n%s', e)
+
+        dst_vms = [vm['name'] for vm in self.config.dst_vms]
+        for vm in self.config.vm_states:
+            vm_state = vm['state']
+            if vm_state in ('PAUSED', 'SUSPENDED', 'VERIFY_RESIZE'):
+                if vm['name'] not in dst_vms:
+                    vm_id = self.get_vm_id(vm['name'])
+                    self.novaclient.servers.start(vm_id)
+                    self.wait_until_objects(
+                        [(vm_id, 'ACTIVE')], self.check_vm_state, conf.TIMEOUT)
+                else:
+                    vm_id = self.dst_cloud.get_vm_id(vm['name'])
+                    self.dst_cloud.novaclient.start(vm_id)
+                    self.wait_until_objects(
+                        [(vm_id, 'ACTIVE')], self.dst_cloud.check_vm_state,
+                        conf.TIMEOUT)
 
     def create_ext_net_map_yaml(self):
         src_ext_nets = [net['name'] for net in self.config.networks
@@ -1062,10 +1046,12 @@ class Prerequisites(base.BasePrerequisites):
             self.create_volumes_from_images()
             self.log.info('Boot vm from volume')
             self.boot_vms_from_volumes()
-        self.log.info('Creating vms')
+        self.log.info('Creating security groups')
+        self.create_security_groups()
+        self.log.info('Creating cinder objects')
+        self.create_cinder_objects()
+        self.log.info('Creating VMs')
         self.create_all_vms()
-        self.log.info('Breaking VMs')
-        self.break_vm()
         self.log.info('Breaking Images')
         self.break_images()
         self.log.info('Delete images on dst')
@@ -1074,20 +1060,18 @@ class Prerequisites(base.BasePrerequisites):
         self.update_filtering_file()
         self.log.info('Creating vm snapshots')
         self.create_vm_snapshots()
-        self.log.info('Creating security groups')
-        self.create_security_groups()
-        self.log.info('Creating cinder objects')
-        self.create_cinder_objects()
-        self.log.info('Writing data into the volumes')
-        self.write_data_to_volumes()
+        self.log.info('Create tenant on dst, without security group')
+        self.create_tenant_wo_sec_group_on_dst()
+        self.log.info('Create role on dst')
+        self.create_user_on_dst()
+        self.log.info('Creating networks on dst')
+        self.create_dst_networking()
+        self.log.info('Creating vms on dst')
+        self.create_vms_on_dst()
         self.log.info('Creating invalid cinder objects')
         self.create_invalid_cinder_objects()
         self.log.info('Create swift containers and objects')
         self.create_swift_container_and_objects()
-        self.log.info('Emulating vm states')
-        self.emulate_vm_states()
-        self.log.info('Generating vm states list')
-        self.generate_vm_state_list()
         self.log.info('Deleting flavor')
         self.delete_flavor()
         self.log.info('Modifying admin tenant quotas')
@@ -1102,13 +1086,17 @@ class Prerequisites(base.BasePrerequisites):
         self.delete_users()
         self.log.info('Delete tenants which should be deleted')
         self.delete_tenants()
-        self.log.info('Create tenant on dst, without security group')
-        self.create_tenant_wo_sec_group_on_dst()
-        self.log.info('Create role on dst')
-        self.create_user_on_dst()
-        self.log.info('Creating networks on dst')
-        self.create_dst_networking()
         self.log.info('Creating networks map')
         self.create_ext_net_map_yaml()
-        self.log.info('Creating vms on dst')
-        self.create_vms_on_dst()
+
+    def run_restore_vms_state(self):
+        self.init_dst_cloud()
+        self.log.info('Adjusting VM initial states')
+        self.adjust_initial_statuses()
+        self.log.info('Emulating vm states')
+        self.emulate_vm_states()
+        self.log.info('Breaking VMs')
+        for vm in [self.get_vm_id(vm['name']) for vm in
+                   self.migration_utils.get_all_vms_from_config()
+                   if vm.get('broken')]:
+            self.break_vm(vm)

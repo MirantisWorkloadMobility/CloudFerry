@@ -124,12 +124,74 @@ class RemoteStdout(object):
             raise exc_type, exc_val, exc_tb
 
 
+class grant_all_permissions(object):
+    def __init__(self, runner, path):
+        self.runner = runner
+        self.file_path = path
+        self.dir_path = os.path.dirname(path)
+        self.old_file_perms = None
+        self.old_dir_perms = None
+
+    def __enter__(self):
+        self.old_dir_perms = remote_get_file_permissions(self.runner,
+                                                         self.dir_path)
+
+        # there may be no file in destination (which is fine)
+        self.old_file_perms = try_remote_get_file_permissions(self.runner,
+                                                              self.file_path)
+
+        LOG.debug("Temporarily adding full access to '%s' dir on '%s' host",
+                  self.dir_path, self.runner.host)
+        try_remote_chmod(self.runner, 777, self.dir_path)
+
+        LOG.debug("Temporarily adding full access to '%s' file on '%s' host",
+                  self.file_path, self.runner.host)
+        try_remote_chmod(self.runner, 666, self.file_path)
+
+    def _restore_access(self, path, perms):
+        if perms:
+            LOG.debug("Restoring access mode '%s' for '%s' file on '%s' host",
+                      perms, path, self.runner.host)
+            try_remote_chmod(self.runner, perms, path)
+
+    def __exit__(self, *_):
+        self._restore_access(self.file_path, self.old_file_perms)
+        self._restore_access(self.dir_path, self.old_dir_perms)
+
+
 def remote_file_size(runner, path):
     return int(runner.run('stat --printf="%s" {path}', path=path))
 
 
 def remote_file_size_mb(runner, path):
     return int(math.ceil(remote_file_size(runner, path) / (1024.0 * 1024.0)))
+
+
+def remote_get_file_permissions(runner, path):
+    """Returns file/dir permissions in octal format"""
+    return str(runner.run('stat -c \'%a\' "{path}"', path=path))
+
+
+def remote_chmod(runner, octal_perms, path):
+    runner.run('chmod {perms} "{path}"'.format(path=path, perms=octal_perms))
+
+
+def try_remote_chmod(runner, octal_perms, path):
+    try:
+        remote_chmod(runner, octal_perms, path)
+    except remote_runner.RemoteExecutionError as e:
+        LOG.debug("chmod '%s' '%s' on node %s failed with: %s", octal_perms,
+                  path, runner.host, e)
+
+
+def try_remote_get_file_permissions(runner, path):
+    """Returns file/dir permissions in octal format, or `None` in case of
+    error"""
+    try:
+        return remote_get_file_permissions(runner, path)
+    except remote_runner.RemoteExecutionError as e:
+        LOG.debug("Can't get file permissions for path '%s' on host '%s': %s",
+                  path, runner.host, e)
 
 
 def remote_md5_sum(runner, path):

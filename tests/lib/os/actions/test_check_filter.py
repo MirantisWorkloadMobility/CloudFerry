@@ -16,15 +16,14 @@
 import copy
 
 import mock
-
 from cinderclient import exceptions as cinder_exc
 from glanceclient import exc as glance_exc
 from keystoneclient import exceptions as keystone_exc
 from novaclient import exceptions as nova_exc
 from oslotest import mockpatch
 
+from cloudferry.actions.prechecks import check_filter
 from cloudferry.lib.base import exception
-from cloudferry.lib.os.actions import check_filter
 from tests import test
 
 
@@ -33,7 +32,7 @@ class CheckFilterTestCase(test.TestCase):
         super(CheckFilterTestCase, self).setUp()
 
         fake_utils = mock.Mock()
-        utils_patch = mockpatch.Patch('cloudferry.lib.os.actions.'
+        utils_patch = mockpatch.Patch('cloudferry.actions.prechecks.'
                                       'check_filter.utils', new=fake_utils)
         self.useFixture(utils_patch)
 
@@ -61,13 +60,13 @@ class CheckFilterTestCase(test.TestCase):
         self.opts = dict(search_opts_tenant={}, search_opts={},
                          search_opts_vol={}, search_opts_img={})
 
-    @mock.patch("cloudferry.lib.os.actions.check_filter.utils")
+    @mock.patch("cloudferry.actions.prechecks.check_filter.utils")
     def test_no_filter_file(self, fake_utils):
         fake_utils.check_file.return_value = False
 
         self.assertRaises(exception.AbortMigrationError, self.fake_action.run)
 
-    @mock.patch("cloudferry.lib.os.actions.check_filter.utils")
+    @mock.patch("cloudferry.actions.prechecks.check_filter.utils")
     def test_empty_filter(self, fake_utils):
         fake_utils.read_yaml_file.return_value = {}
 

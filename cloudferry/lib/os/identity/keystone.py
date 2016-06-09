@@ -28,7 +28,6 @@ from cloudferry.lib.utils import retrying
 from cloudferry.lib.utils import utils as utl
 from cloudferry.lib.utils.cache import Cached
 from cloudferry.lib.utils.utils import GeneratorPassword
-from cloudferry.lib.utils.utils import Postman
 from cloudferry.lib.utils.utils import Templater
 
 LOG = log.getLogger(__name__)
@@ -104,12 +103,6 @@ class KeystoneIdentity(identity.Identity):
         self.config = config
         self.cloud = cloud
         self.filter_tenant_id = None
-        self.postman = None
-        if self.config.mail.server != "-":
-            self.postman = Postman(self.config['mail']['username'],
-                                   self.config['mail']['password'],
-                                   self.config['mail']['from_addr'],
-                                   self.config['mail']['server'])
         self.mysql_connector = cloud.mysql_connector('keystone')
         self.templater = Templater()
         self.generator = GeneratorPassword()
@@ -279,6 +272,12 @@ class KeystoneIdentity(identity.Identity):
         """Search tenant by name case-insensitively"""
         return find_by_name(
             'tenant', self.keystone_client.tenants.list(), name)
+
+    def try_get_tenant_by_name(self, name):
+        try:
+            return self.get_tenant_by_name(name)
+        except ks_exceptions.NotFound:
+            return None
 
     def get_tenant_id_by_name(self, name):
         """ Getting tenant ID by name from keystone. """
@@ -517,8 +516,7 @@ class KeystoneIdentity(identity.Identity):
                 if overwrite_passwd and not keep_passwd:
                     self.update_user(_user['meta']['new_id'],
                                      password=password)
-                    self._passwd_notification(user['email'], user['name'],
-                                              password)
+                    self._passwd_notification(user['name'], password)
                 continue
 
             if not self.config.migrate.migrate_users:
@@ -531,8 +529,7 @@ class KeystoneIdentity(identity.Identity):
             if self.config['migrate']['keep_user_passwords']:
                 _user['meta']['overwrite_password'] = True
             else:
-                self._passwd_notification(user['email'], user['name'],
-                                          password)
+                self._passwd_notification(user['name'], password)
 
     @staticmethod
     def _update_users_info(users):
@@ -556,14 +553,9 @@ class KeystoneIdentity(identity.Identity):
 
         return users_info
 
-    def _passwd_notification(self, email, name, password):
-        if not self.postman:
-            return
-        template = 'templates/email.html'
-        self._send_msg(email, 'New password notification',
-                       self._render_template(template,
-                                             {'name': name,
-                                              'password': password}))
+    def _passwd_notification(self, user_name, password):
+        LOG.warning("Password for user '%s' was set to: '%s'",
+                    user_name, password)
 
     def _deploy_roles(self, roles):
         LOG.info("Role deployment started...")
@@ -735,11 +727,6 @@ class KeystoneIdentity(identity.Identity):
 
     def _generate_password(self):
         return self.generator.get_random_password()
-
-    def _send_msg(self, to, subject, msg):
-        if self.postman:
-            with self.postman as p:
-                p.send(to, subject, msg)
 
     def _render_template(self, name_file, args):
         if self.templater:

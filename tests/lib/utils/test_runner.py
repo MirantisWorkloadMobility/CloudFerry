@@ -20,7 +20,8 @@ from tests import test
 
 
 class RemoteRunnerTestCase(test.TestCase):
-    def test_remote_runner_raises_error_if_errors_are_not_ignored(self):
+    @mock.patch('cloudferry.lib.utils.utils.forward_agent')
+    def test_remote_runner_raises_error_if_errors_are_not_ignored(self, _):
         rr = remote_runner.RemoteRunner('host', 'user', 'password',
                                         ignore_errors=False)
 

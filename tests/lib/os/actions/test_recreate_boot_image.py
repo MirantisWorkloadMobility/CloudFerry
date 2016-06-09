@@ -14,9 +14,8 @@
 
 import mock
 
-from cloudferry.lib.os.actions import recreate_boot_image
+from cloudferry.actions.image import recreate_boot_image
 from cloudferry.lib.utils import utils
-
 from tests import test
 
 
@@ -36,7 +35,7 @@ class ReCreateBootImageTestCase(test.TestCase):
         }
         self.obj = recreate_boot_image.ReCreateBootImage(fake_init)
 
-    @mock.patch('cloudferry.lib.os.actions.recreate_boot_image.'
+    @mock.patch('cloudferry.actions.image.recreate_boot_image.'
                 'ReCreateBootImage.process_images')
     def test_run_without_missing_images(self, mock_process_images):
         res = self.obj.run('fake_images_info')
@@ -45,7 +44,7 @@ class ReCreateBootImageTestCase(test.TestCase):
                          res)
         self.assertIsZero(mock_process_images.call_count)
 
-    @mock.patch('cloudferry.lib.os.actions.recreate_boot_image.'
+    @mock.patch('cloudferry.actions.image.recreate_boot_image.'
                 'ReCreateBootImage.process_images')
     def test_run_with_missing_images(self, mock_process_images):
         mock_process_images.return_value = 'fake_new_images_info'
@@ -57,7 +56,7 @@ class ReCreateBootImageTestCase(test.TestCase):
         mock_process_images.assert_called_once_with('fake_images_info_images',
                                                     ['fake'])
 
-    @mock.patch('cloudferry.lib.os.actions.recreate_boot_image.'
+    @mock.patch('cloudferry.actions.image.recreate_boot_image.'
                 'ReCreateBootImage.restore_image')
     def test_process_images(self, mock_restore_image):
         missing_images = {1: 'fake_image_id_1', 2: 'fake_image_id_2'}

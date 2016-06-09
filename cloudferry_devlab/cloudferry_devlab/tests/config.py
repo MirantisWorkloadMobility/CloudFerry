@@ -18,6 +18,12 @@ TIMEOUT = 600
 """Timeout to wait for Openstack objects to create/update/be accessible.
 Value in second."""
 
+NET_NAMES_TO_OMIT = ['tenantnet4_segm_id_cidr1',
+                     'tenantnet4_segm_id_cidr2']
+SUBNET_NAMES_TO_OMIT = ['segm_id_test_subnet_1',
+                        'segm_id_test_subnet_2']
+PARAMS_NAMES_TO_OMIT = ['cidr', 'gateway_ip', 'provider:segmentation_id']
+
 img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
 username_for_ssh = 'cirros'
 """Username for ssh access for cirros image"""
@@ -53,9 +59,6 @@ logging_configuration = {
 
 filters_file_naming_template = 'filter_{tenant_name}.yaml'
 """Naming template for filter files."""
-
-pre_migration_vm_states_file = 'pre_migration_vm_states.json'
-"""Filename to save vm states before migration."""
 
 ext_net_map = 'ext_net_map.yaml'
 """This file contains map of relationships between external networks on source
@@ -120,12 +123,8 @@ tenants = [
          {'name': 'tn1_server_group2', 'policies': ['affinity']}
      ],
      'vms': [
-         {'name': 'tn1server1', 'image': 'image1', 'flavor': 'flavorname2',
-          'key_name': 'key1', 'server_group': 'tn1_server_group'},
-         {'name': 'tn1server2', 'image': 'image1', 'flavor': 'flavorname1',
-          'server_group': 'tn1_server_group'},
-         {'name': 'server6', 'image': 'image1', 'flavor': 'del_flvr',
-          'server_group': 'tn1_server_group2'}
+         {'name': 'tn1server1', 'image': 'image1', 'flavor': 'del_flvr',
+          'key_name': 'key1', 'server_group': 'tn1_server_group'}
      ],
      'networks': [
          {'name': 'tenantnet1', 'admin_state_up': True,
@@ -217,11 +216,9 @@ tenants = [
          'subnet': 60
      },
      'vms': [
-         {'name': 'tn2server1', 'image': 'image1', 'flavor': 'flavorname2',
-          'fip': True, 'key_name': 'key2', 'nics': [{'net-id': 'tenantnet2'}]},
          {'name': 'keypair_test_server', 'image': 'deleted_image',
-          'flavor': 'flavorname2', 'key_name': 'key2', 'nics': [
-              {'net-id': 'tenantnet2'}], 'fip': True}
+          'flavor': 'flavorname2', 'fip': True, 'key_name': 'key2',
+          'nics': [{'net-id': 'tenantnet2'}]}
      ],
      'networks': [
          {'name': 'tenantnet2', 'admin_state_up': True,
@@ -236,7 +233,7 @@ tenants = [
      ],
      'cinder_volumes': [
          {'display_name': 'tn_volume1', 'size': 1, 'volume_type': 'nfs1',
-          'server_to_attach': 'tn2server1', 'device': '/dev/vdb',
+          'server_to_attach': 'keypair_test_server', 'device': '/dev/vdb',
           'mount_point': '/tmp/mount_here/',
           'write_to_file': [
               {'filename': 'test_data.txt', 'data': 'some useless string'},
@@ -251,7 +248,7 @@ tenants = [
          {'name': 'tenantnet3', 'admin_state_up': True,
           'subnets': [
               {'cidr': '10.7.2.0/24', 'ip_version': 4, 'name': 't3_s1',
-               'routers_to_connect': ['ext_router']}]}],
+               'enable_dhcp': False, 'routers_to_connect': ['ext_router']}]}],
      'vms': [
          {'name': 'tn3server1', 'image': 'image1', 'flavor': 'flavorname1',
           'key_name': 'key4'}],
@@ -319,10 +316,8 @@ tenants = [
               {'cidr': '33.33.33.0/24', 'ip_version': 4, 'name': 't4_s1',
                'routers_to_connect': ['ext_router']}]},
          {'name': 'tenantnet4_segm_id_cidr1', 'admin_state_up': True,
-          'shared': False,
-          'router:external': False, 'real_network': False,
-          'provider:segmentation_id': 177,
-          'provider:network_type': 'gre',
+          'shared': False, 'router:external': False, 'real_network': False,
+          'provider:segmentation_id': 177, 'provider:network_type': 'gre',
           'subnets': [
               {'cidr': '31.31.31.0/24', 'ip_version': 4,
                'name': 'segm_id_test_subnet_1', 'connect_to_ext_router': False,
@@ -336,8 +331,7 @@ tenants = [
           'provider:network_type': 'gre',
           'subnets': [
               {'cidr': '40.40.40.0/24', 'ip_version': 4,
-               'name': 'segm_id_test_subnet_2', 'enable_dhcp': False,
-               'connect_to_ext_router': False,
+               'name': 'segm_id_test_subnet_2', 'connect_to_ext_router': False,
                }
               ]
           }],
@@ -446,7 +440,7 @@ img_to_add_members = ['image3', 'image4', 'image6']
 
 flavors = [
     {'name': 'flavorname1', 'disk': '1', 'ram': '64', 'vcpus': '1'},
-    {'name': 'flavorname3', 'disk': '10', 'ram': '32', 'vcpus': '1',
+    {'name': 'flavorname3', 'disk': '3', 'ram': '32', 'vcpus': '1',
      'is_public': False},
     {'name': 'flavorname2', 'disk': '2', 'ram': '48', 'vcpus': '2'},
     {'name': 'del_flvr', 'disk': '1', 'ram': '64', 'vcpus': '1'},
@@ -581,17 +575,13 @@ server_groups = [
 
 vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
-    {'name': 'server2', 'image': 'deleted_on_dst', 'flavor': 'flavorname1',
-     'config_drive': True},
-    {'name': 'server3', 'image': 'deleted_image', 'flavor': 'flavorname2',
-     'fip': True},
-    {'name': 'server4', 'image': 'deleted_image', 'flavor': 'flavorname2'},
-    {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1'},
-    {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'},
-    {'name': 'server7', 'image': 'image1', 'flavor': 'flavorname1',
+    {'name': 'server2', 'image': 'deleted_on_dst', 'flavor': 'del_flvr',
+     'server_group': 'admin_server_group', 'config_drive': True, 'fip': True},
+    {'name': 'server3', 'image': 'deleted_image', 'flavor': 'flavorname2'},
+    {'name': 'server4', 'image': 'broken_image', 'flavor': 'flavorname2'},
+    {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1',
      'broken': True},
-    {'name': 'server8', 'image': 'broken_image', 'flavor': 'flavorname1',
-     'server_group': 'admin_server_group'}
+    {'name': 'not_in_filter', 'image': 'image1', 'flavor': 'flavorname1'}
 ]
 """VM's to create/delete on SRC cloud."""
 
@@ -603,7 +593,7 @@ dst_vms = [
      'tenant': 'tenant5', 'nics': [{'net-id': 'tenant5net2',
                                     'v4-fixed-ip': '123.2.2.102'}]},
     {'name': 'tn5server3', 'image': 'image1', 'flavor': 'flavorname2',
-     'nics': [{'net-id': 'tenant5net', 'v4-fixed-ip': '122.2.2.101'}],
+     'nics': [{'net-id': 'tenant5net', 'v4-fixed-ip': '122.2.2.110'}],
      'tenant': 'tenant5'},
 ]
 """VM's to create on DST environment"""
@@ -651,18 +641,19 @@ cinder_snapshots = [
 """Cinder snapshots to create/delete"""
 
 vm_states = [
-    {'name': 'server1', 'state': 'error'},
-    {'name': 'server2', 'state': 'stop'},
-    {'name': 'server3', 'state': 'suspend'},
-    {'name': 'server4', 'state': 'pause'},
-    {'name': 'server5', 'state': 'resize'},
-    {'name': 'server6', 'state': 'active'},
-    {'name': 'server7', 'state': 'shutoff'},
-    {'name': 'server8', 'state': 'active'},
-    {'name': 'tn1server1', 'state': 'active'},
-    {'name': 'tn1server2', 'state': 'active'},
-    {'name': 'tn2server1', 'state': 'active'},
-    {'name': 'tn4server1', 'state': 'active'}
+    {'name': 'server1', 'state': 'ERROR'},
+    {'name': 'server2', 'state': 'ACTIVE'},
+    {'name': 'server3', 'state': 'SUSPENDED'},
+    {'name': 'server4', 'state': 'PAUSED'},
+    {'name': 'server5', 'state': 'VERIFY_RESIZE'},
+    {'name': 'not_in_filter', 'state': 'SHUTOFF'},
+    {'name': 'tn1server1', 'state': 'ACTIVE'},
+    {'name': 'tn3server1', 'state': 'SHUTOFF'},
+    {'name': 'tn5server1', 'state': 'SHUTOFF'},
+    {'name': 'tn5server2', 'state': 'SHUTOFF'},
+    {'name': 'tn5server3', 'state': 'SHUTOFF'},
+    {'name': 'keypair_test_server', 'state': 'ACTIVE'},
+    {'name': 'server_from_volume', 'state': 'SHUTOFF', 'skip_in_grizzly': True}
 ]
 """Emulate different VM states"""
 

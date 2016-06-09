@@ -87,7 +87,8 @@ class NovaComputeTestCase(BaseNovaComputeTestCase):
                                                  'fake_tenant',
                                                  'http://1.1.1.1:35357/v2.0/',
                                                  cacert='', insecure=False,
-                                                 region_name=None)
+                                                 region_name=None,
+                                                 endpoint_type='publicURL')
         self.assertEqual(self.mock_client(), client)
 
     def test_create_instance(self):
@@ -112,58 +113,74 @@ class NovaComputeTestCase(BaseNovaComputeTestCase):
     @mock.patch('cloudferry.lib.base.resource.time.sleep')
     @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
                 'get_status')
-    def test_change_status_active(self, mock_get, mock_sleep):
+    @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
+                'nova_client')
+    def test_change_status_active(self, mock_client, mock_get, mock_sleep):
         mock_get.return_value = 'shutoff'
         self.nova_client.change_status('active', instance=self.fake_instance_0)
-        self.fake_instance_0.start.assert_called_once_with()
+        mock_client.servers.start.assert_called_once_with(
+            self.fake_instance_0)
         mock_sleep.assert_called_with(256)
 
     @mock.patch('cloudferry.lib.base.resource.time.sleep')
     @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
                 'get_status')
-    def test_change_status_shutoff(self, mock_get, mock_sleep):
+    @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
+                'nova_client')
+    def test_change_status_shutoff(self, mock_client, mock_get, mock_sleep):
         mock_get.return_value = 'active'
         self.nova_client.change_status('shutoff',
                                        instance=self.fake_instance_0)
-        self.fake_instance_0.stop.assert_called_once_with()
+        mock_client.servers.stop.assert_called_once_with(self.fake_instance_0)
         mock_sleep.assert_called_with(256)
 
     @mock.patch('cloudferry.lib.base.resource.time.sleep')
     @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
                 'get_status')
-    def test_change_status_resume(self, mock_get, mock_sleep):
+    @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
+                'nova_client')
+    def test_change_status_resume(self, mock_client, mock_get, mock_sleep):
         mock_get.return_value = 'suspended'
         self.nova_client.change_status('active', instance=self.fake_instance_0)
-        self.fake_instance_0.resume.assert_called_once_with()
+        mock_client.servers.resume.assert_called_once_with(
+            self.fake_instance_0)
         mock_sleep.assert_called_with(256)
 
     @mock.patch('cloudferry.lib.base.resource.time.sleep')
     @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
                 'get_status')
-    def test_change_status_paused(self, mock_get, mock_sleep):
+    @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
+                'nova_client')
+    def test_change_status_paused(self, mock_client, mock_get, mock_sleep):
         mock_get.return_value = 'active'
         self.nova_client.change_status('paused', instance=self.fake_instance_0)
-        self.fake_instance_0.pause.assert_called_once_with()
+        mock_client.servers.pause.assert_called_once_with(self.fake_instance_0)
         mock_sleep.assert_called_with(256)
 
     @mock.patch('cloudferry.lib.base.resource.time.sleep')
     @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
                 'get_status')
-    def test_change_status_unpaused(self, mock_get, mock_sleep):
+    @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
+                'nova_client')
+    def test_change_status_unpaused(self, mock_client, mock_get, mock_sleep):
         mock_get.return_value = 'paused'
         self.nova_client.change_status('active',
                                        instance=self.fake_instance_0)
-        self.fake_instance_0.unpause.assert_called_once_with()
+        mock_client.servers.unpause.assert_called_once_with(
+            self.fake_instance_0)
         mock_sleep.assert_called_with(256)
 
     @mock.patch('cloudferry.lib.base.resource.time.sleep')
     @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
                 'get_status')
-    def test_change_status_suspend(self, mock_get, mock_sleep):
+    @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
+                'nova_client')
+    def test_change_status_suspend(self, mock_client, mock_get, mock_sleep):
         mock_get.return_value = 'active'
         self.nova_client.change_status('suspended',
                                        instance=self.fake_instance_0)
-        self.fake_instance_0.suspend.assert_called_once_with()
+        mock_client.servers.suspend.assert_called_once_with(
+            self.fake_instance_0)
         mock_sleep.assert_called_with(256)
 
     def test_change_status_same(self):
@@ -174,13 +191,16 @@ class NovaComputeTestCase(BaseNovaComputeTestCase):
 
     @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
                 'wait_for_status')
-    def test_shutoff_to_verify_resize_brings_instance_active(self, _):
-        self.mock_client().servers.get('fake_instance_id').status = 'shutoff'
-
+    @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
+                'get_status')
+    @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute.'
+                'nova_client')
+    def test_shutoff_to_verify_resize_brings_instance_active(
+            self, mock_client, mock_get, _):
+        mock_get.return_value = 'shutoff'
         self.nova_client.change_status('verify_resize',
                                        instance=self.fake_instance_0)
-
-        self.assertTrue(self.fake_instance_0.start.called)
+        mock_client.servers.start.assert_called_once_with(self.fake_instance_0)
 
     def test_get_flavor_from_id(self):
         self.mock_client().flavors.find.return_value = self.fake_flavor_0
@@ -509,6 +529,7 @@ class NovaClientTestCase(test.TestCase):
         password = 'password'
         insecure = False
         cacert = ''
+        ep_type = 'internalURL'
 
         config.cloud.user = user
         config.cloud.tenant = tenant
@@ -518,6 +539,7 @@ class NovaClientTestCase(test.TestCase):
         config.cloud.insecure = insecure
         config.cloud.cacert = cacert
         config.migrate.override_rules = None
+        config.cloud.nova_endpoint_type = ep_type
 
         cloud.position = 'src'
 
@@ -526,7 +548,8 @@ class NovaClientTestCase(test.TestCase):
 
         n_client.assert_called_with(user, password, tenant, auth_url,
                                     region_name=region, cacert=cacert,
-                                    insecure=insecure)
+                                    insecure=insecure,
+                                    endpoint_type=ep_type)
 
     def test_does_not_add_region_if_not_set_in_config(self, n_client):
         cloud = mock.MagicMock()
@@ -538,6 +561,7 @@ class NovaClientTestCase(test.TestCase):
         password = 'password'
         insecure = False
         cacert = ''
+        ep_type = 'internalURL'
 
         config.cloud.region = None
         config.cloud.user = user
@@ -546,6 +570,7 @@ class NovaClientTestCase(test.TestCase):
         config.cloud.password = password
         config.cloud.insecure = insecure
         config.cloud.cacert = cacert
+        config.cloud.nova_endpoint_type = ep_type
         config.migrate.override_rules = None
 
         cloud.position = 'src'
@@ -555,4 +580,4 @@ class NovaClientTestCase(test.TestCase):
 
         n_client.assert_called_with(user, password, tenant, auth_url,
                                     cacert=cacert, insecure=insecure,
-                                    region_name=None)
+                                    region_name=None, endpoint_type=ep_type)

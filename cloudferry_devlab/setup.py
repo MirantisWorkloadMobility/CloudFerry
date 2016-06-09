@@ -30,7 +30,8 @@ setup(name='cloudferry_devlab',
                 'cloudferry_devlab.tests.testcases'],
       entry_points={
           'console_scripts': [
-              'generate_load = cloudferry_devlab.bin.main:main'
+              'generate_load = cloudferry_devlab.bin.main:main',
+              'restore_vms_state = cloudferry_devlab.bin.main:restore_vms'
           ],
       },
       package_data={'cloudferry_devlab.tests.testcases':

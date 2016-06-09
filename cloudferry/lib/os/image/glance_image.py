@@ -16,11 +16,8 @@
 import copy
 import httplib
 from itertools import ifilter
-import json
 import re
 
-from fabric.api import run
-from fabric.api import settings
 from glanceclient import client as glance_client
 from glanceclient import exc as glance_exceptions
 from glanceclient.v1.images import CREATE_PARAMS
@@ -144,7 +141,7 @@ class GlanceImage(image.Image):
         """ Getting glance client. """
         endpoint_glance = self.identity_client.get_endpoint_by_service_type(
             service_type='image',
-            endpoint_type='publicURL')
+            endpoint_type=self.config.cloud.endpoint_type)
 
         # we can figure out what version of client to use from url
         # check if we have "v1" or "v2" in the end of url
@@ -290,15 +287,13 @@ class GlanceImage(image.Image):
         try:
             # ssl.ZeroReturnError happens because a size of an image is zero
             with proxy_client.expect_exception(
-                glance_exceptions.NotFound,
-                glance_exceptions.HTTPInternalServerError,
                 ssl.ZeroReturnError,
+                glance_exceptions.HTTPException,
                 IOError
             ):
                 return self.glance_client.images.data(image_id)
-        except (glance_exceptions.HTTPInternalServerError,
-                glance_exceptions.HTTPNotFound,
-                ssl.ZeroReturnError,
+        except (ssl.ZeroReturnError,
+                glance_exceptions.HTTPException,
                 IOError):
             raise exception.ImageDownloadError
 
@@ -662,14 +657,3 @@ class GlanceImage(image.Image):
 
     def get_status(self, res_id):
         return self.glance_client.images.get(res_id).status
-
-    def patch_image(self, backend_storage, image_id):
-        ssh_attempts = self.cloud.cloud_config.migrate.ssh_connection_attempts
-
-        if backend_storage == 'ceph':
-            image_from_glance = self.get_image_by_id(image_id)
-            with settings(host_string=self.ssh_host,
-                          connection_attempts=ssh_attempts):
-                out = json.loads(
-                    run("rbd -p images info %s --format json" % image_id))
-                image_from_glance.update(size=out["size"])

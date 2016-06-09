@@ -24,7 +24,6 @@ preparation:
           - act_check_bandwidth_src: True
           - check_src_sql: True
           - check_src_rabbit: True
-          - act_get_info_objects_src: False
       - dst_test:
           - act_check_ident_api_dst: True
           - act_check_image_api_dst: True
@@ -35,19 +34,15 @@ preparation:
           - act_check_bandwidth_dst: True
           - check_dst_sql: True
           - check_dst_rabbit: True
-          - act_get_info_objects_dst: False
       - check_networks: True
   - check_users_availability: True
   - create_snapshot: True
-  - create_vm_snapshot_src: True
-  - create_vm_snapshot_dst: True
   - create_image_snapshot_dst: True
   - task_check_write_access:
       - act_check_dst_cloud: True
 
 rollback:
-  - restore_from_vm_snapshot_dst: True
-  - restore_from_vm_snapshot_src: True
+  - restore_vms: True
   - image_rollback_dst: True
   - restore_from_snapshot: False
 
@@ -60,7 +55,7 @@ process:
           - act_deploy_images: True
       - act_comp_res_trans: True
       - act_network_trans: True
-      - get_volumes_db_data: True
+      - get_volumes_from_source: True
       - migrate_volumes: True
       - transport_key_pairs: True
       - act_server_group_trans: False
@@ -70,7 +65,6 @@ process:
       - init_iteration_instance:
           - init_iteration_instance_copy_var: True
           - init_iteration_instance_ref: True
-      - check_needed_compute_resources: True
       - check_instances: ['rename_info_iter']
       - get_next_instance: True
       - trans_one_inst:
@@ -86,27 +80,14 @@ process:
                   - act_conv_image_comp: True
               - set_volume_id_for_attaching: True
           - transport_inst:
-              - act_net_prep: True
+              - provision_ports: True
               - associate_floatingip_on_dest: True
-              - act_map_com_info: True
-              - act_is_not_trans_image: ['act_is_not_merge_diff']
-              - process_transport_image:
-                  - act_transfer_file: True
-                  - act_f_to_i_after_transfer: True
-              - act_is_not_merge_diff: ['act_deploy_instances']
-              - process_merge_diff_and_base:
-                  - act_i_to_f: True
-                  - trans_file_to_file: True
-                  - act_merge: True
-                  - act_convert_image: True
-                  - act_f_to_i: True
               - act_deploy_instances: True
               - add_key_pairs_to_instances: True
-              - act_is_not_copy_diff_file: ['act_transport_ephemeral']
-              - act_trans_diff_file: False
+              - if_vm_is_booted_from_volume: ['act_transport_ephemeral']
               - copy_vm_data: True
               - act_transport_ephemeral: True
-          - act_attaching: True
+          - attach_volumes_in_dst: True
           - act_dissociate_floatingip: True
           - act_start_vms_if_needed: True
           - save_result_migrate_instances: True
@@ -117,7 +98,5 @@ process:
       - verify_vms: True
       - remove_failed_instances: True
   - auto_rollback:
-      - restore_from_vm_snapshot_dst: True
-      - restore_from_vm_snapshot_src: True
       - image_rollback_dst: True
       - restore_from_snapshot: True

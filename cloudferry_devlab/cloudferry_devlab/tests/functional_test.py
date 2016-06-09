@@ -61,9 +61,11 @@ class FunctionalTest(unittest.TestCase):
         self.migration_utils = utils.MigrationUtils(config)
         self.config_ini_path = config_ini['general']['configuration_ini_path']
         self.cloudferry_dir = config_ini['general']['cloudferry_dir']
+        filter_path = config_ini['general'].get(
+            'filter_path',
+            get_option_from_config_ini('filter_path'))
         self.filtering_utils = utils.FilteringUtils(
-            os.path.join(self.cloudferry_dir, get_option_from_config_ini(
-                'filter_path')))
+            os.path.join(self.cloudferry_dir, filter_path))
 
     def filter_networks(self):
         networks = [i['name'] for i in config.networks]
@@ -91,6 +93,8 @@ class FunctionalTest(unittest.TestCase):
                 if 'subnets' not in network:
                     continue
                 for subnet in network['subnets']:
+                    if subnet['name'] in config.SUBNET_NAMES_TO_OMIT:
+                        continue
                     subnet['tenant_id'] = self.src_cloud.get_tenant_id(
                         tenant['name'])
                     subnets.append(subnet)
@@ -279,3 +283,100 @@ class FunctionalTest(unittest.TestCase):
                 nics = [(net, ip['addr']) for ip in vm.addresses.get(
                     net) if ip['OS-EXT-IPS:type'] == 'fixed']
             setattr(vm, 'vm_hash', (vm.name, nics))
+
+    def get_vm_original_state(self, vm_name):
+        for vm in config.vm_states:
+            if vm.get('name') == vm_name:
+                return vm.get('state')
+        self.fail('Original state for VM %s was not found.' % vm_name)
+
+    def _is_segm_id_test(self, param, name):
+        return param in config.PARAMS_NAMES_TO_OMIT and (
+            name in config.NET_NAMES_TO_OMIT or
+            name in config.SUBNET_NAMES_TO_OMIT)
+
+    def validate_resource_parameter_in_dst(self, src_list, dst_list,
+                                           resource_name, parameter):
+        if not src_list:
+            self.fail(
+                'Nothing to migrate - source %s list is empty' % resource_name)
+        name_attr = 'name'
+        if resource_name == 'volume':
+            name_attr = 'display_name'
+        invalid_parameters_list = []
+        not_founded_parameters = []
+        for i in src_list:
+            src_attr = str(getattr(i, name_attr))
+            for j in dst_list:
+                dst_attr = str(getattr(j, name_attr))
+                if src_attr != dst_attr:
+                    continue
+                if getattr(i, parameter, None) and getattr(i, parameter) != \
+                        getattr(j, parameter):
+                    invalid_parameters_list.append((src_attr,
+                                                    str(getattr(i, parameter)),
+                                                    str(getattr(j, parameter)))
+                                                   )
+                break
+            else:
+                not_founded_parameters.append(src_attr)
+
+        if not_founded_parameters:
+            msg = 'Resource {res} with names {r_name} was not found on dst'
+            self.fail(msg.format(res=resource_name,
+                                 r_name=not_founded_parameters))
+
+        if invalid_parameters_list:
+            msg = 'List of parameters {param} for resource {res} with names ' \
+                  '{name} are different src: {r1}, dst: {r2}'
+            self.fail(msg.format(
+                param=parameter, res=resource_name,
+                name=[x[0] for x in invalid_parameters_list],
+                r1=[x[1] for x in invalid_parameters_list],
+                r2=[x[2] for x in invalid_parameters_list]))
+
+    def validate_neutron_resource_parameter_in_dst(self, src_list,
+                                                   dst_list,
+                                                   resource_name='networks',
+                                                   parameter='name'):
+        if not src_list[resource_name]:
+            self.fail(
+                'Nothing to migrate - source %s list is empty' % resource_name)
+        for i in src_list[resource_name]:
+            for j in dst_list[resource_name]:
+                if i['name'] != j['name']:
+                    continue
+                if i[parameter] != j[parameter]:
+                    if not self._is_segm_id_test(parameter, i['name']):
+                        msg = 'Parameter {param} for resource {res}' \
+                              ' with name {name} are different' \
+                              ' src: {r1}, dst: {r2}'
+                        self.fail(msg.format(
+                            param=parameter, res=resource_name, name=i['name'],
+                            r1=i[parameter], r2=j[parameter]))
+                break
+            else:
+                msg = 'Resource {res} with name {r_name} was not found on dst'
+                self.fail(msg.format(res=resource_name, r_name=i['name']))
+
+    @staticmethod
+    def replace_id_with_name(client, resource, res_list):
+        for res in res_list[resource]:
+            if res.get('pool_id'):
+                res['pool_name'] = client.neutronclient.show_pool(
+                    res['pool_id'])['pool']['name']
+            if res.get('subnet_id'):
+                res['subnet_name'] = client.neutronclient.show_subnet(
+                    res['subnet_id'])['subnet']['name']
+            if res.get('tenant_id'):
+                res['tenant_name'] = client.keystoneclient.tenants.get(
+                    res['tenant_id']).name
+        return res_list
+
+    @staticmethod
+    def filter_resource_parameters(resource, res_list, param_list):
+        finals_res_list = {resource: []}
+        for res in res_list[resource]:
+            finals_res_list[resource].append(
+                {param: res[param] for param in res if param in param_list})
+        return finals_res_list

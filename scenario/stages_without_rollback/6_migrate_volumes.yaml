@@ -7,5 +7,5 @@ preparation:
 
 process:
   - transport_storage_resources: True
-  - get_volumes_db_data: True
+  - get_volumes_from_source: True
   - migrate_volumes: True

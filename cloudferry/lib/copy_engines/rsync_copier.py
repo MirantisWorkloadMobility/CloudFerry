@@ -47,8 +47,6 @@ class RsyncCopier(base.BaseCopier):
         cmd = ("rsync "
                "--partial "
                "--inplace "
-               "--perms "
-               "--times "
                "--compress "
                "--verbose "
                "--progress "
@@ -78,10 +76,12 @@ class RsyncCopier(base.BaseCopier):
             raise base.FileCopyError(**data)
 
     def check_usage(self, data):
-        runner = self.runner(data['host_src'], 'src')
         LOG.debug("Checking if rsync is installed")
-        try:
-            runner.run("rsync --help &>/dev/null")
-            return True
-        except remote_runner.RemoteExecutionError:
-            return False
+        for host, position in ((data['host_src'], 'src'),
+                               (data['host_dst'], 'dst')):
+            runner = self.runner(host, position)
+            try:
+                runner.run("rsync --help &>/dev/null")
+                return True
+            except remote_runner.RemoteExecutionError:
+                return False

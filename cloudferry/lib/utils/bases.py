@@ -11,19 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import collections
 import sys
 
-
-def sorted_field_names(obj):
-    """
-    Returns alphabetically sorted list of public object field names (i.e. their
-    names don't start with '_')
-    """
-
-    return sorted(
-        f for f in dir(obj)
-        if not f.startswith('_') and not hasattr(getattr(obj, f), '__call__'))
+from cloudferry.lib.utils import utils
 
 
 def compute_hash(obj):
@@ -58,7 +48,7 @@ class Hashable(object):
     def __eq__(self, other):
         if other.__class__ != self.__class__:
             return False
-        for field in sorted_field_names(self):
+        for field in self._get_hashable_fields():
             if getattr(self, field) != getattr(other, field, None):
                 return False
         return True
@@ -67,7 +57,14 @@ class Hashable(object):
         return not (self == other)
 
     def __hash__(self):
-        return compute_hash(getattr(self, f) for f in sorted_field_names(self))
+        return compute_hash(getattr(self, f)
+                            for f in sorted(self._get_hashable_fields()))
+
+    def _get_hashable_fields(self):
+        return (
+            f for f in dir(self)
+            if not f.startswith('_') and
+            not hasattr(getattr(self, f), '__call__'))
 
 
 class Representable(object):
@@ -79,20 +76,63 @@ class Representable(object):
     def __repr__(self):
         cls = self.__class__
         return '<{module}.{cls} {fields}>'.format(
-            module=cls.__module__,
-            cls=cls.__name__,
+            module=cls.__module__, cls=cls.__name__,
             fields=' '.join('{0}:{1}'.format(f, repr(getattr(self, f)))
-                            for f in sorted_field_names(self)
+                            for f in sorted(self._get_representable_fields())
                             if getattr(self, f) is not None))
 
+    def _get_representable_fields(self):
+        return (
+            f for f in dir(self)
+            if not f.startswith('_') and
+            not hasattr(getattr(self, f), '__call__'))
 
-class ConstructableFromDict(object):
+
+class ExceptionWithFormatting(Exception):
     """
-    Mixin class with __init__ method that just assign values from dictionary
-    to object attributes with names identical to keys from dictionary.
+    Exception to be used as base for exceptions that want to format the
+    message.
+    E.g. for example::
+
+        class FooException(FormattingException):
+            pass
+
+        answer = calculate_answer()
+        if answer != 42:
+            raise FooException('answer = %d instead of 42', answer)
+
+    will lead to log message like ``FooException: answer = -1 instead of 42``
     """
 
-    def __init__(self, data):
-        assert isinstance(data, collections.Mapping)
-        for name, value in data.items():
-            setattr(self, name, value)
+    def __str__(self):
+        try:
+            if len(self.args) > 1:
+                if isinstance(self.args[0], basestring):
+                    # We suspect that anything can happen here, like __repr__
+                    # or __str__ raising arbitrary exceptions.
+                    # We want to suppress them and deliver to the user as much
+                    # original information as we can and don't clutter it with
+                    # exception that happend due to conversion of exception to
+                    # string.
+                    return self.args[0] % self.args[1:]
+            elif len(self.args) == 1:
+                if isinstance(self.args[0], basestring):
+                    return self.args[0]
+            else:
+                return 'ValidationError'
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+        # If we got here, then either exception was raised or first argument is
+        # not a string
+        args_repr = []
+        for arg in self.args:
+            try:
+                args_repr.append(repr(arg))
+            except Exception:  # pylint: disable=broad-except
+                args_repr.append('<%s id:%d>' % (utils.qualname(type(arg)),
+                                                 id(arg)))
+        if len(args_repr) == 1:
+            return '(' + args_repr[0] + ',)'
+        else:
+            return '(' + ', '.join(args_repr) + ')'

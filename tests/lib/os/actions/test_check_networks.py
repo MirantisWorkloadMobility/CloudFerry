@@ -16,8 +16,8 @@
 
 import mock
 
+from cloudferry.actions.prechecks import check_networks
 from cloudferry.lib.base import exception
-from cloudferry.lib.os.actions import check_networks
 from tests import test
 
 
@@ -340,7 +340,9 @@ class CheckNetworksTestCase(test.TestCase):
         src_cmp_info = [mock.Mock(id='fake_instance_id')]
 
         action = self.get_action(src_net_info, src_compute_info=src_cmp_info)
-        self.assertRaises(exception.AbortMigrationError, action.run)
+        with mock.patch.object(check_networks.LOG, 'warning') as warning:
+            action.run()
+            warning.assert_called_once_with(mock.ANY, ['fake_instance_id'])
 
     def test_allocation_pools_overlap(self):
         src_net_info = {'networks': [{'id': 'id1',

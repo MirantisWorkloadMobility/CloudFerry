@@ -18,21 +18,24 @@ nodes = {
     "ip" => "#{options['grizzly_ip']}",
     "ip2" => "#{options['grizzly_ip2']}",
     "memory" => 4096,
-    "role" => "openstack"
+    "role" => "openstack",
+    "cpus" => 2
   },
   "icehouse" => {
     "box" => "openstack-user/trusty-icehouse",
     "ip" => "#{options['icehouse_ip']}",
     "ip2" => "#{options['icehouse_ip2']}",
     "memory" => 4096,
-    "role" => "openstack"
+    "role" => "openstack",
+    "cpus" => 2
   },
   "juno" => {
     "box" => "openstack-user/trusty-juno",
     "ip" => "#{options['juno_ip']}",
     "ip2" => "#{options['juno_ip2']}",
     "memory" => 4096,
-    "role" => "openstack"
+    "role" => "openstack",
+    "cpus" => 2
   },
   "cloudferry" => {
     "box" => "hashicorp/precise64",
@@ -47,7 +50,69 @@ nodes = {
     "ip2" => "#{options['nfs_ip2']}",
     "memory" => 1024,
     "cpus" => 1
-  }
+  },
+  "grizzly_juno_src" => {
+    "box" => "grizzly_juno/src",
+    "url" => "http://172.18.236.71/grizzly_juno/src.json",
+    "ip" => "#{options['grizzly_ip']}",
+    "ip2" => "#{options['grizzly_ip2']}",
+    "memory" => 4096,
+    "role" => "openstack",
+    "hostname" => "grizzly",
+    "release" => "grizzly",
+    "cpus" => 2
+  },
+  "grizzly_juno_dst" => {
+    "box" => "grizzly_juno/dst",
+    "url" => "http://172.18.236.71/grizzly_juno/dst.json",
+    "ip" => "#{options['juno_ip']}",
+    "ip2" => "#{options['juno_ip2']}",
+    "memory" => 4096,
+    "role" => "openstack",
+    "hostname" => "juno",
+    "release" => "juno",
+    "cpus" => 2
+  },
+  "grizzly_juno_nfs" => {
+    "box" => "grizzly_juno/nfs",
+    "url" => "http://172.18.236.71/grizzly_juno/nfs.json",
+    "ip" => "#{options['nfs_ip']}",
+    "ip2" => "#{options['nfs_ip2']}",
+    "memory" => 1024,
+    "hostname" => "nfs",
+    "cpus" => 1
+  },
+  "icehouse_juno_src" => {
+    "box" => "icehouse_juno/src",
+    "url" => "http://172.18.236.71/icehouse_juno/src.json",
+    "ip" => "#{options['icehouse_ip']}",
+    "ip2" => "#{options['icehouse_ip2']}",
+    "memory" => 4096,
+    "role" => "openstack",
+    "hostname" => "icehouse",
+    "release" => "icehouse",
+    "cpus" => 2
+  },
+  "icehouse_juno_dst" => {
+    "box" => "icehouse_juno/dst",
+    "url" => "http://172.18.236.71/icehouse_juno/dst.json",
+    "ip" => "#{options['juno_ip']}",
+    "ip2" => "#{options['juno_ip2']}",
+    "memory" => 4096,
+    "role" => "openstack",
+    "hostname" => "juno",
+    "release" => "juno",
+    "cpus" => 2
+  },
+  "icehouse_juno_nfs" => {
+    "box" => "icehouse_juno/nfs",
+    "url" => "http://172.18.236.71/icehouse_juno/nfs.json",
+    "ip" => "#{options['nfs_ip']}",
+    "ip2" => "#{options['nfs_ip2']}",
+    "memory" => 1024,
+    "hostname" => "nfs",
+    "cpus" => 1
+  },
 }
 
 options['http_proxy'] ||= ""
@@ -76,13 +141,16 @@ Vagrant.configure(2) do |config|
                             "#{options['nfs_ip']}"
   end
 
-  config.vm.provision "shell", path: "./provision/prerequisites.sh"
   etc_hosts = nodes.map { |name, data| [data["ip"], name].join(' ') }.join("\n")
 
   nodes.each do |nodename, nodedata|
     config.vm.define nodename do |thisnode|
+      if nodedata.key?("url")
+        thisnode.vm.box_url = nodedata["url"]
+      end
+
       thisnode.vm.box = nodedata['box']
-      thisnode.vm.hostname = nodename
+      thisnode.vm.hostname = nodedata.fetch("hostname", nodename)
       thisnode.vm.provision "shell", inline: "echo '#{etc_hosts}' >> /etc/hosts"
       thisnode.vm.provision "shell",
         path: "./provision/keys.sh",
@@ -90,15 +158,16 @@ Vagrant.configure(2) do |config|
 
       case nodedata.fetch("role", "")
         when "openstack"
-          thisnode.vm.provision "shell", path: "./provision/fix_interfaces.sh"
+          thisnode.vm.provision "shell", path: "./provision/configure_networking.sh", args: ['eth1', 'br-ex', nodedata['ip']]
+          thisnode.vm.provision "shell", path: "./provision/configure_networking.sh", args: ['eth2', 'br-ex2', nodedata['ip2']]
+          thisnode.vm.provision "shell", path: "./provision/configure_openstack.sh", args: [nodedata['ip'], nodename]
           thisnode.vm.provision "shell", path: "./provision/create_disks_swift.sh"
-          if nodename == "grizzly" then
-            thisnode.vm.provision "shell", path: "./provision/qemu.sh"
-          elsif nodename == "icehouse" then
+
+          if nodename == "icehouse" then
             thisnode.vm.provision "shell", path: "./provision/cleanup_nova_instances.sh"
           end
-          thisnode.vm.provision "shell", path: "./provision/libvirt.sh"
         when "lab"
+          config.vm.provision "shell", path: "./provision/prerequisites.sh"
           thisnode.vm.provision "shell",
             path: "./provision/cloudferry.sh"
           if File.exist?(File.join(Dir.home, ".ssh/id_rsa")) then
@@ -108,13 +177,16 @@ Vagrant.configure(2) do |config|
           end
       end
 
-      thisnode.vm.network "private_network", ip: nodedata['ip']
-      thisnode.vm.network "private_network", ip: nodedata['ip2']
+      thisnode.vm.network "private_network", ip: nodedata['ip'], auto_config: (nodedata.fetch("role", "") != "openstack"), nic_type: "virtio"
+      thisnode.vm.network "private_network", ip: nodedata['ip2'], auto_config: (nodedata.fetch("role", "") != "openstack"), nic_type: "virtio"
 
       thisnode.vm.provider "virtualbox" do |v|
         v.memory = nodedata.fetch("memory", 1024)
         v.cpus = nodedata.fetch("cpus", 2)
         v.customize ["modifyvm", :id, "--nicpromisc2", "allow-all"]
+        v.customize ["modifyvm", :id, "--nicpromisc3", "allow-all"]
+        v.customize ["modifyvm", :id, "--cpuexecutioncap", "90"]
+        v.customize ["modifyvm", :id, "--nictype1", "virtio"]
       end
     end
   end

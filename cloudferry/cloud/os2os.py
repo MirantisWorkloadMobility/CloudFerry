@@ -14,13 +14,11 @@
 
 
 from cloudferry.cloud import cloud
-from cloudferry.cloud import cloud_ferry
 from cloudferry.lib.base import migration
 from cloudferry.lib.os.compute import nova_compute
 from cloudferry.lib.os.identity import keystone
 from cloudferry.lib.os.image import glance_image
 from cloudferry.lib.os.network import neutron
-from cloudferry.lib.os.object_storage import swift_storage
 from cloudferry.lib.os.storage import cinder_storage
 from cloudferry.lib.scheduler import cursor
 from cloudferry.lib.scheduler import namespace
@@ -28,16 +26,15 @@ from cloudferry.lib.scheduler import scheduler
 from cloudferry.lib.utils import utils as utl
 
 
-class OS2OSFerry(cloud_ferry.CloudFerry):
+class OS2OSFerry(object):
 
     def __init__(self, config):
-        super(OS2OSFerry, self). __init__(config)
         resources = {'identity': keystone.KeystoneIdentity,
                      'image': glance_image.GlanceImage,
                      'storage': cinder_storage.CinderStorage,
                      'network': neutron.NeutronNetwork,
-                     'compute': nova_compute.NovaCompute,
-                     'objstorage': swift_storage.SwiftStorage}
+                     'compute': nova_compute.NovaCompute}
+        self.config = config
         self.src_cloud = cloud.Cloud(resources, cloud.SRC, config)
         self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)
         self.src_cloud.migration = {

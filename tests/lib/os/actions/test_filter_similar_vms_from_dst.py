@@ -14,9 +14,9 @@
 #    under the License.
 
 import mock
-from cloudferry.lib.os.actions.filter_similar_vms_from_dst import \
-    FilterSimilarVMsFromDST
 
+from cloudferry.actions.filter.filter_similar_vms_from_dst import \
+    FilterSimilarVMsFromDST
 from tests import test
 
 

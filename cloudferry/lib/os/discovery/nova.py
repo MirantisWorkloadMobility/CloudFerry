@@ -11,182 +11,184 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import itertools
 import logging
 
-from cloudferry.lib.os.discovery import cinder
-from cloudferry.lib.os.discovery import glance
-from cloudferry.lib.os.discovery import keystone
-from cloudferry.lib.os.discovery import model
+from novaclient import exceptions
+
+from cloudferry import discover
+from cloudferry import model
+from cloudferry.model import compute
+from cloudferry.model import identity
+from cloudferry.model import image
+from cloudferry.model import storage
 from cloudferry.lib.utils import qemu_img
 from cloudferry.lib.utils import remote
 from cloudferry.lib.os import clients
 
+EXT_ATTR_INSTANCE_NAME = 'OS-EXT-SRV-ATTR:instance_name'
+EXT_ATTR_HYPER_HOST = 'OS-EXT-SRV-ATTR:hypervisor_hostname'
+EXT_ATTR_AZ = 'OS-EXT-AZ:availability_zone'
+EXT_ATTR_HOST = 'OS-EXT-SRV-ATTR:host'
+EXT_ATTR_VOL_ATTACHMENTS = 'os-extended-volumes:volumes_attached'
+
 LOG = logging.getLogger(__name__)
 
-HOST = 'OS-EXT-SRV-ATTR:host'
-VOLUMES_ATTACHED = 'os-extended-volumes:volumes_attached'
+
+class FlavorDiscoverer(discover.Discoverer):
+    discovered_class = compute.Flavor
+
+    def discover_all(self):
+        # TODO: implement
+        return
+
+    def discover_one(self, uuid):
+        compute_client = clients.compute_client(self.cloud)
+        raw_flavor = compute_client.flavors.get(uuid)
+        # TODO: implement
+        return compute.Flavor.load({
+            'object_id': self.make_id(raw_flavor.id),
+        })
+
+    def load_from_cloud(self, data):
+        return compute.Flavor.load(data)
 
 
-class Flavor(model.Model):
-    class Schema(model.Schema):
-        object_id = model.PrimaryKey('id')
+class ServerDiscoverer(discover.Discoverer):
+    discovered_class = compute.Server
 
-    @classmethod
-    def load_missing(cls, cloud, object_id):
-        compute_client = clients.compute_client(cloud)
-        raw_flavor = compute_client.flavors.get(object_id.id)
-        return Flavor.load_from_cloud(cloud, raw_flavor)
+    def discover_all(self):
+        compute_client = clients.compute_client(self.cloud)
+        avail_hosts = _list_available_compute_hosts(compute_client)
+        servers = {}
 
-    def equals(self, other):
-        # TODO: replace with implementation that make sense
-        return True
+        # Go through each tenant since nova don't return more items than
+        # specified in osapi_max_limit configuration option (1000 by default)
+        # in single API call
+        for tenant in self._get_tenants():
+            LOG.debug('Discovering servers from cloud "%s" tenant "%s"',
+                      self.cloud.name, tenant.name)
+            tenant_id = tenant.id
+            raw_server_list = compute_client.servers.list(
+                search_opts={
+                    'all_tenants': True,
+                    'tenant_id': tenant_id,
+                })
+            for raw_server in raw_server_list:
+                host = getattr(raw_server, EXT_ATTR_HOST)
+                if host not in avail_hosts:
+                    LOG.warning('Skipping server %s in tenant %s, host not '
+                                'available.', host, tenant.name)
+                    continue
+                # Convert server data to model conforming format
+                server = self.load_from_cloud(raw_server)
+                hyper_host = getattr(raw_server, EXT_ATTR_HYPER_HOST)
+                servers.setdefault(hyper_host, []).append(server)
 
+        # Collect information about ephemeral disks
+        # TODO: work with different servers in parallel
+        for host, host_servers in servers.items():
+            LOG.debug('Getting ephemeral disks information from cloud %s '
+                      'host %s', self.cloud.name, host)
+            with remote.RemoteExecutor(self.cloud, host) as remote_executor:
+                for server in host_servers:
+                    _populate_ephemeral_disks(remote_executor, server)
 
-class SecurityGroup(model.Model):
-    class Schema(model.Schema):
-        name = model.String(required=True)
-
-
-class EphemeralDisk(model.Model):
-    class Schema(model.Schema):
-        path = model.String(required=True)
-        size = model.Integer(required=True)
-        format = model.String(required=True)
-        base_path = model.String(required=True, allow_none=True)
-        base_size = model.Integer(required=True, allow_none=True)
-        base_format = model.String(required=True, allow_none=True)
-
-
-@model.type_alias('vms')
-class Server(model.Model):
-    class Schema(model.Schema):
-        object_id = model.PrimaryKey('id')
-        name = model.String(required=True)
-        security_groups = model.Nested(SecurityGroup, many=True, missing=list)
-        status = model.String(required=True)
-        tenant = model.Dependency(keystone.Tenant)
-        image = model.Dependency(glance.Image, allow_none=True)
-        image_membership = model.Dependency(glance.ImageMember,
-                                            allow_none=True)
-        user_id = model.String(required=True)  # TODO: user reference
-        key_name = model.String(required=True, allow_none=True)
-        flavor = model.Dependency(Flavor)
-        config_drive = model.String(required=True)
-        availability_zone = model.String(required=True, allow_none=True)
-        host = model.String(required=True)
-        hypervisor_hostname = model.String(required=True)
-        instance_name = model.String(required=True)
-        metadata = model.Dict(missing=dict)
-        ephemeral_disks = model.Nested(EphemeralDisk, many=True, missing=list)
-        attached_volumes = model.Dependency(cinder.Volume, many=True,
-                                            missing=list)
-        # TODO: ports
-
-        FIELD_MAPPING = {
-            'host': HOST,
-            'hypervisor_hostname': 'OS-EXT-SRV-ATTR:hypervisor_hostname',
-            'instance_name': 'OS-EXT-SRV-ATTR:instance_name',
-            'availability_zone': 'OS-EXT-AZ:availability_zone',
-            'attached_volumes': VOLUMES_ATTACHED,
-            'tenant': 'tenant_id',
-        }
-        FIELD_VALUE_TRANSFORMERS = {
-            'image': lambda x: x or None
-        }
-
-    @classmethod
-    def discover(cls, cloud):
-        compute_client = clients.compute_client(cloud)
-        avail_hosts = list_available_compute_hosts(compute_client)
+        # Store data to local database
         with model.Session() as session:
-            servers = []
+            for host_servers in servers.values():
+                for server in host_servers:
+                    session.store(server)
+                    if _need_image_membership(server):
+                        image_member_uuid = image.ImageMember.make_uuid(
+                            server.image, server.tenant)
+                        server.image_membership = self.find_obj(
+                            image.ImageMember, image_member_uuid)
 
-            # Collect servers using API
-            for tenant in session.list(keystone.Tenant, cloud.name):
-                server_list = compute_client.servers.list(
-                    search_opts={
-                        'all_tenants': True,
-                        'tenant_id': tenant.object_id.id,
-                    })
-                for raw_server in server_list:
-                    host = getattr(raw_server, HOST)
-                    if host not in avail_hosts:
-                        LOG.warning('Skipping server %s, host not available.',
-                                    host)
-                        continue
-                    # Workaround for grizzly lacking os-extended-volumes
-                    overrides = {}
-                    if not hasattr(raw_server, VOLUMES_ATTACHED):
-                        overrides['attached_volumes'] = [
-                            volume.id for volume in
-                            compute_client.volumes.get_server_volumes(
-                                raw_server.id)]
-                    try:
-                        srv = Server.load_from_cloud(cloud, raw_server,
-                                                     overrides)
-                        if _need_image_membership(srv):
-                            srv.image_membership = glance.ImageMember.make(
-                                cloud,
-                                srv.image.object_id.id,
-                                srv.tenant.object_id.id)
-                            session.store(srv.image_membership)
-                        servers.append(srv)
-                        LOG.debug('Discovered: %s', srv)
-                    except model.ValidationError as e:
-                        LOG.warning('Server %s ignored: %s', raw_server.id, e,
-                                    exc_info=True)
-                        continue
+    def discover_one(self, uuid):
+        compute_client = clients.compute_client(self.cloud)
+        try:
+            raw_server = compute_client.servers.get(uuid)
+        except exceptions.NotFound:
+            raise discover.NotFound()
 
-            # Discover ephemeral volume info using SSH
-            servers.sort(key=lambda s: s.host)
-            for host, host_servers in itertools.groupby(servers,
-                                                        key=lambda s: s.host):
-                with remote.RemoteExecutor(cloud, host) as remote_executor:
-                    for srv in host_servers:
-                        ephemeral_disks = _list_ephemeral(remote_executor, srv)
-                        if ephemeral_disks is not None:
-                            srv.ephemeral_disks = ephemeral_disks
-                            session.store(srv)
+        # Check if server host is available
+        avail_hosts = _list_available_compute_hosts(compute_client)
+        host = getattr(raw_server, EXT_ATTR_HOST)
+        if host not in avail_hosts:
+            LOG.warning('Skipping server %s, host not available.',
+                        host)
+            return None
 
-    def equals(self, other):
-        # pylint: disable=no-member
-        # TODO: consider comparing metadata
-        # TODO: consider comparing security_groups
-        if not self.tenant.equals(other.tenant):
-            return False
-        if not self.flavor.equals(other.flavor):
-            return False
-        if not self.image.equals(other.image):
-            return False
-        if self.key_name != other.key_name or self.name != other.name:
-            return False
-        return True
+        # Convert server data to model conforming format
+        server = self.load_from_cloud(raw_server)
+        with remote.RemoteExecutor(
+                self.cloud, server.hypervisor_host) as remote_executor:
+            _populate_ephemeral_disks(remote_executor, server)
+
+        # Store server
+        with model.Session() as session:
+            session.store(server)
+            if _need_image_membership(server):
+                image_member_uuid = image.ImageMember.make_uuid(
+                    server.image, server.tenant)
+                server.image_membership = self.find_obj(
+                    image.ImageMember, image_member_uuid)
+        return server
+
+    def load_from_cloud(self, data):
+        compute_client = clients.compute_client(self.cloud)
+        # Workaround for grizzly lacking EXT_ATTR_VOL_ATTACHMENTS
+        if hasattr(data, EXT_ATTR_VOL_ATTACHMENTS):
+            raw_attachments = [
+                '{0}:{1}'.format(data.id, attachment['id'])
+                for attachment in
+                getattr(data, EXT_ATTR_VOL_ATTACHMENTS)]
+        else:
+            raw_attachments = [
+                '{0}:{1}'.format(attachment.serverId, attachment.volumeId)
+                for attachment in
+                compute_client.volumes.get_server_volumes(data.id)]
+        server_image = None
+        if data.image:
+            server_image = data.image['id']
+        server_dict = {
+            'object_id': self.make_id(data.id),
+            'security_groups': [],  # TODO: implement security groups
+            'tenant': self.find_ref(identity.Tenant, data.tenant_id),
+            'image': self.find_ref(image.Image, server_image),
+            'image_membership': None,
+            'flavor': self.find_ref(compute.Flavor, data.flavor['id']),
+            'availability_zone': getattr(data, EXT_ATTR_AZ),
+            'host': getattr(data, EXT_ATTR_HOST),
+            'hypervisor_hostname': getattr(data, EXT_ATTR_HYPER_HOST),
+            'instance_name': getattr(data, EXT_ATTR_INSTANCE_NAME),
+            'attached_volumes': [self.find_ref(storage.Attachment, attachment)
+                                 for attachment in raw_attachments],
+            'ephemeral_disks': [],  # Ephemeral disks will be filled later
+        }
+        for attr_name in ('name', 'status', 'user_id', 'key_name',
+                          'config_drive', 'metadata'):
+            if hasattr(data, attr_name):
+                server_dict[attr_name] = getattr(data, attr_name)
+        return compute.Server.load(server_dict)
+
+    def _get_tenants(self):
+        identity_client = clients.identity_client(self.cloud)
+        return identity_client.tenants.list()
 
 
-def _need_image_membership(srv):
-    image = srv.image
-    if image is None:
-        return False
-    if image.is_public:
-        return False
-    return image.tenant != srv.tenant
-
-
-def _list_ephemeral(remote_executor, server):
-    result = []
+def _populate_ephemeral_disks(rmt_exec, server):
     try:
-        output = remote_executor.sudo('virsh domblklist {instance}',
-                                      instance=server.instance_name)
+        output = rmt_exec.sudo('virsh domblklist {instance}',
+                               instance=server.instance_name)
     except remote.RemoteFailure:
         LOG.error('Unable to get ephemeral disks for server %s, skipping.',
-                  server.object_id, exc_info=True)
-        return None
+                  server, exc_info=True)
+        return
+
     volume_targets = set()
-    for volume in server.attached_volumes:
-        for attachment in volume.attachments:
-            if attachment.server == server:
-                volume_targets.add(attachment.device.replace('/dev/', ''))
+    for attachment in server.attached_volumes:
+        volume_targets.add(attachment.device.replace('/dev/', ''))
 
     for line in output.splitlines():
         split = line.split(None, 1)
@@ -196,14 +198,13 @@ def _list_ephemeral(remote_executor, server):
         if target in volume_targets or not path.startswith('/'):
             continue
 
-        size, base_path, format = _get_disk_info(remote_executor, path)
+        size, base_path, format = _get_disk_info(rmt_exec, path)
         if base_path is not None:
-            base_size, _, base_format = _get_disk_info(
-                remote_executor, base_path)
+            base_size, _, base_format = _get_disk_info(rmt_exec, base_path)
         else:
             base_size = base_format = None
         if size is not None:
-            eph_disk = EphemeralDisk.load({
+            eph_disk = compute.EphemeralDisk.load({
                 'path': path,
                 'size': size,
                 'format': format,
@@ -211,11 +212,19 @@ def _list_ephemeral(remote_executor, server):
                 'base_size': base_size,
                 'base_format': base_format,
             })
-            result.append(eph_disk)
-    return result
+            server.ephemeral_disks.append(eph_disk)
 
 
-def list_available_compute_hosts(compute_client):
+def _need_image_membership(srv):
+    img = srv.image
+    if img is None:
+        return False
+    if img.is_public:
+        return False
+    return img.tenant != srv.tenant
+
+
+def _list_available_compute_hosts(compute_client):
     return set(c.host
                for c in compute_client.services.list(binary='nova-compute')
                if c.state == 'up' and c.status == 'enabled')

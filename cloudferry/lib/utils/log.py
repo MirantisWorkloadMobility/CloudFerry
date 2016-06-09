@@ -17,6 +17,7 @@ import logging
 from logging import config
 from logging import handlers
 import os
+from requests.packages import urllib3
 import sys
 
 from oslo_config import cfg
@@ -45,7 +46,8 @@ class StdoutLogger(object):
         pass
 
 
-def configure_logging(log_config=None, debug=None, forward_stdout=None):
+def configure_logging(log_config=None, debug=None, forward_stdout=None,
+                      hide_ssl_warnings=None):
     """Configure the logging
 
     Loading logging configuration file which is defined in the general
@@ -60,6 +62,8 @@ def configure_logging(log_config=None, debug=None, forward_stdout=None):
         debug = CONF.migrate.debug
     if forward_stdout is None:
         forward_stdout = CONF.migrate.forward_stdout
+    if hide_ssl_warnings is None:
+        hide_ssl_warnings = CONF.migrate.hide_ssl_warnings
 
     with open(log_config, 'r') as f:
         config.dictConfig(yaml.load(f))
@@ -70,6 +74,8 @@ def configure_logging(log_config=None, debug=None, forward_stdout=None):
                 handler.setLevel(logging.DEBUG)
     if forward_stdout:
         sys.stdout = StdoutLogger()
+    if hide_ssl_warnings:
+        urllib3.disable_warnings()
 
 
 class RunRotatingFileHandler(handlers.RotatingFileHandler):

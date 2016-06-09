@@ -73,16 +73,19 @@ class ISCSIConnector(object):
         timeout = self.storage_backend_timeout
         retryer = retrying.retry(max_time=timeout, raise_error=False)
 
-        def check_path_and_rescan():
+        def check_path_and_rescan(sudo_password):
             # The rescan isn't documented as being necessary(?), but it helps
             try:
                 rescan = "iscsiadm -m node -T {iqn} -p {portal} --rescan"
-                local.sudo(rescan.format(iqn=target_iqn, portal=target_portal))
+                local.sudo(
+                    rescan.format(iqn=target_iqn, portal=target_portal),
+                    sudo_password=sudo_password)
             except local.LocalExecutionFailed as e:
                 LOG.debug("Rescan failed with %d: %s", e.code, e.message)
-            return local.sudo("test -e {path}".format(path=path))
+            return local.sudo("test -e {path}".format(path=path),
+                              sudo_password=sudo_password)
 
-        return retryer.run(check_path_and_rescan) == ''
+        return retryer.run(check_path_and_rescan, self.sudo_password) == ''
 
     def get_sessions(self):
         password = self.sudo_password

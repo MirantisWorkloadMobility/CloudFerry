@@ -32,3 +32,4 @@ preparation:
           - check_dst_rabbit: True
       - check_networks: True
   - check_users_availability: True
+  - check_copy_engine_configuration: True

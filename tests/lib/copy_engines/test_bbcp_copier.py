@@ -30,8 +30,9 @@ class BbcpCopierTestCase(test_base.BaseTestCase):
         self.src_cloud.hosts_with_bbcp = set()
         self.dst_cloud.hosts_with_bbcp = set()
 
+    @mock.patch('cloudferry.lib.utils.utils.forward_agent')
     @mock.patch('os.path.isfile')
-    def test_usage_false(self, mock_isfile):
+    def test_usage_false(self, mock_isfile, _):
         mock_isfile.return_value = False
         self.assertFalse(self.copier.check_usage(self.data))
 

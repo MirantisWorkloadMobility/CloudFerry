@@ -12,16 +12,19 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import json
-import os
 import unittest
 
+from fabric.api import run, settings
+from fabric.network import NetworkError
+from generator import generator, generate
 from nose.plugins.attrib import attr
 
 from cloudferry_devlab.tests import config
 from cloudferry_devlab.tests import functional_test
+from cloudferry_devlab.tests import test_exceptions
 
 
+@generator
 class VmMigration(functional_test.FunctionalTest):
 
     def setUp(self):
@@ -58,16 +61,11 @@ class VmMigration(functional_test.FunctionalTest):
         self.set_hash_for_vms(dst_vms)
         for s_vm in src_vms:
             for d_vm in dst_vms:
-                if s_vm.name == d_vm.name:
+                if s_vm.vm_hash == d_vm.vm_hash:
                     self.src_dst_vms.append({
                         'src_vm': s_vm,
                         'dst_vm': d_vm,
                     })
-
-        file_path = os.path.join(self.cloudferry_dir,
-                                 config.pre_migration_vm_states_file)
-        with open(file_path) as data_file:
-            self.original_states = json.load(data_file)
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_vms_not_in_filter_stay_active_on_src(self):
@@ -80,7 +78,7 @@ class VmMigration(functional_test.FunctionalTest):
             for vm_obj in vm_list:
                 self.assertEqual(
                     vm_obj.status,
-                    self.original_states[vm_obj.name],
+                    self.get_vm_original_state(vm_obj.name),
                     msg="Vm %s has wrong state" % vm_obj.name)
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
@@ -96,16 +94,25 @@ class VmMigration(functional_test.FunctionalTest):
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_cold_migrate_vm_state(self):
         """Validate VMs were cold migrated with correct states."""
+        msg = "Vm '%s' (%s) on %s has incorrect state '%s', should be '%s'"
         for vms in self.src_dst_vms:
             dst_vm = vms['dst_vm']
             src_vm = vms['src_vm']
-            if self.original_states[src_vm.name] == 'ACTIVE' or \
-                    self.original_states[src_vm.name] == 'VERIFY_RESIZE':
-                self.assertIn(src_vm.status, ['SHUTOFF', 'ACTIVE'])
-                self.assertEqual(dst_vm.status, 'ACTIVE')
+            if self.get_vm_original_state(src_vm.name) in ['ACTIVE',
+                                                           'VERIFY_RESIZE']:
+                self.assertIn(src_vm.status, ['SHUTOFF', 'ACTIVE'],
+                              msg=msg % (src_vm.name, src_vm.id, 'SRC',
+                                         src_vm.status, ['SHUTOFF', 'ACTIVE']))
+                self.assertEqual(dst_vm.status, 'ACTIVE',
+                                 msg=msg % (dst_vm.name, dst_vm.id, 'DST',
+                                            dst_vm.status, 'ACTIVE'))
             else:
-                self.assertEqual(src_vm.status, 'SHUTOFF')
-                self.assertEqual(dst_vm.status, 'SHUTOFF')
+                self.assertEqual(src_vm.status, 'SHUTOFF',
+                                 msg=msg % (src_vm.name, src_vm.id, 'SRC',
+                                            src_vm.status, 'SHUTOFF'))
+                self.assertEqual(dst_vm.status, 'SHUTOFF',
+                                 msg=msg % (dst_vm.name, dst_vm.id, 'DST',
+                                            dst_vm.status, 'SHUTOFF'))
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_cold_migrate_vm_ip(self):
@@ -125,6 +132,8 @@ class VmMigration(functional_test.FunctionalTest):
     def test_cold_migrate_vm_security_groups(self):
         """Validate VMs were cold migrated with correct security groups."""
         for vms in self.src_dst_vms:
+            if not hasattr(vms['dst_vm'], 'security_groups'):
+                continue
             dst_sec_group_names = [x['name'] for x in
                                    vms['dst_vm'].security_groups]
             for security_group in vms['src_vm'].security_groups:
@@ -150,3 +159,112 @@ class VmMigration(functional_test.FunctionalTest):
             msg = ('2 or more vms exist on dst in the same net with same ip'
                    ' address: %s')
             self.fail(msg % duplicates)
+
+    @generate('config_drive', 'key_name', 'security_groups', 'metadata')
+    def test_migrate_vms_parameters(self, param):
+        """Validate VMs were migrated with correct parameters.
+
+        :param name:
+        :param config_drive:
+        :param key_name:
+        :param security_groups:
+        :param metadata:"""
+        src_vms = self.get_src_vm_objects_specified_in_config()
+        dst_vms = self.dst_cloud.novaclient.servers.list(
+            search_opts={'all_tenants': 1})
+
+        filtering_data = self.filtering_utils \
+            .filter_vms_with_filter_config_file(src_vms)
+        src_vms = filtering_data[0]
+        src_vms = [vm for vm in src_vms if vm.status != 'ERROR']
+
+        def compare_vm_parameter(param, vm1, vm2):
+            vm1_param = getattr(vm1, param, None)
+            vm2_param = getattr(vm2, param, None)
+            if param == "config_drive" and vm1_param == u'1':
+                vm1_param = u'True'
+            if vm1_param != vm2_param:
+                error_msg = ('Parameter {param} for VM with name '
+                             '{name} is different src: {vm1}, dst: {vm2}')
+                self.fail(error_msg.format(param=param, name=vm1.name,
+                                           vm1=getattr(vm1, param),
+                                           vm2=getattr(vm2, param)))
+
+        self.set_hash_for_vms(src_vms)
+        self.set_hash_for_vms(dst_vms)
+        if not src_vms:
+            self.skipTest('Nothing to check - source resources list is empty')
+        for src_vm in src_vms:
+            for dst_vm in dst_vms:
+                if src_vm.vm_hash != dst_vm.vm_hash:
+                    continue
+                compare_vm_parameter(param, src_vm, dst_vm)
+                break
+            else:
+                msg = 'VM with hash %s was not found on dst'
+                self.fail(msg % str(src_vm.vm_hash))
+
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    def test_migrate_vms_with_floating(self):
+        """Validate VMs were migrated with floating ip assigned."""
+        vm_names_with_fip = self.get_vms_with_fip_associated()
+        dst_vms = self.dst_cloud.novaclient.servers.list(
+            search_opts={'all_tenants': 1})
+        for vm in dst_vms:
+            if vm.name not in vm_names_with_fip:
+                continue
+            for net in vm.addresses.values():
+                if [True for addr in net if 'floating' in addr.values()]:
+                    break
+            else:
+                raise RuntimeError('Vm {0} does not have floating ip'.format(
+                    vm.name))
+
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    def test_not_valid_vms_did_not_migrate(self):
+        """Validate VMs with invalid statuses weren't migrated.
+        Invalid VMs have 'broken': True value in :mod:`config.py`
+        """
+        all_vms = self.migration_utils.get_all_vms_from_config()
+        vms = [vm['name'] for vm in all_vms if vm.get('broken')]
+        migrated_vms = []
+        for vm in vms:
+            try:
+                self.dst_cloud.get_vm_id(vm)
+                migrated_vms.append(vm)
+            except test_exceptions.NotFound:
+                pass
+        if migrated_vms:
+            self.fail('Not valid vms %s migrated')
+
+    @attr(migrated_tenant='tenant2')
+    def test_ssh_connectivity_by_keypair(self):
+        """Validate migrated VMs ssh connectivity by keypairs."""
+        vms = self.dst_cloud.novaclient.servers.list(
+            search_opts={'all_tenants': 1})
+        for _vm in vms:
+            if 'keypair_test' in _vm.name:
+                vm = _vm
+                break
+        else:
+            raise RuntimeError(
+                'VM for current test was not spawned on dst. Make sure vm with'
+                'name keypair_test has been created on src')
+        ip_addr = self.migration_utils.get_vm_fip(vm)
+        # make sure 22 port in sec group is open
+        self.migration_utils.open_ssh_port_secgroup(self.dst_cloud,
+                                                    vm.tenant_id)
+        # try to connect to vm via key pair
+        with settings(host_string=ip_addr, user="root",
+                      key=config.private_key['id_rsa'],
+                      abort_on_prompts=True, connection_attempts=3,
+                      disable_known_hosts=True):
+            try:
+                run("pwd", shell=False)
+            except NetworkError:
+                msg = 'VM with name {name} and ip: {addr} is not accessible'
+                self.fail(msg.format(name=vm.name, addr=ip_addr))
+            except SystemExit:
+                msg = 'VM with name {name} and ip: {addr} is not accessible ' \
+                      'via key pair'
+                self.fail(msg.format(name=vm.name, addr=ip_addr))

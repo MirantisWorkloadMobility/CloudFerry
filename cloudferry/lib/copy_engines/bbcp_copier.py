@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import logging
-import os
 
 from oslo_config import cfg
 
@@ -85,10 +84,9 @@ class BbcpCopier(base.BaseCopier):
         additional_options = []
         # -f: forces the copy by first unlinking the target file before
         # copying.
-        # -p: preserve source mode, ownership, and dates.
         # -S: command to start bbcp on the source node.
         # -T: command to start bbcp on the target node.
-        forced_options = ['-f', '-p']
+        forced_options = ['-f']
         if CONF.migrate.copy_with_md5_verification:
             # -e: error check data for transmission errors using md5 checksum.
             forced_options.append('-e')
@@ -139,10 +137,6 @@ class BbcpCopier(base.BaseCopier):
 
     def check_usage(self, data):
         LOG.debug('Checking if bbcp is available')
-        path = {CONF.bbcp.path, CONF.bbcp.src_path, CONF.bbcp.dst_path}
-        if not all(os.path.isfile(p) for p in path):
-            LOG.error("The path of bbcp are not valid: %s", path)
-            return False
         for host, position, cloud in (
                 (data['host_src'], 'src', self.src_cloud),
                 (data['host_dst'], 'dst', self.dst_cloud)):
