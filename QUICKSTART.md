@@ -22,7 +22,7 @@
 
 4. Setup development environment
     ```
-    cd CloudFerry/devlab
+    cd CloudFerry/cloudferry_devlab
     vagrant up grizzly icehouse nfs
     ```
 
@@ -39,14 +39,14 @@
 6. Generate cloudferry config for development lab
     ```
     cd CloudFerry
-    ./devlab/provision/generate_config.sh --cloudferry-path $(pwd)
+    ./cloudferry_devlab/provision/generate_config.sh --cloudferry-path $(pwd)
     ```
 
 7. Generate load on source VM (this will create a number of VMs on grizzly node)
     ```
     cd CloudFerry/
-    source ./devlab/tests/openrc.example
-    python ./devlab/generate_load.py
+    source ./cloudferry_devlab/tests/openrc.example
+    python ./cloudferry_devlab/generate_load.py
     ```
 
 8. Run migration
