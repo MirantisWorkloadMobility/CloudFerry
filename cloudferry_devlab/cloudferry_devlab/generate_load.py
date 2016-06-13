@@ -16,6 +16,7 @@ import itertools
 import logging
 from logging import config as logging_config
 import os
+import copy
 
 from keystoneclient import exceptions as ks_exceptions
 from neutronclient.common import exceptions as nt_exceptions
@@ -25,6 +26,7 @@ import yaml
 from cloudferry_devlab.tests import base
 from cloudferry_devlab.tests import cleanup
 from cloudferry_devlab.tests import config as conf
+from cloudferry_devlab.tests import images
 
 VM_SPAWNING_LIMIT = 5
 CREATE_CLEAN_METHODS_MAP = {
@@ -237,51 +239,76 @@ class Prerequisites(base.BasePrerequisites):
         img = self.dst_cloud.glanceclient.images.get(img_id)
         return img.status == 'active'
 
-    def update_filtering_file(self):
+    def set_tenant_filter(self, filter_dict, not_incl_img, all_tenants_filter):
+        vm_list = [x.__dict__['id'] for x in
+                   self.novaclient.servers.list()]
+        blacklisted = images.Blacklisted(self.config, self.glanceclient)
+        exclude_img_ids = [str(img_id) for img_id in
+                           blacklisted.get_blacklisted_img_ids()]
+        img_ids = blacklisted.filter_images()
+        for key in filter_dict.keys():
+            if key == 'images':
+                if not all_tenants_filter:
+                    filter_dict[key]['exclude_images_list'].extend(
+                        exclude_img_ids)
+                    if exclude_img_ids:
+                        img_ids = []
+                filter_dict[key]['images_list'].extend([str(img_id)
+                                                       for img_id in img_ids
+                                                       if img_id not in
+                                                       not_incl_img])
+
+            elif key == 'instances':
+                for vm in vm_list:
+                    if vm != self.get_vm_id('not_in_filter'):
+                        filter_dict[key]['id'].append(str(vm))
+        img_list = set(filter_dict['images']['images_list'])
+        filter_dict['images']['images_list'] = list(img_list)
+        instances_list = set(filter_dict['instances']['id'])
+        filter_dict['instances']['id'] = list(instances_list)
+        return filter_dict
+
+    def update_filtering_file(self, all_tenants_filter=False):
         not_incl_img = [self.get_image_id(img) for img in
                         self.config.images_not_included_in_filter]
+        default_filter_dict = {
+            'tenants': {
+                'tenant_id': []
+            },
+            'instances': {
+                'id': []
+            },
+            'images': {
+                'images_list': [],
+                'exclude_images_list': [],
+                'dont_include_public_and_members_from_other_tenants': False
+            }
+        }
+        filter_dict = copy.deepcopy(default_filter_dict)
+        file_path = {}
         for tenant in self.config.tenants + [{'name': self.tenant}]:
             if tenant.get('deleted'):
                 continue
-            filter_dict = {
-                'tenants': {
-                    'tenant_id': []
-                },
-                'instances': {
-                    'id': []
-                },
-                'images': {
-                    'images_list': [],
-                    'dont_include_public_and_members_from_other_tenants': False
-                }
-            }
-            filter_dict['tenants']['tenant_id'] = [str(
-                self.get_tenant_id(tenant['name']))]
+            filter_dict['tenants']['tenant_id'].append(str(
+                self.get_tenant_id(tenant['name'])))
             self.switch_user(user=self.username, password=self.password,
                              tenant=tenant['name'])
 
-            vm_id_list = [x.__dict__['id'] for x in
-                          self.novaclient.servers.list()]
+            filter_dict = self.set_tenant_filter(filter_dict,
+                                                 not_incl_img,
+                                                 all_tenants_filter)
+            if not all_tenants_filter:
+                file_path[self.config.filters_file_naming_template.format(
+                    tenant_name=tenant['name'])] = filter_dict
+                filter_dict = copy.deepcopy(default_filter_dict)
+            else:
+                file_path[self.config.all_tenants_filter_filename] = \
+                    filter_dict
 
-            img_id_list = [x.__dict__['id'] for x in
-                           self.glanceclient.images.list(search_opts={
-                               'is_public': False})]
+        for key, value in file_path.iteritems():
+            with open(self.get_abs_path(key), "w") as f:
+                yaml.dump(value, f, default_flow_style=False)
 
-            for key in filter_dict.keys():
-                if key == 'images':
-                    for img_id in img_id_list:
-                        if img_id not in not_incl_img:
-                            filter_dict[key]['images_list'].append(str(img_id))
-                elif key == 'instances':
-                    for vm in vm_id_list:
-                        if vm != self.get_vm_id('not_in_filter'):
-                            filter_dict[key]['id'].append(str(vm))
-
-            file_path = self.config.filters_file_naming_template.format(
-                tenant_name=tenant['name'])
-            file_path = self.get_abs_path(file_path)
-            with open(file_path, "w") as f:
-                yaml.dump(filter_dict, f, default_flow_style=False)
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
@@ -1058,6 +1085,8 @@ class Prerequisites(base.BasePrerequisites):
         self.delete_image_on_dst()
         self.log.info('Updating filtering')
         self.update_filtering_file()
+        self.log.info('Create All tenants Filter file')
+        self.update_filtering_file(True)
         self.log.info('Creating vm snapshots')
         self.create_vm_snapshots()
         self.log.info('Create tenant on dst, without security group')

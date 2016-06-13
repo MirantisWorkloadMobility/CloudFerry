@@ -25,6 +25,8 @@ from neutronclient.v2_0 import client as neutron
 from novaclient import exceptions as nova_exceptions
 from novaclient.v2 import client as nova
 from swiftclient import client as swift_client
+from nose.config import Config, all_config_files
+from nose.plugins.manager import DefaultPluginManager
 
 from cloudferry_devlab.tests import test_exceptions
 import cloudferry_devlab.tests.utils as utils
@@ -454,6 +456,20 @@ class BasePrerequisites(object):
                 logger.warning('There was some problems during state change:\n'
                                '%s' % e)
         return vm_id, vm_state
+
+
+def get_nosetest_cmd_attribute_val(attribute):
+    env = os.environ
+    manager = DefaultPluginManager()
+    cfg_files = all_config_files()
+    tmp_config = Config(env=env, files=cfg_files, plugins=manager)
+    tmp_config.configure()
+    try:
+        attr_list = getattr(tmp_config.options, 'attr')
+        value = dict(token.split('=') for token in attr_list)
+        return value[attribute]
+    except TypeError:
+        return None
 
 
 def get_dict_from_config_file(config_file):

@@ -60,6 +60,9 @@ logging_configuration = {
 filters_file_naming_template = 'filter_{tenant_name}.yaml'
 """Naming template for filter files."""
 
+all_tenants_filter_filename = 'all_tenants_filter.yaml'
+"""All tenants filter file."""
+
 ext_net_map = 'ext_net_map.yaml'
 """This file contains map of relationships between external networks on source
 and destination clouds."""
@@ -86,6 +89,8 @@ users = [
      'tenant': 'tenant3', 'enabled': True},
     {'name': 'user9', 'password': 'passwd', 'email': 'user8@example.com',
      'tenant': 'tenant5', 'enabled': True},
+    {'name': 'user11', 'password': 'passwd', 'email': 'user11@example.com',
+     'tenant': 'tenant7', 'enabled': True}
 ]
 """Users to create/delete"""
 
@@ -371,6 +376,11 @@ tenants = [
          ],
      'images': [{'name': 'cirros_image_for_tenant5', 'copy_from': img_url,
                  'is_public': True}],
+     },
+    {'name': 'tenant7', 'description': 'Tenant7 filter has excluded images',
+     'enabled': True, 'exclude_images': True,
+     'images': [{'name': 'image7', 'copy_from': img_url, 'is_public': False},
+                {'name': 'image8', 'copy_from': img_url, 'is_public': False}]
      }
 ]
 """Tenants to create/delete"""
@@ -428,7 +438,10 @@ create_zero_image = True
 """Create zero image, without any parameters"""
 
 images_not_included_in_filter = ['image5']
-"""Images not to be migrated"""
+"""Images not to be included in filter"""
+
+images_blacklisted = ['image7']
+"""Images blacklisted"""
 
 vms_not_in_filter = ['not_in_filter']
 """Instances not to be included in filter"""
