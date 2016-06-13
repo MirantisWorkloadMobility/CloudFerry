@@ -801,13 +801,14 @@ class Prerequisites(base.BasePrerequisites):
                                         conf.TIMEOUT)
         self.wait_until_objects(vms, self.check_vm_state, conf.TIMEOUT)
 
-    def delete_flavor(self, flavor='del_flvr'):
+    def delete_flavors(self):
         """
         Method for flavor deletion.
         """
         try:
-            self.novaclient.flavors.delete(
-                self.get_flavor_id(flavor))
+            for flavor in self.config.flavors_deleted_after_vm_boot:
+                self.novaclient.flavors.delete(
+                    self.get_flavor_id(flavor))
         except nv_exceptions.ClientException:
             self.log.warning("Flavor %s failed to delete:", flavor,
                              exc_info=True)
@@ -1109,8 +1110,8 @@ class Prerequisites(base.BasePrerequisites):
         self.create_invalid_cinder_objects()
         self.log.info('Create swift containers and objects')
         self.create_swift_container_and_objects()
-        self.log.info('Deleting flavor')
-        self.delete_flavor()
+        self.log.info('Deleting flavors which should be deleted')
+        self.delete_flavors()
         self.log.info('Modifying admin tenant quotas')
         self.modify_admin_tenant_quotas()
         self.log.info('Update network quotas')
