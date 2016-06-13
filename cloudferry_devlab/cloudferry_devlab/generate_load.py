@@ -930,9 +930,12 @@ class Prerequisites(base.BasePrerequisites):
         """
         inst_name = getattr(self.novaclient.servers.get(vm_id),
                             'OS-EXT-SRV-ATTR:instance_name')
-        cmd = 'virsh destroy {0} && virsh undefine {0}'.format(inst_name)
-        self.migration_utils.execute_command_on_vm(
-            self.get_vagrant_vm_ip(), cmd, username='root', password='')
+        for cmd in ['virsh destroy {0}'.format(inst_name),
+                    'virsh undefine {0}'.format(inst_name)]:
+            self.migration_utils.execute_command_on_vm(
+                self.get_vagrant_vm_ip(), cmd,
+                username=self.configuration_ini['src']['ssh_user'],
+                password=self.configuration_ini['src']['ssh_sudo_password'])
 
     def delete_image_on_dst(self):
         """ Method delete images with a 'delete_on_dst' flag on
@@ -958,7 +961,9 @@ class Prerequisites(base.BasePrerequisites):
             image_id = self.get_image_id(image['name'])
             cmd = 'rm -rf /var/lib/glance/images/%s' % image_id
             self.migration_utils.execute_command_on_vm(
-                self.get_vagrant_vm_ip(), cmd, username='root', password='')
+                self.get_vagrant_vm_ip(), cmd,
+                username=self.configuration_ini['src']['ssh_user'],
+                password=self.configuration_ini['src']['ssh_sudo_password'])
         for image in images_to_delete:
             image_id = self.get_image_id(image['name'])
             self.glanceclient.images.delete(image_id)
