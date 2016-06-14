@@ -22,6 +22,11 @@ class ExampleReferenced(model.Model):
     object_id = model.PrimaryKey()
     qux = model.Integer(required=True)
 
+    def equals(self, other):
+        if super(ExampleReferenced, self).equals(other):
+            return True
+        return self.qux == other.qux
+
     @classmethod
     def create_object(cls, cloud, cloud_obj_id):
         with model.Session() as session:
@@ -102,6 +107,39 @@ class Example(model.Model):
                 'type': ExampleReferenced.get_class_qualname(),
             }],
         }
+
+
+class ExampleRef(model.Model):
+    object_id = model.PrimaryKey()
+    ref = model.Reference(ExampleReferenced, allow_none=True)
+
+    def equals(self, other):
+        # pylint: disable=no-member
+        if super(ExampleRef, self).equals(other):
+            return True
+        if self.ref is None:
+            return other.ref is None
+        return self.ref.equals(other.ref)
+
+    @classmethod
+    def create_object(cls, cloud, unique_id, ref_unique_id):
+        data = {
+            'object_id': {
+                'cloud': cloud,
+                'id': unique_id,
+                'type': cls.get_class_qualname(),
+            },
+        }
+        if ref_unique_id is not None:
+            ref = {
+                'cloud': cloud,
+                'id': ref_unique_id,
+                'type': ExampleReferenced.get_class_qualname(),
+            }
+        else:
+            ref = None
+        data['ref'] = ref
+        return cls.load(data)
 
 
 class ModelTestCase(test_local_db.DatabaseMockingTestCase):
@@ -329,3 +367,39 @@ class ModelTestCase(test_local_db.DatabaseMockingTestCase):
                 bar_value='some other non-random string')
             self._validate_example_obj(
                 object2_id, s2.retrieve(Example, object2_id))
+
+    def test_absent_reference_equals1(self):
+        object1 = ExampleRef.create_object(
+            'test_cloud1', 'example_ref_id', 'example_referenced_id')
+        object2 = ExampleRef.create_object(
+            'test_cloud2', 'example_ref_id', 'example_referenced_id')
+        self.assertTrue(object1.equals(object2))
+
+    def test_absent_reference_equals2(self):
+        object1 = ExampleRef.create_object(
+            'test_cloud1', 'example_ref_id', 'example_referenced_id')
+        object2 = ExampleRef.create_object(
+            'test_cloud2', 'example_ref_id', 'other_referenced_id')
+        self.assertFalse(object1.equals(object2))
+
+    def test_absent_reference_equals3(self):
+        object1 = ExampleRef.create_object(
+            'test_cloud1', 'example_ref_id', None)
+        object2 = ExampleRef.create_object(
+            'test_cloud2', 'example_ref_id', None)
+        self.assertTrue(object1.equals(object2))
+
+    def test_absent_reference_equals4(self):
+        with model.Session():
+            ExampleReferenced.create_object(
+                'test_cloud1', 'example_referenced_id')
+            ExampleReferenced.create_object(
+                'test_cloud2', 'other_referenced_id')
+
+        object1 = ExampleRef.create_object(
+            'test_cloud1', 'example_ref_id', 'example_referenced_id')
+        object2 = ExampleRef.create_object(
+            'test_cloud2', 'example_ref_id', 'other_referenced_id')
+        # We have equivalent objects referenced by example_referenced_id and
+        # other_referenced_id this time
+        self.assertTrue(object1.equals(object2))
