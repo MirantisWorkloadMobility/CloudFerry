@@ -219,6 +219,7 @@ class VmMigration(functional_test.FunctionalTest):
         filtering_data = self.filtering_utils \
             .filter_vms_with_filter_config_file(src_vms)
         src_vms = filtering_data[0]
+        src_vms = [vm for vm in src_vms if vm.status != 'ERROR']
 
         fail_msg = []
         self.set_hash_for_vms(src_vms)
