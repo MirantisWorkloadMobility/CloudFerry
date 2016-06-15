@@ -24,6 +24,7 @@ from cloudferry.lib.base import exception
 from cloudferry.lib.base.action import action
 from cloudferry.lib.os.network import neutron
 from cloudferry.lib.utils import log
+from cloudferry.lib.utils import mapper
 from cloudferry.lib.utils import proxy_client
 from cloudferry.lib.utils import utils
 
@@ -65,7 +66,7 @@ class CheckNetworks(action.Action):
         LOG.debug("Retrieving Compute information from Source cloud...")
         src_compute_info = ComputeInfo(src_compute, search_opts, tenant_ids)
 
-        ext_net_map = utils.read_yaml_file(self.cfg.migrate.ext_net_map) or {}
+        ext_net_map = mapper.Mapper('ext_network_map')
 
         # Check external networks mapping
         if ext_net_map:
