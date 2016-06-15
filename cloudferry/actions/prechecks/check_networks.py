@@ -11,8 +11,6 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
-
-
 import collections
 
 import ipaddr
@@ -46,8 +44,8 @@ class CheckNetworks(action.Action):
 
     def run(self, **kwargs):
         LOG.debug("Checking networks...")
-        overlapping_resources = {}
-        invalid_resources = {}
+        has_overlapping_resources = False
+        has_invalid_resources = False
 
         src_net = self.src_cloud.resources[utils.NETWORK_RESOURCE]
         dst_net = self.dst_cloud.resources[utils.NETWORK_RESOURCE]
@@ -73,16 +71,35 @@ class CheckNetworks(action.Action):
             invalid_ext_net_ids = src_net_info.get_invalid_ext_net_ids(
                 dst_net_info, ext_net_map)
             if invalid_ext_net_ids:
-                invalid_resources.update(
-                    {"invalid_external_nets_ids_in_map": invalid_ext_net_ids})
+                invalid_src_nets = invalid_ext_net_ids['src_nets']
+                invalid_dst_nets = invalid_ext_net_ids['dst_nets']
+                invalid_nets_str = ""
+
+                if invalid_src_nets:
+                    invalid_nets_str = 'Source cloud:\n' + \
+                                       '\n'.join(invalid_src_nets) + '\n'
+                if invalid_dst_nets:
+                    invalid_nets_str += 'Destination cloud:\n' + \
+                                        '\n'.join(invalid_dst_nets) + '\n'
+
+                LOG.error("External networks mapping file has non-existing "
+                          "network UUIDs defined:\n%s\nPlease update '%s' "
+                          "file with correct values and re-run networks "
+                          "check.",
+                          invalid_nets_str, self.cfg.migrate.ext_net_map)
+                has_invalid_resources = True
 
         # Check networks' segmentation IDs overlap
         LOG.info("Check networks' segmentation IDs overlapping...")
         nets_overlapping_seg_ids = (src_net_info.get_overlapping_seg_ids(
             dst_net_info))
         if nets_overlapping_seg_ids:
-            LOG.warning("Networks with segmentation IDs overlapping:\n%s",
-                        nets_overlapping_seg_ids)
+            LOG.warning("Segmentation IDs for these networks in source cloud "
+                        "WILL NOT BE KEPT regardless of options defined in "
+                        "config, because networks with the same segmentation "
+                        "IDs already exist in destination: %s.",
+                        '\n'.join([n['src_net_id']
+                                   for n in nets_overlapping_seg_ids]))
 
         # Check external subnets overlap
         LOG.info("Check external subnets overlapping...")
@@ -90,24 +107,61 @@ class CheckNetworks(action.Action):
             src_net_info.get_overlapping_external_subnets(dst_net_info,
                                                           ext_net_map))
         if overlapping_external_subnets:
-            overlapping_resources.update(
-                {"overlapping_external_subnets": overlapping_external_subnets})
+            pool_fmt = '"{pool}" pool of subnet "{snet_name}" ({snet_id})'
+            fmt = "{src_pool} overlaps with {dst_pool}"
+            overlapping_nets = []
+
+            for snet in overlapping_external_subnets:
+                overlapping_nets.append(
+                    fmt.format(
+                        src_pool=pool_fmt.format(
+                            pool=snet['src_subnet']['allocation_pools'],
+                            snet_name=snet['src_subnet']['name'],
+                            snet_id=snet['src_subnet']['id']),
+                        dst_pool=pool_fmt.format(
+                            pool=snet['dst_subnet']['allocation_pools'],
+                            snet_name=snet['dst_subnet']['name'],
+                            snet_id=snet['dst_subnet']['id'],
+                        )))
+
+            message = ("Following external networks have overlapping "
+                       "allocation pools in source and destination:\n{}.\nTo "
+                       "resolve this:\n"
+                       " 1. Manually change allocation pools in source or "
+                       "destination networks to be identical;\n"
+                       " 2. Use '[migrate] ext_net_map' external networks "
+                       "mapping. Floating IPs will NOT BE KEPT in that "
+                       "case.".format('\n'.join(overlapping_nets)))
+
+            LOG.error(message)
+            has_overlapping_resources = True
 
         # Check floating IPs overlap
         LOG.info("Check floating IPs overlapping...")
         floating_ips = src_net_info.list_overlapping_floating_ips(dst_net_info,
                                                                   ext_net_map)
         if floating_ips:
-            overlapping_resources.update(
-                {'overlapping_floating_ips': floating_ips})
+            LOG.error("Following floating IPs from source cloud already exist "
+                      "in destination, but either tenant, or external "
+                      "network doesn't match source cloud floating IP: %s\n"
+                      "In order to resolve you'd need to either delete "
+                      "floating IP from destination, or recreate floating "
+                      "IP so that they match fully in source and destination.",
+                      '\n'.join(floating_ips))
+            has_overlapping_resources = True
 
         # Check busy physical networks on DST of FLAT network type
         LOG.info("Check busy physical networks for FLAT network type...")
         busy_flat_physnets = src_net_info.busy_flat_physnets(dst_net_info,
                                                              ext_net_map)
         if busy_flat_physnets:
-            overlapping_resources.update(
-                {'busy_flat_physnets': busy_flat_physnets})
+            LOG.error("Flat network(s) allocated in different physical "
+                      "network(s) exist in destination cloud:\n%s\nIn order "
+                      "to resolve flat networks in the list must be "
+                      "connected to the same physical network in source and "
+                      "destination.",
+                      '\n'.join([str(n) for n in busy_flat_physnets]))
+            has_overlapping_resources = True
 
         # Check physical networks existence on DST for VLAN network type
         LOG.info("Check physical networks existence for VLAN network type...")
@@ -115,29 +169,28 @@ class CheckNetworks(action.Action):
         missing_vlan_physnets = src_net_info.missing_vlan_physnets(
             dst_net_info, dst_neutron_client, ext_net_map)
         if missing_vlan_physnets:
-            overlapping_resources.update(
-                {'missing_vlan_physnets': missing_vlan_physnets})
+            LOG.error("Following physical networks are not present in "
+                      "destination, but required by source cloud networks: "
+                      "%s\nIn order to resolve make sure neutron has "
+                      "required physical networks defined in config.",
+                      '\n'.join(missing_vlan_physnets))
+
+            has_overlapping_resources = True
 
         # Check VMs spawned directly in external network
         LOG.info("Check VMs spawned directly in external networks...")
         devices = src_net_info.get_devices_from_external_networks()
         vms_list = src_compute_info.list_vms_in_external_network(devices)
         if vms_list:
-            LOG.warning('Some VMs are booted directly in external networks: '
-                        '%s', vms_list)
+            LOG.warning('Following VMs are booted directly in external '
+                        'network, which is not recommended: %s', vms_list)
 
         # Print LOG message with all overlapping stuff and abort migration
-        if overlapping_resources or invalid_resources:
-            if overlapping_resources:
-                LOG.critical('Network overlapping list:\n%s',
-                             overlapping_resources)
-            if invalid_resources:
-                LOG.critical('Invalid Network resources list:\n%s',
-                             invalid_resources)
+        if has_overlapping_resources or has_invalid_resources:
             raise exception.AbortMigrationError(
-                "There is a number of overlapping/invalid Network resources, "
-                "so migration process can not be continued. Resolve it please "
-                "and try again")
+                "There is a number of overlapping/invalid network resources "
+                "which require manual resolution. See error messages above "
+                "for details.")
 
 
 class ComputeInfo(object):
@@ -292,11 +345,11 @@ class NetworkInfo(object):
                               src_subnet['id'], src_subnet['network_id'])
                     continue
 
-                overlap = {'src_subnet': src_subnet['id'],
-                           'dst_subnet': dst_subnet['id']}
-                LOG.warning("Allocation pool of subnet '%s' on SRC overlaps "
-                            "with allocation pool of subnet '%s' on DST.",
-                            src_subnet['id'], dst_subnet['id'])
+                overlap = {'src_subnet': src_subnet,
+                           'dst_subnet': dst_subnet}
+                LOG.debug("Allocation pool of subnet '%s' on SRC overlaps "
+                          "with allocation pool of subnet '%s' on DST.",
+                          src_subnet['id'], dst_subnet['id'])
                 overlapping_external_subnets.append(overlap)
 
         return overlapping_external_subnets
@@ -367,7 +420,7 @@ class NetworkInfo(object):
                 continue
 
             if network.physnet in dst_flat_physnets:
-                busy_flat_physnets.append(network.physnet)
+                busy_flat_physnets.append(network)
 
         return busy_flat_physnets
 
@@ -444,7 +497,7 @@ class NetworkInfo(object):
                        'dst_nets': [<dst_net_id_0>, <dst_net_id_1>, ...]}
         """
 
-        invalid_ext_nets = {}
+        invalid_ext_nets = {'src_nets': [], 'dst_nets': []}
 
         src_ext_nets_ids = [net.id for net in self.by_id.itervalues() if
                             net.external]
@@ -453,9 +506,9 @@ class NetworkInfo(object):
 
         for src_net_id, dst_net_id in ext_net_map.iteritems():
             if src_net_id not in src_ext_nets_ids:
-                invalid_ext_nets.setdefault('src_nets', []).append(src_net_id)
+                invalid_ext_nets['src_nets'].append(src_net_id)
             if dst_net_id not in dst_ext_nets_ids:
-                invalid_ext_nets.setdefault('dst_nets', []).append(dst_net_id)
+                invalid_ext_nets['dst_nets'].append(dst_net_id)
 
         return invalid_ext_nets
 
@@ -472,6 +525,10 @@ class Network(object):
         self.network_type = self.info['provider:network_type']
         self.seg_id = self.info["provider:segmentation_id"]
         self.physnet = self.info["provider:physical_network"]
+
+    def __str__(self):
+        return "{name} ({uuid}), physnet: {phy}".format(
+            name=self.info['name'], uuid=self.id, phy=self.physnet)
 
     def add_subnet(self, info):
         self.subnets.append(info)
