@@ -51,7 +51,7 @@ class KeystoneIdentityTestCase(test.TestCase):
         self.kc_patch = mockpatch.PatchObject(keystone_client, 'Client',
                                               new=self.mock_client)
         self.useFixture(self.kc_patch)
-        self.fake_cloud = mock.Mock()
+        self.fake_cloud = mock.MagicMock()
         self.fake_cloud.mysql_connector = mock.Mock()
 
         self.keystone_client = keystone.KeystoneIdentity(FAKE_CONFIG,
@@ -328,7 +328,7 @@ class KeystoneIdentityTestCase(test.TestCase):
         for role in fake_roles_list:
             fake_info['roles'].append(
                 {'role': {'name': role.name,
-                          'id': role},
+                          'id': role.id},
                  'meta': {}})
         return fake_info
 

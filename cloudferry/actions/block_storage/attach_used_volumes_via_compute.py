@@ -18,7 +18,10 @@ import logging
 from cinderclient import exceptions as cinder_exceptions
 from novaclient import exceptions as nova_exceptions
 
+from cloudferry.lib.base import exception
 from cloudferry.lib.base.action import action
+from cloudferry.lib.migration import notifiers
+from cloudferry.lib.migration import objects
 from cloudferry.lib.utils import proxy_client
 from cloudferry.lib.utils import utils
 
@@ -26,6 +29,11 @@ LOG = logging.getLogger(__name__)
 
 
 class AttachVolumesCompute(action.Action):
+    def __init__(self, init, cloud=None):
+        super(AttachVolumesCompute, self).__init__(init, cloud)
+        self.state_notifier = notifiers.MigrationStateNotifier()
+        for observer in self.init['migration_observers']:
+            self.state_notifier.add_observer(observer)
 
     def run(self, info, **kwargs):
         info = copy.deepcopy(info)
@@ -43,24 +51,44 @@ class AttachVolumesCompute(action.Action):
                         status = storage_res.get_status(volume_id)
                     except cinder_exceptions.NotFound:
                         dst_volume = storage_res.get_migrated_volume(volume_id)
-                        if dst_volume:
+                        if dst_volume is not None:
                             volume_id = dst_volume.id
                             status = dst_volume.status
 
+                inst = instance['instance']
+
+                if status is None:
+                    msg = ("Cannot attach volume '{vol}' to VM '{vm}': volume "
+                           "does not exist").format(vol=volume_id,
+                                                    vm=inst['name'])
+                    self.state_notifier.incomplete(
+                        objects.MigrationObjectType.VM, inst, msg)
+                    continue
+
                 if status == 'available':
                     nova_client = compute_res.nova_client
-                    inst = instance['instance']
                     try:
                         nova_client.volumes.create_server_volume(
                             inst['id'], volume_id, volume['device'])
                         timeout = self.cfg.migrate.storage_backend_timeout
-                        storage_res.try_wait_for_status(volume_id,
-                                                        storage_res.get_status,
-                                                        'in-use',
-                                                        timeout=timeout)
+                        storage_res.wait_for_status(volume_id,
+                                                    storage_res.get_status,
+                                                    'in-use',
+                                                    timeout=timeout)
                     except (cinder_exceptions.ClientException,
-                            nova_exceptions.ClientException) as e:
-                        msg = ("Failed attaching volume %s to instance %s: "
-                               "%s. Skipping")
-                        LOG.warning(msg, volume_id, inst['id'], e.message)
+                            nova_exceptions.ClientException,
+                            exception.TimeoutException) as e:
+                        msg = ("Failed to attach volume '%s' to instance "
+                               "'%s': %s. Skipping" %
+                               (volume_id, inst['id'], e.message))
+                        LOG.warning(msg)
+                        self.state_notifier.incomplete(
+                            objects.MigrationObjectType.VM, inst, msg)
+                else:
+                    msg = ("Cannot attach volume '%s' to instance '%s' since "
+                           "it's status is '%s'" % (volume_id, inst['id'],
+                                                    status))
+                    LOG.warning(msg)
+                    self.state_notifier.incomplete(
+                        objects.MigrationObjectType.VM, inst, msg)
         return {}

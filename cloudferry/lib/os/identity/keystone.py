@@ -22,6 +22,8 @@ from sqlalchemy.exc import ProgrammingError
 
 from cloudferry import cfglib
 from cloudferry.lib.base import identity
+from cloudferry.lib.migration import notifiers
+from cloudferry.lib.migration import objects as objs
 from cloudferry.lib.utils import log
 from cloudferry.lib.utils import mapper
 from cloudferry.lib.utils import proxy_client
@@ -109,6 +111,9 @@ class KeystoneIdentity(identity.Identity):
         self.generator = GeneratorPassword()
         self.defaults = {}
         self.tenant_name_map = mapper.Mapper('tenant_map')
+        self.state_notifier = notifiers.MigrationStateNotifier()
+        for observer in cloud.migration_observers:
+            self.state_notifier.add_observer(observer)
 
     @property
     def keystone_client(self):
@@ -145,7 +150,7 @@ class KeystoneIdentity(identity.Identity):
 
         elif isinstance(identity_obj, keystone_client.roles.Role):
             return {'role': {'name': identity_obj.name,
-                             'id': identity_obj},
+                             'id': identity_obj.id},
                     'meta': {}}
 
         LOG.error('KeystoneIdentity converter has received incorrect value. '
@@ -492,13 +497,18 @@ class KeystoneIdentity(identity.Identity):
             tenant = _tenant['tenant']
             if tenant['name'].lower() not in dst_tenants:
                 LOG.debug("Creating tenant '%s'", tenant['name'])
-                _tenant['meta']['new_id'] = self.create_tenant(
-                    tenant['name'],
-                    tenant['description']).id
+                created_tenant = self.create_tenant(tenant['name'],
+                                                    tenant['description'])
+                _tenant['meta']['new_id'] = created_tenant.id
+                self.state_notifier.success(
+                    objs.MigrationObjectType.TENANT, tenant, created_tenant)
             else:
-                LOG.debug("Tenant '%s' is already present on destination, "
-                          "skipping", tenant['name'])
+                msg = "Tenant '%s' is already present on destination, " \
+                      "skipping" % tenant['name']
+                LOG.debug(msg)
                 _tenant['meta']['new_id'] = dst_tenants[tenant['name'].lower()]
+                self.state_notifier.skip(objs.MigrationObjectType.TENANT,
+                                         tenant, msg)
 
         LOG.info("Tenant deployment done.")
 
@@ -571,10 +581,16 @@ class KeystoneIdentity(identity.Identity):
             role = _role['role']
             if role['name'].lower() not in dst_roles:
                 LOG.debug("Creating role '%s'", role['name'])
-                _role['meta']['new_id'] = self.create_role(role['name']).id
+                new_role = self.create_role(role['name'])
+                self.state_notifier.success(
+                    objs.MigrationObjectType.ROLE, role, new_role)
+                _role['meta']['new_id'] = new_role.id
             else:
-                LOG.debug("Role '%s' is already present on destination, "
-                          "skipping", role['name'])
+                msg = "Role '%s' is already present on destination, " \
+                      "skipping" % role['name']
+                LOG.debug(msg)
+                self.state_notifier.skip(objs.MigrationObjectType.ROLE,
+                                         role, msg)
                 _role['meta']['new_id'] = dst_roles[role['name'].lower()]
 
         LOG.info("Role deployment done.")

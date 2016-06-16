@@ -22,6 +22,9 @@ from oslo_config import cfg
 
 from cloudferry.actions.helper import task_transfer
 from cloudferry.lib.base.action import action
+from cloudferry.lib.copy_engines import base
+from cloudferry.lib.migration import notifiers
+from cloudferry.lib.migration import objects
 from cloudferry.lib.utils import qemu_img as qemu_img_util
 from cloudferry.lib.utils import utils
 
@@ -31,6 +34,13 @@ LOG = logging.getLogger(__name__)
 
 
 class TransportEphemeral(action.Action):
+    def __init__(self, init, cloud=None):
+        super(TransportEphemeral, self).__init__(init, cloud)
+        self.migration_status = notifiers.MigrationStateNotifier()
+
+        for observer in self.init['migration_observers']:
+            self.migration_status.add_observer(observer)
+
     def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)
         new_info = {
@@ -46,8 +56,17 @@ class TransportEphemeral(action.Action):
                 }
             }
             if is_ephemeral:
-                self.copy_ephemeral(self.dst_cloud,
-                                    one_instance)
+                try:
+                    self.copy_ephemeral(self.dst_cloud, one_instance)
+                except (base.NotEnoughSpace, base.FileCopyError) as e:
+                    msg = ("Failed to copy ephemeral of VM '%s', error: "
+                           "%s" % (instance_id, e))
+                    LOG.warning(msg)
+                    self.migration_status.fail(
+                        objects.MigrationObjectType.VM,
+                        instance[utils.INSTANCE_BODY],
+                        message=msg)
+
             new_info[utils.INSTANCES_TYPE].update(
                 one_instance[utils.INSTANCES_TYPE])
 

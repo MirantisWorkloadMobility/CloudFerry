@@ -27,10 +27,11 @@ LOG = log.getLogger(__name__)
 
 
 class Cloud(object):
-    def __init__(self, resources, position, config):
+    def __init__(self, resources, position, config, migration_observers):
         self.resources = resources
         self.position = position
         self.config = config
+        self.migration_observers = migration_observers
 
         self.cloud_config = self.make_cloud_config(self.config, self.position)
         self.init_resources(self.cloud_config)

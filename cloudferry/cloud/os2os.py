@@ -11,10 +11,9 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
-
-
 from cloudferry.cloud import cloud
 from cloudferry.lib.base import migration
+from cloudferry.lib.migration import observers
 from cloudferry.lib.os.compute import nova_compute
 from cloudferry.lib.os.identity import keystone
 from cloudferry.lib.os.image import glance_image
@@ -28,15 +27,22 @@ from cloudferry.lib.utils import utils as utl
 
 class OS2OSFerry(object):
 
-    def __init__(self, config):
+    def __init__(self, config, state_observer):
+        self.migration_observers = [
+            state_observer,
+            observers.LoggingMigrationObserver()
+        ]
+
         resources = {'identity': keystone.KeystoneIdentity,
                      'image': glance_image.GlanceImage,
                      'storage': cinder_storage.CinderStorage,
                      'network': neutron.NeutronNetwork,
                      'compute': nova_compute.NovaCompute}
         self.config = config
-        self.src_cloud = cloud.Cloud(resources, cloud.SRC, config)
-        self.dst_cloud = cloud.Cloud(resources, cloud.DST, config)
+        self.src_cloud = cloud.Cloud(resources, cloud.SRC, config,
+                                     self.migration_observers)
+        self.dst_cloud = cloud.Cloud(resources, cloud.DST, config,
+                                     self.migration_observers)
         self.src_cloud.migration = {
             resource: migration.Migration(self.src_cloud, self.dst_cloud,
                                           resource)
@@ -51,6 +57,7 @@ class OS2OSFerry(object):
             'src_cloud': self.src_cloud,
             'dst_cloud': self.dst_cloud,
             'cfg': self.config,
+            'migration_observers': self.migration_observers
         }
         self.scenario = None
 
@@ -77,4 +84,5 @@ class OS2OSFerry(object):
         scheduler_migr = scheduler.Scheduler(namespace=namespace_scheduler,
                                              **process_migration)
         scheduler_migr.start()
+
         return scheduler_migr.status_error
