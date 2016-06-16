@@ -31,9 +31,11 @@ crudini --set /etc/nova/nova.conf DEFAULT osapi_compute_workers 1
 crudini --set /etc/nova/nova.conf DEFAULT metadata_workers 1
 crudini --set /etc/nova/nova.conf DEFAULT allow_resize_to_same_host True
 crudini --set /etc/nova/nova.conf DEFAULT allow_migrate_to_same_host True
+crudini --set /etc/nova/nova.conf DEFAULT api_rate_limit False
 crudini --set /etc/nova/nova.conf conductor workers 1
 service nova-api restart
 service nova-conductor restart
 service nova-compute restart
+service nova-scheduler restart
 
 EOF
