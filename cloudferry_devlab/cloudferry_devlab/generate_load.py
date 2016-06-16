@@ -1135,6 +1135,6 @@ class Prerequisites(base.BasePrerequisites):
         self.emulate_vm_states()
         self.log.info('Breaking VMs')
         for vm in [self.get_vm_id(vm['name']) for vm in
-                   self.migration_utils.get_all_vms_from_config()
+                   self.src_vms_from_config
                    if vm.get('broken')]:
             self.break_vm(vm)

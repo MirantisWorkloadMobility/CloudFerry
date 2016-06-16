@@ -60,6 +60,8 @@ class FunctionalTest(unittest.TestCase):
                 configuration_ini=config_ini,
                 config=config)
         self.migration_utils = utils.MigrationUtils(config)
+        self.src_vms_from_config = \
+            self.migration_utils.get_all_vms_from_config()
         self.config_ini_path = config_ini['general']['configuration_ini_path']
         self.cloudferry_dir = config_ini['general']['cloudferry_dir']
         tenant = base.get_nosetest_cmd_attribute_val('migrated_tenant')
@@ -156,19 +158,16 @@ class FunctionalTest(unittest.TestCase):
         return self._get_keystone_resources('roles', roles)
 
     def get_src_vm_objects_specified_in_config(self):
-        vms = self.migration_utils.get_all_vms_from_config()
-        vms_names = [vm['name'] for vm in vms if not vm.get('broken')]
+        vms_names = [vm['name'] for vm in self.src_vms_from_config
+                     if not vm.get('broken')]
         opts = {'search_opts': {'all_tenants': 1}}
         return [i for i in self.src_cloud.novaclient.servers.list(**opts)
                 if i.name in vms_names]
 
-    def get_src_vm_objects_not_on_dst_bef_mig(self):
-        vms = self.migration_utils.get_all_vms_from_config()
-        vms_names = [vm['name'] for vm in vms if not (vm.get('broken') or
-                     vm.get('already_on_dst'))]
-        opts = {'search_opts': {'all_tenants': 1}}
-        return [i for i in self.src_cloud.novaclient.servers.list(**opts)
-                if i.name in vms_names]
+    def filter_vms_already_on_dst(self, src_data_list):
+        vms_names = [vm['name'] for vm in self.src_vms_from_config
+                     if not vm.get('already_on_dst')]
+        return [i for i in src_data_list if i.name in vms_names]
 
     def filter_flavors(self, filter_only_private=False):
         flavors = []

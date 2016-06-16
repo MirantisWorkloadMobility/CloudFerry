@@ -68,6 +68,8 @@ class BasePrerequisites(object):
         self.filtering_utils = utils.FilteringUtils(
             self.configuration_ini['migrate']['filter_path'])
         self.migration_utils = utils.MigrationUtils(config)
+        self.src_vms_from_config = \
+            self.migration_utils.get_all_vms_from_config()
 
         self.config = config
         self.cloud_prefix = cloud_prefix.lower()
