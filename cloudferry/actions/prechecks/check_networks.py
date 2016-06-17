@@ -71,7 +71,8 @@ class CheckNetworks(action.Action):
             LOG.info("Check external networks mapping...")
             invalid_ext_net_ids = src_net_info.get_invalid_ext_net_ids(
                 dst_net_info, ext_net_map)
-            if invalid_ext_net_ids:
+            if invalid_ext_net_ids['src_nets'] or \
+                    invalid_ext_net_ids['dst_nets']:
                 invalid_src_nets = invalid_ext_net_ids['src_nets']
                 invalid_dst_nets = invalid_ext_net_ids['dst_nets']
                 invalid_nets_str = ""
