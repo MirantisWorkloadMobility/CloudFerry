@@ -22,6 +22,7 @@ from cloudferry.lib.os.identity import keystone
 from cloudferry.lib.os.storage import filters as cinder_filters
 from cloudferry.lib.utils import filters
 from cloudferry.lib.utils import log
+from cloudferry.lib.utils import mapper
 from cloudferry.lib.utils import proxy_client
 from cloudferry.lib.utils import retrying
 from cloudferry.lib.utils import utils
@@ -77,6 +78,7 @@ class CinderStorage(storage.Storage):
         self.mysql_connector = cloud.mysql_connector('cinder')
         self.volume_filter = None
         self.filter_tenant_id = None
+        self.tenant_name_map = mapper.Mapper('tenant_map')
 
     @property
     def cinder_client(self):
@@ -185,7 +187,7 @@ class CinderStorage(storage.Storage):
             LOG.debug("Retrieved cinder quota for tenant '%s' (%s): %s",
                       t.name, t.id, quota)
 
-            quota['tenant_name'] = t.name
+            quota['tenant_name'] = self.tenant_name_map.map(t.name)
 
             quotas.append(quota)
         return quotas

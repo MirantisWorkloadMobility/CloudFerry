@@ -30,11 +30,12 @@ from cloudferry.lib.os.compute import server_groups
 from cloudferry.lib.os.identity import keystone
 from cloudferry.lib.scheduler import signal_handler
 from cloudferry.lib.utils import log
+from cloudferry.lib.utils import mapper
 from cloudferry.lib.utils import mysql_connector
 from cloudferry.lib.utils import node_ip
 from cloudferry.lib.utils import override
 from cloudferry.lib.utils import proxy_client
-from cloudferry.lib.utils import utils as utl
+from cloudferry.lib.utils import utils
 from cloudferry.lib.os.compute.usage_quota import UsageQuotaCompute
 
 LOG = log.getLogger(__name__)
@@ -90,6 +91,7 @@ class NovaCompute(compute.Compute):
         # List of instance IDs which failed to create
         self.processing_instances = []
         self.failed_instances = []
+        self.tenant_name_map = mapper.Mapper('tenant_map')
         self.instance_info_caches = instance_info_caches.InstanceInfoCaches(
             self.get_db_connection())
         if config.migrate.override_rules is None:
@@ -230,10 +232,9 @@ class NovaCompute(compute.Compute):
 
         return info
 
-    @staticmethod
-    def convert_instance(instance, cfg, cloud):
-        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
-        compute_res = cloud.resources[utl.COMPUTE_RESOURCE]
+    def convert_instance(self, instance, cfg, cloud):
+        identity_res = cloud.resources[utils.IDENTITY_RESOURCE]
+        compute_res = cloud.resources[utils.COMPUTE_RESOURCE]
         sg_res = server_groups.ServerGroupsHandler(cloud)
 
         instance_name = instance_libvirt_name(instance)
@@ -261,16 +262,16 @@ class NovaCompute(compute.Compute):
                                   instance_node,
                                   ssh_user)
 
-        if not utl.libvirt_instance_exists(instance_name,
-                                           cfg.cloud.ssh_host,
-                                           instance_node,
-                                           ssh_user,
-                                           cfg.cloud.ssh_sudo_password):
+        if not utils.libvirt_instance_exists(instance_name,
+                                             cfg.cloud.ssh_host,
+                                             instance_node,
+                                             ssh_user,
+                                             cfg.cloud.ssh_sudo_password):
             LOG.warning('Instance %s (%s) not found on %s, skipping migration',
                         instance_name, instance.id, instance_node)
             return None
 
-        instance_block_info = utl.get_libvirt_block_info(
+        instance_block_info = utils.get_libvirt_block_info(
             instance_name,
             cfg.cloud.ssh_host,
             instance_node,
@@ -288,7 +289,7 @@ class NovaCompute(compute.Compute):
                                                   instance.id)
         is_ephemeral = flav_details['ephemeral_gb'] > 0
         if is_ephemeral:
-            ephemeral_path['path_src'] = utl.get_disk_path(
+            ephemeral_path['path_src'] = utils.get_disk_path(
                 instance,
                 instance_block_info,
                 disk=DISK + LOCAL)
@@ -301,7 +302,7 @@ class NovaCompute(compute.Compute):
         }
 
         if instance.image:
-            diff['path_src'] = utl.get_disk_path(
+            diff['path_src'] = utils.get_disk_path(
                 instance,
                 instance_block_info)
         flav_name = compute_res.get_flavor_from_id(instance.flavor['id'],
@@ -316,21 +317,22 @@ class NovaCompute(compute.Compute):
         else:
             server_group = None
 
-        config_drive = utl.get_disk_path(instance, instance_block_info,
-                                         disk=utl.DISK_CONFIG)
+        config_drive = utils.get_disk_path(instance, instance_block_info,
+                                           disk=utils.DISK_CONFIG)
         inst = {'instance': {'name': instance.name,
                              'instance_name': instance_name,
                              'id': instance.id,
                              'tenant_id': instance.tenant_id,
-                             'tenant_name': tenant_name,
+                             'tenant_name': self.tenant_name_map.map(
+                                 tenant_name),
                              'status': instance.status,
                              'flavor_id': instance.flavor['id'],
                              'flav_details': flav_details,
                              'image_id': instance.image[
                                  'id'] if instance.image else None,
-                             'boot_mode': (utl.BOOT_FROM_IMAGE
+                             'boot_mode': (utils.BOOT_FROM_IMAGE
                                            if instance.image
-                                           else utl.BOOT_FROM_VOLUME),
+                                           else utils.BOOT_FROM_VOLUME),
                              'key_name': instance.key_name,
                              'availability_zone': getattr(
                                  instance,
@@ -358,7 +360,7 @@ class NovaCompute(compute.Compute):
 
         if isinstance(compute_obj, nova_client.flavors.Flavor):
 
-            compute_res = cloud.resources[utl.COMPUTE_RESOURCE]
+            compute_res = cloud.resources[utils.COMPUTE_RESOURCE]
             tenants = []
 
             if not compute_obj.is_public:
@@ -402,12 +404,11 @@ class NovaCompute(compute.Compute):
                               'metadata_items': compute_obj.metadata_items},
                     'meta': {}}
 
-    @staticmethod
-    def convert(obj, cfg=None, cloud=None):
+    def convert(self, obj, cfg=None, cloud=None):
         if isinstance(obj, nova_client.servers.Server):
-            return NovaCompute.convert_instance(obj, cfg, cloud)
+            return self.convert_instance(obj, cfg, cloud)
         elif isinstance(obj, nova_client.flavors.Flavor):
-            return NovaCompute.convert_resources(obj, cloud)
+            return self.convert_resources(obj, cloud)
 
         LOG.error('NovaCompute converter has received incorrect value. Please '
                   'pass to it only instance or flavor objects.')
@@ -633,9 +634,9 @@ class NovaCompute(compute.Compute):
                         instance, 'server_group')
                 },
             }
-            if instance['boot_mode'] == utl.BOOT_FROM_VOLUME:
+            if instance['boot_mode'] == utils.BOOT_FROM_VOLUME:
                 volume_id = instance['volumes'][0]['id']
-                storage = self.cloud.resources[utl.STORAGE_RESOURCE]
+                storage = self.cloud.resources[utils.STORAGE_RESOURCE]
                 vol = storage.get_migrated_volume(volume_id)
 
                 if vol:
@@ -926,7 +927,7 @@ class NovaCompute(compute.Compute):
         return self.nova_client.servers.get(res_id).status
 
     def get_networks(self, instance):
-        network_resource = self.cloud.resources[utl.NETWORK_RESOURCE]
+        network_resource = self.cloud.resources[utils.NETWORK_RESOURCE]
         interfaces = network_resource.get_instance_network_info(
             instance.id)
         if self.config.migrate.keep_network_interfaces_order:

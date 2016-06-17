@@ -23,6 +23,7 @@ from sqlalchemy.exc import ProgrammingError
 from cloudferry import cfglib
 from cloudferry.lib.base import identity
 from cloudferry.lib.utils import log
+from cloudferry.lib.utils import mapper
 from cloudferry.lib.utils import proxy_client
 from cloudferry.lib.utils import retrying
 from cloudferry.lib.utils import utils as utl
@@ -107,13 +108,13 @@ class KeystoneIdentity(identity.Identity):
         self.templater = Templater()
         self.generator = GeneratorPassword()
         self.defaults = {}
+        self.tenant_name_map = mapper.Mapper('tenant_map')
 
     @property
     def keystone_client(self):
         return self.proxy(self.get_client(), self.config)
 
-    @staticmethod
-    def convert(identity_obj, cfg):
+    def convert(self, identity_obj, cfg):
         """Convert OpenStack Keystone object to CloudFerry object.
 
         :param identity_obj:    Direct OpenStack Keystone object to convert,
@@ -122,10 +123,15 @@ class KeystoneIdentity(identity.Identity):
         """
 
         if isinstance(identity_obj, keystone_client.tenants.Tenant):
-            return {'tenant': {'name': identity_obj.name,
-                               'id': identity_obj.id,
-                               'description': identity_obj.description},
-                    'meta': {}}
+            return {
+                'tenant': {
+                    'name': self.tenant_name_map.map(
+                        identity_obj.name),
+                    'id': identity_obj.id,
+                    'description': identity_obj.description
+                },
+                'meta': {}
+            }
 
         elif isinstance(identity_obj, keystone_client.users.User):
             overwrite_user_passwords = cfg.migrate.overwrite_user_passwords
@@ -644,9 +650,11 @@ class KeystoneIdentity(identity.Identity):
 
     def _get_user_tenants_roles_by_db(self, tenant_list, user_list):
         user_tenants_roles = {
-            u.name.lower(): {t.name.lower(): [] for t in tenant_list}
+            u.name.lower(): {self.tenant_name_map.map(t.name).lower(): []
+                             for t in tenant_list}
             for u in user_list}
-        tenant_ids = {tenant.id: tenant.name.lower() for tenant in tenant_list}
+        tenant_ids = {tenant.id: self.tenant_name_map.map(tenant.name).lower()
+                      for tenant in tenant_list}
         user_ids = {user.id: user.name.lower() for user in user_list}
         roles = {r.id: r for r in self.get_roles_list()}
         for user_id, tenant_id, roles_field in self._get_roles_sql_request():
@@ -671,10 +679,11 @@ class KeystoneIdentity(identity.Identity):
         for user in user_list:
             user_tenants_roles[user.name.lower()] = {}
             for tenant in tenant_list:
+                tenant_name = self.tenant_name_map.map(tenant.name)
                 roles = []
                 for role in self.roles_for_user(user.id, tenant.id):
                     roles.append({'role': {'name': role.name, 'id': role.id}})
-                user_tenants_roles[user.name.lower()][tenant.name.lower()] = \
+                user_tenants_roles[user.name.lower()][tenant_name.lower()] = \
                     roles
         return user_tenants_roles
 
@@ -752,13 +761,16 @@ class KeystoneIdentity(identity.Identity):
         for raw in res:
             return raw['version']
 
-    @staticmethod
-    def identical(src_tenant, dst_tenant):
-        if not src_tenant:
-            src_tenant = {'name': cfglib.CONF.src.tenant}
-        if not dst_tenant:
-            dst_tenant = {'name': cfglib.CONF.dst.tenant}
-        return src_tenant['name'].lower() == dst_tenant['name'].lower()
+    def identical(self, src_tenant, dst_tenant):
+        if src_tenant:
+            src_tenant_name = self.tenant_name_map.map(src_tenant['name'])
+        else:
+            src_tenant_name = cfglib.CONF.src.tenant
+        if dst_tenant:
+            dst_tenant_name = dst_tenant['name']
+        else:
+            dst_tenant_name = cfglib.CONF.dst.tenant
+        return src_tenant_name.lower() == dst_tenant_name.lower()
 
 
 def get_dst_tenant_from_src_tenant_id(src_keystone, dst_keystone,
@@ -773,7 +785,9 @@ def get_dst_tenant_from_src_tenant_id(src_keystone, dst_keystone,
     try:
         with proxy_client.expect_exception(ks_exceptions.NotFound):
             client = dst_keystone.keystone_client
-            return client.tenants.find(name=src_tenant.name)
+            dst_tenant_name = src_keystone.tenant_name_map.map(src_tenant.name)
+            return find_by_name('tenant', client.tenants.list(),
+                                dst_tenant_name)
     except ks_exceptions.NotFound:
         return None
 

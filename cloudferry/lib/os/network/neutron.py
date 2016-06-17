@@ -27,7 +27,8 @@ from cloudferry.lib.base import network
 from cloudferry.lib.os.identity import keystone as ksresource
 from cloudferry.lib.utils import cache
 from cloudferry.lib.utils import log
-from cloudferry.lib.utils import utils as utl
+from cloudferry.lib.utils import mapper
+from cloudferry.lib.utils import utils
 
 
 LOG = log.getLogger(__name__)
@@ -46,10 +47,10 @@ class NeutronNetwork(network.Network):
     def __init__(self, config, cloud):
         super(NeutronNetwork, self).__init__(config)
         self.cloud = cloud
-        self.identity_client = cloud.resources[utl.IDENTITY_RESOURCE]
+        self.identity_client = cloud.resources[utils.IDENTITY_RESOURCE]
         self.filter_tenant_id = None
-        self.ext_net_map = \
-            utl.read_yaml_file(self.config.migrate.ext_net_map) or {}
+        self.ext_net_map = mapper.Mapper('ext_network_map')
+        self.tenant_name_map = mapper.Mapper('tenant_map')
         self.mysql_connector = cloud.mysql_connector('neutron')
 
     @property
@@ -151,12 +152,14 @@ class NeutronNetwork(network.Network):
         data = {}
         if self.config.network.get_all_quota:
             for t_id, t_val in tenants.iteritems():
-                data[t_val] = self.neutron_client.show_quota(t_id)
+                tenant_name = self.tenant_name_map.map(t_val)
+                data[tenant_name] = self.neutron_client.show_quota(t_id)
         else:
             for t in self.neutron_client.list_quotas()['quotas']:
                 if (not tenant_id) or (tenant_id == t['tenant_id']):
-                    tenant_name = self.identity_client.\
+                    t_val = self.identity_client.\
                         try_get_tenant_name_by_id(t['tenant_id'])
+                    tenant_name = self.tenant_name_map.map(t_val)
                     data[tenant_name] = {k: v
                                          for k, v in t.iteritems()
                                          if k != 'tenant_id'}
@@ -367,8 +370,7 @@ class NeutronNetwork(network.Network):
                     return port
         return None
 
-    @staticmethod
-    def convert(neutron_object, cloud, obj_name):
+    def convert(self, neutron_object, cloud, obj_name):
         """Convert OpenStack Neutron network object to CloudFerry object.
 
         :param neutron_object: Direct OS NeutronNetwork object to convert,
@@ -380,23 +382,23 @@ class NeutronNetwork(network.Network):
         """
 
         obj_map = {
-            'network': NeutronNetwork.convert_networks,
-            'subnet': NeutronNetwork.convert_subnets,
-            'router': NeutronNetwork.convert_routers,
-            'floating_ip': NeutronNetwork.convert_floatingips,
-            'security_group': NeutronNetwork.convert_security_groups,
-            'rule': NeutronNetwork.convert_rules,
-            'lb_pool': NeutronNetwork.convert_lb_pools,
-            'lb_member': NeutronNetwork.convert_lb_members,
-            'lb_monitor': NeutronNetwork.convert_lb_monitors,
-            'lb_vip': NeutronNetwork.convert_lb_vips
+            'network': self.convert_networks,
+            'subnet': self.convert_subnets,
+            'router': self.convert_routers,
+            'floating_ip': self.convert_floatingips,
+            'security_group': self.convert_security_groups,
+            'rule': self.convert_rules,
+            'lb_pool': self.convert_lb_pools,
+            'lb_member': self.convert_lb_members,
+            'lb_monitor': self.convert_lb_monitors,
+            'lb_vip': self.convert_lb_vips
         }
 
         return obj_map[obj_name](neutron_object, cloud)
 
     def convert_networks(self, net, cloud):
-        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
-        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+        identity_res = cloud.resources[utils.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utils.NETWORK_RESOURCE]
         get_tenant_name = identity_res.get_tenants_func()
 
         subnets = []
@@ -413,7 +415,8 @@ class NeutronNetwork(network.Network):
             'admin_state_up': net['admin_state_up'],
             'shared': net['shared'],
             'tenant_id': net['tenant_id'],
-            'tenant_name': get_tenant_name(net['tenant_id']),
+            'tenant_name': self.tenant_name_map.map(
+                get_tenant_name(net['tenant_id'])),
             'subnets': subnets,
             'router:external': net['router:external'],
             'provider:physical_network': net['provider:physical_network'],
@@ -434,10 +437,9 @@ class NeutronNetwork(network.Network):
         result['res_hash'] = res_hash
         return result
 
-    @staticmethod
-    def convert_subnets(snet, cloud):
-        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
-        network_res = cloud.resources[utl.NETWORK_RESOURCE]
+    def convert_subnets(self, snet, cloud):
+        identity_res = cloud.resources[utils.IDENTITY_RESOURCE]
+        network_res = cloud.resources[utils.NETWORK_RESOURCE]
         get_tenant_name = identity_res.get_tenants_func()
 
         networks_list = network_res.get_networks_list()
@@ -456,7 +458,8 @@ class NeutronNetwork(network.Network):
             'network_name': net['name'],
             'external': net['router:external'],
             'network_id': snet['network_id'],
-            'tenant_name': get_tenant_name(snet['tenant_id']),
+            'tenant_name': self.tenant_name_map.map(
+                get_tenant_name(snet['tenant_id'])),
             'dns_nameservers': snet['dns_nameservers'],
             'meta': {},
         }
@@ -475,10 +478,9 @@ class NeutronNetwork(network.Network):
 
         return result
 
-    @staticmethod
-    def convert_routers(router, cloud):
-        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
-        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+    def convert_routers(self, router, cloud):
+        identity_res = cloud.resources[utils.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utils.NETWORK_RESOURCE]
 
         get_tenant_name = identity_res.get_tenants_func()
 
@@ -487,7 +489,8 @@ class NeutronNetwork(network.Network):
             'id': router['id'],
             'admin_state_up': router['admin_state_up'],
             'external_gateway_info': router['external_gateway_info'],
-            'tenant_name': get_tenant_name(router['tenant_id']),
+            'tenant_name': self.tenant_name_map.map(
+                get_tenant_name(router['tenant_id'])),
             'meta': {},
         }
         result.update(net_res.get_ports_info(router))
@@ -511,10 +514,9 @@ class NeutronNetwork(network.Network):
 
         return result
 
-    @staticmethod
-    def convert_floatingips(floating, cloud):
-        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
-        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+    def convert_floatingips(self, floating, cloud):
+        identity_res = cloud.resources[utils.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utils.NETWORK_RESOURCE]
 
         get_tenant_name = identity_res.get_tenants_func()
 
@@ -527,8 +529,10 @@ class NeutronNetwork(network.Network):
             'tenant_id': floating['tenant_id'],
             'floating_network_id': ext_id,
             'network_name': extnet['name'],
-            'ext_net_tenant_name': get_tenant_name(extnet['tenant_id']),
-            'tenant_name': get_tenant_name(floating['tenant_id']),
+            'ext_net_tenant_name': self.tenant_name_map.map(
+                get_tenant_name(extnet['tenant_id'])),
+            'tenant_name': self.tenant_name_map.map(
+                get_tenant_name(floating['tenant_id'])),
             'fixed_ip_address': floating['fixed_ip_address'],
             'floating_ip_address': floating['floating_ip_address'],
             'port_id': floating['port_id'],
@@ -539,7 +543,7 @@ class NeutronNetwork(network.Network):
 
     @staticmethod
     def convert_rules(rule, cloud):
-        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+        net_res = cloud.resources[utils.NETWORK_RESOURCE]
 
         rule_hash = net_res.get_resource_hash(rule,
                                               'direction',
@@ -564,10 +568,9 @@ class NeutronNetwork(network.Network):
 
         return result
 
-    @staticmethod
-    def convert_security_groups(sec_gr, cloud):
-        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
-        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+    def convert_security_groups(self, sec_gr, cloud):
+        identity_res = cloud.resources[utils.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utils.NETWORK_RESOURCE]
 
         get_tenant_name = identity_res.get_tenants_func(
             return_default_tenant=False)
@@ -576,9 +579,10 @@ class NeutronNetwork(network.Network):
             'name': sec_gr['name'],
             'id': sec_gr['id'],
             'tenant_id': sec_gr['tenant_id'],
-            'tenant_name': get_tenant_name(sec_gr['tenant_id']),
+            'tenant_name': self.tenant_name_map.map(
+                get_tenant_name(sec_gr['tenant_id'])),
             'description': sec_gr['description'],
-            'security_group_rules': [NeutronNetwork.convert(gr, cloud, 'rule')
+            'security_group_rules': [self.convert(gr, cloud, 'rule')
                                      for gr in sec_gr['security_group_rules']],
             'meta': {},
         }
@@ -592,10 +596,9 @@ class NeutronNetwork(network.Network):
 
         return result
 
-    @staticmethod
-    def convert_lb_pools(pool, cloud):
-        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
-        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+    def convert_lb_pools(self, pool, cloud):
+        identity_res = cloud.resources[utils.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utils.NETWORK_RESOURCE]
 
         get_tenant_name = identity_res.get_tenants_func(
             return_default_tenant=False)
@@ -609,7 +612,8 @@ class NeutronNetwork(network.Network):
             'subnet_id': pool['subnet_id'],
             'provider': pool.get('provider'),
             'tenant_id': pool['tenant_id'],
-            'tenant_name': get_tenant_name(pool['tenant_id']),
+            'tenant_name': self.tenant_name_map.map(
+                get_tenant_name(pool['tenant_id'])),
             'health_monitors': pool['health_monitors'],
             'members': pool['members'],
             'meta': {}
@@ -624,10 +628,9 @@ class NeutronNetwork(network.Network):
 
         return result
 
-    @staticmethod
-    def convert_lb_monitors(monitor, cloud):
-        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
-        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+    def convert_lb_monitors(self, monitor, cloud):
+        identity_res = cloud.resources[utils.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utils.NETWORK_RESOURCE]
 
         get_tenant_name = identity_res.get_tenants_func(
             return_default_tenant=False)
@@ -635,7 +638,8 @@ class NeutronNetwork(network.Network):
         result = {
             'id': monitor['id'],
             'tenant_id': monitor['tenant_id'],
-            'tenant_name': get_tenant_name(monitor['tenant_id']),
+            'tenant_name': self.tenant_name_map.map(
+                get_tenant_name(monitor['tenant_id'])),
             'type': monitor['type'],
             'delay': monitor['delay'],
             'timeout': monitor['timeout'],
@@ -657,10 +661,9 @@ class NeutronNetwork(network.Network):
 
         return result
 
-    @staticmethod
-    def convert_lb_members(member, cloud):
-        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
-        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+    def convert_lb_members(self, member, cloud):
+        identity_res = cloud.resources[utils.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utils.NETWORK_RESOURCE]
 
         get_tenant_name = identity_res.get_tenants_func(
             return_default_tenant=False)
@@ -672,7 +675,8 @@ class NeutronNetwork(network.Network):
             'protocol_port': member['protocol_port'],
             'weight': member['weight'],
             'tenant_id': member['tenant_id'],
-            'tenant_name': get_tenant_name(member['tenant_id']),
+            'tenant_name': self.tenant_name_map.map(
+                get_tenant_name(member['tenant_id'])),
             'meta': {}
         }
 
@@ -686,10 +690,9 @@ class NeutronNetwork(network.Network):
 
         return result
 
-    @staticmethod
-    def convert_lb_vips(vip, cloud):
-        identity_res = cloud.resources[utl.IDENTITY_RESOURCE]
-        net_res = cloud.resources[utl.NETWORK_RESOURCE]
+    def convert_lb_vips(self, vip, cloud):
+        identity_res = cloud.resources[utils.IDENTITY_RESOURCE]
+        net_res = cloud.resources[utils.NETWORK_RESOURCE]
 
         get_tenant_name = identity_res.get_tenants_func(
             return_default_tenant=False)
@@ -706,7 +709,8 @@ class NeutronNetwork(network.Network):
             'session_persistence': vip.get('session_persistence', None),
             'tenant_id': vip['tenant_id'],
             'subnet_id': vip['subnet_id'],
-            'tenant_name': get_tenant_name(vip['tenant_id']),
+            'tenant_name': self.tenant_name_map.map(
+                get_tenant_name(vip['tenant_id'])),
             'meta': {}
         }
 
