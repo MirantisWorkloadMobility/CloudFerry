@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import logging
 
 from cinderclient import exceptions as cinder_exceptions
@@ -21,8 +22,12 @@ from cinderclient.v2 import volumes as volumes_v2
 from cloudferry.lib.base import exception
 from cloudferry.lib.base.action import action
 from cloudferry.lib.os.identity import keystone
+from cloudferry.lib.os.storage import cinder_db
 from cloudferry.lib.os.storage import plugins
 from cloudferry.lib.os.storage.plugins import copy_mechanisms
+from cloudferry.lib.os.storage.plugins.nfs import generic
+from cloudferry.lib.utils import files
+from cloudferry.lib.utils import remote_runner
 from cloudferry.lib.utils import retrying
 from cloudferry.lib.utils import utils
 
@@ -116,6 +121,31 @@ class MigrateVolumes(action.Action):
         self.src_cinder_backend = plugins.get_cinder_backend(self.src_cloud)
         self.dst_cinder_backend = plugins.get_cinder_backend(self.dst_cloud)
 
+        if self._is_nfs_shared():
+            self.migrate_func = self.reuse_source_volume
+        else:
+            self.migrate_func = self.migrate_volume
+
+    def _is_nfs_shared(self):
+        src_shared_nfs = isinstance(self.src_cinder_backend,
+                                    generic.SharedNFSPlugin)
+        dst_shared_nfs = isinstance(self.dst_cinder_backend,
+                                    generic.SharedNFSPlugin)
+        if src_shared_nfs and dst_shared_nfs:
+            return True
+        elif src_shared_nfs or dst_shared_nfs:
+            msg = ("Invalid configuration of src or dst storage backends. "
+                   "In case of shared-nfs both options of the backends must "
+                   "be set to have a value of shared-nfs. Source storage "
+                   "backend has '{src}' and destination storage backend has "
+                   "'{dst}'")
+            raise exception.InvalidConfigException(
+                msg,
+                src=self.cfg.src_storage.backend,
+                dst=self.cfg.dst_storage.backend)
+        else:
+            return False
+
     def get_cinder_volumes(self, **kwargs):
         cinder_volumes_data = kwargs.get('storage_info')
 
@@ -127,61 +157,57 @@ class MigrateVolumes(action.Action):
 
         return cinder_volumes_data['volumes']
 
+    def reuse_source_volume(self, src_volume):
+        """Creates volume on destination with same id from source"""
+        volume_id = src_volume['id']
+        original_size = src_volume['size']
+        src_volume_object = self.dst_cinder_backend.get_volume_object(
+            self.dst_cloud, volume_id)
+        LOG.debug("Backing file for source volume on destination cloud: %s",
+                  src_volume_object)
+        fake_volume = copy.deepcopy(src_volume)
+        fake_volume['size'] = 1
+        dst_volume, dst_volume_object = self._create_volume(fake_volume)
+        user = self.dst_cloud.cloud_config.cloud.ssh_user
+        password = self.dst_cloud.cloud_config.cloud.ssh_sudo_password
+        rr = remote_runner.RemoteRunner(dst_volume_object.host, user,
+                                        password=password, sudo=True,
+                                        ignore_errors=True)
+        files.remote_rm(rr, dst_volume_object.path)
+        dst_cinder = self.dst_cloud.resources[utils.STORAGE_RESOURCE]
+        dst_db = cinder_db.CinderDBBroker(dst_cinder.mysql_connector)
+        dst_db.update_volume_id(dst_volume.id, volume_id)
+        if original_size > 1:
+            dst_db.update_volume(volume_id, size=original_size)
+            inc_size = original_size - 1
+            project_id = dst_db.get_cinder_volume(volume_id).project_id
+            dst_db.inc_quota_usages(project_id, 'gigabytes', inc_size)
+            volume_type = (None
+                           if dst_volume.volume_type == 'None'
+                           else dst_volume.volume_type)
+            if volume_type:
+                dst_db.inc_quota_usages(project_id,
+                                        'gigabytes_%s' % volume_type, inc_size)
+        provider_location = self.dst_cinder_backend.get_provider_location(
+            self.dst_cloud,
+            dst_volume_object.host,
+            src_volume_object.path
+        )
+        dst_db.update_volume(volume_id, provider_location=provider_location)
+        return dst_cinder.get_volume_by_id(volume_id)
+
     def migrate_volume(self, src_volume):
         """Creates volume on destination and copies volume data from source"""
-        LOG.info("Checking if volume '%s' already present in destination",
-                 volume_name(src_volume))
-        dst_cinder = self.dst_cloud.resources[utils.STORAGE_RESOURCE]
+        src_volume_object = self.src_cinder_backend.get_volume_object(
+            self.src_cloud, src_volume['id'])
+        LOG.debug("Backing file for source volume: %s",
+                  src_volume_object)
 
-        dst_volume = dst_cinder.get_migrated_volume(src_volume['id'])
-        volume_exists_in_destination = (dst_volume is not None and
-                                        dst_volume.status in ['available',
-                                                              'in-use'])
+        dst_volume, dst_volume_object = self._create_volume(src_volume)
 
-        if not volume_exists_in_destination:
-            try:
-                src_volume_object = self.src_cinder_backend.get_volume_object(
-                    self.src_cloud, src_volume['id'])
-                LOG.debug("Backing file for source volume: %s",
-                          src_volume_object)
-
-                dst_volume = self._create_volume(src_volume)
-
-                # It takes time to create volume object
-                timeout = self.cfg.migrate.storage_backend_timeout
-                retryer = retrying.Retry(max_time=timeout)
-                dst_volume_object = retryer.run(
-                    self.dst_cinder_backend.get_volume_object,
-                    self.dst_cloud, dst_volume.id)
-
-                LOG.debug("Backing file for volume in destination: %s",
-                          dst_volume_object)
-                LOG.info("Starting volume copy from %s to %s",
-                         src_volume_object, dst_volume_object)
-                self.copy_volume_data(src_volume_object, dst_volume_object)
-            except (plugins.base.VolumeObjectNotFoundError,
-                    retrying.TimeoutExceeded,
-                    exception.TenantNotPresentInDestination,
-                    cinder_exceptions.OverLimit,
-                    cinder_exceptions.NotFound,
-                    copy_mechanisms.CopyFailed) as e:
-                LOG.warning("%(error)s, volume %(name)s will be skipped",
-                            {'error': e.message,
-                             'name': volume_name(src_volume)})
-
-                if dst_volume is not None:
-                    msg = ("Removing volume {name} from destination "
-                           "since it didn't migrate properly".format(
-                            name=volume_name(dst_volume)))
-                    LOG.info(msg)
-                    self.delete_volume(dst_volume)
-            finally:
-                if dst_volume is not None:
-                    self.dst_cinder_backend.cleanup(self.cloud,
-                                                    dst_volume.id)
-        else:
-            LOG.info("Volume '%s' is already present in destination cloud, "
-                     "skipping", src_volume['id'])
+        LOG.info("Starting volume copy from %s to %s",
+                 src_volume_object, dst_volume_object)
+        self.copy_volume_data(src_volume_object, dst_volume_object)
 
         return dst_volume
 
@@ -205,10 +231,21 @@ class MigrateVolumes(action.Action):
                                                           dst_tenant.id)
         LOG.info("Volume created: %s", volume_name(dst_volume))
 
-        return dst_volume
+        # It takes time to create volume object
+        timeout = self.cfg.migrate.storage_backend_timeout
+        retryer = retrying.Retry(max_time=timeout)
+        dst_volume_object = retryer.run(
+            self.dst_cinder_backend.get_volume_object,
+            self.dst_cloud, dst_volume.id)
+
+        LOG.debug("Backing file for volume in destination: %s",
+                  dst_volume_object)
+
+        return dst_volume, dst_volume_object
 
     def run(self, **kwargs):
         """:returns: dictionary {<source-volume-id>: <destination-volume>}"""
+
         new_volumes = {}
         volumes = self.get_cinder_volumes(**kwargs)
         volumes = [v['volume'] for v in volumes.itervalues()]
@@ -216,13 +253,46 @@ class MigrateVolumes(action.Action):
         view = VolumeMigrationView(volumes)
         view.initial_message()
 
-        for i, volume in enumerate(volumes):
-            view.before_migration(i, volume)
+        for i, src_volume in enumerate(volumes):
+            view.before_migration(i, src_volume)
 
-            migrated_volume = self.migrate_volume(volume)
+            LOG.info("Checking if volume '%s' already present in destination",
+                     volume_name(src_volume))
+            dst_cinder = self.dst_cloud.resources[utils.STORAGE_RESOURCE]
 
-            view.after_migration(i, volume)
-            new_volumes[volume['id']] = migrated_volume
+            dst_volume = dst_cinder.get_migrated_volume(src_volume['id'])
+            volume_exists_in_destination = (dst_volume is not None and
+                                            dst_volume.status in ['available',
+                                                                  'in-use'])
+
+            if volume_exists_in_destination:
+                LOG.info("Volume '%s' is already present in destination "
+                         "cloud, skipping", src_volume['id'])
+            else:
+                try:
+                    dst_volume = self.migrate_func(src_volume)
+                except (plugins.base.VolumeObjectNotFoundError,
+                        retrying.TimeoutExceeded,
+                        exception.TenantNotPresentInDestination,
+                        cinder_exceptions.ClientException,
+                        copy_mechanisms.CopyFailed) as e:
+                    LOG.warning("%(error)s, volume %(name)s will be skipped",
+                                {'error': e.message,
+                                 'name': volume_name(src_volume)})
+
+                    if dst_volume is not None:
+                        msg = ("Removing volume {name} from destination "
+                               "since it didn't migrate properly".format(
+                                   name=volume_name(dst_volume)))
+                        LOG.info(msg)
+                        self.delete_volume(dst_volume)
+                finally:
+                    if dst_volume is not None:
+                        self.dst_cinder_backend.cleanup(self.cloud,
+                                                        dst_volume.id)
+
+            view.after_migration(i, src_volume)
+            new_volumes[src_volume['id']] = dst_volume
         return new_volumes
 
     def copy_volume_data(self, src_volume_object, dst_volume_object):

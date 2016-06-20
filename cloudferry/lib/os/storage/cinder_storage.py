@@ -45,22 +45,7 @@ TENANT_ID = 'tenant_id'
 USER_ID = 'user_id'
 DELETED = 'deleted'
 HOST = 'host'
-IGNORED_TBL_LIST = ('quotas', 'quota_usages')
-QUOTA_TABLES = (
-    'quotas',
-    'quota_classes',
-    'quota_usages',
-)
 SRC = 'src'
-TABLE_UNIQ_KEYS = {
-    'volumes': ['id'],
-    'quotas': ['project_id', 'resource'],
-    'quota_classes': ['class_name', 'resource'],
-    'quota_usages': ['project_id', 'resource'],
-    'reservations': ['project_id', 'resource', 'usage_id'],
-    'volume_metadata': ['volume_id', 'key'],
-    'volume_glance_metadata': ['volume_id', 'snapshot_id', 'key'],
-}
 
 VALID_STATUSES = ['available', 'in-use', 'attaching', 'detaching']
 MIGRATED_VOLUMES_METADATA_KEY = 'src_volume_id'
@@ -289,7 +274,8 @@ class CinderStorage(storage.Storage):
         """:returns: volume which was created from another volume using
         :create_volume_from_volume: method"""
         for v in self.get_volumes_list():
-            if v.metadata.get(MIGRATED_VOLUMES_METADATA_KEY) == volume_id:
+            if volume_id in (v.id,
+                             v.metadata.get(MIGRATED_VOLUMES_METADATA_KEY)):
                 return v
 
     def get_snapshots_list(self, detailed=True, search_opts=None):

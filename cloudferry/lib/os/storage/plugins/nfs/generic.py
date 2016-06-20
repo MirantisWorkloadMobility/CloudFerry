@@ -77,3 +77,18 @@ class NFSPlugin(base.CinderMigrationPlugin):
                "volume exists in DB, but is not present on storage, or "
                "'nfs_mount_point_bases' is set incorrectly in config")
         raise base.VolumeObjectNotFoundError(msg.format(volume_id=volume_id))
+
+
+class SharedNFSPlugin(NFSPlugin):
+    PLUGIN_NAME = "shared-nfs"
+
+    def get_provider_location(self, context, host, path):
+        user = context.cloud_config.cloud.ssh_user
+        password = context.cloud_config.cloud.ssh_sudo_password
+
+        rr = remote_runner.RemoteRunner(host, user, password=password,
+                                        sudo=True,
+                                        ignore_errors=True)
+
+        cmd = "df \"{path}\" |  tail -1 | awk '{{ print $1 }}'"
+        return rr.run(cmd, path=path)

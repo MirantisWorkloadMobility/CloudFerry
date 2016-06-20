@@ -312,8 +312,9 @@ src_storage = cfg.OptGroup(name='src_storage',
 
 src_storage_opts = [
     cfg.StrOpt('backend', default='nfs',
-               choices=['nfs', 'iscsi-vmax'],
-               help='Cinder volume backend. Possible values: nfs, iscsi-vmax'),
+               choices=['nfs', 'iscsi-vmax', 'shared-nfs'],
+               help='Cinder volume backend. Possible values: nfs, iscsi-vmax '
+                    'and shared-nfs'),
     cfg.StrOpt('db_host', default=None,
                help='Cinder DB host/IP address'),
     cfg.IntOpt('db_port', default=3306,
@@ -482,8 +483,9 @@ dst_storage = cfg.OptGroup(name='dst_storage',
 
 dst_storage_opts = [
     cfg.StrOpt('backend', default='nfs',
-               choices=['nfs', 'iscsi-vmax'],
-               help='Cinder volume backend. Possible values: nfs, iscsi-vmax'),
+               choices=['nfs', 'iscsi-vmax', 'shared-nfs'],
+               help='Cinder volume backend. Possible values: nfs, iscsi-vmax '
+                    'and shared-nfs'),
     cfg.StrOpt('host', default=None,
                help='storage node ip address'),
     cfg.StrOpt('db_host', default=None,
