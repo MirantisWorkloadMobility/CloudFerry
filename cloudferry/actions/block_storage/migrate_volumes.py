@@ -27,6 +27,7 @@ from cloudferry.lib.os.storage import plugins
 from cloudferry.lib.os.storage.plugins import copy_mechanisms
 from cloudferry.lib.os.storage.plugins.nfs import generic
 from cloudferry.lib.utils import files
+from cloudferry.lib.utils import mysql_connector
 from cloudferry.lib.utils import remote_runner
 from cloudferry.lib.utils import retrying
 from cloudferry.lib.utils import utils
@@ -245,6 +246,11 @@ class MigrateVolumes(action.Action):
 
     def run(self, **kwargs):
         """:returns: dictionary {<source-volume-id>: <destination-volume>}"""
+
+        if self._is_nfs_shared():
+            mysql_connector.dump_db(
+                self.dst_cloud,
+                self.dst_cloud.cloud_config.storage.db_name)
 
         new_volumes = {}
         volumes = self.get_cinder_volumes(**kwargs)

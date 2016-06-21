@@ -1,11 +1,5 @@
 # Stage to migrate compute resources such as flavors and nova quotas.
 
-preparation:
-  - create_snapshot: True
-
-rollback:
-  - restore_from_snapshot: True
-
 process:
   - act_get_filter: True
   - act_check_filter: True

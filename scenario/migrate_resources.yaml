@@ -31,12 +31,10 @@ preparation:
           - check_dst_rabbit: True
       - check_networks: True
   - check_users_availability: True
-  - create_snapshot: True
   - create_image_snapshot_dst: True
 
 rollback:
   - image_rollback_dst: True
-  - restore_from_snapshot: True
 
 
 process:

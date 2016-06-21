@@ -31,7 +31,6 @@ preparation:
           - check_dst_sql: True
           - check_dst_rabbit: True
       - check_networks: True
-  - create_snapshot: False
   - create_image_snapshot_dst: False
 
 rollback:

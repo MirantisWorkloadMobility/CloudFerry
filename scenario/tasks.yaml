@@ -55,8 +55,6 @@ tasks:
    check_dst_rabbit: ['CheckRabbitMQ', 'dst_cloud']
    check_users_availability: ['CheckUsersAvailabilityOnSrcAndDst']
    check_vmax_prerequisites: ['CheckVMAXPrerequisites']
-   create_snapshot: ['MysqlDump', 'dst_cloud']
-   restore_from_snapshot: ['MysqlRestore', 'dst_cloud']
    restore_vms: ['VmRestore']
    act_check_bandwidth_src: ['CheckBandwidth', 'src_cloud']
    act_check_bandwidth_dst: ['CheckBandwidth', 'dst_cloud']

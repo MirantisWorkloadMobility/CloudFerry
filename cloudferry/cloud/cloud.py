@@ -16,10 +16,10 @@
 import copy
 
 from cloudferry.lib.utils import log
-from cloudferry.lib.utils import utils
 from cloudferry.lib.utils import mysql_connector
 from cloudferry.lib.utils import qemu_img
 from cloudferry.lib.utils import ssh_util
+from cloudferry.lib.utils import utils
 
 SRC = "src"
 DST = "dst"
@@ -36,25 +36,28 @@ class Cloud(object):
         self.init_resources(self.cloud_config)
         self.hosts_with_bbcp = set()
 
+        if self.cloud_config.mysqldump.dump_all_databases:
+            mysql_connector.dump_db(self)
+
     @staticmethod
     def make_cloud_config(config, position):
         cloud_config = utils.ext_dict(migrate=utils.ext_dict(),
                                       cloud=utils.ext_dict(),
                                       import_rules=utils.ext_dict(),
                                       mail=utils.ext_dict(),
-                                      snapshot=utils.ext_dict(),
                                       mysql=utils.ext_dict(),
                                       rabbit=utils.ext_dict(),
                                       storage=utils.ext_dict(),
-                                      initial_check=utils.ext_dict())
+                                      initial_check=utils.ext_dict(),
+                                      mysqldump=utils.ext_dict())
 
         cloud_config['migrate'].update(config.migrate)
         cloud_config['cloud'].update(getattr(config, position))
         cloud_config['mysql'].update(getattr(config, position + '_mysql'))
         cloud_config['rabbit'].update(getattr(config, position + '_rabbit'))
-        cloud_config['snapshot'].update(config.snapshot)
         cloud_config['storage'].update(getattr(config, position + '_storage'))
         cloud_config['initial_check'].update(config.initial_check)
+        cloud_config['mysqldump'].update(config.mysqldump)
 
         return cloud_config
 
