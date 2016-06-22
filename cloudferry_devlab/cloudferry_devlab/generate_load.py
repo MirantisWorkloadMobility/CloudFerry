@@ -401,18 +401,10 @@ class Prerequisites(base.BasePrerequisites):
                         self.attach_volume_to_vm(volume=volume, vm=new_vm)
                         if volume.get('write_to_file'):
                             self.write_data_to_volumes(fip, volume)
-            if vm.get('broken'):
-                self.break_vm(new_vm.id)
-            for vm_with_state in self.config.vm_states:
-                if new_vm.name == vm_with_state.get('name'):
-                    msg = 'Changing the VM {} state to {}'\
-                        .format(new_vm.name, vm_with_state.get('state'))
-                    self.log.info(msg)
-                    res = self.set_vm_state(self.novaclient, new_vm.id,
-                                            vm_with_state.get('state'),
-                                            logger=self.log)
-                    self.wait_until_objects([res], self.check_vm_state,
-                                            conf.TIMEOUT)
+            self.log.info('Shutting off VM %s', new_vm.name)
+            res = self.set_vm_state(self.novaclient, new_vm.id, 'SHUTOFF',
+                                    logger=self.log)
+            self.wait_until_objects([res], self.check_vm_state, conf.TIMEOUT)
 
     def create_all_vms(self):
         self.create_vms(self.config.vms)
