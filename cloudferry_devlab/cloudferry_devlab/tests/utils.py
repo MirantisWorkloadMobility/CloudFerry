@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import collections
+import logging
+from logging import config as logging_config
 
 from fabric import api as fabric_api
 from fabric import network
@@ -139,6 +141,8 @@ class MigrationUtils(object):
 
     def __init__(self, conf):
         self.config = conf
+        logging_config.dictConfig(conf.logging_configuration)
+        self.log = logging.getLogger(__name__)
 
     def execute_command_on_vm(self, ip_addr, cmd, username=None,
                               warn_only=False, password=None, key=None,
@@ -156,9 +160,15 @@ class MigrationUtils(object):
                                  warn_only=warn_only):
             try:
                 if use_sudo:
-                    return fabric_api.sudo(cmd, shell=False)
+                    self.log.debug("Running sudo:\n %s", cmd)
+                    output = fabric_api.sudo(cmd, shell=False)
+                    self.log.debug("Fabric sudo output:\n %s", output)
+                    return output
                 else:
-                    return fabric_api.run(cmd, shell=False)
+                    self.log.debug("Running:\n %s", cmd)
+                    output = fabric_api.run(cmd, shell=False)
+                    self.log.debug("Fabric run output:\n %s", output)
+                    return output
             except network.NetworkError:
                 raise RuntimeError('VM with name ip: %s is not accessible'
                                    % ip_addr)
