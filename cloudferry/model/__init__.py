@@ -620,6 +620,16 @@ class LazyObj(_EqualityByPrimaryKeyMixin):
             with Session.current() as session:
                 self._object = session.retrieve(self._model, self.primary_key)
 
+    def _get_object_or_none(self):
+        if self._object is None:
+            try:
+                self._retrieve_obj()
+                return self._object
+            except NotFound:
+                return None
+        else:
+            return self._object
+
     def get(self, name):
         """
         Returns object attribute by name.
@@ -637,6 +647,25 @@ class LazyObj(_EqualityByPrimaryKeyMixin):
         Return fully qualified name of class (with module name, etc...)
         """
         return utils.qualname(self._model)
+
+    def equals(self, other):
+        """
+        Returns True if objects are same even if they are in different clouds.
+        For example, same image that was manually uploaded to tenant with name
+        "admin" to different clouds are equal, and therefore don't need to be
+        migrated.
+        """
+        left = self._get_object_or_none()
+        if isinstance(other, LazyObj):
+            right = self._get_object_or_none()
+        else:
+            right = other
+        if left is not None and right is not None and left.equals(right):
+            return True
+        elif other is not None:
+            return self.primary_key.id == other.primary_key.id
+        else:
+            return False
 
 
 class Session(object):
