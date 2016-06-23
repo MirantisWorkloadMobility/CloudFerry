@@ -727,6 +727,13 @@ class Prerequisites(base.BasePrerequisites):
             cmd = 'sh -c "md5sum {path}/{_file} > {path}/{_file}_md5"'
             self.migration_utils.execute_command_on_vm(vm_ip, cmd.format(
                 path=path, _file=filename))
+        self.migration_utils.execute_command_on_vm(vm_ip, 'sync')
+        self.migration_utils.execute_command_on_vm(
+            vm_ip, '/sbin/blockdev --flushbufs /dev/vda')
+        self.migration_utils.execute_command_on_vm(
+            vm_ip, '/sbin/blockdev --flushbufs /dev/vdb')
+        self.migration_utils.execute_command_on_vm(
+            vm_ip, 'umount {0}'.format(volume['mount_point']))
 
     def create_invalid_cinder_objects(self):
         invalid_volume_tmlt = 'cinder_volume_%s'
