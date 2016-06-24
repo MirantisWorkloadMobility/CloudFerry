@@ -78,6 +78,24 @@ class RemoteDir(object):
                   ignoring_errors=True)
 
 
+class FullAccessRemoteDir(RemoteDir):
+    def __init__(self, runner, dirname):
+        super(FullAccessRemoteDir, self).__init__(runner, dirname)
+        self.old_perms = None
+
+    def __enter__(self):
+        new_dir = super(FullAccessRemoteDir, self).__enter__()
+        self.old_perms = try_remote_get_file_permissions(self.runner,
+                                                         self.dirname)
+        try_remote_chmod(self.runner, 777, self.dirname)
+        return new_dir
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        super(FullAccessRemoteDir, self).__exit__(exc_type, exc_val, exc_tb)
+        if self.old_perms:
+            try_remote_chmod(self.runner, self.old_perms, self.dirname)
+
+
 def is_installed(runner, cmd):
     try:
         is_installed_cmd = "type {cmd} >/dev/null 2>&1".format(cmd=cmd)
@@ -133,17 +151,20 @@ class grant_all_permissions(object):
         self.old_dir_perms = None
 
     def __enter__(self):
+        self.grant_permissions()
+
+    def __exit__(self, *_):
+        self.restore_permissions()
+
+    def grant_permissions(self):
         self.old_dir_perms = remote_get_file_permissions(self.runner,
                                                          self.dir_path)
-
         # there may be no file in destination (which is fine)
         self.old_file_perms = try_remote_get_file_permissions(self.runner,
                                                               self.file_path)
-
         LOG.debug("Temporarily adding full access to '%s' dir on '%s' host",
                   self.dir_path, self.runner.host)
         try_remote_chmod(self.runner, 777, self.dir_path)
-
         LOG.debug("Temporarily adding full access to '%s' file on '%s' host",
                   self.file_path, self.runner.host)
         try_remote_chmod(self.runner, 666, self.file_path)
@@ -154,7 +175,7 @@ class grant_all_permissions(object):
                       perms, path, self.runner.host)
             try_remote_chmod(self.runner, perms, path)
 
-    def __exit__(self, *_):
+    def restore_permissions(self):
         self._restore_access(self.file_path, self.old_file_perms)
         self._restore_access(self.dir_path, self.old_dir_perms)
 
