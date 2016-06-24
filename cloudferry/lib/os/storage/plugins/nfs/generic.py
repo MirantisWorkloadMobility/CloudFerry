@@ -52,12 +52,14 @@ class NFSPlugin(base.CinderMigrationPlugin):
         """:raises: VolumeObjectNotFoundError in case object is not found"""
         controller = context.cloud_config.cloud.ssh_host
         user = context.cloud_config.cloud.ssh_user
+        password = context.cloud_config.cloud.ssh_sudo_password
         paths = context.cloud_config.storage.nfs_mount_point_bases
         volume_template = context.cloud_config.storage.volume_name_template
 
         volume_pattern = generate_volume_pattern(volume_template, volume_id)
 
-        rr = remote_runner.RemoteRunner(controller, user, ignore_errors=True)
+        rr = remote_runner.RemoteRunner(
+            controller, user, ignore_errors=True, sudo=True, password=password)
 
         for mount_point in paths:
             # errors are ignored to avoid "Filesystem loop detected" messages
