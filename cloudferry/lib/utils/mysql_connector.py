@@ -51,7 +51,8 @@ def dump_db(cloud, database=ALL_DATABASES):
     else:
         rr = remote_runner.RemoteRunner(
             db_host, cloud.cloud_config.cloud.ssh_user,
-            password=cloud.cloud_config.cloud.ssh_sudo_password)
+            password=cloud.cloud_config.cloud.ssh_sudo_password,
+            mute_stdout=True)
         run = rr.run
 
     dump = run(' '.join(cmd).format(

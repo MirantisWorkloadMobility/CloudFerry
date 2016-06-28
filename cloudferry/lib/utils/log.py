@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import datetime
+import contextlib
 import logging
 from logging import config
 from logging import handlers
@@ -34,16 +35,32 @@ class StdoutLogger(object):
     Transfer all messages from stdout to cloudferry.lib.stdout logger.
 
     """
+    _mute = False
+
     def __init__(self, name=None):
         self.log = logging.getLogger(name or 'cloudferry.stdout')
 
     def write(self, message):
-        message = message.strip()
-        if message:
-            self.log.info(message)
+        if not self.is_muted():
+            message = message.strip()
+            if message:
+                self.log.info(message)
 
     def flush(self):
         pass
+
+    @classmethod
+    @contextlib.contextmanager
+    def mute(cls):
+        cls._mute = True
+        try:
+            yield
+        finally:
+            cls._mute = False
+
+    @classmethod
+    def is_muted(cls):
+        return cls._mute
 
 
 def configure_logging(log_config=None, debug=None, forward_stdout=None,
