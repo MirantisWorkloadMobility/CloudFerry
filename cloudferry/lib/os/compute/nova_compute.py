@@ -94,11 +94,8 @@ class NovaCompute(compute.Compute):
         self.tenant_name_map = mapper.Mapper('tenant_map')
         self.instance_info_caches = instance_info_caches.InstanceInfoCaches(
             self.get_db_connection())
-        if config.migrate.override_rules is None:
-            self.attr_override = override.AttributeOverrides.zero()
-        else:
-            self.attr_override = override.AttributeOverrides.from_filename(
-                config.migrate.override_rules)
+        self.attr_override = override.AttributeOverrides.from_filename(
+            config.migrate.override_rules, 'servers')
 
     @property
     def nova_client(self):

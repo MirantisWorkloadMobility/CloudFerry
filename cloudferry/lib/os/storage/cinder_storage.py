@@ -11,6 +11,7 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
+
 import copy
 from itertools import ifilter
 
@@ -23,6 +24,7 @@ from cloudferry.lib.os.storage import filters as cinder_filters
 from cloudferry.lib.utils import filters
 from cloudferry.lib.utils import log
 from cloudferry.lib.utils import mapper
+from cloudferry.lib.utils import override
 from cloudferry.lib.utils import proxy_client
 from cloudferry.lib.utils import retrying
 from cloudferry.lib.utils import utils
@@ -79,6 +81,8 @@ class CinderStorage(storage.Storage):
         self.volume_filter = None
         self.filter_tenant_id = None
         self.tenant_name_map = mapper.Mapper('tenant_map')
+        self.attr_override = override.AttributeOverrides.from_filename(
+            config.migrate.override_rules, 'volumes')
 
     @property
     def cinder_client(self):
@@ -354,6 +358,10 @@ class CinderStorage(storage.Storage):
         """
         cinder = self.cinder_client
         tenant_id = kwargs.get('project_id')
+
+        # If migrated volume needs to be created on non default volume_type
+        kwargs['volume_type'] = self.attr_override.get_attr(
+            kwargs, 'volume_type')
 
         # if volume needs to be created in non-admin tenant, re-auth is
         # required in that tenant

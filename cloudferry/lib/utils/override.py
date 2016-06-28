@@ -70,18 +70,30 @@ class AttributeOverrides(object):
                     'list): %s' % (attr, repr(rules)))
 
     @classmethod
-    def from_filename(cls, mapping_filename):
+    def from_filename(cls, mapping_filename, object_type):
         """
         Create AttributeOverrides based on YAML file
         :param mapping_filename: YAML config path
+        :param object_type: The type of objects
         :return: AttributeOverrides instance
         """
+        if mapping_filename is None:
+            return cls.zero()
+
         with open(mapping_filename, 'r') as f:
             data = yaml.load(f)
             if not isinstance(data, dict):
                 raise TypeError('%s root object must be dictionary!' %
                                 (mapping_filename,))
-        return cls(data)
+            object_data = data.get(object_type, {})
+            if not isinstance(object_data, dict):
+                raise TypeError('%s object in mapping file %s must be '
+                                'dictionary!' % (object_type,
+                                                 mapping_filename))
+            if not object_data:
+                return cls.zero()
+
+            return cls(object_data)
 
     @classmethod
     def zero(cls):
