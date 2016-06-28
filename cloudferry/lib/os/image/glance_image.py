@@ -228,7 +228,14 @@ class GlanceImage(image.Image):
                         "in destination (perhaps was deleted previously).",
                         {'name': kwargs.get('name'), 'id': image_id})
             del kwargs['id']
-        return self.glance_client.images.create(**kwargs)
+
+        img = self.glance_client.images.create(**kwargs)
+        self.try_wait_for_status(
+            img.id,
+            self.get_status,
+            'active',
+            timeout=self.config.migrate.image_save_timeout)
+        return img
 
     def delete_image(self, image_id):
         # Change protected property to false before delete

@@ -54,6 +54,7 @@ class Resource(object):
         LOG.debug("Waiting for status change")
         delay = 1
         stop_statuses = [s.lower() for s in (stop_statuses or [])]
+        wait_status = wait_status.lower()
         if 'error' not in stop_statuses:
             stop_statuses.append('error')
         while delay < timeout:
@@ -66,7 +67,7 @@ class Resource(object):
                 raise exception.TimeoutException(
                     get_status(res_id).lower(),
                     wait_status, "Timed out waiting for state change")
-            elif actual_status == wait_status.lower():
+            elif actual_status == wait_status:
                 LOG.debug("Expected status reached, exit")
                 break
 
