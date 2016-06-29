@@ -60,7 +60,8 @@ class EstimateCopy(ProcedureBase):
             for ephemeral_disk in server.ephemeral_disks:
                 ephemeral_count += 1
                 ephemeral_size += ephemeral_disk.size
-            for volume in server.attached_volumes:
+            for obj in server.attached_volumes:
+                volume = obj.volume
                 volumes_count += 1
                 volumes_size += volume.size * G
                 used_volumes.add(volume.object_id)
