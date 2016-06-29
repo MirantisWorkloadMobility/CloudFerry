@@ -195,6 +195,7 @@ def discover_all(cfg, cloud):
     :param cfg: config.Configuration instance
     :param cloud: config.Cloud instance
     """
+    LOG.info('Start discovery process for cloud %s', cloud.name)
     for discoverer_class in cloud.discoverers.values():
         LOG.debug('Starting discovering %s using %s',
                   utils.qualname(discoverer_class.discovered_class),
@@ -204,6 +205,7 @@ def discover_all(cfg, cloud):
         LOG.debug('Finished discovering %s using %s',
                   utils.qualname(discoverer_class.discovered_class),
                   utils.qualname(discoverer_class))
+    LOG.info('Finished discovery process for cloud %s', cloud.name)
 
 
 def load_from_cloud(cfg, cloud, model_class, data):

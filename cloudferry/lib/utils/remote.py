@@ -43,6 +43,7 @@ class RemoteExecutor(object):
     """
 
     def __init__(self, cloud, hostname, ignore_errors=False):
+        self.cloud_name = cloud.name
         self.hostname = hostname
         self.ignore_errors = ignore_errors
         self.settings = cloud.ssh_settings
@@ -57,24 +58,29 @@ class RemoteExecutor(object):
         self.close()
 
     def connect(self):
-        # TODO: connection_attempts
         settings = self.settings
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self._retrying(client.connect,
-                       hostname=self.hostname,
-                       port=settings.port,
-                       username=settings.username,
-                       password=settings.password,
-                       pkey=self._create_pkey(settings.private_key),
-                       sock=self._connect_through_gateway(
-                           self.hostname, settings.port, settings.gateway),
-                       timeout=self.settings.timeout,
-                       allow_agent=False,
-                       look_for_keys=False,
-                       compress=False)
-        self.connections.append(client)
-        self.client = client
+        gateway_socket = self._connect_through_gateway(
+            self.hostname, settings.port, settings.gateway)
+        try:
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self._retrying(client.connect,
+                           hostname=self.hostname,
+                           port=settings.port,
+                           username=settings.username,
+                           password=settings.password,
+                           pkey=self._create_pkey(settings.private_key),
+                           sock=gateway_socket,
+                           timeout=self.settings.timeout,
+                           allow_agent=False,
+                           look_for_keys=False,
+                           compress=False)
+            self.connections.append(client)
+            self.client = client
+        except paramiko.SSHException as ex:
+            LOG.error('Failed to connect to host \'%s\' in cloud \'%s\' '
+                      'through SSH: %s', self.hostname, self.cloud_name, ex)
+            raise
 
     def close(self):
         self.client = None
@@ -112,28 +118,33 @@ class RemoteExecutor(object):
             yield sftp_client.open(filename, mode, 512 * 1024 * 1024)
 
     def _connect_through_gateway(self, host, port, gateway):
-        # TODO: connection_attempts
         if gateway is None:
             return None
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        self._retrying(client.connect,
-                       hostname=gateway.hostname,
-                       port=gateway.port,
-                       username=gateway.username,
-                       password=gateway.password,
-                       pkey=self._create_pkey(gateway.private_key),
-                       sock=self._connect_through_gateway(
-                           gateway.hostname, gateway.port, gateway.gateway),
-                       timeout=self.settings.timeout,
-                       banner_timeout=self.settings.timeout,
-                       allow_agent=False,
-                       look_for_keys=False,
-                       compress=False)
-        self.connections.append(client)
-        return self._retrying(
-            client.get_transport().open_channel,
-            'direct-tcpip', (host, port), ('', 0), window_size=WINDOW_SIZE)
+        try:
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            self._retrying(client.connect,
+                           hostname=gateway.hostname,
+                           port=gateway.port,
+                           username=gateway.username,
+                           password=gateway.password,
+                           pkey=self._create_pkey(gateway.private_key),
+                           sock=self._connect_through_gateway(
+                               gateway.hostname, gateway.port,
+                               gateway.gateway),
+                           timeout=self.settings.timeout,
+                           banner_timeout=self.settings.timeout,
+                           allow_agent=False,
+                           look_for_keys=False,
+                           compress=False)
+            self.connections.append(client)
+            return self._retrying(
+                client.get_transport().open_channel,
+                'direct-tcpip', (host, port), ('', 0), window_size=WINDOW_SIZE)
+        except paramiko.SSHException as ex:
+            LOG.error('Failed to connect to SSH gateway \'%s\' for cloud '
+                      '\'%s\': %s', gateway.hostname, self.cloud_name, ex)
+            raise
 
     @staticmethod
     def _create_pkey(content):

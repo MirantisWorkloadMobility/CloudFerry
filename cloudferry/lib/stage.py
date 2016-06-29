@@ -112,3 +112,5 @@ def execute_stage(class_name, config, force=False):
                        stage=class_name,
                        signature=local_db.Json(new_signature))
             LOG.info('Stage %s executed successfully', class_name)
+        else:
+            LOG.info('Skipping stage %s', class_name)
