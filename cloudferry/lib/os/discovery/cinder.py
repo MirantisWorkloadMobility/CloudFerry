@@ -32,8 +32,9 @@ class VolumeDiscoverer(discover.Discoverer):
     def discover_all(self):
         volumes = []
         volume_client = clients.volume_client(self.cloud)
-        for raw_volume in volume_client.volumes.list(
-                search_opts={'all_tenants': True}):
+        for raw_volume in self.retry(volume_client.volumes.list,
+                                     search_opts={'all_tenants': True},
+                                     returns_iterable=True):
             try:
                 volumes.append(self.load_from_cloud(raw_volume))
             except model.ValidationError as e:
@@ -46,7 +47,9 @@ class VolumeDiscoverer(discover.Discoverer):
     def discover_one(self, uuid):
         volume_client = clients.volume_client(self.cloud)
         try:
-            volume = self.load_from_cloud(volume_client.volumes.get(uuid))
+            volume = self.load_from_cloud(
+                self.retry(volume_client.volumes.get, uuid,
+                           expected_exceptions=[cinder_exceptions.NotFound]))
             with model.Session() as session:
                 session.store(volume)
                 return volume
@@ -75,8 +78,9 @@ class AttachmentDiscoverer(discover.Discoverer):
 
     def discover_all(self):
         volume_client = clients.volume_client(self.cloud)
-        raw_volumes = volume_client.volumes.list(
-            search_opts={'all_tenants': True})
+        raw_volumes = self.retry(volume_client.volumes.list,
+                                 search_opts={'all_tenants': True},
+                                 returns_iterable=True)
         attachments = []
         for raw_volume in raw_volumes:
             for raw_attachment in raw_volume.attachments:
@@ -94,8 +98,9 @@ class AttachmentDiscoverer(discover.Discoverer):
         server_id, volume_id = uuid.split(':')
         compute_client = clients.compute_client(self.cloud)
         try:
-            raw_attachment = compute_client.volumes.get_server_volume(
-                server_id, volume_id)
+            raw_attachment = self.retry(
+                compute_client.volumes.get_server_volume, server_id, volume_id,
+                expected_exceptions=[nova_exceptions.NotFound])
             attachment = self.load_from_cloud(raw_attachment)
             with model.Session() as session:
                 session.store(attachment)

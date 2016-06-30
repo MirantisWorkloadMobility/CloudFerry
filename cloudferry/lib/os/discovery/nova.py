@@ -43,7 +43,7 @@ class FlavorDiscoverer(discover.Discoverer):
 
     def discover_one(self, uuid):
         compute_client = clients.compute_client(self.cloud)
-        raw_flavor = compute_client.flavors.get(uuid)
+        raw_flavor = self.retry(compute_client.flavors.get, uuid)
         # TODO: implement
         return compute.Flavor.load({
             'object_id': self.make_id(raw_flavor.id),
@@ -58,7 +58,7 @@ class ServerDiscoverer(discover.Discoverer):
 
     def discover_all(self):
         compute_client = clients.compute_client(self.cloud)
-        avail_hosts = _list_available_compute_hosts(compute_client)
+        avail_hosts = self._list_available_compute_hosts(compute_client)
         servers = {}
 
         # Go through each tenant since nova don't return more items than
@@ -68,11 +68,12 @@ class ServerDiscoverer(discover.Discoverer):
             LOG.debug('Discovering servers from cloud "%s" tenant "%s"',
                       self.cloud.name, tenant.name)
             tenant_id = tenant.id
-            raw_server_list = compute_client.servers.list(
-                search_opts={
-                    'all_tenants': True,
-                    'tenant_id': tenant_id,
-                })
+            raw_server_list = self.retry(compute_client.servers.list,
+                                         search_opts={
+                                             'all_tenants': True,
+                                             'tenant_id': tenant_id,
+                                         },
+                                         returns_iterable=True)
             for raw_server in raw_server_list:
                 host = getattr(raw_server, EXT_ATTR_HOST)
                 if host not in avail_hosts:
@@ -107,12 +108,13 @@ class ServerDiscoverer(discover.Discoverer):
     def discover_one(self, uuid):
         compute_client = clients.compute_client(self.cloud)
         try:
-            raw_server = compute_client.servers.get(uuid)
+            raw_server = self.retry(compute_client.servers.get, uuid,
+                                    expected_exceptions=[exceptions.NotFound])
         except exceptions.NotFound:
             raise discover.NotFound()
 
         # Check if server host is available
-        avail_hosts = _list_available_compute_hosts(compute_client)
+        avail_hosts = self._list_available_compute_hosts(compute_client)
         host = getattr(raw_server, EXT_ATTR_HOST)
         if host not in avail_hosts:
             LOG.warning('Skipping server %s, host not available.',
@@ -147,7 +149,8 @@ class ServerDiscoverer(discover.Discoverer):
             raw_attachments = [
                 '{0}:{1}'.format(attachment.serverId, attachment.volumeId)
                 for attachment in
-                compute_client.volumes.get_server_volumes(data.id)]
+                self.retry(compute_client.volumes.get_server_volumes, data.id,
+                           returns_iterable=True)]
         server_image = None
         if data.image:
             server_image = data.image['id']
@@ -176,6 +179,13 @@ class ServerDiscoverer(discover.Discoverer):
     def _get_tenants(self):
         identity_client = clients.identity_client(self.cloud)
         return identity_client.tenants.list()
+
+    def _list_available_compute_hosts(self, compute_client):
+        return set(c.host
+                   for c in self.retry(compute_client.services.list,
+                                       binary='nova-compute',
+                                       returns_iterable=True)
+                   if c.state == 'up' and c.status == 'enabled')
 
 
 def _populate_ephemeral_disks(rmt_exec, server):
@@ -223,12 +233,6 @@ def _need_image_membership(srv):
     if img.is_public:
         return False
     return img.tenant != srv.tenant
-
-
-def _list_available_compute_hosts(compute_client):
-    return set(c.host
-               for c in compute_client.services.list(binary='nova-compute')
-               if c.state == 'up' and c.status == 'enabled')
 
 
 def _get_disk_info(remote_executor, path):
