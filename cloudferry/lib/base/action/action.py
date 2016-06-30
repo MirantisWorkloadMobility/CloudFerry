@@ -14,6 +14,7 @@
 
 
 from cloudferry.lib.scheduler import task
+from cloudferry.lib.utils import mapper
 from cloudferry.lib.utils import utils
 
 
@@ -48,6 +49,7 @@ class Action(task.Task):
 
         src_identity = self.src_cloud.resources[utils.IDENTITY_RESOURCE]
         dst_identity = self.dst_cloud.resources[utils.IDENTITY_RESOURCE]
+        tenant_name_map = mapper.Mapper('tenant_map')
 
         src_tenants = src_identity.get_tenants_list()
         dst_tenants = dst_identity.get_tenants_list()
@@ -58,7 +60,7 @@ class Action(task.Task):
         similar_tenants = {}
 
         for src_tenant in src_tenants:
-            src_tnt_name = src_tenant.name.lower()
+            src_tnt_name = tenant_name_map.map(src_tenant.name).lower()
             if src_tnt_name in dst_tenant_map:
                 similar_tenants[src_tenant.id] = dst_tenant_map[src_tnt_name]
 

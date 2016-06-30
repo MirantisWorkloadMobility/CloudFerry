@@ -130,7 +130,12 @@ migrate_opts = [
                help="Path to YAML file which maps source cloud external "
                     "networks to destination cloud external networks. "
                     "Required in case external networks in source and "
-                    "destination don't match."),
+                    "destination don't match.",
+               deprecated_for_removal=True,
+               deprecated_reason='Please use resource_map option'),
+    cfg.StrOpt('resource_map', default='configs/resource_map.yaml',
+               help="Path to YAML file which maps source cloud objects to "
+                    "destination cloud objects."),
     cfg.BoolOpt('keep_floatingip', default=False,
                 help='Specifies whether floating IPs will be kept the same '
                      'in destination cloud. Requires low-level neutron DB '

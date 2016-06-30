@@ -32,8 +32,7 @@ LOG = logging.getLogger(__name__)
 class CleanEnv(base.BasePrerequisites):
 
     def clean_vms(self):
-        vms = self.migration_utils.get_all_vms_from_config()
-        vms_names = [vm['name'] for vm in vms]
+        vms_names = [vm['name'] for vm in self.src_vms_from_config]
         vms = self.novaclient.servers.list(search_opts={'all_tenants': 1})
         vms_ids = []
         for vm in vms:

@@ -67,6 +67,12 @@ ext_net_map = 'ext_net_map.yaml'
 """This file contains map of relationships between external networks on source
 and destination clouds."""
 
+case_sensitivity_test_user = 'user10'
+"""User to be created in upper case on DST Cloud."""
+
+case_sensitivity_test_tenant = 'tenant6'
+"""Tenant to be created in upper case on DST Cloud."""
+
 users = [
     {'name': 'user1', 'password': 'passwd1', 'email': 'mail@example.com',
      'tenant': 'tenant1', 'enabled': True},
@@ -89,14 +95,26 @@ users = [
      'tenant': 'tenant3', 'enabled': True},
     {'name': 'user9', 'password': 'passwd', 'email': 'user8@example.com',
      'tenant': 'tenant5', 'enabled': True},
+    {'name': case_sensitivity_test_user, 'password': 'passwd',
+     'email': 'user10@example.com',
+     'tenant': case_sensitivity_test_tenant, 'enabled': True},
     {'name': 'user11', 'password': 'passwd', 'email': 'user11@example.com',
      'tenant': 'tenant7', 'enabled': True}
 ]
-"""Users to create/delete"""
+"""SRC Users to create/delete"""
+
+dst_users = [
+    {'name': case_sensitivity_test_user.upper(), 'password': 'PASSWD',
+     'email': 'user_10@example.com',
+     'tenant': case_sensitivity_test_tenant.upper(), 'enabled': True}
+]
+"""DST Users to create"""
 
 user_tenant_roles = [
     {'user9': [{'tenant': 'tenant5', 'role': 'SomeRole'}]},
-    {'user1': [{'tenant': 'tenant1', 'role': 'SomeRole'}]}
+    {'user1': [{'tenant': 'tenant1', 'role': 'SomeRole'}]},
+    {case_sensitivity_test_user: [{'tenant': case_sensitivity_test_tenant,
+                                   'role': 'SecondRole'}]}
 ]
 
 roles = [
@@ -368,7 +386,8 @@ tenants = [
               {'cidr': '123.2.2.0/24', 'ip_version': 4, 'name': 't5_s2'}]}],
      'vms': [
          {'name': 'tn5server1', 'image': 'image1', 'flavor': 'flavorname2',
-          'nics': [{'net-id': 'tenant5net', 'v4-fixed-ip': '122.2.2.100'}]},
+          'nics': [{'net-id': 'tenant5net', 'v4-fixed-ip': '122.2.2.100'}],
+          'already_on_dst': True},
          {'name': 'tn5server2', 'image': 'image1', 'flavor': 'flavorname2',
           'nics': [{'net-id': 'tenant5net2', 'v4-fixed-ip': '123.2.2.100'}]},
          {'name': 'tn5server3', 'image': 'image1', 'flavor': 'flavorname2',
@@ -377,13 +396,23 @@ tenants = [
      'images': [{'name': 'cirros_image_for_tenant5', 'copy_from': img_url,
                  'is_public': True}],
      },
+    {'name': case_sensitivity_test_tenant, 'description': 'None',
+     'enabled': True, 'uppercase': True
+     },
     {'name': 'tenant7', 'description': 'Tenant7 filter has excluded images',
-     'enabled': True, 'exclude_images': True,
+     'enabled': True,
      'images': [{'name': 'image7', 'copy_from': img_url, 'is_public': False},
                 {'name': 'image8', 'copy_from': img_url, 'is_public': False}]
      }
 ]
-"""Tenants to create/delete"""
+"""Tenants to create/delete
+`case_sensitivity_test_tenant` covers this scenario:
+ - Create user and tenant in source cloud
+ - Create user and tenant with the same names in the uppercase in
+   destination cloud
+ - Create user roles for the user created
+ - Run identity migration
+ - Verify user roles migrated correctly"""
 
 images = [
     {'name': 'image1', 'copy_from': img_url, 'is_public': True,
@@ -443,6 +472,9 @@ images_not_included_in_filter = ['image5']
 images_blacklisted = ['image7']
 """Images blacklisted"""
 
+flavors_deleted_after_vm_boot = ["del_flvr"]
+"""Flavors to be deleted after booting VM from them"""
+
 vms_not_in_filter = ['not_in_filter']
 """Instances not to be included in filter"""
 
@@ -457,6 +489,10 @@ flavors = [
      'is_public': False},
     {'name': 'flavorname2', 'disk': '2', 'ram': '48', 'vcpus': '2'},
     {'name': 'del_flvr', 'disk': '1', 'ram': '64', 'vcpus': '1'},
+    {'name': 'diffattrib_flvr', 'flavorid': '666', 'disk': '5', 'ram': '96',
+     'vcpus': '1', "ephemeral": '0', 'is_public': True, 'is_deleted': True},
+    {'name': 'diffattrib_flvr', 'flavorid': '666', 'disk': '4', 'ram': '64',
+     'vcpus': '2', "ephemeral": '0', 'is_public': False},
     {'name': 'deleted_flavor', 'flavorid': '777', 'disk': '1', 'ram': '48',
      'vcpus': '1', "ephemeral": '0', 'is_deleted': True},
     {'name': 'recreated_flavor', 'flavorid': '777', 'disk': '1', 'ram': '48',
@@ -590,7 +626,7 @@ vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'server2', 'image': 'deleted_on_dst', 'flavor': 'del_flvr',
      'server_group': 'admin_server_group', 'config_drive': True, 'fip': True},
-    {'name': 'server3', 'image': 'deleted_image', 'flavor': 'flavorname2'},
+    {'name': 'server3', 'image': 'deleted_image', 'flavor': 'diffattrib_flvr'},
     {'name': 'server4', 'image': 'broken_image', 'flavor': 'flavorname2'},
     {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1',
      'broken': True},

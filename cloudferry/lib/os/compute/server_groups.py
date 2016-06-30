@@ -32,6 +32,7 @@ from novaclient import exceptions as nova_exc
 from cloudferry.lib.base import compute
 from cloudferry.lib.os.identity import keystone
 from cloudferry.lib.utils import log
+from cloudferry.lib.utils import mapper
 from cloudferry.lib.utils import proxy_client
 from cloudferry.lib.utils import utils
 
@@ -64,6 +65,7 @@ class ServerGroupsHandler(compute.Compute):
         self.compute = self.cloud.resources[utils.COMPUTE_RESOURCE]
         self.identity = self.cloud.resources[utils.IDENTITY_RESOURCE]
         self.config = copy.deepcopy(self.identity.config)
+        self.tenant_name_map = mapper.Mapper('tenant_map')
 
     def _execute(self, sql):
         """
@@ -118,7 +120,7 @@ class ServerGroupsHandler(compute.Compute):
 
                 groups.append(
                     {"user": self.identity.try_get_username_by_id(row[0]),
-                     "tenant": tenant_name,
+                     "tenant": self.tenant_name_map.map(tenant_name),
                      "uuid": row[2],
                      "name": row[3],
                      "policies": policies})

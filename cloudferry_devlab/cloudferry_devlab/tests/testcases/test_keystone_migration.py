@@ -16,6 +16,8 @@ from generator import generator, generate
 from nose.plugins.attrib import attr
 
 from cloudferry_devlab.tests import functional_test
+import cloudferry_devlab.tests.config as config
+import cloudferry_devlab.tests.base as base
 
 
 @generator
@@ -34,24 +36,45 @@ class KeystoneMigrationTests(functional_test.FunctionalTest):
         :param name: user's name
         :param description: user's description
         :param enabled: is user enabled"""
-        self.validate_resource_parameter_in_dst(self.src_users, self.dst_users,
+        filtered_src_users = [user for user in self.src_users
+                              if getattr(user, "name") !=
+                              config.case_sensitivity_test_user]
+        self.validate_resource_parameter_in_dst(filtered_src_users,
+                                                self.dst_users,
                                                 resource_name='user',
                                                 parameter=param)
 
-    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2',
+          config.case_sensitivity_test_tenant])
     def test_migrate_keystone_user_tenant_roles(self):
         """Validate user's tenant roles were migrated with correct name."""
-        src_user_names = [user.name for user in self.filter_users()]
+        tenant = base.get_nosetest_cmd_attribute_val('migrated_tenant')
         for dst_user in self.dst_users:
-            if dst_user.name not in src_user_names:
+            src_user = None
+            for user in self.src_users:
+                if user.name.lower() == dst_user.name.lower():
+                    src_user = user
+                    break
+            if src_user is None:
                 continue
-            src_user_tnt_roles = self.src_cloud.get_user_tenant_roles(dst_user)
-            dst_user_tnt_roles = self.dst_cloud.get_user_tenant_roles(dst_user)
+            if tenant is None:
+                src_user_tnt_roles = self.src_cloud.get_user_tenant_roles(
+                                         src_user)
+                dst_user_tnt_roles = self.dst_cloud.get_user_tenant_roles(
+                                         dst_user)
+            else:
+                src_user_tnt_roles = self.src_cloud.get_roles_for_user(
+                                         src_user, tenant)
+                dst_user_tnt_roles = self.dst_cloud.get_roles_for_user(
+                                         dst_user, tenant)
+            if len(src_user_tnt_roles) == 0 and len(dst_user_tnt_roles) == 0:
+                continue
             self.validate_resource_parameter_in_dst(
                 src_user_tnt_roles, dst_user_tnt_roles,
                 resource_name='user_tenant_role', parameter='name')
 
-    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2',
+          config.case_sensitivity_test_tenant])
     @generate('name', 'description', 'enabled')
     def test_migrate_keystone_roles(self, param):
         """Validate user's roles were migrated with correct parameters.
@@ -67,7 +90,8 @@ class KeystoneMigrationTests(functional_test.FunctionalTest):
                                                 resource_name='role',
                                                 parameter=param)
 
-    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
+    @attr(migrated_tenant=['admin', 'tenant1', 'tenant2',
+          config.case_sensitivity_test_tenant])
     @generate('name', 'description', 'enabled')
     def test_migrate_keystone_tenants(self, param):
         """Validate tenants were migrated with correct name and description.
@@ -81,6 +105,9 @@ class KeystoneMigrationTests(functional_test.FunctionalTest):
 
         filtering_data = self.filtering_utils.filter_tenants(src_tenants)
         src_tenants = filtering_data[0]
+        src_tenants = [tenant for tenant in src_tenants
+                       if getattr(tenant, "name") !=
+                       config.case_sensitivity_test_tenant]
 
         self.validate_resource_parameter_in_dst(src_tenants, dst_tenants,
                                                 resource_name='tenant',

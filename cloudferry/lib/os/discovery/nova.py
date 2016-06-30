@@ -151,6 +151,8 @@ class ServerDiscoverer(discover.Discoverer):
         server_image = None
         if data.image:
             server_image = data.image['id']
+        attached_volumes = [self.find_ref(storage.Attachment, attachment)
+                            for attachment in raw_attachments]
         server_dict = {
             'object_id': self.make_id(data.id),
             'security_groups': [],  # TODO: implement security groups
@@ -162,8 +164,7 @@ class ServerDiscoverer(discover.Discoverer):
             'host': getattr(data, EXT_ATTR_HOST),
             'hypervisor_hostname': getattr(data, EXT_ATTR_HYPER_HOST),
             'instance_name': getattr(data, EXT_ATTR_INSTANCE_NAME),
-            'attached_volumes': [self.find_ref(storage.Attachment, attachment)
-                                 for attachment in raw_attachments],
+            'attached_volumes': [av for av in attached_volumes if av],
             'ephemeral_disks': [],  # Ephemeral disks will be filled later
         }
         for attr_name in ('name', 'status', 'user_id', 'key_name',

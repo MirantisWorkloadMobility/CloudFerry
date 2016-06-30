@@ -30,6 +30,7 @@ from cloudferry.lib.os.image import filters as glance_filters
 from cloudferry.lib.utils import file_proxy
 from cloudferry.lib.utils import filters
 from cloudferry.lib.utils import log
+from cloudferry.lib.utils import mapper
 from cloudferry.lib.utils import proxy_client
 from cloudferry.lib.utils import retrying
 from cloudferry.lib.utils import remote_runner
@@ -120,6 +121,7 @@ class GlanceImage(image.Image):
         self.runner = remote_runner.RemoteRunner(self.ssh_host,
                                                  self.config.cloud.ssh_user)
         self._image_filter = None
+        self.tenant_name_map = mapper.Mapper('tenant_map')
         super(GlanceImage, self).__init__(config)
 
     def get_image_filter(self):
@@ -317,11 +319,12 @@ class GlanceImage(image.Image):
 
         # at this point we write name of owner of this tenant
         # to map it to different tenant id on destination
-        gl_image.update(
-            {'owner_name': keystone.try_get_tenant_name_by_id(
-                glance_image.owner, default=cloud.cloud_config.cloud.tenant)})
-        gl_image.update({
-            "members": self.get_members({gl_image['id']: {'image': gl_image}})
+        gl_image['owner_name'] = self.tenant_name_map.map(
+            keystone.try_get_tenant_name_by_id(
+                glance_image.owner,
+                default=cloud.cloud_config.cloud.tenant))
+        gl_image['members'] = self.get_members({
+            gl_image['id']: {'image': gl_image}
         })
 
         if self.is_snapshot(glance_image):
@@ -349,8 +352,9 @@ class GlanceImage(image.Image):
                 if img not in result:
                     result[img] = {}
 
-                tenant_name = self.identity_client.try_get_tenant_name_by_id(
-                    entry.member_id, default=self.config.cloud.tenant)
+                tenant_name = self.tenant_name_map.map(
+                    self.identity_client.try_get_tenant_name_by_id(
+                        entry.member_id, default=self.config.cloud.tenant))
                 result[img][tenant_name] = entry.can_share
         return result
 

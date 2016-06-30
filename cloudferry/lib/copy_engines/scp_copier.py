@@ -111,23 +111,23 @@ class ScpCopier(base.BaseCopier):
         dst_temp_dir = os.path.join(os.path.basename(path_dst), '.cf.copy')
 
         partial_files = []
-        with files.RemoteDir(src_runner, src_temp_dir) as src_temp, \
-                files.RemoteDir(dst_runner, dst_temp_dir) as dst_temp:
+        with files.FullAccessRemoteDir(src_runner, src_temp_dir) as src_tmp, \
+                files.FullAccessRemoteDir(dst_runner, dst_temp_dir) as dst_tmp:
             for i in xrange(num_blocks):
                 part = os.path.basename(path_src) + '.part{i}'.format(i=i)
-                part_path = os.path.join(src_temp.dirname, part)
+                part_path = os.path.join(src_tmp.dirname, part)
                 files.remote_split_file(src_runner, path_src, part_path, i,
                                         block_size)
                 gzipped_path = files.remote_gzip(src_runner, part_path)
                 gzipped_filename = os.path.basename(gzipped_path)
-                dst_gzipped_path = os.path.join(dst_temp.dirname,
+                dst_gzipped_path = os.path.join(dst_tmp.dirname,
                                                 gzipped_filename)
 
                 self.run_scp(host_src, gzipped_path, host_dst,
                              dst_gzipped_path, gateway)
 
                 files.remote_unzip(dst_runner, dst_gzipped_path)
-                partial_files.append(os.path.join(dst_temp.dirname, part))
+                partial_files.append(os.path.join(dst_tmp.dirname, part))
 
             for i in xrange(num_blocks):
                 files.remote_join_file(dst_runner, path_dst, partial_files[i],

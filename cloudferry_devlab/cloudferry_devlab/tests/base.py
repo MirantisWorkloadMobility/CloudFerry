@@ -25,8 +25,8 @@ from neutronclient.v2_0 import client as neutron
 from novaclient import exceptions as nova_exceptions
 from novaclient.v2 import client as nova
 from swiftclient import client as swift_client
-from nose.config import Config, all_config_files
-from nose.plugins.manager import DefaultPluginManager
+from nose import config as nose_config
+from nose.plugins import manager as nose_manager
 
 from cloudferry_devlab.tests import test_exceptions
 import cloudferry_devlab.tests.utils as utils
@@ -68,6 +68,8 @@ class BasePrerequisites(object):
         self.filtering_utils = utils.FilteringUtils(
             self.configuration_ini['migrate']['filter_path'])
         self.migration_utils = utils.MigrationUtils(config)
+        self.src_vms_from_config = \
+            self.migration_utils.get_all_vms_from_config()
 
         self.config = config
         self.cloud_prefix = cloud_prefix.lower()
@@ -260,9 +262,21 @@ class BasePrerequisites(object):
     def get_user_tenant_roles(self, user):
         user_tenant_roles = []
         for tenant in self.keystoneclient.tenants.list():
-            user_tenant_roles.extend(self.keystoneclient.roles.roles_for_user(
-                user=self.get_user_id(user.name),
-                tenant=self.get_tenant_id(tenant.name)))
+            user_tenant_roles.extend(
+                self.keystoneclient.roles.roles_for_user(
+                    user=self.get_user_id(user.name),
+                    tenant=self.get_tenant_id(tenant.name)))
+        return user_tenant_roles
+
+    def get_roles_for_user(self, user, tenant_attrib):
+        user_tenant_roles = []
+        for tenant in self.keystoneclient.tenants.list():
+            if tenant.name.lower() == tenant_attrib.lower():
+                user_tenant_roles.extend(
+                    self.keystoneclient.roles.roles_for_user(
+                        user=self.get_user_id(user.name),
+                        tenant=self.get_tenant_id(tenant.name)))
+                break
         return user_tenant_roles
 
     def get_ext_routers(self):
@@ -460,9 +474,9 @@ class BasePrerequisites(object):
 
 def get_nosetest_cmd_attribute_val(attribute):
     env = os.environ
-    manager = DefaultPluginManager()
-    cfg_files = all_config_files()
-    tmp_config = Config(env=env, files=cfg_files, plugins=manager)
+    manager = nose_manager.DefaultPluginManager()
+    cfg_files = nose_config.all_config_files()
+    tmp_config = nose_config.Config(env=env, files=cfg_files, plugins=manager)
     tmp_config.configure()
     try:
         attr_list = getattr(tmp_config.options, 'attr')

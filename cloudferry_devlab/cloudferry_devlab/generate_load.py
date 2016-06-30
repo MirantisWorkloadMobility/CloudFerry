@@ -401,18 +401,10 @@ class Prerequisites(base.BasePrerequisites):
                         self.attach_volume_to_vm(volume=volume, vm=new_vm)
                         if volume.get('write_to_file'):
                             self.write_data_to_volumes(fip, volume)
-            if vm.get('broken'):
-                self.break_vm(new_vm.id)
-            for vm_with_state in self.config.vm_states:
-                if new_vm.name == vm_with_state.get('name'):
-                    msg = 'Changing the VM {} state to {}'\
-                        .format(new_vm.name, vm_with_state.get('state'))
-                    self.log.info(msg)
-                    res = self.set_vm_state(self.novaclient, new_vm.id,
-                                            vm_with_state.get('state'),
-                                            logger=self.log)
-                    self.wait_until_objects([res], self.check_vm_state,
-                                            conf.TIMEOUT)
+            self.log.info('Shutting off VM %s', new_vm.name)
+            res = self.set_vm_state(self.novaclient, new_vm.id, 'SHUTOFF',
+                                    logger=self.log)
+            self.wait_until_objects([res], self.check_vm_state, conf.TIMEOUT)
 
     def create_all_vms(self):
         self.create_vms(self.config.vms)
@@ -735,6 +727,13 @@ class Prerequisites(base.BasePrerequisites):
             cmd = 'sh -c "md5sum {path}/{_file} > {path}/{_file}_md5"'
             self.migration_utils.execute_command_on_vm(vm_ip, cmd.format(
                 path=path, _file=filename))
+        self.migration_utils.execute_command_on_vm(vm_ip, 'sync')
+        self.migration_utils.execute_command_on_vm(
+            vm_ip, '/sbin/blockdev --flushbufs /dev/vda')
+        self.migration_utils.execute_command_on_vm(
+            vm_ip, '/sbin/blockdev --flushbufs /dev/vdb')
+        self.migration_utils.execute_command_on_vm(
+            vm_ip, 'umount {0}'.format(volume['mount_point']))
 
     def create_invalid_cinder_objects(self):
         invalid_volume_tmlt = 'cinder_volume_%s'
@@ -801,13 +800,14 @@ class Prerequisites(base.BasePrerequisites):
                                         conf.TIMEOUT)
         self.wait_until_objects(vms, self.check_vm_state, conf.TIMEOUT)
 
-    def delete_flavor(self, flavor='del_flvr'):
+    def delete_flavors(self):
         """
         Method for flavor deletion.
         """
         try:
-            self.novaclient.flavors.delete(
-                self.get_flavor_id(flavor))
+            for flavor in self.config.flavors_deleted_after_vm_boot:
+                self.novaclient.flavors.delete(
+                    self.get_flavor_id(flavor))
         except nv_exceptions.ClientException:
             self.log.warning("Flavor %s failed to delete:", flavor,
                              exc_info=True)
@@ -859,8 +859,11 @@ class Prerequisites(base.BasePrerequisites):
         for t in self.config.tenants:
             if not t.get('deleted') and t['enabled']:
                 try:
+                    tnt_name = t['name']
+                    if t.get('uppercase'):
+                        tnt_name = t['name'].upper()
                     self.dst_cloud.keystoneclient.tenants.create(
-                        tenant_name=t['name'], description=t['description'],
+                        tenant_name=tnt_name, description=t['description'],
                         enabled=t['enabled'])
                 except ks_exceptions.Conflict:
                     pass
@@ -901,6 +904,9 @@ class Prerequisites(base.BasePrerequisites):
         self.dst_cloud.create_users([user])
         self.dst_cloud.create_user_tenant_roles([user_tenant_role])
 
+    def create_user_in_uppercase_on_dst(self):
+        self.dst_cloud.create_users(self.config.dst_users)
+
     def create_volumes_from_images(self):
         self.create_cinder_volumes(self.config.cinder_volumes_from_images)
 
@@ -923,9 +929,12 @@ class Prerequisites(base.BasePrerequisites):
         """
         inst_name = getattr(self.novaclient.servers.get(vm_id),
                             'OS-EXT-SRV-ATTR:instance_name')
-        cmd = 'virsh destroy {0} && virsh undefine {0}'.format(inst_name)
-        self.migration_utils.execute_command_on_vm(
-            self.get_vagrant_vm_ip(), cmd, username='root', password='')
+        for cmd in ['virsh destroy {0}'.format(inst_name),
+                    'virsh undefine {0}'.format(inst_name)]:
+            self.migration_utils.execute_command_on_vm(
+                self.get_vagrant_vm_ip(), cmd,
+                username=self.configuration_ini['src']['ssh_user'],
+                password=self.configuration_ini['src']['ssh_sudo_password'])
 
     def delete_image_on_dst(self):
         """ Method delete images with a 'delete_on_dst' flag on
@@ -951,7 +960,9 @@ class Prerequisites(base.BasePrerequisites):
             image_id = self.get_image_id(image['name'])
             cmd = 'rm -rf /var/lib/glance/images/%s' % image_id
             self.migration_utils.execute_command_on_vm(
-                self.get_vagrant_vm_ip(), cmd, username='root', password='')
+                self.get_vagrant_vm_ip(), cmd,
+                username=self.configuration_ini['src']['ssh_user'],
+                password=self.configuration_ini['src']['ssh_sudo_password'])
         for image in images_to_delete:
             image_id = self.get_image_id(image['name'])
             self.glanceclient.images.delete(image_id)
@@ -1093,6 +1104,8 @@ class Prerequisites(base.BasePrerequisites):
         self.create_tenant_wo_sec_group_on_dst()
         self.log.info('Create role on dst')
         self.create_user_on_dst()
+        self.log.info('Create user and tenant in upper case on dst')
+        self.create_user_in_uppercase_on_dst()
         self.log.info('Creating networks on dst')
         self.create_dst_networking()
         self.log.info('Creating vms on dst')
@@ -1101,8 +1114,8 @@ class Prerequisites(base.BasePrerequisites):
         self.create_invalid_cinder_objects()
         self.log.info('Create swift containers and objects')
         self.create_swift_container_and_objects()
-        self.log.info('Deleting flavor')
-        self.delete_flavor()
+        self.log.info('Deleting flavors which should be deleted')
+        self.delete_flavors()
         self.log.info('Modifying admin tenant quotas')
         self.modify_admin_tenant_quotas()
         self.log.info('Update network quotas')
@@ -1126,6 +1139,5 @@ class Prerequisites(base.BasePrerequisites):
         self.emulate_vm_states()
         self.log.info('Breaking VMs')
         for vm in [self.get_vm_id(vm['name']) for vm in
-                   self.migration_utils.get_all_vms_from_config()
-                   if vm.get('broken')]:
+                   self.src_vms_from_config if vm.get('broken')]:
             self.break_vm(vm)

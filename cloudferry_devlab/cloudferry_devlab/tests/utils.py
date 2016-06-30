@@ -18,6 +18,7 @@ from fabric import api as fabric_api
 from fabric import network
 from neutronclient.common import exceptions
 import yaml
+import copy
 
 import cloudferry_devlab.tests.config as config
 
@@ -81,6 +82,14 @@ class FilteringUtils(Utils):
                 else:
                     popped_vm_list.append(vm)
             current_data_list = filtered_vms_by_id
+
+        filtered_vms_by_state = []
+        for vm in current_data_list:
+            if vm.status != 'ERROR':
+                filtered_vms_by_state.append(vm)
+            else:
+                popped_vm_list.append(vm)
+        current_data_list = filtered_vms_by_state
 
         return [current_data_list, popped_vm_list]
 
@@ -155,7 +164,7 @@ class MigrationUtils(object):
                                    % ip_addr)
 
     def get_all_vms_from_config(self):
-        vms = self.config.vms
+        vms = copy.deepcopy(self.config.vms)
         for tenant in self.config.tenants:
             if not tenant.get('vms') or tenant.get('deleted'):
                 continue
@@ -165,7 +174,7 @@ class MigrationUtils(object):
         return vms
 
     def get_all_images_from_config(self):
-        images = self.config.images
+        images = copy.deepcopy(self.config.images)
         for tenant in self.config.tenants:
             if not tenant.get('images'):
                 continue

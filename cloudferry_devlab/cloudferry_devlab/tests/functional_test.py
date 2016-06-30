@@ -60,6 +60,8 @@ class FunctionalTest(unittest.TestCase):
                 configuration_ini=config_ini,
                 config=config)
         self.migration_utils = utils.MigrationUtils(config)
+        self.src_vms_from_config = \
+            self.migration_utils.get_all_vms_from_config()
         self.config_ini_path = config_ini['general']['configuration_ini_path']
         self.cloudferry_dir = config_ini['general']['cloudferry_dir']
         tenant = base.get_nosetest_cmd_attribute_val('migrated_tenant')
@@ -156,11 +158,16 @@ class FunctionalTest(unittest.TestCase):
         return self._get_keystone_resources('roles', roles)
 
     def get_src_vm_objects_specified_in_config(self):
-        vms = self.migration_utils.get_all_vms_from_config()
-        vms_names = [vm['name'] for vm in vms if not vm.get('broken')]
+        vms_names = [vm['name'] for vm in self.src_vms_from_config
+                     if not vm.get('broken')]
         opts = {'search_opts': {'all_tenants': 1}}
         return [i for i in self.src_cloud.novaclient.servers.list(**opts)
                 if i.name in vms_names]
+
+    def filter_vms_already_on_dst(self, src_data_list):
+        vms_names = [vm['name'] for vm in self.src_vms_from_config
+                     if not vm.get('already_on_dst')]
+        return [i for i in src_data_list if i.name in vms_names]
 
     def filter_flavors(self, filter_only_private=False):
         flavors = []
@@ -297,6 +304,26 @@ class FunctionalTest(unittest.TestCase):
         return param in config.PARAMS_NAMES_TO_OMIT and (
             name in config.NET_NAMES_TO_OMIT or
             name in config.SUBNET_NAMES_TO_OMIT)
+
+    def compare_vm_flavor_parameter(self, field, vm1, vm2):
+        msgs = []
+        vm1_param = getattr(vm1, 'flavor')[field]
+        vm2_param = getattr(vm2, 'flavor')[field]
+        vm1_flavor = self.src_cloud.novaclient.flavors.get(vm1_param)
+        vm2_flavor = self.dst_cloud.novaclient.flavors.get(vm2_param)
+        vm1_flavor_name = getattr(vm1_flavor, "name")
+        vm2_flavor_name = getattr(vm2_flavor, "name")
+        if vm1_flavor_name in config.flavors_deleted_after_vm_boot:
+            vm1_param = "deleted_{src_flavor_id}".format(
+                src_flavor_id=vm1_param)
+            vm2_param = vm2_flavor_name
+        if vm1_param != vm2_param:
+            error_msg = ('Flavor Field {field} for VM with name '
+                         '{name} is different src: {vm1}, dst: {vm2}')
+            msgs.append(error_msg.format(field=field, name=vm1.name,
+                                         vm1=getattr(vm1, 'flavor'),
+                                         vm2=getattr(vm2, 'flavor')))
+        return msgs
 
     def validate_resource_parameter_in_dst(self, src_list, dst_list,
                                            resource_name, parameter):

@@ -949,8 +949,6 @@ class NeutronRouterTestCase(test.TestCase):
 
 
 @mock.patch("cloudferry.lib.os.network.neutron.neutron_client.Client")
-@mock.patch("cloudferry.lib.os.network.neutron.utl.read_yaml_file",
-            mock.MagicMock())
 class NeutronClientTestCase(test.TestCase):
     def test_adds_region_if_set_in_config(self, n_client):
         cloud = mock.MagicMock()

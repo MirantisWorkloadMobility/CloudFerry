@@ -18,6 +18,7 @@ from fabric.api import run, settings
 from fabric.network import NetworkError
 from generator import generator, generate
 from nose.plugins.attrib import attr
+import copy
 
 from cloudferry_devlab.tests import config
 from cloudferry_devlab.tests import functional_test
@@ -41,14 +42,13 @@ class VmMigration(functional_test.FunctionalTest):
                           "file. Probably in the instances id list in the "
                           "config file is not specified VMs for migration "
                           "or is specified tenant id and VMs that not belong "
-                          "to this tenant.")
+                          "to this tenant or All VMS in SRC in error state")
 
-        src_vms = [vm for vm in src_vms if vm.status != 'ERROR' and
-                   self.tenant_exists(self.src_cloud.keystoneclient,
-                                      vm.tenant_id)]
+        src_vms = [vm for vm in src_vms
+                   if self.tenant_exists(self.src_cloud.keystoneclient,
+                                         vm.tenant_id)]
         if not src_vms:
-            self.fail("All VMs in SRC was in error state or "
-                      "VM's tenant in SRC doesn't exist")
+            self.fail("VM's tenant in SRC doesn't exist")
 
         dst_vms = self.dst_cloud.novaclient.servers.list(
             search_opts={'all_tenants': 1})
@@ -66,6 +66,8 @@ class VmMigration(functional_test.FunctionalTest):
                         'src_vm': s_vm,
                         'dst_vm': d_vm,
                     })
+        self.dst_vms = dst_vms
+        self.src_vms = src_vms
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_vms_not_in_filter_stay_active_on_src(self):
@@ -84,8 +86,7 @@ class VmMigration(functional_test.FunctionalTest):
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_vm_not_in_filter_did_not_migrate(self):
         """Validate VMs not included in filter file weren't migrated."""
-        dst_vms = [x.name for x in self.dst_cloud.novaclient.servers.list(
-                   search_opts={'all_tenants': 1})]
+        dst_vms = [x.name for x in self.dst_vms]
         for vm in config.vms_not_in_filter:
             msg = 'VM migrated despite that it was '\
                    'not included in filter, VM info: \n{vm}'
@@ -169,16 +170,9 @@ class VmMigration(functional_test.FunctionalTest):
         :param key_name:
         :param security_groups:
         :param metadata:"""
-        src_vms = self.get_src_vm_objects_specified_in_config()
-        dst_vms = self.dst_cloud.novaclient.servers.list(
-            search_opts={'all_tenants': 1})
-
-        filtering_data = self.filtering_utils \
-            .filter_vms_with_filter_config_file(src_vms)
-        src_vms = filtering_data[0]
-        src_vms = [vm for vm in src_vms if vm.status != 'ERROR']
 
         def compare_vm_parameter(param, vm1, vm2):
+            msgs = []
             vm1_param = getattr(vm1, param, None)
             vm2_param = getattr(vm2, param, None)
             if param == "config_drive" and vm1_param == u'1':
@@ -186,31 +180,50 @@ class VmMigration(functional_test.FunctionalTest):
             if vm1_param != vm2_param:
                 error_msg = ('Parameter {param} for VM with name '
                              '{name} is different src: {vm1}, dst: {vm2}')
-                self.fail(error_msg.format(param=param, name=vm1.name,
-                                           vm1=getattr(vm1, param),
-                                           vm2=getattr(vm2, param)))
+                msgs.append(error_msg.format(param=param, name=vm1.name,
+                                             vm1=getattr(vm1, param),
+                                             vm2=getattr(vm2, param)))
+            return msgs
 
-        self.set_hash_for_vms(src_vms)
-        self.set_hash_for_vms(dst_vms)
-        if not src_vms:
-            self.skipTest('Nothing to check - source resources list is empty')
-        for src_vm in src_vms:
-            for dst_vm in dst_vms:
+        fail_msg = []
+        for src_vm in self.src_vms:
+            for dst_vm in self.dst_vms:
                 if src_vm.vm_hash != dst_vm.vm_hash:
                     continue
-                compare_vm_parameter(param, src_vm, dst_vm)
+                fail_msg.extend(compare_vm_parameter(
+                    param, src_vm, dst_vm))
                 break
             else:
                 msg = 'VM with hash %s was not found on dst'
-                self.fail(msg % str(src_vm.vm_hash))
+                fail_msg.append(msg % str(src_vm.vm_hash))
+        if fail_msg:
+            self.fail('\n'.join(fail_msg))
+
+    def test_migrate_vms_flavor_parameter(self):
+        """Validate VMs were migrated with correct flavor."""
+
+        fail_msg = []
+        src_vms = copy.copy(self.src_vms)
+        src_vms = self.filter_vms_already_on_dst(src_vms)
+
+        for src_vm in src_vms:
+            for dst_vm in self.dst_vms:
+                if src_vm.vm_hash != dst_vm.vm_hash:
+                    continue
+                fail_msg.extend(self.compare_vm_flavor_parameter(
+                    'id', src_vm, dst_vm))
+                break
+            else:
+                msg = 'VM with hash %s was not found on dst'
+                fail_msg.append(msg % str(src_vm.vm_hash))
+        if fail_msg:
+            self.fail('\n'.join(fail_msg))
 
     @attr(migrated_tenant=['admin', 'tenant1', 'tenant2'])
     def test_migrate_vms_with_floating(self):
         """Validate VMs were migrated with floating ip assigned."""
         vm_names_with_fip = self.get_vms_with_fip_associated()
-        dst_vms = self.dst_cloud.novaclient.servers.list(
-            search_opts={'all_tenants': 1})
-        for vm in dst_vms:
+        for vm in self.dst_vms:
             if vm.name not in vm_names_with_fip:
                 continue
             for net in vm.addresses.values():
@@ -225,8 +238,8 @@ class VmMigration(functional_test.FunctionalTest):
         """Validate VMs with invalid statuses weren't migrated.
         Invalid VMs have 'broken': True value in :mod:`config.py`
         """
-        all_vms = self.migration_utils.get_all_vms_from_config()
-        vms = [vm['name'] for vm in all_vms if vm.get('broken')]
+        vms = [vm['name'] for vm in self.src_vms_from_config
+               if vm.get('broken')]
         migrated_vms = []
         for vm in vms:
             try:
@@ -240,9 +253,7 @@ class VmMigration(functional_test.FunctionalTest):
     @attr(migrated_tenant='tenant2')
     def test_ssh_connectivity_by_keypair(self):
         """Validate migrated VMs ssh connectivity by keypairs."""
-        vms = self.dst_cloud.novaclient.servers.list(
-            search_opts={'all_tenants': 1})
-        for _vm in vms:
+        for _vm in self.dst_vms:
             if 'keypair_test' in _vm.name:
                 vm = _vm
                 break
