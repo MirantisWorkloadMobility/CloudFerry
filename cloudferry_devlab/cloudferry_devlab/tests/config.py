@@ -23,6 +23,10 @@ NET_NAMES_TO_OMIT = ['tenantnet4_segm_id_cidr1',
 SUBNET_NAMES_TO_OMIT = ['segm_id_test_subnet_1',
                         'segm_id_test_subnet_2']
 PARAMS_NAMES_TO_OMIT = ['cidr', 'gateway_ip', 'provider:segmentation_id']
+OPENSTACK_RELEASES = {'192.168.1.2': 'grizzly',
+                      '192.168.1.3': 'icehouse',
+                      '192.168.1.8': 'juno'}
+SWIFT_AUTH_VERSION = '2'
 
 img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
 username_for_ssh = 'cirros'
@@ -45,15 +49,18 @@ logging_configuration = {
     'handlers': {
         'simple_handler': {'class': 'logging.StreamHandler',
                            'formatter': 'simple',
-                           'level': 'INFO'}
+                           'level': 'DEBUG'},
+        'debug_to_file': {'class': 'logging.FileHandler',
+                          'formatter': 'simple', 'level': 'DEBUG',
+                          'filename': 'debug-generate_load.log'}
     },
     'loggers': {
-        'cloudferry_devlab.generate_load': {'handlers': ['simple_handler'],
-                                            'level': 'INFO',
-                                            'propagate': False},
-        'cloudferry_devlab.tests.cleanup': {'handlers': ['simple_handler'],
-                                            'level': 'INFO',
-                                            'propagate': False}
+        'cloudferry_devlab.tests.base': {'handlers': ['simple_handler',
+                                                      'debug_to_file'],
+                                         'level': 'DEBUG'},
+        'cloudferry_devlab.tests.utils': {'handlers': ['simple_handler',
+                                                       'debug_to_file'],
+                                          'level': 'DEBUG'}
     }
 }
 
