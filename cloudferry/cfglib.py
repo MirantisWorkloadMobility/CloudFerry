@@ -253,6 +253,9 @@ migrate_opts = [
                     'rules file path.'),
     cfg.BoolOpt('migrate_whole_cloud', default=False,
                 help="Migrate the whole cloud despite the filter file."),
+    cfg.IntOpt('image_save_timeout', default=600,
+               help='Time to wait for image backed to save an image. '
+                    'Value is in seconds.')
 ]
 
 
