@@ -16,6 +16,7 @@ import logging
 
 from cloudferry import model
 from cloudferry.lib.utils import bases
+from cloudferry.lib.utils import retrying
 from cloudferry.lib.utils import utils
 
 LOG = logging.getLogger(__name__)
@@ -105,10 +106,7 @@ class Discoverer(object):
                       model_qualname, object_id,
                       utils.qualname(discoverer_class))
             discoverer = discoverer_class(self.config, self.cloud)
-            with model.Session() as session:
-                obj = discoverer.discover_one(uuid)
-                session.store(obj)
-                return obj
+            return discoverer.discover_one(uuid)
         except NotFound:
             LOG.warning('Object %s with uuid %s not found in cloud %s',
                         model_class.get_class_qualname(), uuid,
@@ -120,7 +118,7 @@ class Discoverer(object):
             LOG.warning('Invalid %s with uuid %s in cloud %s: %s',
                         model_class.get_class_qualname(), uuid,
                         self.cloud.name, e)
-        return None
+            return None
 
     def find_ref(self, model_class, uuid):
         """
@@ -159,6 +157,36 @@ class Discoverer(object):
             'cloud': self.cloud.name,
             'type': model_class.get_class_qualname(),
         }
+
+    def retry(self, func, *args, **kwargs):
+        """
+        Call function passed as first argument passing any remaining arguments
+        and keyword arguments. If function fail with exception, it is called
+        again after waiting for few seconds (specified by
+        ``OpenstackCloud.request_attempts`` configuration parameter). It stops
+        retrying after ``OpenstackCloud.request_failure_sleep`` unsuccessful
+        attempts were made.
+        :param func: function, bound method or some other callable
+        :param expected_exceptions: tuple/list of exceptions that are expected
+                                    and handled, e.g. there is no need to retry
+                                    if such exception is caught
+        :param returns_iterable: set it to True if func is expected to return
+                                 iterable
+        :return: whatever func returns
+        """
+        expected_exceptions = kwargs.pop('expected_exceptions', None)
+        returns_iterable = kwargs.pop('returns_iterable', False)
+
+        retry = retrying.Retry(
+            max_attempts=self.cloud.request_attempts,
+            timeout=self.cloud.request_failure_sleep,
+            expected_exceptions=expected_exceptions,
+            reraise_original_exception=True)
+        if returns_iterable:
+            return retry.run(lambda *a, **kw: [x for x in func(*a, **kw)],
+                             *args, **kwargs)
+        else:
+            return retry.run(func, *args, **kwargs)
 
 
 def discover_all(cfg, cloud):
