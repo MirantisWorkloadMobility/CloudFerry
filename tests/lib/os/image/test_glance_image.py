@@ -12,31 +12,31 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-
 import mock
 
-from glanceclient.v1 import client as glance_client
-from oslotest import mockpatch
-
-from cloudferry.lib.os.image.glance_image import GlanceImage
-from cloudferry.lib.utils import utils
+from cloudferry.lib.os.image import glance_image
 from tests import test
 
 
-FAKE_CONFIG = utils.ext_dict(cloud=utils.ext_dict({'user': 'fake_user',
-                                                   'password': 'fake_password',
-                                                   'tenant': 'fake_tenant',
-                                                   'region': None,
-                                                   'host': '1.1.1.1',
-                                                   'ssh_host': '1.1.1.10',
-                                                   'ssh_user': 'fake_user',
-                                                   'cacert': '',
-                                                   'insecure': False,
-                                                   'endpoint_type':
-                                                       'privateURL'
-                                                   }),
-                             migrate=utils.ext_dict({'retry': '7',
-                                                     'time_wait': 5}))
+FAKE_CONFIG = {
+    'dst': {
+        'user': 'fake_user',
+        'password': 'fake_password',
+        'tenant': 'fake_tenant',
+        'region': None,
+        'host': '1.1.1.1',
+        'ssh_host': '1.1.1.10',
+        'ssh_user': 'fake_user',
+        'cacert': '',
+        'insecure': False,
+        'endpoint_type': 'privateURL'
+    },
+    'migrate': {
+        'retry': '7',
+        'time_wait': 5,
+        'image_save_timeout': 1
+    }
+}
 
 
 class FakeUser(object):
@@ -49,14 +49,15 @@ class GlanceImageTestCase(test.TestCase):
     def setUp(self):
         test.TestCase.setUp(self)
 
+        self.override_config(FAKE_CONFIG)
+
         self.glance_mock_client = mock.MagicMock()
         self.glance_mock_client().images.data().iterable = 'fake_resp_1'
 
-        self.glance_client_patch = mockpatch.PatchObject(
-            glance_client,
-            'Client',
-            new=self.glance_mock_client)
-        self.useFixture(self.glance_client_patch)
+        m = mock.patch('glanceclient.v1.client.Client',
+                       new=self.glance_mock_client)
+        self.glance_client_patch = m.start()
+        self.addCleanup(m.stop)
         self.identity_mock = mock.Mock()
         self.identity_mock.get_endpoint_by_service_type = mock.Mock(
             return_value="http://192.168.1.2:9696/v2")
@@ -71,12 +72,13 @@ class GlanceImageTestCase(test.TestCase):
 
         self.fake_cloud = mock.Mock()
         self.fake_cloud.position = 'dst'
-
         self.fake_cloud.resources = dict(identity=self.identity_mock,
                                          image=self.image_mock)
         self.fake_cloud.mysql_connector = mock.MagicMock()
+        self.fake_cloud.config = self.cloud_config('dst')
 
-        self.glance_image = GlanceImage(FAKE_CONFIG, self.fake_cloud)
+        self.glance_image = glance_image.GlanceImage(self.fake_cloud.config,
+                                                     self.fake_cloud)
 
         self.fake_image_1 = mock.MagicMock()
 
@@ -141,7 +143,7 @@ class GlanceImageTestCase(test.TestCase):
 
         gl_client = self.glance_image.get_client()
         mock_calls = [mock.call(fake_endpoint, token=fake_auth_token,
-                                insecure=FAKE_CONFIG.cloud.insecure,
+                                insecure=self.fake_cloud.config.cloud.insecure,
                                 session=None)]
 
         self.glance_mock_client.assert_has_calls(mock_calls)

@@ -12,10 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import abc
+import logging
 
 from oslo_utils import importutils
 
 from cloudferry.lib.utils import local_db
+
+LOG = logging.getLogger(__name__)
 
 local_db.execute_once("""
 CREATE TABLE IF NOT EXISTS stages (
@@ -108,3 +111,4 @@ def execute_stage(class_name, config, force=False):
             tx.execute('INSERT INTO stages VALUES (:stage, :signature)',
                        stage=class_name,
                        signature=local_db.Json(new_signature))
+            LOG.info('Stage %s executed successfully', class_name)

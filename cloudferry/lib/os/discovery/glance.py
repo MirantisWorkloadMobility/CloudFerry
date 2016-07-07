@@ -58,8 +58,10 @@ class ImageDiscoverer(discover.Discoverer):
     def discover_all(self):
         images = []
         image_client = clients.image_client(self.cloud)
-        raw_images = image_client.images.list(filters={'is_public': None,
-                                                       'status': 'active'})
+        raw_images = self.retry(image_client.images.list,
+                                filters={'is_public': None,
+                                         'status': 'active'},
+                                returns_iterable=True)
         for raw_image in raw_images:
             try:
                 images.append(self.load_from_cloud(raw_image))
@@ -77,7 +79,9 @@ class ImageDiscoverer(discover.Discoverer):
     def discover_one(self, uuid):
         image_client = clients.image_client(self.cloud)
         try:
-            raw_image = image_client.images.get(uuid)
+            raw_image = self.retry(
+                image_client.images.get, uuid,
+                expected_exceptions=[glance_exc.HTTPNotFound])
             img = self.load_from_cloud(raw_image)
             with model.Session() as session:
                 session.store(img)
@@ -100,8 +104,10 @@ class ImageDiscoverer(discover.Discoverer):
 
     def _populate_members(self, img, image_client):
         try:
-            raw_members = image_client.image_members.list(
-                image=img.object_id.id)
+            raw_members = self.retry(
+                image_client.image_members.list, image=img.object_id.id,
+                expected_exceptions=[glance_exc.HTTPNotFound],
+                returns_iterable=True)
             for raw_member in raw_members:
                 member = self.find_ref(image.ImageMember,
                                        '{0}:{1}'.format(raw_member.image_id,

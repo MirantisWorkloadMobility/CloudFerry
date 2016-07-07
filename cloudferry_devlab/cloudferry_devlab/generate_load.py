@@ -13,8 +13,6 @@
 # limitations under the License.
 
 import itertools
-import logging
-from logging import config as logging_config
 import os
 import copy
 
@@ -28,7 +26,6 @@ from cloudferry_devlab.tests import cleanup
 from cloudferry_devlab.tests import config as conf
 from cloudferry_devlab.tests import images
 
-VM_SPAWNING_LIMIT = 5
 CREATE_CLEAN_METHODS_MAP = {
     'create_tenants': 'clean_tenants',
     'create_users': 'clean_users',
@@ -70,8 +67,6 @@ class Prerequisites(base.BasePrerequisites):
         self.dst_cloud = None
         self.clean_tools = cleanup.CleanEnv(config, configuration_ini,
                                             cloud_prefix)
-        logging_config.dictConfig(conf.logging_configuration)
-        self.log = logging.getLogger(__name__)
 
     @staticmethod
     def is_flavor_public(flavor):
@@ -79,6 +74,7 @@ class Prerequisites(base.BasePrerequisites):
 
     def init_dst_cloud(self):
         if not self.dst_cloud:
+            self.log.debug("Initiating DST cloud clients.")
             self.dst_cloud = Prerequisites(
                 cloud_prefix='DST',
                 configuration_ini=self.configuration_ini,
@@ -95,11 +91,14 @@ class Prerequisites(base.BasePrerequisites):
         if users is None:
             users = self.config.users
         for user in users:
+            self.log.debug("Creating user with name %s.", user['name'])
             self.keystoneclient.users.create(
                 **get_params_for_user_creating(user))
             if not user.get('additional_tenants'):
                 continue
             for tenant in user['additional_tenants']:
+                self.log.debug("Adding user %s with role %s to tenant %s.",
+                               user['name'], tenant['role'], tenant['name'])
                 self.keystoneclient.roles.add_user_role(
                     tenant=self.get_tenant_id(tenant['name']),
                     role=self.get_role_id(tenant['role']),
@@ -116,6 +115,7 @@ class Prerequisites(base.BasePrerequisites):
     @clean_if_exists
     def create_roles(self):
         for role in self.config.roles:
+            self.log.debug("Creating role %s.", role['name'])
             self.keystoneclient.roles.create(name=role['name'])
 
     def create_user_tenant_roles(self, user_tenant_roles=None):
@@ -126,6 +126,9 @@ class Prerequisites(base.BasePrerequisites):
                 user = self.get_user_id(user)
                 for role in roles:
                     try:
+                        self.log.debug("Creating user %s role %s for tenant "
+                                       "%s.", user, role['role'],
+                                       role['tenant'])
                         self.keystoneclient.roles.add_user_role(
                             user=user, role=self.get_role_id(role['role']),
                             tenant=self.get_tenant_id(role['tenant']))
@@ -140,10 +143,13 @@ class Prerequisites(base.BasePrerequisites):
         if tenants is None:
             tenants = self.config.tenants
         for tenant in tenants:
+            self.log.debug("Creating tenant %s.", tenant['name'])
             self.keystoneclient.tenants.create(tenant_name=tenant['name'],
                                                description=tenant[
                                                    'description'],
                                                enabled=tenant['enabled'])
+            self.log.debug("Adding admin user role to tenant %s.",
+                           tenant['name'])
             self.keystoneclient.roles.add_user_role(
                 self.get_user_id(self.username),
                 self.get_role_id('admin'),
@@ -160,6 +166,7 @@ class Prerequisites(base.BasePrerequisites):
                 raise RuntimeError(msg % keypair['name'])
             self.switch_user(user=user['name'], password=user['password'],
                              tenant=user['tenant'])
+            self.log.debug("Creating keypair %s.", keypair['name'])
             self.novaclient.keypairs.create(name=keypair['name'],
                                             public_key=keypair['public_key'])
         self.switch_user(user=self.username, password=self.password,
@@ -170,9 +177,13 @@ class Prerequisites(base.BasePrerequisites):
         """
         for tenant in self.config.tenants:
             if 'quota' in tenant:
+                self.log.debug("Updating nova quota for tenant %s.",
+                               tenant['name'])
                 self.novaclient.quotas.update(tenant_id=self.get_tenant_id(
                     tenant['name']), **tenant['quota'])
             if 'quota_cinder' in tenant:
+                self.log.debug("Updating cinder quota for tenant %s.",
+                               tenant['name'])
                 self.cinderclient.quotas.update(
                     tenant_id=self.get_tenant_id(tenant['name']),
                     **tenant['quota_cinder'])
@@ -194,7 +205,7 @@ class Prerequisites(base.BasePrerequisites):
 
                 self.switch_user(user=self.username, password=self.password,
                                  tenant=tenant['name'])
-
+                self.log.debug("Uploading image %s.", image['name'])
                 img = self.glanceclient.images.create(
                     **_get_body_for_image_creating(image))
 
@@ -205,6 +216,7 @@ class Prerequisites(base.BasePrerequisites):
         dst_img_ids = []
         for image in self.config.images:
             image_body = _get_body_for_image_creating(image)
+            self.log.debug("Uploading image %s.", image['name'])
             img = self.glanceclient.images.create(**image_body)
             img_ids.append(img.id)
             if image.get('upload_on_dst'):
@@ -316,6 +328,7 @@ class Prerequisites(base.BasePrerequisites):
     def create_flavors(self, flavor_list=None):
         def create_flvrs(flavors, ten_id):
             for flavor in flavors:
+                self.log.debug("Creating flavor %s.", flavor['name'])
                 if flavor.get('is_deleted'):
                     flavor.pop('is_deleted')
                     fl = self.novaclient.flavors.create(**flavor)
@@ -362,6 +375,8 @@ class Prerequisites(base.BasePrerequisites):
     def create_server_groups(self):
         def _create_groups(server_groups_list):
             for server_group in server_groups_list:
+                self.log.debug("Creating server group %s.",
+                               server_group['name'])
                 self.novaclient.server_groups.create(**server_group)
         # Create server group for admin tenant
         _create_groups(self.config.server_groups)
@@ -392,9 +407,8 @@ class Prerequisites(base.BasePrerequisites):
                 fip = self.neutronclient.create_floatingip(
                     {"floatingip": {"floating_network_id": self.ext_net_id}})
                 fip = fip['floatingip']['floating_ip_address']
-                msg = 'Assigning Floating IP {} to VM {}'.format(fip,
-                                                                 new_vm.name)
-                self.log.info(msg)
+                self.log.info("Assigning Floating IP %s to VM %s.", fip,
+                              new_vm.name)
                 new_vm.add_floating_ip(fip)
                 for volume in volumes:
                     if new_vm.name == volume['server_to_attach']:
@@ -447,6 +461,8 @@ class Prerequisites(base.BasePrerequisites):
 
         snp_ids = []
         for snapshot in self.config.snapshots:
+            self.log.debug("Creating snapshot for server %s.",
+                           snapshot.get('server'))
             self.novaclient.servers.create_image(
                 server=self.get_vm_id(snapshot['server']),
                 image_name=snapshot['image_name'])
@@ -474,6 +490,7 @@ class Prerequisites(base.BasePrerequisites):
                     if param in _subnet}
 
         for network in networks:
+            self.log.debug("Creating network %s.", network['name'])
             net = self.neutronclient.create_network(
                 {'network': get_body_for_network_creating(network)})
             for subnet in network['subnets']:
@@ -507,9 +524,11 @@ class Prerequisites(base.BasePrerequisites):
     def create_routers(self, routers=None):
         if routers:
             for router in routers:
+                self.log.debug("Creating router %s.", router.get('name'))
                 self.neutronclient.create_router(router)
         else:
             for router in self.config.routers:
+                self.log.debug("Creating router %s.", router.get('name'))
                 self.neutronclient.create_router(router)
             for tenant in self.config.tenants:
                 if tenant.get('routers'):
@@ -517,6 +536,8 @@ class Prerequisites(base.BasePrerequisites):
                                      password=self.password,
                                      tenant=tenant['name'])
                     for router in tenant['routers']:
+                        self.log.debug("Creating router %s.",
+                                       router.get('name'))
                         self.neutronclient.create_router(router)
             self.switch_user(user=self.username, password=self.password,
                              tenant=self.tenant)
@@ -540,6 +561,7 @@ class Prerequisites(base.BasePrerequisites):
 
     def create_pools(self, pools):
         for pool in pools:
+            self.log.debug("Creating LB pool %s.", pool['name'])
             pool["tenant_id"] = self.get_tenant_id(pool["tenant_name"])
             pool["subnet_id"] = self.get_subnet_id(pool["subnet_name"])
             pool = {i: v for i, v in pool.iteritems()
@@ -563,6 +585,7 @@ class Prerequisites(base.BasePrerequisites):
 
     def create_vips(self, vips):
         for vip in vips:
+            self.log.debug("Creating LB vip %s.", vip['name'])
             vip["pool_id"] = self.get_pool_id(vip["pool_name"])
             vip["tenant_id"] = self.get_tenant_id(vip["tenant_name"])
             vip["subnet_id"] = self.get_subnet_id(vip["subnet_name"])
@@ -598,6 +621,8 @@ class Prerequisites(base.BasePrerequisites):
             if tenant.get('vips'):
                 self.create_vips(tenant['vips'])
             if tenant.get('unassociated_fip'):
+                self.log.debug("Creating unassociated fips for tenant %s.",
+                               tenant['name'])
                 self.create_unassociated_fips(self.neutronclient,
                                               tenant.get('unassociated_fip'),
                                               self.ext_net_id)
@@ -606,6 +631,8 @@ class Prerequisites(base.BasePrerequisites):
 
     def create_security_group(self, sg_list):
         for security_group in sg_list:
+            self.log.debug("Creating security group %s.",
+                           security_group['name'])
             # pylint: disable=no-member
             gid = self.novaclient.security_groups.create(
                 name=security_group['name'],
@@ -652,7 +679,7 @@ class Prerequisites(base.BasePrerequisites):
             return {param: _volume[param] for param in params
                     if param in _volume}
 
-        self.log.debug('Creating cinder volumes')
+        self.log.debug('Creating cinder volumes.')
         vlm_ids = []
         for volume in volumes_list:
             if 'user' in volume:
@@ -666,7 +693,7 @@ class Prerequisites(base.BasePrerequisites):
             vlm_ids.append(vlm.id)
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
-        self.log.debug('Waiting for cinder volumes to become active')
+        self.log.debug('Waiting for cinder volumes to become active.')
         self.wait_until_objects(vlm_ids, self.check_volume_state,
                                 conf.TIMEOUT)
 
@@ -677,16 +704,16 @@ class Prerequisites(base.BasePrerequisites):
         self.novaclient.volumes.create_server_volume(server_id=vm.id,
                                                      volume_id=vlm_id,
                                                      device=volume['device'])
-        msg = 'Waiting for volume {} to become in-use with ' \
-              'VM {}'.format(volume['display_name'],
-                             vm.name)
-        self.log.info(msg)
+        self.log.info("Waiting for volume %s to become in-use with VM %s.",
+                      volume['display_name'], vm.name)
         self.wait_until_objects([vlm_id],
                                 self.check_volume_state,
                                 conf.TIMEOUT)
 
     def create_cinder_snapshots(self, snapshot_list):
         for snapshot in snapshot_list:
+            self.log.debug("Creating volume snapshot %s.",
+                           snapshot.get('display_name'))
             self.cinderclient.volume_snapshots.create(**snapshot)
 
     def create_cinder_objects(self):
@@ -706,6 +733,8 @@ class Prerequisites(base.BasePrerequisites):
         """Method creates file and md5sum of this file on volume
         Make filesystem on volume. The OS assigns the volume to the next
         available device, which /dev/vda"""
+        self.log.debug("Writing data to volume %s.",
+                       volume.get('display_name'))
         cmd = '/usr/sbin/mkfs.ext2 /dev/vdb'
         self.migration_utils.execute_command_on_vm(vm_ip, cmd)
         # Create directory for mount point
@@ -790,6 +819,7 @@ class Prerequisites(base.BasePrerequisites):
                 continue
             vm_id = self.get_vm_id(vm['name'])
             vm_state = vm['state']
+            self.log.debug("Setting VM %s to state %s.", vm['name'], vm_state)
             vms.append(self.set_vm_state(self.novaclient, vm_id, vm_state,
                                          logger=self.log))
             if vm['name'] in dst_vms:
@@ -806,6 +836,7 @@ class Prerequisites(base.BasePrerequisites):
         """
         try:
             for flavor in self.config.flavors_deleted_after_vm_boot:
+                self.log.debug("Deleting flavor %s.", flavor)
                 self.novaclient.flavors.delete(
                     self.get_flavor_id(flavor))
         except nv_exceptions.ClientException:
@@ -818,6 +849,8 @@ class Prerequisites(base.BasePrerequisites):
         for tenant in self.config.tenants:
             if "quota_network" not in tenant:
                 continue
+            self.log.debug("Updating network quota for tenant %s.",
+                           tenant['name'])
             ten_id = tenants[tenant["name"]]
             quota_net = tenant["quota_network"]
             self.neutronclient.update_quota(ten_id,
@@ -826,12 +859,16 @@ class Prerequisites(base.BasePrerequisites):
     def modify_admin_tenant_quotas(self):
         for tenant in self.config.tenants:
             if 'quota' in tenant:
+                self.log.debug("Updating admin's quota for tenant %s.",
+                               tenant['name'])
                 self.novaclient.quotas.update(tenant_id=self.get_tenant_id(
                     self.tenant), **tenant['quota'])
                 break
 
     def change_admin_role_in_tenants(self):
         for tenant in self.config.tenants:
+            self.log.debug("Removing admin role from tenant %s.",
+                           tenant['name'])
             self.keystoneclient.roles.remove_user_role(
                 self.get_user_id(self.username),
                 self.get_role_id('admin'),
@@ -841,12 +878,14 @@ class Prerequisites(base.BasePrerequisites):
     def delete_users(self):
         for user in self.config.users:
             if user.get('deleted'):
+                self.log.debug("Deleting user %s.", user['name'])
                 self.keystoneclient.users.delete(
                     self.get_user_id(user['name']))
 
     def delete_tenants(self):
         for tenant in self.config.tenants:
             if tenant.get('deleted'):
+                self.log.debug("Deleting tenant %s.", tenant['name'])
                 self.keystoneclient.tenants.delete(
                     self.get_tenant_id(tenant['name']))
 
@@ -862,6 +901,8 @@ class Prerequisites(base.BasePrerequisites):
                     tnt_name = t['name']
                     if t.get('uppercase'):
                         tnt_name = t['name'].upper()
+                    self.log.debug("Creating tenant wo security group %s.",
+                                   t['name'])
                     self.dst_cloud.keystoneclient.tenants.create(
                         tenant_name=tnt_name, description=t['description'],
                         enabled=t['enabled'])
@@ -912,6 +953,7 @@ class Prerequisites(base.BasePrerequisites):
 
     def boot_vms_from_volumes(self):
         for vm in self.config.vms_from_volumes:
+            self.log.debug("Creating VM %s from volume.", vm['name'])
             params = self._get_parameters_for_vm_creating(vm)
             params['block_device_mapping_v2'] = []
             params['block_device_mapping_v2'].append(
@@ -927,6 +969,7 @@ class Prerequisites(base.BasePrerequisites):
         """ Method delete vm via virsh to emulate situation, when vm is valid
         and active in nova db, but in fact does not exist
         """
+        self.log.debug("Breaking VM with id %s.", vm_id)
         inst_name = getattr(self.novaclient.servers.get(vm_id),
                             'OS-EXT-SRV-ATTR:instance_name')
         for cmd in ['virsh destroy {0}'.format(inst_name),
@@ -946,8 +989,9 @@ class Prerequisites(base.BasePrerequisites):
         images_to_delete = [image for image in all_images
                             if image.get('delete_on_dst')]
         for image in images_to_delete:
-            image_id = image.get('id') or \
-                       self.dst_cloud.get_image_id(image['name'])
+            self.log.debug("Deleting image %s from DST cloud.", image['name'])
+            image_id = image.get('id') or self.dst_cloud.get_image_id(
+                image['name'])
             self.dst_cloud.glanceclient.images.delete(image_id)
 
     def break_images(self):
@@ -957,6 +1001,7 @@ class Prerequisites(base.BasePrerequisites):
         images_to_delete = [image for image in all_images
                             if image.get('is_deleted')]
         for image in images_to_break:
+            self.log.debug("Breaking image %s.", image['name'])
             image_id = self.get_image_id(image['name'])
             cmd = 'rm -rf /var/lib/glance/images/%s' % image_id
             self.migration_utils.execute_command_on_vm(
@@ -964,6 +1009,7 @@ class Prerequisites(base.BasePrerequisites):
                 username=self.configuration_ini['src']['ssh_user'],
                 password=self.configuration_ini['src']['ssh_sudo_password'])
         for image in images_to_delete:
+            self.log.debug("Deleting image %s.", image['name'])
             image_id = self.get_image_id(image['name'])
             self.glanceclient.images.delete(image_id)
 
@@ -1061,83 +1107,83 @@ class Prerequisites(base.BasePrerequisites):
 
     def run_preparation_scenario(self):
         self.init_dst_cloud()
-        self.log.info('Creating tenants')
+        self.log.info('Creating tenants.')
         self.create_tenants()
-        self.log.info('Creating users')
+        self.log.info('Creating users.')
         self.create_users()
-        self.log.info('Creating roles')
+        self.log.info('Creating roles.')
         self.create_roles()
-        self.log.info('Creating keypairs')
+        self.log.info('Creating keypairs.')
         self.create_keypairs()
-        self.log.info('Modifying quotas')
+        self.log.info('Modifying quotas.')
         self.modify_quotas()
-        self.log.info('Creating flavors')
+        self.log.info('Creating flavors.')
         self.create_flavors()
-        self.log.info('Uploading images')
+        self.log.info('Uploading images.')
         self.upload_image()
-        self.log.info('Creating networking')
+        self.log.info('Creating networking.')
         self.create_all_networking()
         if self.openstack_release in ['icehouse', 'juno']:
-            self.log.info('Creating server groups')
+            self.log.info('Creating server groups.')
             self.create_server_groups()
-            self.log.info('Create bootable volume from image')
+            self.log.info('Create bootable volume from image.')
             self.create_volumes_from_images()
-            self.log.info('Boot vm from volume')
+            self.log.info('Boot vm from volume.')
             self.boot_vms_from_volumes()
-        self.log.info('Creating security groups')
+        self.log.info('Creating security groups.')
         self.create_security_groups()
-        self.log.info('Creating cinder objects')
+        self.log.info('Creating cinder objects.')
         self.create_cinder_objects()
-        self.log.info('Creating VMs')
+        self.log.info('Creating VMs.')
         self.create_all_vms()
-        self.log.info('Breaking Images')
+        self.log.info('Breaking images.')
         self.break_images()
-        self.log.info('Delete images on dst')
+        self.log.info('Delete images from DST cloud.')
         self.delete_image_on_dst()
-        self.log.info('Updating filtering')
+        self.log.info('Updating filtering.')
         self.update_filtering_file()
-        self.log.info('Create All tenants Filter file')
-        self.update_filtering_file(True)
-        self.log.info('Creating vm snapshots')
+        self.log.info('Create all tenants filter file.')
+        self.update_filtering_file(all_tenants_filter=True)
+        self.log.info('Creating vm snapshots.')
         self.create_vm_snapshots()
-        self.log.info('Create tenant on dst, without security group')
+        self.log.info('Create tenant on DST cloud, without security group.')
         self.create_tenant_wo_sec_group_on_dst()
-        self.log.info('Create role on dst')
+        self.log.info('Create role on DST cloud.')
         self.create_user_on_dst()
-        self.log.info('Create user and tenant in upper case on dst')
+        self.log.info('Create user and tenant in upper case on DST cloud.')
         self.create_user_in_uppercase_on_dst()
-        self.log.info('Creating networks on dst')
+        self.log.info('Creating networks on DST cloud.')
         self.create_dst_networking()
-        self.log.info('Creating vms on dst')
+        self.log.info('Creating vms on DST cloud.')
         self.create_vms_on_dst()
-        self.log.info('Creating invalid cinder objects')
+        self.log.info('Creating invalid cinder objects.')
         self.create_invalid_cinder_objects()
-        self.log.info('Create swift containers and objects')
+        self.log.info('Create swift containers and objects.')
         self.create_swift_container_and_objects()
-        self.log.info('Deleting flavors which should be deleted')
+        self.log.info('Deleting flavors which should be deleted.')
         self.delete_flavors()
-        self.log.info('Modifying admin tenant quotas')
+        self.log.info('Modifying admin tenant quotas.')
         self.modify_admin_tenant_quotas()
-        self.log.info('Update network quotas')
+        self.log.info('Update network quotas.')
         self.update_network_quotas()
-        self.log.info('Change admin role in tenants')
+        self.log.info('Change admin role in tenants.')
         self.change_admin_role_in_tenants()
-        self.log.info('Creating user tenant roles')
+        self.log.info('Creating user tenant roles.')
         self.create_user_tenant_roles()
-        self.log.info('Delete users which should be deleted')
+        self.log.info('Delete users which should be deleted.')
         self.delete_users()
-        self.log.info('Delete tenants which should be deleted')
+        self.log.info('Delete tenants which should be deleted.')
         self.delete_tenants()
-        self.log.info('Creating networks map')
+        self.log.info('Creating networks map.')
         self.create_ext_net_map_yaml()
 
     def run_restore_vms_state(self):
         self.init_dst_cloud()
-        self.log.info('Adjusting VM initial states')
+        self.log.info('Adjusting VM initial states.')
         self.adjust_initial_statuses()
-        self.log.info('Emulating vm states')
+        self.log.info('Emulating VM states.')
         self.emulate_vm_states()
-        self.log.info('Breaking VMs')
+        self.log.info('Breaking VMs.')
         for vm in [self.get_vm_id(vm['name']) for vm in
                    self.src_vms_from_config if vm.get('broken')]:
             self.break_vm(vm)

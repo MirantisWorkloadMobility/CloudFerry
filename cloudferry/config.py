@@ -289,6 +289,8 @@ def database_settings(database_name):
 
 class OpenstackCloud(ConfigSection):
     name = fields.String()
+    request_attempts = fields.Integer(missing=3)
+    request_failure_sleep = fields.Float(missing=5)
     credential = fields.Nested(Credential.schema_class)
     scope = fields.Nested(Scope.schema_class)
     ssh_settings = fields.Nested(SshSettings.schema_class, load_from='ssh')

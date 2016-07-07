@@ -28,7 +28,8 @@ class TenantDiscoverer(discover.Discoverer):
 
     def discover_all(self):
         identity_client = clients.identity_client(self.cloud)
-        raw_tenants = identity_client.tenants.list()
+        raw_tenants = self.retry(identity_client.tenants.list,
+                                 returns_iterable=True)
         with model.Session() as session:
             for raw_tenant in raw_tenants:
                 session.store(self.load_from_cloud(raw_tenant))
@@ -36,7 +37,8 @@ class TenantDiscoverer(discover.Discoverer):
     def discover_one(self, uuid):
         identity_client = clients.identity_client(self.cloud)
         try:
-            raw_tenant = identity_client.tenants.get(uuid)
+            raw_tenant = self.retry(identity_client.tenants.get, uuid,
+                                    expected_exceptions=[exceptions.NotFound])
             tenant = self.load_from_cloud(raw_tenant)
             with model.Session() as session:
                 session.store(tenant)

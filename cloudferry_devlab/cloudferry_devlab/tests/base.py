@@ -14,6 +14,7 @@
 
 import contextlib
 import logging
+from logging import config as logging_config
 import os
 import time
 
@@ -28,14 +29,11 @@ from swiftclient import client as swift_client
 from nose import config as nose_config
 from nose.plugins import manager as nose_manager
 
+from cloudferry_devlab.tests import config as conf
 from cloudferry_devlab.tests import test_exceptions
 import cloudferry_devlab.tests.utils as utils
 
 LOG = logging.getLogger(__name__)
-OPENSTACK_RELEASES = {'192.168.1.2': 'grizzly',
-                      '192.168.1.3': 'icehouse',
-                      '192.168.1.8': 'juno'}
-SWIFT_AUTH_VERSION = '2'
 
 
 class SwiftConnection(object):
@@ -52,7 +50,7 @@ class SwiftConnection(object):
             user=self.username,
             key=self.password,
             tenant_name=self.tenant,
-            auth_version=SWIFT_AUTH_VERSION)
+            auth_version=conf.SWIFT_AUTH_VERSION)
         try:
             yield conn
         finally:
@@ -65,6 +63,8 @@ class BasePrerequisites(object):
                  results_path='.'):
         self.configuration_ini = configuration_ini
         self.results_path = results_path
+        logging_config.dictConfig(conf.logging_configuration)
+        self.log = logging.getLogger(__name__)
         self.filtering_utils = utils.FilteringUtils(
             self.configuration_ini['migrate']['filter_path'])
         self.migration_utils = utils.MigrationUtils(config)
@@ -144,13 +144,13 @@ class BasePrerequisites(object):
             swift_conn.delete_object(container_name, obj_name)
 
     def _get_openstack_release(self):
-        for release in OPENSTACK_RELEASES:
+        for release in conf.OPENSTACK_RELEASES:
             if release in self.auth_url:
-                return OPENSTACK_RELEASES[release]
+                return conf.OPENSTACK_RELEASES[release]
         raise RuntimeError('Unknown OpenStack release')
 
     def get_vagrant_vm_ip(self):
-        for release in OPENSTACK_RELEASES:
+        for release in conf.OPENSTACK_RELEASES:
             if release in self.auth_url:
                 return release
 
@@ -421,6 +421,8 @@ class BasePrerequisites(object):
         return True
 
     def switch_user(self, user, password, tenant):
+        self.log.debug("Switching clients to use user %s and tenant %s.", user,
+                       tenant)
         self.keystoneclient = keystone.Client(auth_url=self.auth_url,
                                               username=user,
                                               password=password,
