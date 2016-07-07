@@ -313,8 +313,6 @@ class CinderStorage(storage.Storage):
         """
 
         glance = self.cloud.resources[utils.IMAGE_RESOURCE]
-        compute = self.cloud.resources[utils.COMPUTE_RESOURCE]
-        az_mapper = compute.attr_override
 
         metadata = volume.get('metadata', {})
         metadata[MIGRATED_VOLUMES_METADATA_KEY] = volume['id']
@@ -330,17 +328,18 @@ class CinderStorage(storage.Storage):
             if dst_image:
                 image_id = dst_image.id
 
-        src_az = compute.get_availability_zone(volume['availability_zone'])
+        az = self.attr_override.get_attr(volume, 'availability_zone')
+        volume_type = self.attr_override.get_attr(volume, 'volume_type')
 
         created_volume = self.create_volume(
             size=volume['size'],
             project_id=tenant_id,
             display_name=volume['display_name'],
             display_description=volume['display_description'],
-            availability_zone=src_az or az_mapper.get_attr(
-                volume, 'availability_zone'),
+            availability_zone=az,
             metadata=metadata,
-            imageRef=image_id)
+            imageRef=image_id,
+            volume_type=volume_type)
 
         timeout = self.config.migrate.storage_backend_timeout
         retryer = retrying.Retry(max_time=timeout,

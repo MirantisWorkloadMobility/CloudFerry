@@ -62,3 +62,6 @@
 #  volume_type:
 #  - when: null
 #    replace: netapp
+#  availability_zone:
+#  - when: source_cloud_az
+#    replace: dest_cloud_az
