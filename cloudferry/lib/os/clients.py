@@ -81,26 +81,26 @@ class ClientProxy(object):
 
 
 def _get_authenticated_v2_client(credential, scope):
-    client = v2_0_client.Client(auth_url=credential.auth_url,
-                                username=credential.username,
-                                password=credential.password,
-                                region_name=credential.region_name,
-                                domain_id=credential.domain_id,
-                                endpoint_type=credential.endpoint_type,
-                                insecure=credential.https_insecure,
-                                cacert=credential.https_cacert,
-                                project_domain_id=scope.domain_id,
-                                project_name=scope.project_name,
-                                project_id=scope.project_id,
-                                tenant_id=scope.project_id)
-    if client.auth_ref is None:
-        try:
+    try:
+        client = v2_0_client.Client(auth_url=credential.auth_url,
+                                    username=credential.username,
+                                    password=credential.password,
+                                    region_name=credential.region_name,
+                                    domain_id=credential.domain_id,
+                                    endpoint_type=credential.endpoint_type,
+                                    insecure=credential.https_insecure,
+                                    cacert=credential.https_cacert,
+                                    project_domain_id=scope.domain_id,
+                                    project_name=scope.project_name,
+                                    project_id=scope.project_id,
+                                    tenant_id=scope.project_id)
+        if client.auth_ref is None:
             client.authenticate()
-        except ks_exceptions.Unauthorized:
-            LOG.error('Authentication with credentials %r in scope %r failed.',
-                      credential, scope)
-            raise
-    return client
+        return client
+    except ks_exceptions.Unauthorized:
+        LOG.error('Authentication with credentials %r in scope %r failed.',
+                  credential, scope)
+        raise
 
 
 def get_token(credential, scope):
