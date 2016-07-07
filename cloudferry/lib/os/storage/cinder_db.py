@@ -70,30 +70,32 @@ class CinderDBBroker(object):
         self._update_table(sql, old_id, kwargs)
 
     def update_volume_id(self, old_id, new_id):
-        # It is impossible to update the primary key if any tables have
-        # dependent records.
-        # Making a copy of the fake volume with ID from source cloud.
-        row = self.mysql.execute("SELECT * FROM volumes WHERE id = :old_id",
-                                 old_id=old_id).fetchone()
-        parameters = {'id': new_id}
-        parameters.update({k: v for k, v in row.items() if k != 'id'})
-        insert = "INSERT INTO volumes ({}) VALUES ({})".format(
-            ', '.join(parameters.keys()),
-            ', '.join(':{}'.format(k) for k in parameters.keys())
-        )
-        self.mysql.execute(insert, **parameters)
+        with self.mysql.transaction():
+            # It is impossible to update the primary key if any tables have
+            # dependent records.
+            # Making a copy of the fake volume with ID from source cloud.
+            row = self.mysql.execute("SELECT * FROM volumes "
+                                     "WHERE id = :old_id",
+                                     old_id=old_id).fetchone()
+            parameters = {'id': new_id}
+            parameters.update({k: v for k, v in row.items() if k != 'id'})
+            insert = "INSERT INTO volumes ({}) VALUES ({})".format(
+                ', '.join(parameters.keys()),
+                ', '.join(':{}'.format(k) for k in parameters.keys())
+            )
+            self.mysql.execute(insert, **parameters)
 
-        # Update all dependent tables
-        self.update_volume_metadata(old_id, volume_id=new_id)
+            # Update all dependent tables
+            self.update_volume_metadata(old_id, volume_id=new_id)
 
-        # Update an ID of fake volume to raise an exception if it still has
-        # not updated dependent records in other tables
-        fake_id = str(uuid_lib.uuid4())
-        self.update_volume(old_id, id=fake_id)
+            # Update an ID of fake volume to raise an exception if it still has
+            # not updated dependent records in other tables
+            fake_id = str(uuid_lib.uuid4())
+            self.update_volume(old_id, id=fake_id)
 
-        # Delete fake volume
-        self.mysql.execute('DELETE FROM volumes WHERE id = :old_id',
-                           old_id=fake_id)
+            # Delete fake volume
+            self.mysql.execute('DELETE FROM volumes WHERE id = :old_id',
+                               old_id=fake_id)
 
     def inc_quota_usages(self, project_id, resource, value):
         self.mysql.execute("UPDATE quota_usages "

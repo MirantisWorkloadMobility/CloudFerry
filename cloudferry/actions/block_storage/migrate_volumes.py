@@ -179,7 +179,6 @@ class MigrateVolumes(action.Action):
         dst_db = cinder_db.CinderDBBroker(dst_cinder.mysql_connector)
         dst_db.update_volume_id(dst_volume.id, volume_id)
         if original_size > 1:
-            dst_db.update_volume(volume_id, size=original_size)
             inc_size = original_size - 1
             project_id = dst_db.get_cinder_volume(volume_id).project_id
             dst_db.inc_quota_usages(project_id, 'gigabytes', inc_size)
@@ -194,7 +193,8 @@ class MigrateVolumes(action.Action):
             dst_volume_object.host,
             src_volume_object.path
         )
-        dst_db.update_volume(volume_id, provider_location=provider_location)
+        dst_db.update_volume(volume_id, provider_location=provider_location,
+                             size=original_size)
         return dst_cinder.get_volume_by_id(volume_id)
 
     def migrate_volume(self, src_volume):
@@ -267,11 +267,8 @@ class MigrateVolumes(action.Action):
             dst_cinder = self.dst_cloud.resources[utils.STORAGE_RESOURCE]
 
             dst_volume = dst_cinder.get_migrated_volume(src_volume['id'])
-            volume_exists_in_destination = (dst_volume is not None and
-                                            dst_volume.status in ['available',
-                                                                  'in-use'])
 
-            if volume_exists_in_destination:
+            if dst_volume is not None:
                 LOG.info("Volume '%s' is already present in destination "
                          "cloud, skipping", src_volume['id'])
             else:
@@ -281,11 +278,14 @@ class MigrateVolumes(action.Action):
                         retrying.TimeoutExceeded,
                         exception.TenantNotPresentInDestination,
                         cinder_exceptions.ClientException,
-                        copy_mechanisms.CopyFailed) as e:
+                        copy_mechanisms.CopyFailed,
+                        mysql_connector.MySQLError) as e:
                     LOG.warning("%(error)s, volume %(name)s will be skipped",
                                 {'error': e.message,
                                  'name': volume_name(src_volume)})
 
+                    dst_volume = dst_cinder.get_migrated_volume(
+                        src_volume['id'])
                     if dst_volume is not None:
                         msg = ("Removing volume {name} from destination "
                                "since it didn't migrate properly".format(

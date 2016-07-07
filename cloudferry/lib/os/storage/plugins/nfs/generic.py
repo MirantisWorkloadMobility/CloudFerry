@@ -82,7 +82,8 @@ class NFSPlugin(base.CinderMigrationPlugin):
 class SharedNFSPlugin(NFSPlugin):
     PLUGIN_NAME = "shared-nfs"
 
-    def get_provider_location(self, context, host, path):
+    @staticmethod
+    def get_provider_location(context, host, path):
         user = context.cloud_config.cloud.ssh_user
         password = context.cloud_config.cloud.ssh_sudo_password
 

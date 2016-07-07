@@ -12,14 +12,18 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
+import contextlib
 import time
 
+import pymysql
 import sqlalchemy
 
 from cloudferry.lib.utils import remote_runner
 from cloudferry.lib.utils import local
 
 ALL_DATABASES = "--all-databases"
+
+MySQLError = pymysql.MySQLError
 
 
 def get_db_host(cloud_config):
@@ -76,6 +80,7 @@ class MysqlConnector(object):
         self.config = config
         self.db = db
         self.connection_url = self.compose_connection_url()
+        self._connection = None
 
     def compose_connection_url(self):
         return '{}://{}:{}@{}:{}/{}'.format(self.config['db_connection'],
@@ -89,12 +94,22 @@ class MysqlConnector(object):
         return sqlalchemy.create_engine(self.connection_url)
 
     def execute(self, command, **kwargs):
-        with sqlalchemy.create_engine(
-                self.connection_url).begin() as connection:
+        with self.transaction() as connection:
             return connection.execute(sqlalchemy.text(command), **kwargs)
 
     def batch_execute(self, commands, **kwargs):
-        with sqlalchemy.create_engine(
-                self.connection_url).begin() as connection:
+        with self.transaction() as connection:
             for command in commands:
                 connection.execute(sqlalchemy.text(command), **kwargs)
+
+    @contextlib.contextmanager
+    def transaction(self):
+        if self._connection:
+            yield self._connection
+        else:
+            with self.get_engine().begin() as conn:
+                self._connection = conn
+                try:
+                    yield conn
+                finally:
+                    self._connection = None
