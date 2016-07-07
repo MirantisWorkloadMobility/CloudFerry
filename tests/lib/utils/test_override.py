@@ -11,6 +11,8 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
+import StringIO
+
 from cloudferry.lib.utils import override
 from tests import test
 
@@ -95,3 +97,48 @@ class AttributeOverrideTestCase(test.TestCase):
             ]
         })
         self.assertEqual('quux', overrides.get_attr(obj, 'foo'))
+
+    def test_raises_error_if_volumes_or_servers_are_not_present(self):
+        invalid_yaml = """
+        wrong_option:
+            availability_zone:
+                - when: x
+                  replace: y
+        servers:
+            availability_zone:
+                - when: p
+                  replace: n
+        """
+
+        stream = StringIO.StringIO(invalid_yaml)
+
+        self.assertRaises(override.InvalidOverrideConfigError,
+                          override.AttributeOverrides.from_stream,
+                          stream, 'servers')
+
+    def test_not_raises_error_if_one_of_allowed_types_is_present(self):
+        correct_yaml1 = """
+        servers:
+            availability_zone:
+                - when: x
+                  replace: y
+        """
+
+        correct_yaml2 = """
+        volumes:
+            availability_zone:
+                - when: x
+                  replace: y
+        """
+
+        yamls = [correct_yaml1, correct_yaml2]
+
+        for yaml in yamls:
+            stream = StringIO.StringIO(yaml)
+
+            try:
+                override.AttributeOverrides.from_stream(stream, 'servers')
+            except (TypeError, override.InvalidOverrideConfigError) as e:
+                self.fail("AttributeOverrides should not raise error for "
+                          "yamls having 'volumes' and 'servers' object "
+                          "types, instead got error: '%s'" % e)
