@@ -232,6 +232,8 @@ class SshGateway(ConfigSection):
     password = fields.String(missing=None)
     private_key = fields.String(missing=None)
     gateway = fields.Nested('self', missing=None)
+    connection_attempts = fields.Integer(missing=1)
+    attempt_failure_sleep = fields.Float(missing=10.0)
 
 
 class SshSettings(ConfigSection):

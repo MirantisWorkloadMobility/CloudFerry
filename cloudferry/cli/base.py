@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import yaml
+from yaml import error as yaml_error
 
 from cloudferry import cfglib
 from cloudferry import config
@@ -64,4 +65,6 @@ class YamlConfigMixin(ConfigMixin):
                 conf = yaml.load(config_file)
                 return config.load(conf)
         except config.ValidationError as ex:
+            self.app.parser.error(ex)
+        except yaml_error.YAMLError as ex:
             self.app.parser.error(ex)

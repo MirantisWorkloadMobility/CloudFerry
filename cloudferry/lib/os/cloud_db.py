@@ -21,13 +21,22 @@ LOG = logging.getLogger(__name__)
 class _ConnectionWrapper(object):
     def __init__(self, database_settings):
         self._settings = database_settings
-        self._conn = pymysql.connect(host=database_settings.host,
-                                     port=database_settings.port,
-                                     user=database_settings.username,
-                                     password=database_settings.password,
-                                     db=database_settings.database,
-                                     cursorclass=pymysql.cursors.DictCursor,
-                                     use_unicode=True)
+        try:
+            self._conn = pymysql.connect(
+                host=database_settings.host,
+                port=database_settings.port,
+                user=database_settings.username,
+                password=database_settings.password,
+                db=database_settings.database,
+                cursorclass=pymysql.cursors.DictCursor,
+                use_unicode=True)
+        except pymysql.MySQLError as ex:
+            LOG.error('Failed to connect to connect to MySQL database '
+                      '%s:%d/%s using login "%s" and password "%s": %s',
+                      database_settings.host, database_settings.port,
+                      database_settings.database, database_settings.username,
+                      database_settings.password, ex)
+            raise
 
     def __enter__(self):
         return self
