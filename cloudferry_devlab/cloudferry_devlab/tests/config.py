@@ -70,6 +70,13 @@ filters_file_naming_template = 'filter_{tenant_name}.yaml'
 all_tenants_filter_filename = 'all_tenants_filter.yaml'
 """All tenants filter file."""
 
+rsc_map_filename = 'configs/resource_map.yaml'
+"""Resource Map file."""
+
+mapped_tenant_dict = {'tenant2': 'tenant2_mapped_in_resource_map_yaml'}
+"""SRC to DST Mapped Tenant Dictionary where key is SRC tenant name
+and value is the corresponding DST tenant name"""
+
 ext_net_map = 'ext_net_map.yaml'
 """This file contains map of relationships between external networks on source
 and destination clouds."""
@@ -270,6 +277,7 @@ tenants = [
               {'filename': 'test/dir/test_data.txt',
                'data': 'test data string'}]}
          ],
+     'images': [{'name': 'image9', 'copy_from': img_url, 'is_public': False}],
      'unassociated_fip': 3
      },
     {'name': 'tenant3', 'description': 'This tenant will be deleted',

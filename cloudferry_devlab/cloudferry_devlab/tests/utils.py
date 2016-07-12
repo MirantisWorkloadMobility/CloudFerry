@@ -199,6 +199,13 @@ class MigrationUtils(object):
             return False
         return True
 
+    def check_mapped_tenant(self, tenant_name, cloud_prefix=''):
+        tnt_name = tenant_name
+        if cloud_prefix in ['', 'dst']:
+            tnt_name = self.config.mapped_tenant_dict.get(tenant_name,
+                                                          tenant_name)
+        return tnt_name
+
     @staticmethod
     def open_ssh_port_secgroup(client, tenant_id):
         sec_grps = client.get_sec_group_id_by_tenant_id(tenant_id)

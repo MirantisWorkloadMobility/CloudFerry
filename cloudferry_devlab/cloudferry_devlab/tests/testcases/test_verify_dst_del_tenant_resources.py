@@ -118,8 +118,11 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
         """Validate deleted tenant weren't migrated."""
         undeleted_tenants = []
         for tenant_name, _ in self.deleted_tenants:
-            if tenant_name in self.dst_tenants:
-                undeleted_tenants.append(tenant_name)
+            tnt_name = self.migration_utils.check_mapped_tenant(
+                tenant_name=tenant_name)
+
+            if tnt_name in self.dst_tenants:
+                undeleted_tenants.append(tnt_name)
 
         if undeleted_tenants:
             msg = 'Tenants {0} exist on destination, but should be deleted!'
@@ -137,8 +140,11 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
             tenant_users_dst = \
                 self._tenant_users_exist_on_dst(tenant_users_list_src)
 
+            tnt_name = self.migration_utils.check_mapped_tenant(
+                tenant_name=tenant_name)
+
             if tenant_users_dst:
-                undeleted_users.append({tenant_name: tenant_users_dst})
+                undeleted_users.append({tnt_name: tenant_users_dst})
 
         if undeleted_users:
             msg = 'Tenant\'s users {0} exist on destination,' \
@@ -152,8 +158,10 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
         for tenant_name, tenant in self.deleted_tenants:
             undeleted_net_ids_list = \
                 self._tenant_nets_exist_on_dst(tenant['networks'])
+            tnt_name = self.migration_utils.check_mapped_tenant(
+                tenant_name=tenant_name)
             if undeleted_net_ids_list:
-                tenant_nets_ids.append({tenant_name: undeleted_net_ids_list})
+                tenant_nets_ids.append({tnt_name: undeleted_net_ids_list})
 
         if tenant_nets_ids:
             msg = 'Tenant\'s network {0} exists on destination,' \
@@ -168,8 +176,10 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
         for tenant_name, tenant in self.deleted_tenants:
             non_migrated_vms = self._tenant_vm_exists_on_dst(tenant['vms'])
 
+            tnt_name = self.migration_utils.check_mapped_tenant(
+                tenant_name=tenant_name)
             if non_migrated_vms:
-                tenants_vms.append({tenant_name: non_migrated_vms})
+                tenants_vms.append({tnt_name: non_migrated_vms})
 
         if tenants_vms:
             msg = 'Tenant\'s vm {0} does not exist on destination,' \
@@ -184,9 +194,11 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
 
             tenant_undeleted_volumes = \
                 self._tenant_volumes_exist_on_dst(tenant['cinder_volumes'])
+            tnt_name = self.migration_utils.check_mapped_tenant(
+                tenant_name=tenant_name)
             if tenant_undeleted_volumes:
                 undeleted_volumes.append(
-                    {tenant_name: tenant_undeleted_volumes})
+                    {tnt_name: tenant_undeleted_volumes})
 
         if undeleted_volumes:
             msg = ("Tenant's cinder volumes with ids {0} exist on "
@@ -210,8 +222,10 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
                             continue
                         if dst_vm.key_name not in migrated_keys:
                             keys_list.append(dst_vm.key_name)
+            tnt_name = self.migration_utils.check_mapped_tenant(
+                tenant_name=tenant_name)
             if keys_list:
-                unused_keypairs.append({tenant_name: keys_list})
+                unused_keypairs.append({tnt_name: keys_list})
 
         if unused_keypairs:
             msg = 'Tenant\'s key_pairs {0} exist on destination,' \
@@ -231,8 +245,10 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
             for src_vm in tenant['vms']:
                 if not src_vm['flavor'] in dst_flavors_list:
                     flvlist.append(src_vm['flavor'])
+            tnt_name = self.migration_utils.check_mapped_tenant(
+                tenant_name=tenant_name)
             if flvlist:
-                unused_flavors.append({tenant_name: flvlist})
+                unused_flavors.append({tnt_name: flvlist})
 
         if unused_flavors:
             msg = 'Tenant\'s flavors {0} do not exist on destination,' \
@@ -270,8 +286,11 @@ class VerifyDstDeletedTenantResources(functional_test.FunctionalTest):
             non_migrated_subnets = set(
                 src_tenant_net_names) ^ set(migrated_subnets)
 
+            tnt_name = self.migration_utils.check_mapped_tenant(
+                tenant_name=tenant_name)
+
             if non_migrated_subnets:
-                tenants_subnets.append({tenant_name: non_migrated_subnets})
+                tenants_subnets.append({tnt_name: non_migrated_subnets})
 
         if tenants_subnets:
             msg = 'Tenant\'s subnets do not exist on destination,' \

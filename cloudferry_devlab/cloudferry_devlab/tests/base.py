@@ -299,18 +299,20 @@ class BasePrerequisites(object):
                 continue
             if not user.get('enabled') or user.get('deleted'):
                 continue
-            if not self.tenant_exists(user['tenant']) or \
+            tnt_name = self.migration_utils.check_mapped_tenant(
+                tenant_name=user['tenant'], cloud_prefix=self.cloud_prefix)
+            if not self.tenant_exists(tnt_name) or \
                     not self.user_has_not_primary_tenants(user['name']):
                 continue
             try:
                 self.switch_user(user['name'], user['password'],
-                                 user['tenant'])
+                                 tnt_name)
             except ks_exceptions.Unauthorized:
                 self.keystoneclient.users.update(
                     self.get_user_id(user['name']), password=user['password'],
-                    tenant=user['tenant'])
+                    tenant=tnt_name)
                 self.switch_user(user['name'], user['password'],
-                                 user['tenant'])
+                                 tnt_name)
             keypairs.extend(self.novaclient.keypairs.list())
         return keypairs
 
@@ -319,12 +321,14 @@ class BasePrerequisites(object):
         self.switch_user(self.username, self.password, self.tenant)
         server_groups = self.novaclient.server_groups.list()
         for tenant in self.config.tenants:
-            if not self.tenant_exists(tenant['name']):
+            tnt_name = self.migration_utils.check_mapped_tenant(
+                tenant_name=tenant['name'], cloud_prefix=self.cloud_prefix)
+            if not self.tenant_exists(tnt_name):
                 continue
             with utils.AddAdminUserRoleToNonAdminTenant(
-                    self.keystoneclient, self.username, tenant['name']):
+                    self.keystoneclient, self.username, tnt_name):
                 self.switch_user(self.username, self.password,
-                                 tenant['name'])
+                                 tnt_name)
                 server_groups.extend(self.novaclient.server_groups.list())
         self.switch_user(self.username, self.password, initial_tenant)
         return server_groups
