@@ -81,6 +81,11 @@ class TransportEphemeral(action.Action):
                                              host)
             diff_path = diff['path_dst']
             backing_path = qemu_img.detect_backing_file(diff_path, None)
+
+            if backing_path is None:
+                # Ignore missing ephemeral backing file
+                continue
+
             LOG.debug('Transport Ephemeral rebase diff: diff_path=%s, '
                       'backing_path=%s', diff_path, backing_path)
             backing_dir = os.path.dirname(backing_path)
