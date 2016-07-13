@@ -104,8 +104,8 @@ class CinderStorageTestCase(test.TestCase):
 
         volume = self.cinder_client.create_volume(100500, name='fake')
 
-        self.mock_client().volumes.create.assert_called_once_with(100500,
-                                                                  name='fake')
+        self.mock_client().volumes.create.assert_called_once_with(
+            100500, name='fake', volume_type=None)
         self.assertEqual(self.fake_volume_0, volume)
 
     def test_get_volume_by_id(self):

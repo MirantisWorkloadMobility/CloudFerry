@@ -163,6 +163,7 @@ class MigrateVolumes(action.Action):
                     retrying.TimeoutExceeded,
                     exception.TenantNotPresentInDestination,
                     cinder_exceptions.OverLimit,
+                    cinder_exceptions.NotFound,
                     copy_mechanisms.CopyFailed) as e:
                 LOG.warning("%(error)s, volume %(name)s will be skipped",
                             {'error': e.message,
