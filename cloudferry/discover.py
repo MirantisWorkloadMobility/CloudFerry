@@ -208,10 +208,29 @@ def discover_all(cfg, cloud):
     LOG.info('Finished discovery process for cloud %s', cloud.name)
 
 
-def load_from_cloud(cfg, cloud, model_class, data):
+def get_discoverer(cfg, cloud, model_class):
+    """
+    Returns discoverer for given model class and cloud
+    :param cfg: cloudferry configuration object
+    :param cloud: cloud configuration object
+    :param model_class: model.Model derived class
+    :return: discoverer object
+    """
     discoverer_class = cloud.discoverers.get(model_class)
     if discoverer_class is None:
         LOG.error('Can\'t find discoverer for %s', utils.qualname(model_class))
         raise DiscovererNotFound(model_class)
-    discoverer = discoverer_class(cfg, cloud)
+    return discoverer_class(cfg, cloud)
+
+
+def load_from_cloud(cfg, cloud, model_class, data):
+    """
+    Returns instance of ``model_class`` created using data.
+    :param cfg: cloudferry configuration object
+    :param cloud: cloud configuration object
+    :param model_class: model.Model derived class
+    :param data: data which to use when constructing object
+    :return: ``model_class`` instance
+    """
+    discoverer = get_discoverer(cfg, cloud, model_class)
     return discoverer.load_from_cloud(data)

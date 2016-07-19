@@ -171,8 +171,27 @@ class Integer(_FieldWithTable, fields.Integer):
     pass
 
 
-class Dict(_FieldWithTable, fields.Dict):
+class Float(_FieldWithTable, fields.Float):
     pass
+
+
+class Dict(_FieldWithTable, fields.Dict):
+    @staticmethod
+    def equals(lhs, rhs):
+        """
+        Returns True if both ``lhs`` dictionary and ``rhs`` dictionary have
+        identical contents.
+        :param lhs: one dictionary
+        :param rhs: other dictionary
+        :return: True if dictionaries are equal, False otherwise
+        """
+        keys = set(lhs.keys())
+        if keys != set(rhs.keys()):
+            return False
+        for key in keys:
+            if lhs[key] != rhs[key]:
+                return False
+        return True
 
 
 class Reference(_FieldWithTable, fields.Field):

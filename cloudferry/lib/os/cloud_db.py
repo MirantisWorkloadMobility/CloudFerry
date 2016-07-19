@@ -81,7 +81,7 @@ class _ConnectionWrapper(object):
                   self._settings.port, self._settings.database, sql, kwargs)
         with self._conn.cursor() as cursor:
             rowcount = cursor.execute(sql, kwargs)
-            assert rowcount <= 0
+            assert rowcount <= 1
             return cursor.fetchone()
 
 
