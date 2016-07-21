@@ -80,6 +80,11 @@ class Prerequisites(base.BasePrerequisites):
                 configuration_ini=self.configuration_ini,
                 config=self.config)
 
+    def delete_volumes_from_db(self):
+        for volume in self.config.volumes_deleted_by_name_from_db:
+            vol_id = self.get_volume_id(volume)
+            self.clean_tools.delete_volume_by_id_from_db(vol_id, 'src')
+
     @clean_if_exists
     def create_users(self, users=None):
         def get_params_for_user_creating(_user):
@@ -1202,3 +1207,5 @@ class Prerequisites(base.BasePrerequisites):
         for vm in [self.get_vm_id(vm['name']) for vm in
                    self.src_vms_from_config if vm.get('broken')]:
             self.break_vm(vm)
+        self.log.info('Delete volumes from cinder database on SRC cloud.')
+        self.delete_volumes_from_db()

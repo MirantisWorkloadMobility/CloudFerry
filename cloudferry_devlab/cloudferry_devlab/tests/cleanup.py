@@ -80,6 +80,16 @@ class CleanEnv(base.BasePrerequisites):
                 self.get_volume_id(volume.display_name))
             LOG.info('Volume "%s" has been deleted', volume.display_name)
 
+    def delete_volume_by_id_from_db(self, vol_id, position):
+        cinder_mysql = self.mysql_connector('cinder', position)
+        if self.openstack_release == 'icehouse':
+            sql_vol_delete_by_id = "DELETE FROM volume_admin_metadata WHERE"\
+                " volume_id='{vol_id}'".format(vol_id=vol_id)
+            cinder_mysql.execute(sql_vol_delete_by_id)
+        sql_vol_delete_by_id = "DELETE FROM volumes WHERE"\
+            " id='{vol_id}'".format(vol_id=vol_id)
+        cinder_mysql.execute(sql_vol_delete_by_id)
+
     def clean_swift_containers_and_objects(self):
         containers = self.config.swift_containers
         for container in containers:

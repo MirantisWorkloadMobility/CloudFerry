@@ -140,6 +140,21 @@ class CinderMigrationTests(functional_test.FunctionalTest):
             for _file in volume['write_to_file']:
                 check_file_valid(volume['mount_point'] + _file['filename'])
 
+    def test_cinder_volumes_deleted_not_attached_to_vm(self):
+        """Validate volumes that were deleted from cinder DB are not attached
+        to migrated vms on destination cloud.
+        """
+
+        deleted_volumes_migrated = []
+        vol_name_list = self.dst_cloud.get_attached_server_volumes()
+        for vol in vol_name_list:
+            if vol in config.volumes_deleted_by_name_from_db:
+                deleted_volumes_migrated.append(vol)
+        if deleted_volumes_migrated:
+            self.fail(msg='Volume migrated despite that it was '
+                          'deleted from cinder DB, Volume info: \n{}'.format(
+                                deleted_volumes_migrated))
+
     def test_cinder_volumes_not_in_filter_did_not_migrate(self):
         """Validate volumes not in filter weren't migrated."""
         dst_volumes = [x.id for x in self.dst_volume_list]
@@ -156,6 +171,21 @@ class CinderMigrationTests(functional_test.FunctionalTest):
             self.fail(msg='Volumes migrated despite that it was not included '
                           'in filter, Volumes info: \n{}'.format(
                                 volumes_not_in_filter))
+
+    def test_cinder_volumes_deleted_from_db_did_not_migrate(self):
+        """Validate volumes that were deleted from cinder DB
+        weren't migrated.
+        """
+        dst_volumes = [self.dst_cloud.get_volume_name(x.id)
+                       for x in self.dst_volume_list]
+        deleted_volumes_migrated = []
+        for volume in config.volumes_deleted_by_name_from_db:
+            if volume in dst_volumes:
+                deleted_volumes_migrated.append(volume)
+        if deleted_volumes_migrated:
+            self.fail(msg='Volume migrated despite that it was '
+                          'deleted from cinder DB, Volume info: \n{}'.format(
+                                deleted_volumes_migrated))
 
     def test_invalid_status_cinder_volumes_did_not_migrate(self):
         """Validate volumes with invalid statuses weren't migrated.
