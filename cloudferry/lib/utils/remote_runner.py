@@ -20,6 +20,7 @@ from fabric import exceptions as fabric_exceptions
 from oslo_config import cfg
 
 from cloudferry.lib.base import exception
+from cloudferry.lib.utils import log
 from cloudferry.lib.utils import retrying
 from cloudferry.lib.utils import utils
 
@@ -61,7 +62,7 @@ class RemoteTunnelOptions(object):
 class RemoteRunner(object):
     def __init__(self, host, user, password=None, sudo=False, key=None,
                  ignore_errors=False, timeout=None, gateway=None,
-                 remote_tunnel=None):
+                 remote_tunnel=None, mute_stdout=False):
         """ Runner a command on remote host.
 
         :param host: the remote host to execute a command.
@@ -73,6 +74,7 @@ class RemoteRunner(object):
         :param timeout: execute timeout
         :param gateway: ssh gateway to connect to the remote host
         :param remote_tunnel: the object of ``RemoteTunnelOptions`` class
+        :param mute_stdout: Mute stdout
         """
         self.host = host
         if key is None:
@@ -85,6 +87,19 @@ class RemoteRunner(object):
         self.timeout = timeout
         self.gateway = gateway
         self.remote_tunnel = remote_tunnel
+        self.mute_stdout = mute_stdout
+
+    def _run_with_remote_tunnel(self, func):
+        def run(cmd):
+            with self.remote_tunnel():
+                return func(cmd)
+        return run
+
+    def _run_with_mute_stdout(self, func):
+        def run(cmd):
+            with log.StdoutLogger.mute():
+                return func(cmd)
+        return run
 
     def run(self, cmd, **kwargs):
         abort_exception = None
@@ -101,6 +116,12 @@ class RemoteRunner(object):
         else:
             run = api.run
 
+        if self.remote_tunnel is not None:
+            run = self._run_with_remote_tunnel(run)
+
+        if self.mute_stdout:
+            run = self._run_with_mute_stdout(run)
+
         with api.settings(warn_only=self.ignore_errors,
                           host_string=self.host,
                           user=self.user,
@@ -115,15 +136,12 @@ class RemoteRunner(object):
                 LOG.debug("running '%s' on '%s' host as user '%s'",
                           cmd, self.host, self.user)
                 try:
-                    if self.remote_tunnel is not None:
-                        with self.remote_tunnel():
-                            result = run(cmd)
-                    else:
-                        result = run(cmd)
+                    result = run(cmd)
                 except fabric_exceptions.NetworkError as e:
                     raise RemoteExecutionError(e.message)
-                LOG.debug('[%s] Command "%s" result: %s',
-                          self.host, cmd, result)
+                if not self.mute_stdout:
+                    LOG.debug('[%s] Command "%s" result: %s',
+                              self.host, cmd, result)
                 return result
 
     def run_ignoring_errors(self, cmd, **kwargs):

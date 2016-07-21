@@ -4,12 +4,6 @@
 # not exist in the destination cloud until after the migration has been completed.
 # Use path to this file in the configuration.ini in block [migrate].
 
-preparation:
-  - create_snapshot: True
-
-rollback:
-  - restore_from_snapshot: True
-
 process:
   - task_associations_transporting:
       - act_server_group_trans: True

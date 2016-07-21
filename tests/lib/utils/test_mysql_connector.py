@@ -23,7 +23,7 @@ class GetDbTestCase(test.TestCase):
         config = mock.MagicMock()
         config.mysql.db_host = "db_vip"
         expected = "mysql_node"
-        config.migrate.mysqldump_host = expected
+        config.mysqldump.mysqldump_host = expected
 
         self.assertEqual(expected, mysql_connector.get_db_host(config))
 
@@ -31,6 +31,6 @@ class GetDbTestCase(test.TestCase):
         config = mock.MagicMock()
         expected = "db_vip"
         config.mysql.db_host = expected
-        config.migrate.mysqldump_host = None
+        config.mysqldump.mysqldump_host = None
 
         self.assertEqual(expected, mysql_connector.get_db_host(config))

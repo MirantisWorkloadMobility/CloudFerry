@@ -196,9 +196,6 @@ migrate_opts = [
                choices=['nova', 'cobalt'],
                help='Live migration type used for in-cloud live migration. '
                     'Possible values: "nova", "cobalt".'),
-    cfg.StrOpt('mysqldump_host',
-               help='IP or hostname used for creating MySQL dump for rollback.'
-                    'If not set uses `[dst] db_host` config option.'),
     cfg.BoolOpt('optimize_user_role_fetch', default=True,
                 help="Uses low-level DB requests if set to True, "
                 "may be incompatible with more recent versions of "
@@ -255,7 +252,7 @@ migrate_opts = [
                 help="Migrate the whole cloud despite the filter file."),
     cfg.IntOpt('image_save_timeout', default=600,
                help='Time to wait for image backed to save an image. '
-                    'Value is in seconds.')
+                    'Value is in seconds.'),
 ]
 
 
@@ -312,8 +309,9 @@ src_storage = cfg.OptGroup(name='src_storage',
 
 src_storage_opts = [
     cfg.StrOpt('backend', default='nfs',
-               choices=['nfs', 'iscsi-vmax'],
-               help='Cinder volume backend. Possible values: nfs, iscsi-vmax'),
+               choices=['nfs', 'iscsi-vmax', 'shared-nfs'],
+               help='Cinder volume backend. Possible values: nfs, iscsi-vmax '
+                    'and shared-nfs'),
     cfg.StrOpt('db_host', default=None,
                help='Cinder DB host/IP address'),
     cfg.IntOpt('db_port', default=3306,
@@ -482,8 +480,9 @@ dst_storage = cfg.OptGroup(name='dst_storage',
 
 dst_storage_opts = [
     cfg.StrOpt('backend', default='nfs',
-               choices=['nfs', 'iscsi-vmax'],
-               help='Cinder volume backend. Possible values: nfs, iscsi-vmax'),
+               choices=['nfs', 'iscsi-vmax', 'shared-nfs'],
+               help='Cinder volume backend. Possible values: nfs, iscsi-vmax '
+                    'and shared-nfs'),
     cfg.StrOpt('host', default=None,
                help='storage node ip address'),
     cfg.StrOpt('db_host', default=None,
@@ -587,12 +586,6 @@ dst_network_opts = [
                      "to True, and only tenant quotas otherwise.")
 ]
 
-snapshot = cfg.OptGroup(name='snapshot',
-                        title="Rules for snapshot")
-
-snapshot_opts = [
-    cfg.StrOpt('snapshot_path', default="dump.sql")]
-
 initial_check = cfg.OptGroup(name='initial_check',
                              title='Configuration for initial checks')
 
@@ -680,6 +673,24 @@ rollback_opts = [
                      "at rollback.")
 ]
 
+mysqldump_group = cfg.OptGroup(name='mysqldump',
+                               title="Settings for the mysqldump")
+
+mysqldump_opts = [
+    cfg.BoolOpt('run_mysqldump_locally', default=True,
+                help="Run mysqldump command on localhost where CloudFerry is "
+                     "running."),
+    cfg.StrOpt('mysqldump_host', default=None,
+               help='IP or hostname used for executing mysqldump command.'
+                    'If not set uses `db_host` config option.'),
+    cfg.StrOpt('db_dump_filename',
+               default="dump_{position}_{database}_{time}.sql",
+               help="Filename template to store a dump of a database."),
+    cfg.BoolOpt('dump_all_databases', default=False,
+                help="Make a snapshot of all databases for source and "
+                     "destination clouds"),
+]
+
 cfg_for_reg = [
     (src, src_opts),
     (dst, dst_opts),
@@ -698,7 +709,6 @@ cfg_for_reg = [
     (dst_identity, dst_identity_opts),
     (dst_image, dst_image_opts),
     (dst_network, dst_network_opts),
-    (snapshot, snapshot_opts),
     (initial_check, initial_check_opts),
     (condense, condense_opts),
     (database, database_opts),
@@ -706,6 +716,7 @@ cfg_for_reg = [
     (bbcp_group, bbcp_opts),
     (rsync_group, rsync_opts),
     (rollback_group, rollback_opts),
+    (mysqldump_group, mysqldump_opts),
 ]
 
 CONF = cfg.CONF
