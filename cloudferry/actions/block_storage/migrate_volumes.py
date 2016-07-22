@@ -22,6 +22,7 @@ from cinderclient.v2 import volumes as volumes_v2
 from cloudferry.lib.base import exception
 from cloudferry.lib.base.action import action
 from cloudferry.lib.os.identity import keystone
+from cloudferry.lib.copy_engines import base as copy_engines_base
 from cloudferry.lib.os.storage import cinder_db
 from cloudferry.lib.os.storage import plugins
 from cloudferry.lib.os.storage.plugins import copy_mechanisms
@@ -279,6 +280,7 @@ class MigrateVolumes(action.Action):
                         exception.TenantNotPresentInDestination,
                         cinder_exceptions.ClientException,
                         copy_mechanisms.CopyFailed,
+                        copy_engines_base.NotEnoughSpace,
                         mysql_connector.MySQLError) as e:
                     LOG.warning("%(error)s, volume %(name)s will be skipped",
                                 {'error': e.message,

@@ -14,6 +14,7 @@
 
 import logging
 import math
+import re
 import os
 
 from fabric import api
@@ -178,6 +179,63 @@ class grant_all_permissions(object):
     def restore_permissions(self):
         self._restore_access(self.file_path, self.old_file_perms)
         self._restore_access(self.dir_path, self.old_dir_perms)
+
+
+BLOCKSIZE_K = 1 << 10
+BLOCKSIZE_M = BLOCKSIZE_K << 10
+BLOCKSIZE_G = BLOCKSIZE_M << 10
+
+
+def gnu_df_output_parser(df_output):
+    path_pattern = r'[\w/.:-]+'
+
+    pattern = r'^({path_pattern})\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)%\s+' \
+              r'({path_pattern})$'.format(path_pattern=path_pattern)
+
+    res = []
+
+    # ignore header
+    for line in df_output.splitlines()[1:]:
+        matched = re.match(pattern, line)
+
+        if matched is None:
+            LOG.debug("Unexpected output from 'df', failed to parse line "
+                      "'%s'!", line)
+            continue
+
+        fs, nblocks, used, avail, percentage, mount = matched.groups()
+        res.append({
+            'filesystem': fs,
+            'num_blocks': int(nblocks),
+            'blocks_used': int(used),
+            'blocks_available': int(avail),
+            'use_percentage': int(percentage),
+            'mount_point': mount
+        })
+
+    return res
+
+
+def remote_df(runner, path=None, block_size=BLOCKSIZE_M):
+    if path is None:
+        path = ''
+
+    df_cmd = 'BLOCKSIZE={block_size} df --portability {path}'.format(
+        block_size=block_size, path=path)
+    df_output = runner.run(df_cmd)
+
+    return gnu_df_output_parser(df_output)
+
+
+def remote_free_space(runner, path, block_size=BLOCKSIZE_M):
+    try:
+        # there should be only one mount point for a path
+        df_result = remote_df(runner, path, block_size=block_size)[0]
+        return df_result['blocks_available']
+    except (IndexError, KeyError) as e:
+        LOG.debug("Failed to get free space for path '%s' on node '%s': %s",
+                  path, runner.host, e)
+        return 0
 
 
 def remote_file_size(runner, path):

@@ -15,6 +15,7 @@
 from cloudferry.lib.base import exception
 from cloudferry.lib.os.storage.plugins import base
 from cloudferry.lib.os.storage.plugins import copy_mechanisms
+from cloudferry.lib.utils import files
 from cloudferry.lib.utils import remote_runner
 from cloudferry.lib.utils import log
 
@@ -91,5 +92,5 @@ class SharedNFSPlugin(NFSPlugin):
                                         sudo=True,
                                         ignore_errors=True)
 
-        cmd = "df \"{path}\" |  tail -1 | awk '{{ print $1 }}'"
-        return rr.run(cmd, path=path)
+        df = files.remote_df(rr, path=path)
+        return df[0]['filesystem'] if df else None

@@ -70,6 +70,17 @@ class BaseCopierTestCase(BaseTestCase):
             self.assertCalledOnce(runner.run_ignoring_errors)
 
 
+class VerifySpaceInDestinationCopierTestCase(test.TestCase):
+    def test_raises_not_enough_space(self):
+        fake_copier = mock.Mock()
+        fake_copier.destination_has_enough_space.return_value = False
+        data = mock.MagicMock()
+
+        copier = base.CopierVerifyingSpaceInDestination(fake_copier)
+
+        self.assertRaises(base.NotEnoughSpace, copier.transfer, data)
+
+
 class FakeCopier(base.BaseCopier):
     name = 'fake'
 
@@ -100,7 +111,8 @@ class GetCopierTestCase(test.TestCase):
                                         'host_dst': 'fake_host_dst'})
 
     def test_get_copier(self):
-        self.assertIsInstance(self.get_copier('fake').copier, FakeCopier)
+        self.assertIsInstance(self.get_copier('fake').copier.copier,
+                              FakeCopier)
 
     def test_get_copier_not_found(self):
         self.assertRaises(base.CopierNotFound, self.get_copier, 'fake_fake')
