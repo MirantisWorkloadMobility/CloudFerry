@@ -34,6 +34,9 @@ DEFAULT_DISCOVERER_LIST = [
     'cloudferry.lib.os.discovery.glance.ImageMemberDiscoverer',
     'cloudferry.lib.os.discovery.cinder.VolumeDiscoverer',
     'cloudferry.lib.os.discovery.cinder.AttachmentDiscoverer',
+    'cloudferry.lib.os.discovery.neutron.QuotaDiscoverer',
+    'cloudferry.lib.os.discovery.neutron.NetworkDiscoverer',
+    'cloudferry.lib.os.discovery.neutron.SubnetDiscoverer',
     'cloudferry.lib.os.discovery.nova.FlavorDiscoverer',
     'cloudferry.lib.os.discovery.nova.ServerDiscoverer',
 ]

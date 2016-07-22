@@ -97,15 +97,7 @@ class Discoverer(object):
                       model_qualname, object_id)
 
         try:
-            discoverer_class = self.cloud.discoverers.get(model_class)
-            if discoverer_class is None:
-                LOG.warning('Can\'t find discoverer class for %s',
-                            model_qualname)
-                raise DiscovererNotFound(model_class)
-            LOG.debug('Trying to discover %s with ID %s using %s',
-                      model_qualname, object_id,
-                      utils.qualname(discoverer_class))
-            discoverer = discoverer_class(self.config, self.cloud)
+            discoverer = get_discoverer(self.config, self.cloud, model_class)
             return discoverer.discover_one(uuid)
         except NotFound:
             LOG.warning('Object %s with uuid %s not found in cloud %s',
@@ -197,14 +189,14 @@ def discover_all(cfg, cloud):
     """
     LOG.info('Start discovery process for cloud %s', cloud.name)
     for discoverer_class in cloud.discoverers.values():
-        LOG.debug('Starting discovering %s using %s',
-                  utils.qualname(discoverer_class.discovered_class),
-                  utils.qualname(discoverer_class))
+        LOG.info('Starting discovering %s using %s',
+                 utils.qualname(discoverer_class.discovered_class),
+                 utils.qualname(discoverer_class))
         discoverer = discoverer_class(cfg, cloud)
         discoverer.discover_all()
-        LOG.debug('Finished discovering %s using %s',
-                  utils.qualname(discoverer_class.discovered_class),
-                  utils.qualname(discoverer_class))
+        LOG.info('Finished discovering %s using %s',
+                 utils.qualname(discoverer_class.discovered_class),
+                 utils.qualname(discoverer_class))
     LOG.info('Finished discovery process for cloud %s', cloud.name)
 
 
