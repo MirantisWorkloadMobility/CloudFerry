@@ -49,6 +49,8 @@ class KeystoneMigrationTests(functional_test.FunctionalTest):
     def test_migrate_keystone_user_tenant_roles(self):
         """Validate user's tenant roles were migrated with correct name."""
         tenant = base.get_nosetest_cmd_attribute_val('migrated_tenant')
+        dst_tenant = self.migration_utils.check_mapped_tenant(
+            tenant_name=tenant)
         for dst_user in self.dst_users:
             src_user = None
             for user in self.src_users:
@@ -66,7 +68,7 @@ class KeystoneMigrationTests(functional_test.FunctionalTest):
                 src_user_tnt_roles = self.src_cloud.get_roles_for_user(
                                          src_user, tenant)
                 dst_user_tnt_roles = self.dst_cloud.get_roles_for_user(
-                                         dst_user, tenant)
+                                         dst_user, dst_tenant)
             if len(src_user_tnt_roles) == 0 and len(dst_user_tnt_roles) == 0:
                 continue
             self.validate_resource_parameter_in_dst(
@@ -107,7 +109,9 @@ class KeystoneMigrationTests(functional_test.FunctionalTest):
         src_tenants = filtering_data[0]
         src_tenants = [tenant for tenant in src_tenants
                        if getattr(tenant, "name") !=
-                       config.case_sensitivity_test_tenant]
+                       config.case_sensitivity_test_tenant and
+                       getattr(tenant, "name") not in
+                       config.mapped_tenant_dict.keys()]
 
         self.validate_resource_parameter_in_dst(src_tenants, dst_tenants,
                                                 resource_name='tenant',

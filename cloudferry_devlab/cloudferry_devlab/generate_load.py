@@ -324,6 +324,16 @@ class Prerequisites(base.BasePrerequisites):
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
+    def update_resource_map(self):
+        rsc_map_dict = {
+            'tenant_map': self.config.mapped_tenant_dict
+        }
+        map_filename = self.get_abs_path(self.config.rsc_map_filename)
+        if not os.path.exists(os.path.dirname(map_filename)):
+            os.makedirs(os.path.dirname(map_filename))
+        with open(map_filename, "w") as f:
+            yaml.dump(rsc_map_dict, f, default_flow_style=False)
+
     @clean_if_exists
     def create_flavors(self, flavor_list=None):
         def create_flvrs(flavors, ten_id):
@@ -901,6 +911,8 @@ class Prerequisites(base.BasePrerequisites):
                     tnt_name = t['name']
                     if t.get('uppercase'):
                         tnt_name = t['name'].upper()
+                    tnt_name = self.migration_utils.check_mapped_tenant(
+                        tenant_name=tnt_name)
                     self.log.debug("Creating tenant wo security group %s.",
                                    t['name'])
                     self.dst_cloud.keystoneclient.tenants.create(
@@ -1144,6 +1156,8 @@ class Prerequisites(base.BasePrerequisites):
         self.update_filtering_file()
         self.log.info('Create all tenants filter file.')
         self.update_filtering_file(all_tenants_filter=True)
+        self.log.info('Update Tenant Resource Map')
+        self.update_resource_map()
         self.log.info('Creating vm snapshots.')
         self.create_vm_snapshots()
         self.log.info('Create tenant on DST cloud, without security group.')

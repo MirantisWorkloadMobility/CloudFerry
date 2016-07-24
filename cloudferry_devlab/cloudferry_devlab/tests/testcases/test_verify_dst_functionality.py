@@ -64,9 +64,12 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         except ks_exceptions.Conflict:
             pass
 
+        tnt_name = self.migration_utils.check_mapped_tenant(
+            tenant_name=TEST_TENANT_NAME)
+
         self.dst_cloud.switch_user(user=self.dst_cloud.username,
                                    password=self.dst_cloud.password,
-                                   tenant=TEST_TENANT_NAME)
+                                   tenant=tnt_name)
 
         # declare vars in case if condition below will not be satisfied
         image_name = ''
@@ -76,7 +79,7 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         # create vm parameters
         flavor_name = config.flavors[0]['name']
         for tenant in config.tenants:
-            if tenant['name'] == TEST_TENANT_NAME:
+            if tenant['name'] == tnt_name:
                 image_name = tenant['images'][0]['name']
                 nic_name = tenant['networks'][0]['name']
                 self.neutron_float_ip_quota = \
@@ -133,9 +136,12 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
 
     def tearDown(self):
 
+        tnt_name = self.migration_utils.check_mapped_tenant(
+            tenant_name=TEST_TENANT_NAME)
+
         self.dst_cloud.switch_user(user=self.dst_cloud.username,
                                    password=self.dst_cloud.password,
-                                   tenant=TEST_TENANT_NAME)
+                                   tenant=tnt_name)
 
         cinder_volumes = self.dst_cloud.cinderclient.volumes.list()
         for volume in cinder_volumes:
@@ -155,7 +161,7 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         self.release_fips_tenant()
 
         self.update_floatip_neutron_quota(self.fip_quota_neutron,
-                                          TEST_TENANT_NAME)
+                                          tnt_name)
 
         try:
             # remove admin role of the dst admin account for test tenant
@@ -335,8 +341,11 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
     def test_floating_ips_neutron_quota(self):
         """Validate destination cloud's floating IP quota information."""
         self.release_fips_tenant()
+        tnt_name = self.migration_utils.check_mapped_tenant(
+            tenant_name=TEST_TENANT_NAME)
+
         self.update_floatip_neutron_quota(self.neutron_float_ip_quota,
-                                          TEST_TENANT_NAME)
+                                          tnt_name)
         self.release_fips_tenant()
 
         for _ in xrange(self.neutron_float_ip_quota):

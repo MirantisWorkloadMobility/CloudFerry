@@ -153,6 +153,8 @@ class NetrworkingMigrationTests(functional_test.FunctionalTest):
                 if src_router['name'] == dst_router['name']:
                     src_tenant_name = self.src_cloud.get_tenant_name(
                         src_router['tenant_id'])
+                    src_tenant_name = self.migration_utils.check_mapped_tenant(
+                        tenant_name=src_tenant_name)
                     self.assertTrue(src_tenant_name == dst_tenant_name,
                                     msg='DST tenant name %s is not equal to '
                                         'SRC %s' %
