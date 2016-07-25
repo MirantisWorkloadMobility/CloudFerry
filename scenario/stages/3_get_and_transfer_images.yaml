@@ -2,11 +2,9 @@
 # members.
 
 preparation:
-  - create_snapshot: True
   - create_image_snapshot_dst: True
 
 rollback:
-  - restore_from_snapshot: True
   - image_rollback_dst: True
 
 process:

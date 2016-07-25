@@ -3,9 +3,6 @@
 #Following resources going to be migrated:
 #identity, compute, keypairs, networks.
 
-preparation:
-  - create_snapshot: True
-
 process:
   - act_get_filter: True
   - act_check_filter: True

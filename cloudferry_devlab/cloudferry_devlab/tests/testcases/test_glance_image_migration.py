@@ -45,6 +45,8 @@ class GlanceMigrationTests(functional_test.FunctionalTest):
                 mbr_list = []
                 for mem in members:
                     mem_name = auth_client.tenants.find(id=mem.member_id).name
+                    mem_name = self.migration_utils.check_mapped_tenant(
+                        tenant_name=mem_name)
                     mbr_list.append(mem_name)
                 _members.append({img.name: sorted(mbr_list)})
             return sorted(_members)

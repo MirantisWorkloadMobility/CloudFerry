@@ -37,8 +37,12 @@ class VerifyDstCloudFunctionality(functional_test.FunctionalTest):
         self.dst_cloud.switch_user(user=self.dst_cloud.username,
                                    password=self.dst_cloud.password,
                                    tenant=self.dst_cloud.tenant)
+
+        tnt_name = self.migration_utils.check_mapped_tenant(
+            tenant_name=TEST_TENANT_NAME)
+
         self.dst_test_tenant_id = \
-            self.dst_cloud.get_tenant_id(TEST_TENANT_NAME)
+            self.dst_cloud.get_tenant_id(tnt_name)
 
         self.dst_net_sid_mapping = []
         self.dst_all_nets_sids = []

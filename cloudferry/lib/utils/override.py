@@ -13,7 +13,13 @@
 # limitations under the License.
 import yaml
 
+from cloudferry.lib.base import exception
+
 ABSENT = object()
+
+
+class InvalidOverrideConfigError(exception.AbortMigrationError):
+    pass
 
 
 class OverrideRule(object):
@@ -57,7 +63,13 @@ class OverrideRule(object):
                     (attribute, repr(match)))
 
 
+def get_filename_from_stream(stream):
+    return getattr(stream, 'name', 'stream')
+
+
 class AttributeOverrides(object):
+    ALLOWED_OBJECT_TYPES = ['volumes', 'servers']
+
     def __init__(self, mapping):
         self.mapping = {}
         for attr, rules in mapping.items():
@@ -70,18 +82,41 @@ class AttributeOverrides(object):
                     'list): %s' % (attr, repr(rules)))
 
     @classmethod
-    def from_filename(cls, mapping_filename):
+    def from_stream(cls, stream, object_type):
+        data = yaml.load(stream)
+        if not isinstance(data, dict):
+            raise TypeError('%s root object must be dictionary!' %
+                            (get_filename_from_stream(stream),))
+        object_data = data.get(object_type, {})
+
+        if not set(data.keys()).issubset(set(cls.ALLOWED_OBJECT_TYPES)):
+            raise InvalidOverrideConfigError(
+                "Mapping file '%s' has unsupported entries: '%s'. "
+                "Please make sure you follow template config." % (
+                    get_filename_from_stream(stream), data.keys()))
+
+        if not isinstance(object_data, dict):
+            raise TypeError('%s object in mapping file %s must be '
+                            'dictionary!' % (object_type,
+                                             get_filename_from_stream(stream)))
+        if not object_data:
+            return cls.zero()
+
+        return cls(object_data)
+
+    @classmethod
+    def from_filename(cls, mapping_filename, object_type):
         """
         Create AttributeOverrides based on YAML file
         :param mapping_filename: YAML config path
+        :param object_type: The type of objects
         :return: AttributeOverrides instance
         """
+        if mapping_filename is None:
+            return cls.zero()
+
         with open(mapping_filename, 'r') as f:
-            data = yaml.load(f)
-            if not isinstance(data, dict):
-                raise TypeError('%s root object must be dictionary!' %
-                                (mapping_filename,))
-        return cls(data)
+            return cls.from_stream(f, object_type)
 
     @classmethod
     def zero(cls):

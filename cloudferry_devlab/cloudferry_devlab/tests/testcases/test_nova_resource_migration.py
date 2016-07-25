@@ -133,10 +133,12 @@ class NovaResourceMigrationTests(functional_test.FunctionalTest):
             self.dst_cloud.keystoneclient.tenants.list(), self.dst_cloud)
         tenants_with_missed_quotas = []
         for tenant in src_quotas:
-            self.assertIn(tenant, dst_quotas,
-                          'Tenant %s is missing on dst' % tenant)
-            if src_quotas[tenant][param] != dst_quotas[tenant][param]:
-                tenants_with_missed_quotas.append(tenant)
+            tnt_name = self.migration_utils.check_mapped_tenant(
+                tenant_name=tenant)
+            self.assertIn(tnt_name, dst_quotas,
+                          'Tenant %s is missing on dst' % tnt_name)
+            if src_quotas[tenant][param] != dst_quotas[tnt_name][param]:
+                tenants_with_missed_quotas.append(tnt_name)
         if tenants_with_missed_quotas:
             self.fail(msg='%s quotas for tenants %s migrated not successfully'
                           % (param, tenants_with_missed_quotas))

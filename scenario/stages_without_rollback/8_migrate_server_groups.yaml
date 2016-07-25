@@ -4,9 +4,6 @@
 # cloud and place them in correct affinity or anti-affinity groups
 # if they had any.
 
-preparation:
-  - create_snapshot: True
-
 process:
   - task_associations_transporting:
       - act_server_group_trans: True
