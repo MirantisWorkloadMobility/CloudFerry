@@ -14,4 +14,4 @@ nose==1.3.7
 nose-testconfig==0.9.1
 sqlalchemy==1.0.12
 PyMySQL==0.6.7
-git+https://github.com/kevinastone/generator.git@nose-attribs#egg=test-generator
+git://github.com/kevinastone/generator.git@dc9c3a5ed5e8ba70f8d514e847b882f11807bd57#egg=test-generator
