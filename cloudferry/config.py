@@ -29,7 +29,10 @@ DEFAULT_MIGRATION_LIST = [
     'cloudferry.lib.os.migrate.glance.ImageMemberMigrationFlowFactory',
 ]
 DEFAULT_DISCOVERER_LIST = [
+    'cloudferry.lib.os.discovery.keystone.UserDiscoverer',
     'cloudferry.lib.os.discovery.keystone.TenantDiscoverer',
+    'cloudferry.lib.os.discovery.keystone.RoleDiscoverer',
+    'cloudferry.lib.os.discovery.keystone.UserRoleDiscoverer',
     'cloudferry.lib.os.discovery.glance.ImageDiscoverer',
     'cloudferry.lib.os.discovery.glance.ImageMemberDiscoverer',
     'cloudferry.lib.os.discovery.cinder.VolumeDiscoverer',

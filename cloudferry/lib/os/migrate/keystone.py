@@ -36,8 +36,8 @@ class CreateTenant(base.MigrationTask):
 
     def revert(self, *args, **kwargs):
         if self.created_object is not None:
-            # TODO: retry delete
-            self.dst_identity.tenants.delete(self.created_object)
+            identity_client = clients.identity_client(self.dst_cloud)
+            clients.retry(identity_client.tenants.delete, self.created_object)
         super(CreateTenant, self).revert(*args, **kwargs)
 
 

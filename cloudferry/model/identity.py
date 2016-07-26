@@ -26,3 +26,44 @@ class Tenant(model.Model):
         if super(Tenant, self).equals(other):
             return True
         return self.name.lower() == other.name.lower()
+
+
+@model.type_alias('users')
+class User(model.Model):
+    object_id = model.PrimaryKey()
+    name = model.String(required=True)
+    enabled = model.Boolean(required=True)
+
+    def equals(self, other):
+        # pylint: disable=no-member
+        if super(User, self).equals(other):
+            return True
+        return self.name.lower() == other.name.lower()
+
+
+@model.type_alias('roles')
+class Role(model.Model):
+    object_id = model.PrimaryKey()
+    name = model.String(required=True)
+
+    def equals(self, other):
+        # pylint: disable=no-member
+        if super(Role, self).equals(other):
+            return True
+        return self.name.lower() == other.name.lower()
+
+
+@model.type_alias('user_roles')
+class UserRole(model.Model):
+    object_id = model.PrimaryKey()
+    tenant = model.Dependency(Tenant)
+    user = model.Dependency(User)
+    role = model.Dependency(Role)
+
+    def equals(self, other):
+        # pylint: disable=no-member
+        if super(UserRole, self).equals(other):
+            return True
+        return self.tenant.equals(other.tenant) \
+            and self.user.equals(other.user) \
+            and self.role.equals(other.role)
