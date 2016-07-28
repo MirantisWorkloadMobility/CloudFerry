@@ -80,9 +80,11 @@ class BbcpCopierTestCase(test_base.BaseTestCase):
             mock_run.assert_not_called()
 
             runner.reset_mock()
-            runner.run.side_effect = (remote_runner.RemoteExecutionError, None)
+            runner.run.side_effect = (remote_runner.RemoteExecutionError,
+                                      remote_runner.RemoteExecutionError,
+                                      None)
             self.copier.copy_bbcp('fake_host', 'src')
-            self.assertEqual(2, runner.run.call_count)
+            self.assertEqual(3, runner.run.call_count)
             self.assertCalledOnce(mock_run)
 
 
