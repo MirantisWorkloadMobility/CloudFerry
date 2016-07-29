@@ -64,7 +64,8 @@ class RemoteFileCopy(CopyMechanism):
             copier.transfer(data)
         except (base.FileCopyError,
                 base.CopierCannotBeUsed,
-                base.CopierNotFound) as e:
+                base.CopierNotFound,
+                base.NotEnoughSpace) as e:
             msg = ("Copying file from {src_host}@{src_file} to "
                    "{dst_host}@{dst_file}, error: {err}").format(
                 src_host=source_object.host,
