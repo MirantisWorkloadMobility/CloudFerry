@@ -53,12 +53,6 @@ class BaseInterruptHandler(object):
             self.released = True
 
 
-class IgnoreInterruptHandler(BaseInterruptHandler):
-    def enter(self):
-        for sig in self.sig_list:
-            signal.signal(sig, signal.SIG_IGN)
-
-
 class InterruptHandler(BaseInterruptHandler):
     def enter(self):
         def handler(signum, frame):  # pylint: disable=unused-argument
@@ -67,5 +61,5 @@ class InterruptHandler(BaseInterruptHandler):
             signal.signal(sig, handler)
 
 
-class InterruptedException(Exception):
+class InterruptedException(BaseException):
     pass

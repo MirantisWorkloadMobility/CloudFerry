@@ -14,7 +14,10 @@
 
 import logging
 
+from novaclient import exceptions as nova_exc
+
 from cloudferry.lib.base.action import action
+from cloudferry.lib.base import exception
 from cloudferry.lib.utils import utils
 
 LOG = logging.getLogger(__name__)
@@ -34,19 +37,29 @@ class CheckPointVm(action.Action):
 
 
 class VmRestore(action.Action):
-    def run(self, info_backup, **kwargs):
+    def run(self, **kwargs):
         src_compute = self.src_cloud.resources[utils.COMPUTE_RESOURCE]
         dst_compute = self.dst_cloud.resources[utils.COMPUTE_RESOURCE]
         for instance_id in set(dst_compute.processing_instances +
                                dst_compute.failed_instances):
             LOG.debug("Delete VM %s on DST", instance_id)
             dst_compute.force_delete_vm_by_id(instance_id)
-        for instance_id in src_compute.processing_instances:
-            instance = info_backup['instances'][instance_id]['instance']
-            LOG.debug("Status of '%s' (%s) is changed to original state %s on "
-                      "SRC", instance['name'], instance_id, instance['status'])
-            # reset status of vm
-            src_compute.change_status(
-                instance['status'],
-                instance_id=instance_id)
+        info_backup = kwargs.get('info_backup')
+        if info_backup:
+            for instance_id in src_compute.processing_instances:
+                instance = info_backup['instances'][instance_id]['instance']
+                LOG.debug("Status of '%s' (%s) is changed to original state "
+                          "%s on SRC", instance['name'], instance_id,
+                          instance['status'])
+                # reset status of vm
+                try:
+                    src_compute.change_status(
+                        instance['status'],
+                        instance_id=instance_id)
+                except (nova_exc.ClientException,
+                        exception.TimeoutException) as e:
+                    LOG.debug(e, exc_info=True)
+                    LOG.error("Status reset of instance '%s' has been failed "
+                              "with an error: %s", instance_id, e)
+
         return {}
