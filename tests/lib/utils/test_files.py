@@ -64,3 +64,34 @@ class RemoteDirTestCase(test.TestCase):
             pass
 
         self.assertCalledOnce(runner.run_ignoring_errors)
+
+
+class RemoteDFTestCase(test.TestCase):
+    def test_gnu_df_parser(self):
+        fs = '10.0.0.1:/nfs-dir/mount_point_A'
+        num_blocks = 40317
+        used = 2190
+        available = 36079
+        use_percent = 6
+        mount_point = '/'
+
+        df_output = (
+            "Filesystem     1M-blocks  Used Available Use% Mounted on\n" +
+            "{fs}          {mblocks}  {used}     {available}   " +
+            "{use_percentage}% {mount_point}"
+        ).format(fs=fs, mblocks=num_blocks, used=used, available=available,
+                 use_percentage=use_percent, mount_point=mount_point)
+
+        result = files.gnu_df_output_parser(df_output)
+
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 1)
+
+        res = result[0]
+        self.assertIsInstance(res, dict)
+        self.assertEqual(res['filesystem'], fs)
+        self.assertEqual(res['num_blocks'], num_blocks)
+        self.assertEqual(res['blocks_used'], used)
+        self.assertEqual(res['blocks_available'], available)
+        self.assertEqual(res['use_percentage'], use_percent)
+        self.assertEqual(res['mount_point'], mount_point)

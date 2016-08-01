@@ -28,6 +28,15 @@ CONF = cfg.CONF
 BBCP_PATH = '/tmp/bbcp'
 
 
+def _bbcp_installed(runner, bbcp):
+    try:
+        bbcp_help_template = "{bbcp} --help &>/dev/null"
+        runner.run(bbcp_help_template.format(bbcp=bbcp))
+        return True
+    except remote_runner.RemoteExecutionError:
+        return False
+
+
 class BbcpCopier(base.BaseCopier):
     """
     BBCP extension allows using the bbcp to transfer files beeetwen nodes.
@@ -46,12 +55,11 @@ class BbcpCopier(base.BaseCopier):
         runner = self.runner(host, position)
 
         LOG.debug("Checking if bbcp is installed on '%s' host", host)
-        cmd = "bbcp --help &>/dev/null"
-        try:
-            runner.run(cmd)
-        except remote_runner.RemoteExecutionError:
-            pass
-        else:
+
+        bbcp_installed = (_bbcp_installed(runner, 'bbcp') or
+                          _bbcp_installed(runner, BBCP_PATH))
+
+        if bbcp_installed:
             return
 
         if position == 'src':
@@ -62,15 +70,15 @@ class BbcpCopier(base.BaseCopier):
             user = CONF.dst.ssh_user
 
         LOG.debug("Copying %s to %s:%s", bbcp, host, BBCP_PATH)
-        cmd = "scp {ssh_opts} {bbcp} {user}@{host}:{tmp}"
-        local.run(cmd.format(ssh_opts=ssh_util.default_ssh_options(),
-                             bbcp=bbcp,
-                             user=user,
-                             host=host,
-                             tmp=BBCP_PATH),
+        scp_bbcp = "scp {ssh_opts} {bbcp} {user}@{host}:{tmp}"
+        local.run(scp_bbcp.format(ssh_opts=ssh_util.default_ssh_options(),
+                                  bbcp=bbcp,
+                                  user=user,
+                                  host=host,
+                                  tmp=BBCP_PATH),
                   capture_output=False)
-        cmd = "chmod 755 {path}"
-        runner.run(cmd, path=BBCP_PATH)
+        chmod_bbcp = "chmod 777 {path}"
+        runner.run(chmod_bbcp, path=BBCP_PATH)
 
     def transfer(self, data):
         host_src = data['host_src']

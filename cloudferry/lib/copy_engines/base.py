@@ -30,6 +30,10 @@ class FileCopyError(exception.CFBaseException):
                "to '{host_dst}:{path_dst}'")
 
 
+class NotEnoughSpace(exception.CFBaseException):
+    pass
+
+
 class BaseCopier(object):
     name = None
 
@@ -88,12 +92,37 @@ class BaseCopier(object):
         """
         return True
 
+    def destination_has_enough_space(self, data):
+        dst_host = data['host_dst']
+        dst_path = data['path_dst']
+        src_host = data['host_src']
+        src_path = data['path_src']
+
+        src_runner = self.runner(src_host, 'src')
+        dst_runner = self.runner(dst_host, 'dst')
+
+        file_size = files.remote_file_size_mb(src_runner, src_path)
+        available_space = files.remote_free_space(dst_runner, dst_path)
+
+        return file_size < available_space
+
     @classmethod
     def get_name(cls):
         return cls.name or cls.__name__
 
 
-class CopierAddingWritePermissionsInDestination(object):
+class CopierDecorator(object):
+    def __init__(self, copier):
+        self.copier = copier
+
+    def __getattr__(self, item):
+        return getattr(self.copier, item)
+
+    def __repr__(self):
+        return self.__class__.__name__ + repr(self.copier)
+
+
+class CopierAddingWritePermissionsInDestination(CopierDecorator):
     """Decorates concrete copiers.
 
     When running migration as unprivileged user (non-root), destination
@@ -103,8 +132,8 @@ class CopierAddingWritePermissionsInDestination(object):
     permissions back once done."""
 
     def __init__(self, copier, config):
+        super(CopierAddingWritePermissionsInDestination, self).__init__(copier)
         self.config = config
-        self.copier = copier
 
     def transfer(self, data):
         dst_host = data['host_dst']
@@ -119,11 +148,24 @@ class CopierAddingWritePermissionsInDestination(object):
         with files.grant_all_permissions(dst_runner, dst_path):
             self.copier.transfer(data)
 
-    def __getattr__(self, item):
-        return getattr(self.copier, item)
 
-    def __repr__(self):
-        return self.__class__.__name__ + repr(self.copier)
+class CopierVerifyingSpaceInDestination(CopierDecorator):
+    def transfer(self, data):
+        if self.copier.destination_has_enough_space(data):
+            self.copier.transfer(data)
+        else:
+            dst_host = data['host_dst']
+            dst_path = data['path_dst']
+            src_host = data['host_src']
+            src_path = data['path_src']
+
+            msg = ("Destination path '{dst_path}' on node '{dst_host}' does "
+                   "not have enough space to copy '{src_path}' from node "
+                   "'{src_host}'").format(src_path=src_path,
+                                          dst_path=dst_path,
+                                          src_host=src_host,
+                                          dst_host=dst_host)
+            raise NotEnoughSpace(msg)
 
 
 class CopierNotFound(exception.AbortMigrationError):
@@ -163,7 +205,9 @@ def get_copier(src_cloud, dst_cloud, driver=None):
     """
     copier_class = get_copier_class(driver)
     unsafe_copier = copier_class(src_cloud, dst_cloud)
-    copier = CopierAddingWritePermissionsInDestination(unsafe_copier, CONF)
+    copier = CopierVerifyingSpaceInDestination(
+        CopierAddingWritePermissionsInDestination(
+            unsafe_copier, CONF))
     return copier
 
 
