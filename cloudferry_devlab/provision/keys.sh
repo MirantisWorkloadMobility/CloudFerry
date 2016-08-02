@@ -1,32 +1,32 @@
 #!/bin/bash
 
-SCRIPT=$(basename $0)
+PUB_KEY=$1
+PRV_KEY=$2
+USERS=("${@:3}")
 
-error_exit() {
-    local message=$1
-
-    if [[ -n $message ]]; then
-        echo $message &>2
-        echo &>2
-    fi
-
-    echo "Usage: ${SCRIPT} --public-key <PUBLIC_KEY>"
-
+if [[ -z ${PUB_KEY} ]]
+then
+    echo "Missing user public-key"
     exit 1
-}
+fi
 
-while [[ $# -ge 1 ]]; do
-    case $1 in
-        --public-key) shift; PUB_KEY="$1"; shift;;
-        *) error_exit "Invalid arg $1";;
-    esac
+if [[ -z ${PRV_KEY} ]]
+then
+    echo "Missing user private-key"
+    exit 1
+fi
+
+for user in "${USERS[@]}"; do
+    home=$( awk -F: -v user=${user} 'user == $1 {print $(NF - 1)}' /etc/passwd )
+    ssh_dir="${home}/.ssh"
+    mkdir -p "${ssh_dir}"
+    echo "${PUB_KEY}" >> "${ssh_dir}/authorized_keys"
+    echo "${PUB_KEY}" > "${ssh_dir}/id_rsa.pub"
+    echo "${PRV_KEY}" > "${ssh_dir}/id_rsa"
+    chown "${user}:${user}" "${ssh_dir}" -R
+    chmod 700 "${ssh_dir}"
+    chmod 660 "${ssh_dir}/authorized_keys"
+    chmod 600 "${ssh_dir}/id_rsa"
+    chmod 644 "${ssh_dir}/id_rsa.pub"
 done
 
-[[ -z $PUB_KEY ]] && error_exit "Missing --public-key option"
-
-ssh_dir=/root/.ssh
-
-if ! grep -s "$PUB_KEY" $ssh_dir/authorized_keys; then
-    mkdir -p $ssh_dir
-    echo "$PUB_KEY" >> $ssh_dir/authorized_keys
-fi
