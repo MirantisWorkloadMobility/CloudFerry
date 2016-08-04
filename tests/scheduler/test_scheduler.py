@@ -17,6 +17,7 @@ import mock
 
 from cloudferry.lib.scheduler import scheduler
 from cloudferry.lib.scheduler import task
+from cloudferry.lib.utils import errorcodes
 
 from tests import test
 
@@ -27,17 +28,17 @@ class SchedulerTestCase(test.TestCase):
                        mock_out_task(),
                        mock_out_task()]
         s = scheduler.Scheduler(migration=fake_cursor)
-        s.event_start_task = mock.Mock()
-        s.event_start_task.return_value = True
-        s.event_end_task = mock.Mock()
-        s.start()
-        self.assertEqual(scheduler.NO_ERROR, s.status_error)
-        self.assertIsNotNone(s.event_start_task.call_args)
-        self.assertIn(fake_cursor[0], s.event_start_task.call_args[0])
-        self.assertIsNotNone(s.event_end_task.call_args)
-        self.assertIn(fake_cursor[0], s.event_end_task.call_args[0])
-        self.assertTrue(fake_cursor[0].run.called)
-        self.assertTrue(fake_cursor[2].run.called)
+        with mock.patch.object(s, 'event_start_task',
+                               return_value=True) as start_task:
+            with mock.patch.object(s, 'event_end_task') as end_task:
+                s.start()
+                self.assertEqual(errorcodes.NO_ERROR, s.status_error)
+                self.assertEqual(3, start_task.call_count)
+                start_task.assert_called_with(fake_cursor[0])
+                self.assertEqual(3, end_task.call_count)
+                end_task.assert_called_with(fake_cursor[0])
+                for t in fake_cursor:
+                    self.assertCalledOnce(t.run)
 
 
 class MigrationRollbackTestCase(test.TestCase):
@@ -48,7 +49,7 @@ class MigrationRollbackTestCase(test.TestCase):
         s = scheduler.Scheduler(migration=[migration], rollback=[rollback])
         s.start()
 
-        assert rollback.run.called
+        self.assertCalledOnce(rollback.run)
 
     def test_preparation_step_is_not_rolled_back_and_error_raised(self):
         migration = mock_out_task()
@@ -61,9 +62,9 @@ class MigrationRollbackTestCase(test.TestCase):
 
         s.start()
 
-        assert preparation.run.called
-        assert not rollback.run.called
-        assert not migration.run.called
+        self.assertCalledOnce(preparation.run)
+        self.assertFalse(rollback.run.called)
+        self.assertFalse(migration.run.called)
 
 
 def mock_out_task(throws_exception=False):
