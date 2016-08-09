@@ -53,17 +53,23 @@ logging_configuration = {
         'simple_handler': {'class': 'logging.StreamHandler',
                            'formatter': 'simple',
                            'level': 'DEBUG'},
-        'debug_to_file': {'class': 'logging.FileHandler',
-                          'formatter': 'simple', 'level': 'DEBUG',
-                          'filename': 'debug-generate_load.log'}
+        'generate_load_hdlr': {'class': 'logging.FileHandler',
+                               'formatter': 'simple', 'level': 'DEBUG',
+                               'filename': 'debug-generate_load.log'},
+        'functional_test_hdlr': {'class': 'logging.FileHandler',
+                                 'formatter': 'simple', 'level': 'DEBUG',
+                                 'filename': 'debug-functional_test.log'}
     },
     'loggers': {
         'cloudferry_devlab.tests.base': {'handlers': ['simple_handler',
-                                                      'debug_to_file'],
+                                                      'generate_load_hdlr'],
                                          'level': 'DEBUG'},
         'cloudferry_devlab.tests.utils': {'handlers': ['simple_handler',
-                                                       'debug_to_file'],
-                                          'level': 'DEBUG'}
+                                                       'generate_load_hdlr'],
+                                          'level': 'DEBUG'},
+        'cloudferry_devlab.tests.functional_test':
+            {'handlers': ['functional_test_hdlr'], 'level': 'DEBUG',
+             'propagate': False}
     }
 }
 
