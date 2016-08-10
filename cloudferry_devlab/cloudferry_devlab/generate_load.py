@@ -1172,8 +1172,9 @@ class Prerequisites(base.BasePrerequisites):
         self.create_vms_on_dst()
         self.log.info('Creating invalid cinder objects.')
         self.create_invalid_cinder_objects()
-        self.log.info('Create swift containers and objects.')
-        self.create_swift_container_and_objects()
+        if conf.SWIFT_TESTING_ENABLED:
+            self.log.info('Create swift containers and objects.')
+            self.create_swift_container_and_objects()
         self.log.info('Deleting flavors which should be deleted.')
         self.delete_flavors()
         self.log.info('Modifying admin tenant quotas.')
