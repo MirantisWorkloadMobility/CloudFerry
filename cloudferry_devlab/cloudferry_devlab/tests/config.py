@@ -28,6 +28,9 @@ OPENSTACK_RELEASES = {'192.168.1.2': 'grizzly',
                       '192.168.1.8': 'juno'}
 SWIFT_AUTH_VERSION = '2'
 
+SWIFT_TESTING_ENABLED = False
+"""Variable to enable swift containers and objects testing."""
+
 img_url = 'http://download.cirros-cloud.net/0.3.3/cirros-0.3.3-x86_64-disk.img'
 username_for_ssh = 'cirros'
 """Username for ssh access for cirros image"""
