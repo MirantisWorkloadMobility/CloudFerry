@@ -35,6 +35,12 @@ class GetFilter(action.Action):
             if utils.TENANTS_TYPE in filter_config:
                 search_opts_tenant = filter_config[utils.TENANTS_TYPE]
 
+        filtered_tenant = search_opts_tenant.get('tenant_id', ['INVALID'])[0]
+
+        for r in self.src_cloud.resources.values():
+            if hasattr(r, 'filter_tenant_id') and filtered_tenant != 'INVALID':
+                r.filter_tenant_id = filtered_tenant
+
         return {
             'search_opts': search_opts,
             'search_opts_img': search_opts_img,
