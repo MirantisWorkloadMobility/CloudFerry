@@ -156,20 +156,20 @@ class NovaCompute(compute.Compute):
 
         for tenant_id in tenant_ids:
             project_quota = self.get_quotas(tenant_id=tenant_id)
-            project_quota_info = self.convert_resources(project_quota,
-                                                        None)
+            project_quota_info = self.convert_resources(project_quota, None)
             project_quota_info['tenant_id'] = tenant_id
             project_quotas.append(project_quota_info)
             if self.config.migrate.migrate_user_quotas:
                 for user_id in user_ids:
-                    if self.identity.roles_for_user(user_id, tenant_id):
-                        user_quota = self.get_quotas(tenant_id=tenant_id,
-                                                     user_id=user_id)
-                        user_quota_info = self.convert_resources(
-                            user_quota, None)
-                        user_quota_info['tenant_id'] = tenant_id
-                        user_quota_info['user_id'] = user_id
-                        user_quotas.append(user_quota_info)
+                    LOG.debug("Get quotas for tenant '%s' and user '%s'",
+                              tenant_id, user_id)
+                    user_quota = self.get_quotas(tenant_id=tenant_id,
+                                                 user_id=user_id)
+                    user_quota_info = self.convert_resources(
+                        user_quota, None)
+                    user_quota_info['tenant_id'] = tenant_id
+                    user_quota_info['user_id'] = user_id
+                    user_quotas.append(user_quota_info)
 
         return project_quotas, user_quotas
 
@@ -431,9 +431,7 @@ class NovaCompute(compute.Compute):
             self._deploy_quotas(info['project_quotas'], tenant_map)
             self._deploy_quotas(info['user_quotas'], tenant_map, user_map)
 
-        new_info = self.read_info(target='resources')
-
-        return new_info
+        return info
 
     def deploy(self, info, target='instances', **kwargs):
         """
