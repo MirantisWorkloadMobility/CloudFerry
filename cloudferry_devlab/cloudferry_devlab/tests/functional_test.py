@@ -27,12 +27,11 @@ from cloudferry_devlab.tests import base
 
 
 def suppress_dependency_logging():
-    suppressed_logs = ['iso8601.iso8601',
-                       'keystoneclient.session',
-                       'neutronclient.client',
+    suppressed_logs = ['iso8601.iso8601', 'keystoneclient.session',
+                       'neutronclient.client', 'glanceclient.common.http',
                        'requests.packages.urllib3.connectionpool',
-                       'glanceclient.common.http',
-                       'paramiko.transport']
+                       'paramiko.transport', 'cloudferry_devlab.tests.base',
+                       'cloudferry_devlab.tests.utils']
     for l in suppressed_logs:
         logging.getLogger(l).setLevel(logging.WARNING)
 
@@ -45,7 +44,6 @@ class FunctionalTest(unittest.TestCase):
 
     def setUp(self):
         super(FunctionalTest, self).setUp()
-        suppress_dependency_logging()
         if not config_ini:
             raise test_exceptions.ConfFileError('Configuration file parameter'
                                                 ' --tc-file is missing or '
@@ -71,6 +69,7 @@ class FunctionalTest(unittest.TestCase):
             else config.all_tenants_filter_filename
         self.filtering_utils = utils.FilteringUtils(
             os.path.join(self.cloudferry_dir, filter_path))
+        suppress_dependency_logging()
 
     def filter_networks(self):
         networks = [i['name'] for i in config.networks]
