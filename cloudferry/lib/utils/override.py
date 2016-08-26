@@ -63,6 +63,19 @@ class OverrideRule(object):
                     (attribute, repr(match)))
 
 
+class OverrideProxy(object):
+    def __init__(self, obj, overrides):
+        self._obj = obj
+        self._overrides = overrides
+        self._cache = {}
+
+    def __getattr__(self, name):
+        for rule in self._overrides.get(name, []):
+            if rule.predicate(self._obj):
+                return rule.value
+        return getattr(self._obj, name)
+
+
 def get_filename_from_stream(stream):
     return getattr(stream, 'name', 'stream')
 

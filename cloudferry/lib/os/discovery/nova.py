@@ -203,6 +203,7 @@ class ServerDiscoverer(discover.Discoverer):
         with cloud_db.connection(self.cloud.nova_db) as db:
             flavor_id = self._get_flavor(db, data.id)
 
+        hypervisor_host = getattr(data, EXT_ATTR_HYPER_HOST)
         server_dict = {
             'object_id': self.make_id(data.id),
             'security_groups': [],  # TODO: implement security groups
@@ -212,10 +213,12 @@ class ServerDiscoverer(discover.Discoverer):
             'flavor': self.find_ref(compute.Flavor, flavor_id),
             'availability_zone': getattr(data, EXT_ATTR_AZ),
             'host': getattr(data, EXT_ATTR_HOST),
-            'hypervisor_hostname': getattr(data, EXT_ATTR_HYPER_HOST),
+            'hypervisor_hostname': hypervisor_host,
             'instance_name': getattr(data, EXT_ATTR_INSTANCE_NAME),
             'attached_volumes': [av for av in attached_volumes if av],
             'ephemeral_disks': [],  # Ephemeral disks will be filled later
+            'compute_node': self.find_ref(compute.ComputeNode,
+                                          hypervisor_host),
         }
         for attr_name in ('name', 'status', 'user_id', 'key_name',
                           'config_drive', 'metadata'):
@@ -296,7 +299,8 @@ def _get_disk_info(remote_executor, path):
     try:
         size_str = remote_executor.sudo('stat -c %s {path}', path=path)
     except remote.RemoteFailure:
-        LOG.error('Unable to get size of "%s", skipping disk.', path,
+        LOG.warn('Unable to get size of "%s", skipping disk.', path)
+        LOG.debug('Unable to get size of "%s", skipping disk.', path,
                   exc_info=True)
         return None, None, None
     disk_info = qemu_img.get_disk_info(remote_executor, path)

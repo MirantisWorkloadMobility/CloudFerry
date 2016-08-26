@@ -13,6 +13,9 @@
 # limitations under the License.
 import abc
 import logging
+import pickle
+import threading
+import uuid
 
 from oslo_utils import reflection
 from taskflow import retry
@@ -21,6 +24,7 @@ from taskflow.patterns import linear_flow
 
 from cloudferry import discover
 from cloudferry import model
+from cloudferry.lib.utils import override
 from cloudferry.lib.utils import taskflow_utils
 from cloudferry.lib.utils import utils
 
@@ -78,6 +82,33 @@ class MigrationFlowFactory(object):
         return []
 
 
+class InjectSourceObject(task.Task):
+    default_provides = ['source_obj']
+
+    def __init__(self, obj, **kwargs):
+        super(InjectSourceObject, self).__init__(
+            name='InjectSourceObject_{}'.format(
+                taskflow_utils.object_name(obj)),
+            **kwargs)
+        self.source_obj = obj
+
+    def execute(self, *args, **kwargs):
+        LOG.info('Starting to migrate %s with id %s',
+                 utils.qualname(self.source_obj.get_class()),
+                 self.source_obj.primary_key)
+        return [
+            {
+                'type': self.source_obj.get_class_qualname(),
+                'object': self.source_obj.dump(),
+            }
+        ]
+
+    def revert(self, *args, **kwargs):
+        LOG.error('Failed to migrate %s with id %s',
+                  utils.qualname(self.source_obj.get_class()),
+                  self.source_obj.primary_key)
+
+
 class MigrationTask(task.Task):
     """
     Base class for object migration tasks that make it easier to write object
@@ -88,13 +119,22 @@ class MigrationTask(task.Task):
     should implement migrate method.
     """
 
-    def __init__(self, obj, config, migration, **kwargs):
-        super(MigrationTask, self).__init__(
-            name='{0}_{1}'.format(utils.qualname(self.__class__),
-                                  taskflow_utils.object_name(obj)),
-            requires=reflection.get_callable_args(self.migrate),
-            **kwargs)
-        self.src_object = obj
+    def __init__(self, config, migration, obj, name_suffix=None, requires=None,
+                 **kwargs):
+        name = '{0}_{1}'.format(utils.qualname(self.__class__),
+                                taskflow_utils.object_name(obj))
+        if name_suffix is not None:
+            name += '_' + name_suffix
+        if requires is None:
+            requires = []
+        else:
+            requires = list(requires)
+        requires.extend(reflection.get_callable_args(self.migrate))
+
+        super(MigrationTask, self).__init__(name=name, requires=requires,
+                                            **kwargs)
+        self.src_cloud = config.clouds[migration.source]
+        self.dst_cloud = config.clouds[migration.destination]
         self.config = config
         self.migration = migration
         self.created_object = None
@@ -107,8 +147,20 @@ class MigrationTask(task.Task):
         """
         pass
 
+    def rollback(self, *args, **kwargs):
+        pass
+
     def execute(self, *args, **kwargs):
-        result = self.migrate(
+        return self._call(self.migrate, *args, **kwargs)
+
+    def revert(self, *args, **kwargs):
+        super(MigrationTask, self).revert(*args, **kwargs)
+        self.rollback(
+            *[self._deserialize(arg) for arg in args],
+            **{key: self._deserialize(value) for key, value in kwargs.items()})
+
+    def _call(self, fn, *args, **kwargs):
+        result = fn(
             *[self._deserialize(arg) for arg in args],
             **{key: self._deserialize(value)
                for key, value in kwargs.items()})
@@ -116,10 +168,12 @@ class MigrationTask(task.Task):
             return [self._serialize(val) for val in result]
         elif isinstance(result, dict):
             return [self._serialize(result[key]) for key in self.provides]
+        else:
+            return result
 
     @staticmethod
     def _serialize(obj):
-        if not isinstance(obj, model.Model):
+        if not hasattr(obj, 'get_class_qualname') or not hasattr(obj, 'dump'):
             return obj
         return {
             'type': obj.get_class_qualname(),
@@ -150,6 +204,137 @@ class MigrationTask(task.Task):
         """
         return discover.load_from_cloud(self.config, cloud, model_class, data)
 
+    def override(self, obj):
+        model_class = obj.get_class()
+        overrides = self.migration.overrides
+        if model_class not in overrides:
+            return obj
+        return override.OverrideProxy(obj, overrides[model_class])
+
+
+class Destructor(object):
+    @staticmethod
+    def get_class_qualname():
+        return utils.qualname(Destructor)
+
+    def dump(self):
+        return pickle.dumps(self, protocol=-1).encode('base64')
+
+    @classmethod
+    def load(cls, data):
+        return pickle.loads(data.decode('base64'))
+
+    def run(self, cfg, migration):
+        """
+        Run the destruction process
+        :param cfg: CloudFerry configuration
+        :param migration: migration in effect
+        :return:
+        """
+        raise NotImplementedError()
+
+    def get_signature(self):
+        """
+        Must return hashable object using which it is possible to identify
+        destructed object.
+        """
+        raise NotImplementedError()
+
+
+class SingletonMigrationTaskMetaclass(abc.ABCMeta):
+    def __new__(mcs, name, parents, dct):
+        dct['_LOCK'] = threading.Lock()
+        dct['_results'] = {}
+        return super(SingletonMigrationTaskMetaclass, mcs).__new__(
+            mcs, name, parents, dct)
+
+
+class SingletonMigrationTask(MigrationTask):
+    """
+    Migration task that execute self.migrate(...) function only once for each
+    migration and set of values returned by ``get_singleton_key`` and provides
+    destructor object that will be executed in the end of migration.
+    """
+
+    # pylint: disable=abstract-method
+    __metaclass__ = SingletonMigrationTaskMetaclass
+
+    def __init__(self, config, migration, obj, **kwargs):
+        self._is_executed = False
+        self.destructor_var = 'destructor_{0}'.format(uuid.uuid4())
+
+        provides = kwargs.pop('provides', [])
+        provides.append(self.destructor_var)
+
+        super(SingletonMigrationTask, self).__init__(
+            config, migration, obj, provides=provides, **kwargs)
+
+    def execute(self, *args, **kwargs):
+        # pylint: disable=no-member
+        with self._LOCK:
+            key = self._call(self.get_singleton_key, *args, **kwargs)
+            if key in self._results:
+                return self._results[key]
+            self._is_executed = True
+            result = super(SingletonMigrationTask, self).execute(*args,
+                                                                 **kwargs)
+            self._results[key] = result
+            return result
+
+    def revert(self, *args, **kwargs):
+        # pylint: disable=no-member
+        with self._LOCK:
+            if self._is_executed:
+                super(SingletonMigrationTask, self).revert(*args, **kwargs)
+                self._is_executed = False
+
+    def get_singleton_key(self, *args, **kwargs):
+        # pylint: disable=unused-argument
+        return ()
+
+
+class DestructorTask(task.Task):
+    """
+    Task that collect all destructor objects produced by migrations and execute
+    them.
+    """
+
+    def __init__(self, cfg, migration, requires):
+        super(DestructorTask, self).__init__(
+            name='GlobalDestructorTask',
+            requires=requires)
+        self.config = cfg
+        self.migration = migration
+
+    def execute(self, *args, **kwargs):
+        # pylint: disable=broad-except
+        LOG.info('Executing destructors')
+        executed_destructors = set()
+        for require in self.requires:
+            data = kwargs.get(require)
+            if not isinstance(data, dict):
+                if data is not None:
+                    LOG.error('Data for require %s is not dict: %s',
+                              require, repr(data))
+                continue
+            if data.get('type') != Destructor.get_class_qualname():
+                LOG.error('Data for require %s is not of destructor type: %s',
+                          require, data.get('type'))
+                continue
+            try:
+                destructor = Destructor.load(data['object'])
+                signature = (destructor.__class__, destructor.get_signature())
+                if signature not in executed_destructors:
+                    LOG.debug('Executing destructor %s', repr(destructor))
+                    destructor.run(self.config, self.migration)
+                    executed_destructors.add(signature)
+                else:
+                    LOG.debug('Destructor with signature %r already executed.',
+                              signature)
+            except Exception:
+                LOG.error('Failed to run destructor for %s', require,
+                          exc_info=True)
+
 
 class RememberMigration(MigrationTask):
     """
@@ -157,13 +342,15 @@ class RememberMigration(MigrationTask):
     and save link between original and destination object.
     """
 
-    def migrate(self, dst_object, *args, **kwargs):
-        LOG.debug('Remebering migration: %s -> %s',
-                  self.src_object, dst_object)
+    def migrate(self, source_obj, dst_object, *args, **kwargs):
+        LOG.debug('Remebering migration: %s -> %s', source_obj, dst_object)
         with model.Session() as session:
-            self.src_object.link_to(dst_object)
+            source_obj.link_to(dst_object)
             session.store(dst_object)
-            session.store(self.src_object)
+            session.store(source_obj)
+        LOG.info('Finished migrating %s with id %s to %s',
+                 utils.qualname(source_obj.get_class()),
+                 source_obj.primary_key, dst_object.primary_key)
 
 
 def create_migration_flow(obj, config, migration):
@@ -181,11 +368,28 @@ def create_migration_flow(obj, config, migration):
     cls = obj.get_class()
     flow_factories = migration.migration_flow_factories
     if cls not in flow_factories:
-        raise RuntimeError('Failed to find migration flow factory')
+        raise RuntimeError('Failed to find migration flow factory for ' +
+                           repr(cls))
     else:
         flow = linear_flow.Flow('top_level_' + taskflow_utils.object_name(obj),
                                 retry=retry.AlwaysRevert())
         factory = flow_factories[cls]()
         migration_tasks = factory.create_flow(config, migration, obj)
-        flow.add(*migration_tasks)
+        flow.add(InjectSourceObject(obj), *migration_tasks)
         return flow
+
+
+def add_destructor_task(cfg, migration, graph):
+    destructor_requires = []
+    for provide in graph.provides:
+        if provide.startswith('destructor_'):
+            destructor_requires.append(provide)
+
+    destructor_task = DestructorTask(cfg, migration, destructor_requires)
+
+    graph.add(destructor_task)
+    for node, _ in graph.iter_nodes():
+        if node.name == destructor_task.name:
+            continue
+        print node
+        graph.link(node, destructor_task)

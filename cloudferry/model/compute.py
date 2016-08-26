@@ -51,6 +51,15 @@ class Flavor(model.Model):
                 model.Dict.equals(self.extra_specs, other.extra_specs))
 
 
+@model.type_alias('compute_nodes')
+class ComputeNode(model.Model):
+    object_id = model.PrimaryKey()
+    interfaces = model.Dict(required=True, missing=list)
+
+    def equals(self, other):
+        return False
+
+
 class SecurityGroup(model.Model):
     name = model.String(required=True)
 
@@ -86,6 +95,8 @@ class Server(model.Model):
     ephemeral_disks = model.Nested(EphemeralDisk, many=True, missing=list)
     attached_volumes = model.Dependency(storage.Attachment, many=True,
                                         missing=list)
+    compute_node = model.Reference(ComputeNode, required=True,
+                                   ensure_existence=True)
     # TODO: ports
 
     def equals(self, other):

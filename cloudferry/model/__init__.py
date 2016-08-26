@@ -137,6 +137,12 @@ class ObjectId(collections.namedtuple('ObjectId', ('id', 'cloud'))):
             'type': utils.qualname(cls),
         }
 
+    def __str__(self):
+        return '{}/{}'.format(self.cloud, self.id)
+
+    def __repr__(self):
+        return str(self)
+
 
 class NotFound(Exception):
     """
@@ -159,6 +165,7 @@ class _FieldBase(object):
         super(_FieldBase, self).__init__(*args, **kwargs)
 
     def create_descriptor(self, name):
+        # pylint: disable=unused-argument
         return None
 
 
@@ -263,7 +270,7 @@ class Reference(_FieldBase, fields.Field):
         if value is None:
             return None
         if self.many:
-            return set(x.primary_key for x in value)
+            return frozenset(x.primary_key for x in value)
         else:
             return value.primary_key
 
@@ -477,7 +484,7 @@ class Model(_EqualityByPrimaryKeyMixin):
                             elem.clear_dirty(table)
                     else:
                         value.clear_dirty(table)
-            else:
+            elif table is None or field.table == table:
                 value = getattr(self, name, None)
                 if isinstance(field, Reference):
                     self._original[name] = \
@@ -549,6 +556,7 @@ class Model(_EqualityByPrimaryKeyMixin):
         """
         # pylint: disable=no-member
         assert self.primary_key is not None
+        assert self.primary_key.cloud != cloud.name
         for link in self.links:
             if link.primary_key.cloud == cloud.name:
                 return link
@@ -803,6 +811,7 @@ class Session(object):
         field.
         :param obj: model instance
         """
+        # pylint: disable=protected-access
         if isinstance(obj, LazyObj):
             if obj._object is None:
                 return
@@ -918,27 +927,27 @@ class Session(object):
             result.append(obj)
         return result
 
-    def delete(self, cls=None, cloud=None, object_id=None, table='objects'):
+    def delete(self, cls=None, cloud=None, cloud_name=None, object_id=None,
+               table='objects'):
         """
         Deletes all objects that have cls or cloud or object_id that are equal
         to values passed as arguments. Arguments that are None are ignored.
         """
+        if cloud is not None:
+            cloud_name = cloud.name
         if cloud is not None and object_id is not None:
-            assert object_id.cloud == cloud.name
+            assert object_id.cloud == cloud_name
         for key in self.session.keys():
             obj_cls, obj_pk = key
             matched = True
             if cls is not None and cls is not obj_cls:
                 matched = False
-            if cloud is not None and obj_pk.cloud != cloud.name:
+            if cloud is not None and obj_pk.cloud != cloud_name:
                 matched = False
             if object_id is not None and object_id != obj_pk:
                 matched = False
             if matched:
                 del self.session[key]
-        cloud_name = None
-        if cloud is not None:
-            cloud_name = cloud.name
         self._delete_rows(cls, cloud_name, object_id, table)
 
     @staticmethod

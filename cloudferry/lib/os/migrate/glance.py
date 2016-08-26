@@ -46,60 +46,58 @@ class BaseImageMigrationTask(base.MigrationTask):
 class ReserveImage(BaseImageMigrationTask):
     default_provides = ['dst_object']
 
-    def migrate(self, *args, **kwargs):
+    def migrate(self, source_obj, *args, **kwargs):
         # TODO: update image properties related to Snapshots
         # TODO: support image created from URL
-        source = self.src_object
         dst_cloud = self.config.clouds[self.migration.destination]
         try:
             self.created_object = self.dst_glance.images.create(
-                id=source.primary_key.id,
-                name=source.name,
-                container_format=source.container_format,
-                disk_format=source.disk_format,
-                is_public=source.is_public,
-                protected=source.protected,
-                owner=source.tenant.get_uuid_in(dst_cloud),
-                size=source.size,
-                properties=source.properties)
+                id=source_obj.primary_key.id,
+                name=source_obj.name,
+                container_format=source_obj.container_format,
+                disk_format=source_obj.disk_format,
+                is_public=source_obj.is_public,
+                protected=source_obj.protected,
+                owner=source_obj.tenant.get_uuid_in(dst_cloud),
+                size=source_obj.size,
+                properties=source_obj.properties)
         except glance_exc.HTTPConflict:
-            img = self.dst_glance.images.get(source.primary_key.id)
+            img = self.dst_glance.images.get(source_obj.primary_key.id)
             if img.status == 'deleted':
-                _reset_dst_image_status(self)
-                self._update_dst_image()
+                _reset_dst_image_status(self, source_obj)
+                self._update_dst_image(source_obj)
             else:
-                self._delete_dst_image()
-                _reset_dst_image_status(self)
-                self._update_dst_image()
+                self._delete_dst_image(source_obj)
+                _reset_dst_image_status(self, source_obj)
+                self._update_dst_image(source_obj)
 
         result = self.load_from_cloud(
             image.Image, dst_cloud, self.created_object)
         return dict(dst_object=result)
 
-    def revert(self, *args, **kwargs):
+    def revert(self, source_obj, *args, **kwargs):
         super(ReserveImage, self).revert(*args, **kwargs)
         if self.created_object is not None:
-            self._delete_dst_image()
+            self._delete_dst_image(source_obj)
 
-    def _delete_dst_image(self):
+    def _delete_dst_image(self, source_obj):
         dst_glance = self.dst_glance
-        image_id = self.src_object.object_id.id
+        image_id = source_obj.object_id.id
         dst_glance.images.update(image_id, protected=False)
         dst_glance.images.delete(image_id)
 
-    def _update_dst_image(self):
-        source = self.src_object
+    def _update_dst_image(self, source_obj):
         dst_cloud = self.config.clouds[self.migration.destination]
         self.created_object = self.dst_glance.images.update(
-            source.primary_key.id,
-            name=source.name,
-            container_format=source.container_format,
-            disk_format=source.disk_format,
-            is_public=source.is_public,
-            protected=source.protected,
-            owner=source.tenant.get_uuid_in(dst_cloud),
-            size=source.size,
-            properties=source.properties)
+            source_obj.primary_key.id,
+            name=source_obj.name,
+            container_format=source_obj.container_format,
+            disk_format=source_obj.disk_format,
+            is_public=source_obj.is_public,
+            protected=source_obj.protected,
+            owner=source_obj.tenant.get_uuid_in(dst_cloud),
+            size=source_obj.size,
+            properties=source_obj.properties)
 
 
 class _FileLikeProxy(object):
@@ -133,8 +131,8 @@ class _FileLikeProxy(object):
 class UploadImage(BaseImageMigrationTask):
     default_provides = ['need_restore_deleted']
 
-    def migrate(self, dst_object, *args, **kwargs):
-        if self.src_object.status == 'deleted':
+    def migrate(self, source_obj, dst_object, *args, **kwargs):
+        if source_obj.status == 'deleted':
             return dict(need_restore_deleted=True)
         image_id = dst_object.object_id.id
         try:
@@ -146,25 +144,28 @@ class UploadImage(BaseImageMigrationTask):
 
 
 class UploadDeletedImage(BaseImageMigrationTask):
-    def migrate(self, dst_object, need_restore_deleted, *args, **kwargs):
+    def migrate(self, source_obj, dst_object, need_restore_deleted,
+                *args, **kwargs):
         if not need_restore_deleted:
             return
         dst_image_id = dst_object.object_id.id
         with model.Session() as session:
-            boot_disk_infos = self._get_boot_disk_locations(session)
+            boot_disk_infos = self._get_boot_disk_locations(
+                session, source_obj)
 
         for boot_disk_info in boot_disk_infos:
-            if self.upload_server_image(boot_disk_info, dst_image_id):
+            if self.upload_server_image(boot_disk_info, dst_image_id,
+                                        source_obj):
                 return
         raise base.AbortMigration(
             'Unable to restore deleted image %s: no servers found',
             dst_image_id)
 
-    def _get_boot_disk_locations(self, session):
+    def _get_boot_disk_locations(self, session, source_obj):
         boot_disk_infos = []
         src_cloud = self.config.clouds[self.migration.source]
         for server in session.list(compute.Server, src_cloud):
-            if not server.image or server.image != self.src_object:
+            if not server.image or server.image != source_obj:
                 continue
             for disk in server.ephemeral_disks:
                 if disk.base_path is not None and disk.path.endswith('disk'):
@@ -181,7 +182,7 @@ class UploadDeletedImage(BaseImageMigrationTask):
         random.shuffle(boot_disk_infos)
         return boot_disk_infos
 
-    def upload_server_image(self, boot_disk_info, dst_image_id):
+    def upload_server_image(self, boot_disk_info, dst_image_id, source_obj):
         src_cloud = self.config.clouds[self.migration.source]
         host = boot_disk_info['host']
         image_path = boot_disk_info['base_path']
@@ -191,7 +192,7 @@ class UploadDeletedImage(BaseImageMigrationTask):
         token = clients.get_token(cloud.credential, cloud.scope)
         endpoint = clients.get_endpoint(cloud.credential, cloud.scope,
                                         consts.ServiceType.IMAGE)
-        _reset_dst_image_status(self)
+        _reset_dst_image_status(self, source_obj)
         with remote.RemoteExecutor(src_cloud, host) as remote_executor:
             curl_output = remote_executor.sudo(
                 'curl -X PUT -w "\\n\\n<http_status=%{{http_code}}>" '
@@ -211,12 +212,12 @@ class UploadDeletedImage(BaseImageMigrationTask):
             return True
 
 
-def _reset_dst_image_status(task):
+def _reset_dst_image_status(task, source_obj):
     dst_cloud = task.config.clouds[task.migration.destination]
     with cloud_db.connection(dst_cloud.glance_db) as db:
         db.execute('UPDATE images SET deleted_at=NULL, deleted=0, '
                    'status=\'queued\', checksum=NULL WHERE id=%(image_id)s',
-                   image_id=task.src_object.primary_key.id)
+                   image_id=source_obj.primary_key.id)
 
 
 class ImageMigrationFlowFactory(base.MigrationFlowFactory):
@@ -234,25 +235,23 @@ class ImageMigrationFlowFactory(base.MigrationFlowFactory):
 class MigrateImageMember(BaseImageMigrationTask):
     default_provides = ['dst_object']
 
-    def migrate(self, *args, **kwargs):
-        src_object = self.src_object
+    def migrate(self, source_obj, *args, **kwargs):
         dst_cloud = self.config.clouds[self.migration.destination]
-        dst_image_id = src_object.image.get_uuid_in(dst_cloud)
-        dst_tenant_id = src_object.member.get_uuid_in(dst_cloud)
+        dst_image_id = source_obj.image.get_uuid_in(dst_cloud)
+        dst_tenant_id = source_obj.member.get_uuid_in(dst_cloud)
         self.dst_glance.image_members.create(dst_image_id, dst_tenant_id,
-                                             src_object.can_share)
+                                             source_obj.can_share)
         image_member = self.load_from_cloud(
             image.ImageMember, dst_cloud, dict(
                 image_id=dst_image_id, member_id=dst_tenant_id,
-                can_share=src_object.can_share))
+                can_share=source_obj.can_share))
         return dict(dst_object=image_member)
 
-    def revert(self, *args, **kwargs):
+    def revert(self, source_obj, *args, **kwargs):
         super(MigrateImageMember, self).revert(*args, **kwargs)
-        src_object = self.src_object
         dst_cloud = self.config.clouds[self.migration.destination]
-        dst_image_id = src_object.image.get_uuid_in(dst_cloud)
-        dst_tenant_id = src_object.member.get_uuid_in(dst_cloud)
+        dst_image_id = source_obj.image.get_uuid_in(dst_cloud)
+        dst_tenant_id = source_obj.member.get_uuid_in(dst_cloud)
         self.dst_glance.image_members.delete(dst_image_id, dst_tenant_id)
 
 
@@ -261,6 +260,6 @@ class ImageMemberMigrationFlowFactory(base.MigrationFlowFactory):
 
     def create_flow(self, config, migration, obj):
         return [
-            MigrateImageMember(obj, config, migration),
-            base.RememberMigration(obj, config, migration),
+            MigrateImageMember(config, migration, obj),
+            base.RememberMigration(config, migration, obj),
         ]

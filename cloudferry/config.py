@@ -14,13 +14,17 @@
 import collections
 import itertools
 import logging
+import re
 
 import marshmallow
 from marshmallow import fields
+import netaddr
 from oslo_utils import importutils
 
 from cloudferry.lib.utils import bases
+from cloudferry.lib.utils import override
 from cloudferry.lib.utils import query
+from cloudferry import model
 
 LOG = logging.getLogger(__name__)
 DEFAULT_MIGRATION_LIST = [
@@ -29,6 +33,7 @@ DEFAULT_MIGRATION_LIST = [
     'cloudferry.lib.os.migrate.glance.ImageMemberMigrationFlowFactory',
 ]
 DEFAULT_DISCOVERER_LIST = [
+    'cloudferry.lib.os.discovery.node.ComputeNodeDiscoverer',
     'cloudferry.lib.os.discovery.keystone.UserDiscoverer',
     'cloudferry.lib.os.discovery.keystone.TenantDiscoverer',
     'cloudferry.lib.os.discovery.keystone.RoleDiscoverer',
@@ -147,8 +152,12 @@ class ConfigSection(ConfigSchema):
         # pylint: disable=not-callable
         if self.schema_class is None:
             return
-        for field_name in self.schema_class().fields:  # pyling
+        for field_name in self.schema_class().fields:
+            # Check that field wasn't initialized in derived class
             if not hasattr(self, field_name):
+                if field_name not in kwargs:
+                    raise ValidationError('Configuration key missing: %s',
+                                          field_name)
                 setattr(self, field_name, kwargs.pop(field_name))
         assert not kwargs, 'kwargs should only contain field values'
 
@@ -191,6 +200,59 @@ class DictField(fields.Field):
             v = self.nested_field.deserialize(val)
             ret[k] = v
         return ret
+
+
+class IPNetworkField(fields.String):
+    default_error_messages = {
+        'invalid': 'Not a valid IPv4 network string.'
+    }
+
+    def __init__(self, *args, **kwargs):
+        super(IPNetworkField, self).__init__(*args, **kwargs)
+
+    def _deserialize(self, value, attr, data):
+        string_val = super(IPNetworkField, self)._deserialize(
+            value, attr, data)
+        try:
+            return netaddr.IPNetwork(string_val, version=4)
+        except netaddr.AddrFormatError:
+            self.fail('invalid')
+
+
+class PortRangeField(fields.String):
+    default_error_messages = {
+        'invalid': 'Not a valid IPv4 network string.'
+    }
+    regex = re.compile(r'^([0-9]+)-([0-9]+)$')
+
+    def __init__(self, *args, **kwargs):
+        super(PortRangeField, self).__init__(*args, **kwargs)
+
+    def _deserialize(self, value, attr, data):
+        string_val = super(PortRangeField, self)._deserialize(
+            value, attr, data)
+        match = self.regex.match(string_val)
+        if match:
+            return int(match.group(1)), int(match.group(2))
+        else:
+            self.fail('invalid')
+
+
+class OverrideRulesField(fields.Dict):
+    def __init__(self, *args, **kwargs):
+        super(OverrideRulesField, self).__init__(*args, **kwargs)
+
+    def _deserialize(self, value, attr, data):
+        dict_val = super(OverrideRulesField, self)._deserialize(
+            value, attr, data)
+        result = {}
+        try:
+            for attr_name, rules in dict_val.items():
+                result[attr_name] = [override.OverrideRule(attr_name, rule)
+                                     for rule in rules]
+            return result
+        except TypeError as ex:
+            raise marshmallow.ValidationError(ex.message)
 
 
 class FirstFit(fields.Field):
@@ -299,6 +361,10 @@ class OpenstackCloud(ConfigSection):
     name = fields.String()
     request_attempts = fields.Integer(missing=3)
     request_failure_sleep = fields.Float(missing=5)
+    operation_timeout = fields.Float(missing=90.0)
+    unused_network = IPNetworkField(missing='10.192.0.0/16')
+    unused_port_range = PortRangeField(missing='40000-50000')
+    admin_role = fields.String(missing='admin')
     credential = fields.Nested(Credential.schema_class)
     scope = fields.Nested(Scope.schema_class)
     ssh_settings = fields.Nested(SshSettings.schema_class, load_from='ssh')
@@ -314,6 +380,15 @@ class OpenstackCloud(ConfigSection):
                               required=True)
     cinder_db = fields.Nested(database_settings('cinder').schema_class,
                               required=True)
+    access_networks = fields.List(IPNetworkField(), missing=list)
+    access_iface = fields.String(allow_none=True, missing=None)
+
+    @marshmallow.validates_schema(skip_on_field_errors=True)
+    def check_cloud_have_access_net_or_iface(self, data):
+        if not data['access_networks'] and not data['access_iface']:
+            raise marshmallow.ValidationError(
+                'Values for `access_net` or `access_iface` are required '
+                'to be specified in cloud configuration')
 
     def __init__(self, **kwargs):
         self.discoverers = collections.OrderedDict()
@@ -334,10 +409,30 @@ class Migration(ConfigSection):
                 OneOrMore(fields.Raw())),
             many=True),
         required=True)
+    overrides = DictField(fields.String(),
+                          OverrideRulesField(),
+                          missing=dict)
     migration_flow_factories = ClassList(DEFAULT_MIGRATION_LIST)
 
+    @marshmallow.validates_schema(skip_on_field_errors=True)
+    def check_override_rules(self, data):
+        overrides = data['overrides']
+        for object_type, ovr in overrides.items():
+            try:
+                model_cls = model.get_model(object_type)
+            except ImportError:
+                raise marshmallow.ValidationError(
+                    'Invalid object type "{0}"'.format(object_type))
+            schema = model_cls.schema_class()
+            for attribute, _ in ovr.items():
+                if attribute not in schema.fields:
+                    raise marshmallow.ValidationError(
+                        'Invalid override rule: "{0}" schema don\'t have '
+                        '"{1}" attribute.'.format(
+                            object_type, attribute))
+
     def __init__(self, source, destination, objects, migration_flow_factories,
-                 **kwargs):
+                 overrides, **kwargs):
         self.source = source
         self.destination = destination
         self.query = query.Query(objects)
@@ -348,16 +443,21 @@ class Migration(ConfigSection):
         for factory_class in migration_flow_factories:
             migrated_class = factory_class.migrated_class
             self.migration_flow_factories[migrated_class] = factory_class
+
+        self.overrides = {model.get_model(k): v for k, v in overrides.items()}
+
         super(Migration, self).__init__(objects=objects, **kwargs)
 
 
 class Configuration(ConfigSection):
     clouds = DictField(
         fields.String(allow_none=False),
-        fields.Nested(OpenstackCloud.schema_class, default=dict))
+        fields.Nested(OpenstackCloud.schema_class, default=dict),
+        required=True)
     migrations = DictField(
         fields.String(allow_none=False),
-        fields.Nested(Migration.schema_class, default=dict), debug=True)
+        fields.Nested(Migration.schema_class, default=dict),
+        required=True)
 
     @marshmallow.validates_schema(skip_on_field_errors=True)
     def check_migration_have_correct_source_and_dict(self, data):
