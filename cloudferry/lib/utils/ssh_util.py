@@ -46,13 +46,6 @@ class SshUtil(object):
             return runner.run(str(cmd_cfg.ssh_cmd(host, str(cmd))))
 
 
-def get_cipher_option():
-    if CONF.migrate.ssh_cipher:
-        return '-c ' + CONF.migrate.ssh_cipher
-    else:
-        return ''
-
-
 def default_ssh_options():
     options = [
         '-o UserKnownHostsFile=/dev/null',

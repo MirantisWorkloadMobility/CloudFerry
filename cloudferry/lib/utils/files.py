@@ -21,6 +21,7 @@ from fabric import api
 from fabric import state
 
 from cloudferry import cfglib
+from cloudferry.lib.utils import local
 from cloudferry.lib.utils import remote_runner
 
 LOG = logging.getLogger(__name__)
@@ -69,14 +70,27 @@ class RemoteDir(object):
         self.runner = runner
         self.dirname = dirname
 
-    def __enter__(self):
+    def mkdir(self):
         cmd = "mkdir -p {dir}"
         self.runner.run(cmd, dir=self.dirname)
+
+    def __enter__(self):
+        self.mkdir()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         remote_rm(self.runner, self.dirname, recursive=True,
                   ignoring_errors=True)
+
+
+class RemoteTempDir(RemoteDir):
+    def __init__(self, runner, prefix):
+        super(RemoteTempDir, self).__init__(runner, None)
+        self.prefix = prefix
+
+    def mkdir(self):
+        cmd = "mktemp -dt {prefix}"
+        self.dirname = self.runner.run(cmd, prefix=self.prefix)
 
 
 class FullAccessRemoteDir(RemoteDir):
@@ -95,6 +109,32 @@ class FullAccessRemoteDir(RemoteDir):
         super(FullAccessRemoteDir, self).__exit__(exc_type, exc_val, exc_tb)
         if self.old_perms:
             try_remote_chmod(self.runner, self.old_perms, self.dirname)
+
+
+class LocalDir(object):
+    def __init__(self, dirname):
+        self.dirname = dirname
+
+    def mkdir(self):
+        cmd = "mkdir -p {dirname}"
+        local.run(cmd.format(dirname=self.dirname))
+
+    def __enter__(self):
+        self.mkdir()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        local_rm(self.dirname, recursive=True, ignoring_errors=True)
+
+
+class LocalTempDir(LocalDir):
+    def __init__(self, prefix):
+        super(LocalTempDir, self).__init__(None)
+        self.prefix = prefix
+
+    def mkdir(self):
+        cmd = "mktemp -dt {prefix}"
+        self.dirname = local.run(cmd.format(prefix=self.prefix))
 
 
 def is_installed(runner, cmd):
@@ -310,3 +350,12 @@ def remote_join_file(runner, dest_file, part, start, block_size):
            "count=1")
     runner.run(cmd, part=part, dest=dest_file, start=start,
                block_size=block_size)
+
+
+def local_rm(path, recursive=False, ignoring_errors=False):
+    options = 'f'
+    if recursive:
+        options += 'r'
+    cmd = "rm -{options} {path}"
+    run = local.run_ignoring_errors if ignoring_errors else local.run
+    run(cmd.format(options=options, path=path))
