@@ -13,7 +13,6 @@
 # limitations under the License.
 
 DEFAULT = 0
-NO_ELEMENT = -1
 
 
 class Cursor(object):
@@ -33,16 +32,16 @@ class Cursor(object):
             if self.next_iter.next_element[0]:
                 if self.next_iter.num_element < len(
                         self.next_iter.next_element):
-                    self.__change_state_cursor(self.next_iter.num_element)
+                    self._change_state_cursor(self.next_iter.num_element)
                 else:
-                    self.__change_state_cursor(DEFAULT)
+                    self._change_state_cursor(DEFAULT)
             else:
-                self.next_iter = NO_ELEMENT
-        if self.next_iter == NO_ELEMENT:
+                self.next_iter = None
+        if self.next_iter is None:
             raise StopIteration
         return self.next_iter
 
-    def __change_state_cursor(self, num_element):
+    def _change_state_cursor(self, num_element):
         self.next_iter = self.next_iter.next_element[num_element]
         self.threads = [i for i in self.next_iter.parall_elem]
 

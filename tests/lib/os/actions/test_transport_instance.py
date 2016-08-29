@@ -60,7 +60,7 @@ class DeployInstanceWithManualScheduling(test.TestCase):
 
         self.assertRaises(
             transport_instance.DestinationCloudNotOperational,
-            tr_inst._deploy_instance_on_random_host,
+            tr_inst.deploy_instance_on_random_host,
             one_instance,
             'somezone'
         )
@@ -121,7 +121,7 @@ class DeployInstanceWithManualScheduling(test.TestCase):
 
         tr_inst.dst_cloud = dst_cloud
 
-        tr_inst._deploy_instance_on_random_host(
+        tr_inst.deploy_instance_on_random_host(
             one_instance, 'somezone'
         )
 

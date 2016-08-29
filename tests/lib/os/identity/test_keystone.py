@@ -244,15 +244,13 @@ class KeystoneIdentityTestCase(test.TestCase):
         self.mock_client().tenants.list.return_value = fake_tenants_list
         self.mock_client().users.list.return_value = fake_users_list
         self.mock_client().roles.list.return_value = fake_roles_list
-        self.keystone_client._get_user_roles_cached = mock.MagicMock()
-        self.keystone_client._get_user_roles_cached.return_value = \
-            mock.MagicMock().return_value = [self.fake_role_0]
-        self.mock_client().roles.roles_for_user.return_value = [
-            self.fake_role_0]
-
-        info = self.keystone_client.read_info()
-
-        self.assertEquals(fake_info, info)
+        with mock.patch.object(self.keystone_client,
+                               '_get_user_roles_cached') as mock_roles:
+            mock_roles.return_value.return_value = [self.fake_role_0]
+            self.mock_client().roles.roles_for_user.\
+                return_value = [self.fake_role_0]
+            info = self.keystone_client.read_info()
+            self.assertEquals(fake_info, info)
 
     def test_deploy(self):
         fake_tenants_list = [self.fake_tenant_0, self.fake_tenant_1]
@@ -478,7 +476,7 @@ class KeystoneClientTestCase(test.TestCase):
         config.cloud.cacert = cacert
 
         ks = keystone.KeystoneIdentity(config, cloud)
-        ks._get_client_by_creds()
+        ks.get_client_by_creds()
 
         ks_client.assert_called_with(
             region_name=region,
@@ -510,7 +508,7 @@ class KeystoneClientTestCase(test.TestCase):
         config.cloud.cacert = cacert
 
         ks = keystone.KeystoneIdentity(config, cloud)
-        ks._get_client_by_creds()
+        ks.get_client_by_creds()
 
         ks_client.assert_called_with(
             tenant_name=tenant,

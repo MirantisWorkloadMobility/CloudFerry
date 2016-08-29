@@ -106,12 +106,13 @@ class ServerGroupTestCase(test.TestCase):
                    "name": "test",
                    "policies": ["anti-affinity"]}]
 
-        self.handler._delete_server_group = mock.Mock()
-        self.handler._deploy_server_group = mock.Mock()
-        self.handler.deploy_server_groups(groups)
-
-        self.assertEqual(self.handler._delete_server_group.call_count, 0)
-        self.assertEqual(self.handler._deploy_server_group.call_count, 0)
+        with mock.patch.object(self.handler,
+                               '_delete_server_group') as mock_delete:
+            with mock.patch.object(self.handler,
+                                   '_deploy_server_group') as mock_deploy:
+                self.handler.deploy_server_groups(groups)
+                self.assertCalledNever(mock_delete)
+                self.assertCalledNever(mock_deploy)
 
     def test_deploy_server_groups_already_exists_doesnt_match(self):
         result = mock.Mock()
@@ -126,15 +127,16 @@ class ServerGroupTestCase(test.TestCase):
                    "name": "test_different",
                    "policies": ["anti-affinity"]}]
 
-        self.handler._delete_server_group = mock.Mock()
-        self.handler._deploy_server_group = mock.Mock()
-        self.handler.deploy_server_groups(groups)
-
-        self.handler._delete_server_group.assert_called_once_with(
-            {"user": "user",
-             "tenant": "tenant",
-             "uuid": "1234",
-             "name": "test",
-             "policies": ["anti-affinity"]}
-        )
-        self.handler._deploy_server_group.assert_called_once_with(groups[0])
+        with mock.patch.object(self.handler,
+                               '_delete_server_group') as mock_delete:
+            with mock.patch.object(self.handler,
+                                   '_deploy_server_group') as mock_deploy:
+                self.handler.deploy_server_groups(groups)
+                mock_delete.assert_called_once_with(
+                    {"user": "user",
+                     "tenant": "tenant",
+                     "uuid": "1234",
+                     "name": "test",
+                     "policies": ["anti-affinity"]}
+                )
+                mock_deploy.assert_called_once_with(groups[0])
