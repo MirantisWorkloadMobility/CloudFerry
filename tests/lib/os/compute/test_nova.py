@@ -403,47 +403,13 @@ class ComputeHostsTestCase(BaseNovaComputeTestCase):
 
 
 class FlavorDeploymentTestCase(test.TestCase):
-    def test_flavor_is_not_created_if_already_exists_on_dest(self):
-        existing_flavor = mock.Mock()
-        existing_flavor.id = 'existing-id'
-        existing_flavor.name = 'existing-name'
-        existing_flavor.is_public = True
-        existing_flavor.ram = 48
-        existing_flavor.vcpus = 1
-        existing_flavor.disk = 0
-        existing_flavor.ephemeral = 1
-        existing_flavor.swap = 0
-        existing_flavor.rxtx_factor = 1.0
-
-        flavors = {
-            existing_flavor.id: {
-                'flavor': {
-                    'is_public': True,
-                    'name': existing_flavor.name,
-                    'tenants': [],
-                    'ram': 48,
-                    'vcpus': 1,
-                    'disk': 0,
-                    'ephemeral': 1,
-                    'swap': 0,
-                    'rxtx_factor': 1.0,
-                },
-                'meta': {}
-            }
-        }
-
+    def setUp(self):
+        super(FlavorDeploymentTestCase, self).setUp()
         config = mock.Mock()
         config.migrate.override_rules = None
         cloud = mock.MagicMock()
         cloud.position = 'dst'
-
-        nc = nova_compute.NovaCompute(config, cloud)
-        nc._create_flavor_if_not_exists = mock.Mock()
-        nc.get_flavor_list = mock.Mock()
-        nc.get_flavor_list.return_value = [existing_flavor]
-        nc._deploy_flavors(flavors, tenant_map={})
-
-        assert not nc._create_flavor_if_not_exists.called
+        self.nc = nova_compute.NovaCompute(config, cloud)
 
     @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute'
                 '.create_flavor')
@@ -465,20 +431,12 @@ class FlavorDeploymentTestCase(test.TestCase):
             }
         }
         tenant_map = {}
-        config = mock.Mock()
-        config.migrate.override_rules = None
-        cloud = mock.MagicMock()
-        cloud.position = 'dst'
 
-        nc = nova_compute.NovaCompute(config, cloud)
-        nc._create_flavor_if_not_exists = mock.Mock()
-        nc._add_flavor_access_for_tenants = mock.Mock()
-        nc.get_flavor_list = mock.Mock()
-        nc.get_flavor_list.return_value = []
-
-        nc._deploy_flavors(flavors, tenant_map)
-
-        assert not nc._add_flavor_access_for_tenants.called
+        with mock.patch.object(self.nc, 'get_flavor_list', return_value=[]):
+            with mock.patch.object(
+                    self.nc, '_add_flavor_access_for_tenants') as mock_add:
+                self.nc.deploy_flavors(flavors, tenant_map)
+                self.assertCalledNever(mock_add)
 
     @mock.patch('cloudferry.lib.os.compute.nova_compute.NovaCompute'
                 '.create_flavor')
@@ -500,20 +458,11 @@ class FlavorDeploymentTestCase(test.TestCase):
             }
         }
         tenant_map = {}
-        config = mock.Mock()
-        config.migrate.override_rules = None
-        cloud = mock.MagicMock()
-        cloud.position = 'dst'
-
-        nc = nova_compute.NovaCompute(config, cloud)
-        nc._create_flavor_if_not_exists = mock.Mock()
-        nc._add_flavor_access_for_tenants = mock.Mock()
-        nc.get_flavor_list = mock.Mock()
-        nc.get_flavor_list.return_value = []
-
-        nc._deploy_flavors(flavors, tenant_map)
-
-        assert nc._add_flavor_access_for_tenants.called
+        with mock.patch.object(self.nc, 'get_flavor_list', return_value=[]):
+            with mock.patch.object(
+                    self.nc, '_add_flavor_access_for_tenants') as mock_add:
+                self.nc.deploy_flavors(flavors, tenant_map)
+                self.assertCalledOnce(mock_add)
 
 
 @mock.patch("cloudferry.lib.os.compute.nova_compute.nova_client.Client")

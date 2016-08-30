@@ -137,7 +137,7 @@ class TransportInstance(action.Action):
             new_id = dst_compute.deploy(
                 instance, availability_zone=instance_az)
         except exception.TimeoutException:
-            one_instance, new_id = self._deploy_instance_on_random_host(
+            one_instance, new_id = self.deploy_instance_on_random_host(
                 one_instance, instance_az)
 
         new_ids[new_id] = instance['id']
@@ -162,7 +162,7 @@ class TransportInstance(action.Action):
         )
         return one_instance
 
-    def _deploy_instance_on_random_host(self, one_instance, availability_zone):
+    def deploy_instance_on_random_host(self, one_instance, availability_zone):
         one_instance = copy.deepcopy(one_instance)
         dst_compute = self.dst_cloud.resources[utils.COMPUTE_RESOURCE]
 

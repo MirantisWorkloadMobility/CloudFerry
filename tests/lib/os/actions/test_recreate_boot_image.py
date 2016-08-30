@@ -42,7 +42,7 @@ class ReCreateBootImageTestCase(test.TestCase):
         self.assertEqual({'images_info': 'fake_images_info',
                           'compute_ignored_images': {}},
                          res)
-        self.assertIsZero(mock_process_images.call_count)
+        self.assertCalledNever(mock_process_images)
 
     @mock.patch('cloudferry.actions.image.recreate_boot_image.'
                 'ReCreateBootImage.process_images')

@@ -67,7 +67,7 @@ class FileProxyTestCase(test.TestCase):
         with mock.patch.object(fp, 'read') as mock_read:
             fp.read()
             mock_read.assert_called_once_with()
-            self.assertIsZero(file_obj.read.call_count)
+            self.assertCalledNever(file_obj.read)
 
     def test_read(self):
         file_obj = mock.Mock()
@@ -148,7 +148,7 @@ class ProgressViewTestCase(test.TestCase):
         self.sizeof_fmt.reset_mock()
         mock_parse_size.return_value = 123
         pv = file_proxy.ProgressView()
-        self.assertIsZero(self.sizeof_fmt.call_count)
+        self.assertCalledNever(self.sizeof_fmt)
         self.assertEqual(None, pv.size)
         self.assertEqual('NAN', pv.size_hr)
         self.assertEqual(123, pv.show_size)
@@ -186,7 +186,7 @@ class ProgressViewTestCase(test.TestCase):
                 mock_inc.assert_called_once_with(10)
                 self.assertEqual(10, self.progress_view.current_show_size)
                 self.assertEqual(2, mock_time.call_count)
-                self.assertIsZero(mock_show.call_count)
+                self.assertCalledNever(mock_show)
 
                 # second time
                 mock_time.reset_mock()
