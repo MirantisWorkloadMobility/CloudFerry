@@ -499,6 +499,9 @@ images_blacklisted = ['image7']
 flavors_deleted_after_vm_boot = ["del_flvr"]
 """Flavors to be deleted after booting VM from them"""
 
+volumes_deleted_by_name_from_db = ['deleted_volume']
+"""Volumes deleted by name from cinder database on SRC cloud"""
+
 vms_not_in_filter = ['not_in_filter']
 """Instances not to be included in filter"""
 
@@ -650,7 +653,8 @@ vms = [
     {'name': 'server1', 'image': 'image1', 'flavor': 'flavorname1'},
     {'name': 'server2', 'image': 'deleted_on_dst', 'flavor': 'del_flvr',
      'server_group': 'admin_server_group', 'config_drive': True, 'fip': True},
-    {'name': 'server3', 'image': 'deleted_image', 'flavor': 'diffattrib_flvr'},
+    {'name': 'server3', 'image': 'deleted_image', 'flavor': 'diffattrib_flvr',
+     'fip': True},
     {'name': 'server4', 'image': 'broken_image', 'flavor': 'flavorname2'},
     {'name': 'server5', 'image': 'image1', 'flavor': 'flavorname1',
      'broken': True},
@@ -694,7 +698,9 @@ cinder_volumes = [
      'volume_type': 'nfs2',  'metadata': {'data': 'nope', 'enabled': "False"},
      'server_to_attach': 'server2', 'device': '/dev/vdb'},
     {'display_name': 'cinder_volume3', 'size': 1,
-     'user': 'test_volume_migration'}
+     'user': 'test_volume_migration'},
+    {'display_name': 'deleted_volume', 'size': 1, 'volume_type': 'nfs1',
+     'server_to_attach': 'server3', 'device': '/dev/vdb'}
 ]
 """Cinder images to create/delete.
 To write some date, use "write_to_file" parameter. Now only string could be
