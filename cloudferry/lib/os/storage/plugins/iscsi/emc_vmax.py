@@ -218,6 +218,7 @@ class EMCConnector(object):
 
     def _get_volume_instance(self, volume):
         try:
+            # pylint: disable=eval-used
             pl = eval(volume.provider_location)
         except (SyntaxError, ValueError, TypeError):
             LOG.warning("Invalid provider location for volume '%s'",

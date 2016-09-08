@@ -70,22 +70,22 @@ def check_redis_config():
 
 
 @redis_socket_to_kwargs
-def put(key, value, connection):
+def put(key, value, connection=None):
     connection.set(key, value)
 
 
 @redis_socket_to_kwargs
-def get(key, connection):
+def get(key, connection=None):
     return connection.get(key)
 
 
 @redis_socket_to_kwargs
-def delete(key, connection):
+def delete(key, connection=None):
     return connection.delete(key)
 
 
 @redis_socket_to_kwargs
-def delete_batch(data_keys, connection):
+def delete_batch(data_keys, connection=None):
     pipe = connection.pipeline()
     for key in data_keys:
         pipe.delete(key)
@@ -93,5 +93,5 @@ def delete_batch(data_keys, connection):
 
 
 @redis_socket_to_kwargs
-def keys(pattern, connection):
+def keys(pattern, connection=None):
     return connection.keys(pattern)

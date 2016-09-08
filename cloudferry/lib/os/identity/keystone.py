@@ -220,7 +220,7 @@ class KeystoneIdentity(identity.Identity):
         """
 
         def func():
-            auth_ref = self._get_client_by_creds().auth_ref
+            auth_ref = self.get_client_by_creds().auth_ref
             return keystone_client.Client(auth_ref=auth_ref,
                                           endpoint=self.config.cloud.auth_url,
                                           cacert=self.config.cloud.cacert,
@@ -232,7 +232,7 @@ class KeystoneIdentity(identity.Identity):
             reraise_original_exception=True)
         return retrier.run(func)
 
-    def _get_client_by_creds(self):
+    def get_client_by_creds(self):
         """Authenticating with a user name and password.
 
         :return: OpenStack Keystone Client instance

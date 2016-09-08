@@ -31,6 +31,7 @@ from nose.plugins import manager as nose_manager
 
 from cloudferry_devlab.tests import config as conf
 from cloudferry_devlab.tests import test_exceptions
+from cloudferry_devlab.tests import mysql_connector
 import cloudferry_devlab.tests.utils as utils
 
 LOG = logging.getLogger(__name__)
@@ -143,6 +144,10 @@ class BasePrerequisites(object):
         with self.swift_connection() as swift_conn:
             swift_conn.delete_object(container_name, obj_name)
 
+    def mysql_connector(self, db_name, position):
+        config = self.configuration_ini["%s_mysql" % position]
+        return mysql_connector.MysqlConnector(config, db_name)
+
     def _get_openstack_release(self):
         for release in conf.OPENSTACK_RELEASES:
             if release in self.auth_url:
@@ -250,6 +255,15 @@ class BasePrerequisites(object):
         raise test_exceptions.NotFound('Volume with name "%s" was not found'
                                        % volume_name)
 
+    def get_volume_name(self, volume_id):
+        volumes = self.cinderclient.volumes.list(
+            search_opts={'all_tenants': 1})
+        for volume in volumes:
+            if volume.id == volume_id:
+                return volume.display_name
+        raise test_exceptions.NotFound('Volume with id "%s" was not found'
+                                       % volume_id)
+
     def get_volume_snapshot_id(self, snapshot_name):
         snapshots = self.cinderclient.volume_snapshots.list(
             search_opts={'all_tenants': 1})
@@ -290,29 +304,53 @@ class BasePrerequisites(object):
         return [i['id'] for i in sec_group_list['security_groups']
                 if i['tenant_id'] == tenant_id]
 
+    def switch_mapped_user(self, user):
+        if not user.get('enabled') or user.get('deleted'):
+            return False
+        tnt_name = self.migration_utils.check_mapped_tenant(
+            tenant_name=user['tenant'], cloud_prefix=self.cloud_prefix)
+        user_name = user['name']
+        if tnt_name == self.config.case_sensitivity_test_tenant and \
+                self.cloud_prefix == "DST":
+            tnt_name = tnt_name.upper()
+            user_name = user['name'].upper()
+        if not self.tenant_exists(tnt_name) or \
+                not self.user_has_not_primary_tenants(user_name):
+            return False
+        try:
+            self.switch_user(user_name, user['password'],
+                             tnt_name)
+        except ks_exceptions.Unauthorized:
+            self.keystoneclient.users.update(
+                self.get_user_id(user_name), password=user['password'],
+                tenant=tnt_name)
+            self.switch_user(user_name, user['password'],
+                             tnt_name)
+        return True
+
+    def get_attached_server_volumes(self):
+        self.switch_user(self.username, self.password, self.tenant)
+        vol_name_list = []
+        for user in self.config.users + [
+            {'name': self.configuration_ini[self.cloud_prefix]['user'],
+             'password': self.configuration_ini[self.cloud_prefix]['password'],
+             'tenant': self.configuration_ini[self.cloud_prefix]['tenant']}]:
+            if not self.switch_mapped_user(user):
+                continue
+            vol_id_list = []
+            for vm in self.novaclient.servers.list():
+                vol_id_list.extend(self.novaclient.volumes.
+                                   get_server_volumes(vm.id))
+            vol_name_list.extend([self.get_volume_name(vol.id)
+                                 for vol in vol_id_list])
+        return vol_name_list
+
     def get_users_keypairs(self):
         self.switch_user(self.username, self.password, self.tenant)
-        user_names = [u['name'] for u in self.config.users]
         keypairs = []
         for user in self.config.users:
-            if user['name'] not in user_names:
+            if not self.switch_mapped_user(user):
                 continue
-            if not user.get('enabled') or user.get('deleted'):
-                continue
-            tnt_name = self.migration_utils.check_mapped_tenant(
-                tenant_name=user['tenant'], cloud_prefix=self.cloud_prefix)
-            if not self.tenant_exists(tnt_name) or \
-                    not self.user_has_not_primary_tenants(user['name']):
-                continue
-            try:
-                self.switch_user(user['name'], user['password'],
-                                 tnt_name)
-            except ks_exceptions.Unauthorized:
-                self.keystoneclient.users.update(
-                    self.get_user_id(user['name']), password=user['password'],
-                    tenant=tnt_name)
-                self.switch_user(user['name'], user['password'],
-                                 tnt_name)
             keypairs.extend(self.novaclient.keypairs.list())
         return keypairs
 

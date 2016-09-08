@@ -425,7 +425,7 @@ class NovaCompute(compute.Compute):
         tenant_map = kwargs.get('tenant_map')
         user_map = kwargs.get('user_map')
 
-        self._deploy_flavors(info['flavors'], tenant_map)
+        self.deploy_flavors(info['flavors'], tenant_map)
         if self.config['migrate']['migrate_quotas']:
             self.update_default_quotas(info['default_quotas'])
             self._deploy_quotas(info['project_quotas'], tenant_map)
@@ -476,7 +476,7 @@ class NovaCompute(compute.Compute):
                 LOG.debug("Tenant '%s' already has access to flavor '%s'", t,
                           flavor_id)
 
-    def _deploy_flavors(self, flavors, tenant_map):
+    def deploy_flavors(self, flavors, tenant_map):
         LOG.info('Deploying flavors to destination cloud...')
         dst_flavors = self.get_flavor_list(is_public=None)
         conflicting = set()

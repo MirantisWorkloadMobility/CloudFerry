@@ -274,8 +274,8 @@ def install_ssh_keys(config, *hosts):
     ssh_backup_base = '/'.join([home_path, '.ssh_backup'])
 
     key = RSA.generate(2048, os.urandom)
-    public_key = key.exportKey('OpenSSH').replace('\n', '\\n')
-    private_key = key.exportKey('PEM').replace('\n', '\\n')
+    public_key = str(key.exportKey('OpenSSH')).replace('\n', '\\n')
+    private_key = str(key.exportKey('PEM')).replace('\n', '\\n')
 
     ssh_backups = {}
     for host in hosts:

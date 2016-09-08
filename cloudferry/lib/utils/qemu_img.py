@@ -79,11 +79,7 @@ class TextQemuImgInfoParser(QemuImgInfoParser):
 
 class JsonQemuImgInfoParser(QemuImgInfoParser):
     def parse(self, img_info_output):
-        try:
-            return json.loads(img_info_output)
-        except TypeError:
-            LOG.debug('Unable to convert json data: %s', img_info_output)
-            return {}
+        return json.loads(img_info_output)
 
 
 class QemuImg(ssh_util.SshUtil):
@@ -126,9 +122,12 @@ class QemuImg(ssh_util.SshUtil):
                                          ignore_errors=False,
                                          sudo=True)
             return JsonQemuImgInfoParser(qemu_img_json)
-        except remote_runner.RemoteExecutionError:
+        except (remote_runner.RemoteExecutionError, TypeError, ValueError) \
+                as e:
             # old qemu version not supporting JSON, fallback to human-readable
             # qemu-img output parser
+            LOG.debug("Failed to get JSON from 'qemu-img info %s', error: %s",
+                      dest_disk_ephemeral, e)
             cmd = "qemu-img info {ephemeral}".format(
                 ephemeral=dest_disk_ephemeral)
             qemu_img_output = self.execute(cmd=cmd,

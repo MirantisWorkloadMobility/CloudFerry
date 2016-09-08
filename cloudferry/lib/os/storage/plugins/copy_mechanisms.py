@@ -119,7 +119,8 @@ class CopyRegularFileToBlockDevice(CopyMechanism):
             # First step: prepare netcat listening on aux_port on dst and
             # forwarding all the data to block device
             rr_dst.run('screen -S {session_name} -d -m /bin/bash -c '
-                       '\'nc -l {aux_port} | dd of={dst_device}\'; sleep 1',
+                       '\'nc -l {aux_port} | dd of={dst_device} bs=64k\'; '
+                       'sleep 1',
                        session_name=session_name, aux_port=aux_port,
                        dst_device=destination_object.path)
 
@@ -132,8 +133,8 @@ class CopyRegularFileToBlockDevice(CopyMechanism):
                        dst_host=dst_host)
 
             # Third step: push data through the tunnel
-            rr_src.run('/bin/bash -c \'dd if={src_file} | {progress_view} '
-                       'nc 127.0.0.1 {aux_port}\'',
+            rr_src.run('/bin/bash -c \'dd if={src_file} bs=64k | '
+                       '{progress_view} nc 127.0.0.1 {aux_port}\'',
                        aux_port=aux_port, progress_view=progress_view,
                        src_file=source_object.path)
 

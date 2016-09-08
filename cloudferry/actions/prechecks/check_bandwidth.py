@@ -13,14 +13,12 @@
 # limitations under the License.
 
 import os
-import subprocess
 import uuid
 
-from fabric.api import env
 
 from cloudferry.lib.base.action import action
-from cloudferry.lib.utils import cmd_cfg
 from cloudferry.lib.utils import files
+from cloudferry.lib.utils import local
 from cloudferry.lib.utils import log
 from cloudferry.lib.utils import remote_runner
 from cloudferry.lib.utils import ssh_util
@@ -55,64 +53,54 @@ class CheckBandwidth(action.Action):
         cfg = self.cloud.cloud_config.cloud
         runner = remote_runner.RemoteRunner(cfg.ssh_host, cfg.ssh_user)
 
-        temp_dir_name = os.popen('mktemp -dt check_band_XXXX').read().rstrip()
-        temp_file_name = str(uuid.uuid4())
+        with files.LocalTempDir('check_band_XXXX') as local_dir:
+            with files.RemoteTempDir(runner, 'check_band_XXXX') as remote_dir:
+                filename = str(uuid.uuid4())
+                local_filepath = os.path.join(local_dir.dirname, filename)
+                remote_filepath = os.path.join(remote_dir.dirname, filename)
+                claimed_bandw = self.cloud.cloud_config.initial_check.\
+                    claimed_bandwidth
+                filesize = self.cloud.cloud_config.initial_check.test_file_size
+                factor = self.cloud.cloud_config.initial_check.factor
+                req_bandwidth = claimed_bandw * factor
 
-        claimed_bandw = self.cloud.cloud_config.initial_check.claimed_bandwidth
-        test_file_size = self.cloud.cloud_config.initial_check.test_file_size
+                scp_download = "scp {ssh_opts} {user}@{host}:{filepath} " \
+                               "{dirname}"
+                scp_upload = "scp {ssh_opts} {filepath} {user}@{host}:" \
+                             "{dirname}"
+                dd_command = "dd if=/dev/zero of={filepath} bs=1 count=0 " \
+                             "seek={filesize}"
+                runner.run(dd_command,
+                           filepath=remote_filepath,
+                           filesize=filesize)
 
-        ssh_user = self.cloud.cloud_config.cloud.ssh_user
+                LOG.info("Checking download speed... Wait please.")
+                period_download = utils.timer(
+                    local.run,
+                    scp_download.format(
+                        ssh_opts=ssh_util.default_ssh_options(),
+                        user=cfg.ssh_user,
+                        host=cfg.ssh_host,
+                        filepath=remote_filepath,
+                        dirname=local_dir.dirname
+                    )
+                )
 
-        factor = self.cloud.cloud_config.initial_check.factor
-        req_bandwidth = claimed_bandw * factor
-
-        local_file_path = os.path.join(temp_dir_name, temp_file_name)
-        remote_file_path = os.path.join(temp_dir_name,
-                                        temp_file_name)
-
-        scp_upload = cmd_cfg.scp_cmd(ssh_util.get_cipher_option(),
-                                     '',
-                                     ssh_user,
-                                     cfg.ssh_host,
-                                     remote_file_path,
-                                     temp_dir_name)
-
-        scp_download = cmd_cfg.scp_cmd(ssh_util.get_cipher_option(),
-                                       local_file_path,
-                                       ssh_user,
-                                       cfg.ssh_host,
-                                       temp_dir_name,
-                                       '')
-
-        with files.RemoteDir(runner, temp_dir_name):
-            try:
-                with utils.forward_agent(env.key_filename):
-                    dd_command = cmd_cfg.dd_full('/dev/zero',
-                                                 remote_file_path,
-                                                 1,
-                                                 0,
-                                                 test_file_size)
-                    self.cloud.ssh_util.execute(dd_command)
-
-                    LOG.info("Checking upload speed... Wait please.")
-                    period_upload = utils.timer(subprocess.call,
-                                                str(scp_upload),
-                                                shell=True)
-
-                    LOG.info("Checking download speed... Wait please.")
-                    period_download = utils.timer(subprocess.call,
-                                                  str(scp_download),
-                                                  shell=True)
-            finally:
-                if len(temp_dir_name) > 1:
-                    os.system("rm -rf {}".format(temp_dir_name))
-                else:
-                    raise RuntimeError('Wrong dirname %s, stopping' %
-                                       temp_dir_name)
+                LOG.info("Checking upload speed... Wait please.")
+                period_upload = utils.timer(
+                    local.run,
+                    scp_upload.format(
+                        ssh_opts=ssh_util.default_ssh_options(),
+                        filepath=local_filepath,
+                        user=cfg.ssh_user,
+                        host=cfg.ssh_host,
+                        dirname=remote_dir.dirname
+                    )
+                )
 
         # To have Megabits per second
-        upload_speed = test_file_size / period_upload * 8
-        download_speed = test_file_size / period_download * 8
+        upload_speed = filesize / period_upload * 8
+        download_speed = filesize / period_download * 8
 
         if upload_speed < req_bandwidth or download_speed < req_bandwidth:
             raise RuntimeError('Bandwidth is not OK. '

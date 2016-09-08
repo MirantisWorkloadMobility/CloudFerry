@@ -51,6 +51,12 @@ class TestCase(base.BaseTestCase):
                                                     mock_obj.call_count))
         self.assertEqual(1, mock_obj.call_count, message)
 
+    def assertCalledNever(self, mock_obj, message=''):
+        message = message or ("Expected '%s' to be never called. "
+                              "Called %s times." % (mock_obj,
+                                                    mock_obj.call_count))
+        self.assertIsZero(mock_obj.call_count, message)
+
     def assertAttrs(self, obj, **attrs):
         for name, value in attrs.items():
             self.assertTrue(hasattr(obj, name))
