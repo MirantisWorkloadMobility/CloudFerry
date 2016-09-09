@@ -177,6 +177,17 @@ class Prerequisites(base.BasePrerequisites):
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
 
+    def modify_user_quotas(self):
+        """ Modify user's custom nova quotas
+        """
+        for user in self.config.users:
+            if 'quota' in user:
+                self.log.debug("Updating custom nova quota for user %s,"
+                               " tenant %s.", user['name'], user['tenant'])
+                self.novaclient.quotas.update(tenant_id=self.get_tenant_id(
+                    user['tenant']), user_id=self.get_user_id(user['name']),
+                    **user['quota'])
+
     def modify_quotas(self):
         """ Modify nova and cinder quotas
         """
@@ -1134,6 +1145,9 @@ class Prerequisites(base.BasePrerequisites):
         self.create_keypairs()
         self.log.info('Modifying quotas.')
         self.modify_quotas()
+        if self.openstack_release in ['icehouse', 'juno']:
+            self.log.info('Modifying custom user quotas.')
+            self.modify_user_quotas()
         self.log.info('Creating flavors.')
         self.create_flavors()
         self.log.info('Uploading images.')
