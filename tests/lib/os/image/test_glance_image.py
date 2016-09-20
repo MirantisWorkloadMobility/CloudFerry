@@ -70,7 +70,7 @@ class GlanceImageTestCase(test.TestCase):
             return_value=[])
         self.image_mock = mock.Mock()
 
-        self.fake_cloud = mock.Mock()
+        self.fake_cloud = mock.MagicMock()
         self.fake_cloud.position = 'dst'
         self.fake_cloud.resources = dict(identity=self.identity_mock,
                                          image=self.image_mock)

@@ -78,8 +78,6 @@ process:
               - associate_floatingip_on_dest: True
               - act_deploy_instances: True
               - add_key_pairs_to_instances: True
-              - if_vm_is_booted_from_volume: ['act_transport_ephemeral']
-              - copy_vm_data: True
               - act_transport_ephemeral: True
           - attach_volumes_in_dst: True
           - act_dissociate_floatingip: True

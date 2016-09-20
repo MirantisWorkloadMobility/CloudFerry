@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import pprint
-import unittest
 
 from generator import generator, generate
 from nose.plugins.attrib import attr
@@ -189,33 +188,3 @@ class NetrworkingMigrationTests(functional_test.FunctionalTest):
             self.fail("{num} floating IPs did not migrate to destination: "
                       "{fips}".format(num=len(missing_fips),
                                       fips=pprint.pformat(missing_fips)))
-
-    @unittest.skipIf(functional_test.get_option_from_config_ini(
-        option='change_router_ips') == 'False',
-        'Change router ips disabled in CloudFerry config')
-    def test_ext_router_ip_changed(self):
-        """Validate router IPs were changed after migration."""
-        dst_routers = self.dst_cloud.get_ext_routers()
-        src_routers = self.src_cloud.get_ext_routers()
-        routers_with_same_gateway = []
-        for dst_router in dst_routers:
-            for src_router in src_routers:
-                if dst_router['name'] != src_router['name']:
-                    continue
-                src_gateway = self.src_cloud.neutronclient.list_ports(
-                    device_id=src_router['id'],
-                    device_owner='network:router_gateway')['ports'][0]
-                dst_gateway = self.dst_cloud.neutronclient.list_ports(
-                    device_id=dst_router['id'],
-                    device_owner='network:router_gateway')['ports'][0]
-                if src_gateway['fixed_ips'][0]['ip_address'] == \
-                        dst_gateway['fixed_ips'][0]['ip_address']:
-                    routers_with_same_gateway.append((dst_router['name'],
-                                                      dst_gateway['fixed_ips']
-                                                      [0]['ip_address']))
-        if routers_with_same_gateway:
-            self.fail(msg='GW ip addresses of routers "{0}" are same on src '
-                          'and dst: {1}'.format([x[0] for x in
-                                                 routers_with_same_gateway],
-                                                [x[1] for x in
-                                                 routers_with_same_gateway]))

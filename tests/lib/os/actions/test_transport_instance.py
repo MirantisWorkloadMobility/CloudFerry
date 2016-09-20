@@ -30,7 +30,8 @@ class DeployInstanceWithManualScheduling(test.TestCase):
 
         compute_hosts = ['host1', 'host2', 'host3']
         num_computes = len(compute_hosts)
-        instance_body = {'availability_zone': 'somezone', 'name': 'vm1'}
+        instance_body = {'availability_zone': 'somezone', 'name': 'vm1',
+                         'id': 'some-id'}
         one_instance = {
             utils.INSTANCES_TYPE: {
                 'some_id': {
@@ -77,7 +78,8 @@ class DeployInstanceWithManualScheduling(test.TestCase):
         compute_hosts.__iter__.return_value = ['host1', 'host2', 'host3']
         compute_hosts.pop.return_value = 'host2'
 
-        instance_body = {'availability_zone': 'somezone', 'name': 'vm1'}
+        instance_body = {'availability_zone': 'somezone', 'name': 'vm1',
+                         'id': 'some_id'}
         one_instance = {
             utils.INSTANCES_TYPE: {
                 'some_id': {

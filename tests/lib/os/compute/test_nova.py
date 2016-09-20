@@ -58,6 +58,7 @@ class BaseNovaComputeTestCase(test.TestCase):
         self.fake_cloud.resources = dict(identity=self.identity_mock)
         self.fake_cloud.position = 'src'
         self.fake_cloud.config = self.cloud_config('src')
+        self.fake_cloud.migration_observers = []
 
         with mock.patch('cloudferry.lib.os.compute.nova_compute.'
                         'mysql_connector'):

@@ -35,7 +35,8 @@ class Grouping(object):
         resources = {'identity': keystone.KeystoneIdentity,
                      'network': neutron.NeutronNetwork,
                      'compute': nova_compute.NovaCompute}
-        self.cloud = cloud.Cloud(resources, cloud_id, config)
+        self.cloud = cloud.Cloud(resources, cloud_id, config,
+                                 migration_observers=[])
 
         self.network = self.cloud.resources['network']
         self.compute = self.cloud.resources['compute']

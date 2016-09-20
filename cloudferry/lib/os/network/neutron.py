@@ -18,12 +18,14 @@ import pprint
 
 import ipaddr
 import netaddr
+from cloudferry.lib.migration import notifiers
 
 from neutronclient.common import exceptions as neutron_exc
 from neutronclient.v2_0 import client as neutron_client
 
 from cloudferry.lib.base import exception
 from cloudferry.lib.base import network
+from cloudferry.lib.migration import objects
 from cloudferry.lib.os.identity import keystone as ksresource
 from cloudferry.lib.utils import cache
 from cloudferry.lib.utils import log
@@ -52,6 +54,9 @@ class NeutronNetwork(network.Network):
         self.ext_net_map = mapper.Mapper('ext_network_map')
         self.tenant_name_map = mapper.Mapper('tenant_map')
         self.mysql_connector = cloud.mysql_connector('neutron')
+        self.state_notifier = notifiers.MigrationStateNotifier()
+        for o in cloud.migration_observers:
+            self.state_notifier.add_observer(o)
 
     @property
     def neutron_client(self):
@@ -192,53 +197,25 @@ class NeutronNetwork(network.Network):
 
     def deploy(self, info, *args, **kwargs):
         """
-        Deploy network resources to DST
-
-        Have non trivial behavior when enabled keep_floatingip and
-        change_router_ips. Example:
-        Initial state:
-            src cloud with router external ip 123.0.0.5
-                and FloatingIP 123.0.0.4
-        Migrate resources:
-            1. Move FloatingIP to dst. On dst we have FloatingIP 123.0.0.4
-            2. Create FloatingIP on dst as stub for router IP.
-                On dst we have two FloatingIP [123.0.0.4, 123.0.0.5].
-                IP 123.0.0.5 exists only in OpenStack DB and not crush
-                src network.
-            3. Create router on dst. (here is the main idea) As you see above,
-                ips 123.0.0.4 and 123.0.0.5 already allocated,
-                then OpenStack must allocate another ip for router
-                (e.g. 123.0.0.6).
-            4. FloatingIP 123.0.0.5 is not needed anymore.
-                We use it on 1.3. step for not allow OpenStack create
-                router with this ip. It will be released if you enable
-                clean_router_ips_stub in config
-        After resource migration we have:
-            src router external ip 123.0.0.5 and FloatingIP 123.0.0.4
-            dst router external ip 123.0.0.6 and FloatingIP 123.0.0.4
+        Deploy all network resources to DST:
+         - quotas;
+         - networks;
+         - subnets;
+         - ports;
+         - floating IPs;
+         - LBaaS objects.
         """
         deploy_info = info
         self.upload_quota(deploy_info['quota'])
         self.upload_networks(deploy_info['networks'],
                              deploy_info['meta']['segmentation_ids'],
                              deploy_info['detached_ports'])
-        dst_router_ip_ids = None
         if self.config.migrate.keep_floatingip:
             self.upload_floatingips(deploy_info['networks'],
                                     deploy_info['floating_ips'])
-            if self.config.migrate.change_router_ips:
-                subnets_map = {subnet['id']: subnet
-                               for subnet in deploy_info['subnets']}
-                router_ips = self.extract_router_ips_as_floating_ips(
-                    subnets_map, deploy_info['routers'])
-                dst_router_ip_ids = self.upload_floatingips(
-                    deploy_info['networks'], router_ips)
         self.upload_routers(deploy_info['networks'],
                             deploy_info['subnets'],
                             deploy_info['routers'])
-        if self.config.migrate.clean_router_ips_stub and dst_router_ip_ids:
-            for router_ip_stub in dst_router_ip_ids:
-                self.neutron_client.delete_floatingip(router_ip_stub)
         self.upload_neutron_security_groups(deploy_info['security_groups'])
         self.upload_sec_group_rules(deploy_info['security_groups'])
         if self.config.migrate.keep_lbaas:
@@ -253,18 +230,6 @@ class NeutronNetwork(network.Network):
                                 deploy_info['lb_pools'],
                                 deploy_info['subnets'])
         return deploy_info
-
-    def extract_router_ips_as_floating_ips(self, subnets, routers_info):
-        result = []
-        tenant = self.config.migrate.router_ips_stub_tenant
-        for router_info in routers_info:
-            router = Router(router_info, subnets)
-            tenant_name = tenant if tenant else router.tenant_name
-            if router.ext_net_id:
-                result.append({'tenant_name': tenant_name,
-                               'floating_network_id': router.ext_net_id,
-                               'floating_ip_address': router.ext_ip})
-        return result
 
     def get_mac_by_ip(self, ip_address, instance_id):
         for port in self.get_ports_list(device_id=instance_id):
@@ -838,6 +803,7 @@ class NeutronNetwork(network.Network):
 
         for floating in floatings:
             floatingip_info = self.convert(floating, self.cloud, 'floating_ip')
+            LOG.debug("Added floating IP: %s", pprint.pformat(floatingip_info))
             floatingips_info.append(floatingip_info)
 
         LOG.info("Done")
@@ -1169,20 +1135,28 @@ class NeutronNetwork(network.Network):
             # Check network for existence on destination cloud
             dst_net = self.get_dst_net_by_src_net(existing_networks, src_net)
             if dst_net:
-                LOG.info("DST cloud already has the same "
-                         "network with name '%s' in tenant '%s'",
-                         src_net['name'], src_net['tenant_name'])
+                msg = ("DST cloud already has the same "
+                       "network with name '%s' in tenant '%s'" %
+                       (src_net['name'], src_net['tenant_name']))
+                LOG.info(msg)
                 self.deploy_detached_ports(dst_net, network_detached_ports)
+                self.state_notifier.skip(
+                    objects.MigrationObjectType.NET,
+                    src_net, msg)
                 continue
 
             LOG.debug("Trying to create network '%s'", src_net['name'])
             tenant_id = identity.get_tenant_id_by_name(src_net['tenant_name'])
 
             if tenant_id is None:
-                LOG.warning("Tenant '%s' is not available on destination! "
-                            "Make sure you migrated identity (keystone) "
-                            "resources! Skipping network '%s'.",
-                            src_net['tenant_name'], src_net['name'])
+                msg = ("Tenant '%s' is not available on destination! "
+                       "Make sure you migrated identity (keystone) "
+                       "resources! Skipping network '%s'." %
+                       (src_net['tenant_name'], src_net['name']))
+                LOG.warning(msg)
+                self.state_notifier.skip(
+                    objects.MigrationObjectType.NET,
+                    src_net, msg)
                 continue
 
             no_extnet_migration = (
@@ -1190,10 +1164,14 @@ class NeutronNetwork(network.Network):
                 not self.config.migrate.migrate_extnets or
                 (src_net['id'] in self.ext_net_map))
             if no_extnet_migration:
-                LOG.debug("External networks migration is disabled in the "
-                          "config OR external networks mapping is enabled. "
-                          "Skipping external network: '%s (%s)'",
-                          src_net['name'], src_net['id'])
+                msg = ("External networks migration is disabled in the "
+                       "config OR external networks mapping is enabled. "
+                       "Skipping external network: '%s (%s)'" %
+                       (src_net['name'], src_net['id']))
+                LOG.debug(msg)
+                self.state_notifier.skip(
+                    objects.MigrationObjectType.NET,
+                    src_net, msg)
                 continue
 
             # create dict, representing basic info about network
@@ -1299,13 +1277,20 @@ class NeutronNetwork(network.Network):
                       pprint.pformat(network_info))
             created_net = self.neutron_client.create_network(network_info)
             created_net = created_net['network']
+            self.state_notifier.success(
+                objects.MigrationObjectType.NET,
+                src_net,
+                created_net['id'])
             LOG.info("Created net '%s'", created_net['name'])
         except neutron_exc.NeutronClientException as e:
-            LOG.warning("Cannot create network on destination: %s. "
-                        "Destination cloud already has the same network. May "
-                        "result in port allocation errors, such as VM IP "
-                        "allocation, floating IP allocation, router IP "
-                        "allocation, etc.", e)
+            msg = ("Cannot create network on destination: %s. "
+                   "Destination cloud already has the same network. May "
+                   "result in port allocation errors, such as VM IP "
+                   "allocation, floating IP allocation, router IP "
+                   "allocation, etc." % e)
+            LOG.warning(msg)
+            self.state_notifier.skip(objects.MigrationObjectType.NET,
+                                     src_net, msg)
             return
 
         for snet in src_net['subnets']:
@@ -1383,7 +1368,7 @@ class NeutronNetwork(network.Network):
                       dst_router['id'])
             self.neutron_client.add_gateway_router(dst_router['id'], info)
         else:
-            LOG.warning('External (%s) network is not exists on destination',
+            LOG.warning('External (%s) network does not exist in destination',
                         ext_net_id)
 
     def add_router_interfaces(self, src_router, dst_router, src_subnets,
@@ -1433,6 +1418,7 @@ class NeutronNetwork(network.Network):
         ipfloatings = {fip['floating_ip_address']: fip['id']
                        for fip in fips_dst}
         for fip in src_floats:
+            LOG.debug("Uploading FIP: %s", pprint.pformat(fip))
             ip = fip['floating_ip_address']
             if ip in ipfloatings:
                 new_floating_ids.append(ipfloatings[ip])
@@ -1446,9 +1432,13 @@ class NeutronNetwork(network.Network):
                     fip['floating_network_id'], networks, existing_networks)
 
                 if ext_net_id is None:
-                    LOG.info("No external net for floating IP, make sure all "
-                             "external networks migrated. Skipping floating "
-                             "IP '%s'", fip['floating_ip_address'])
+                    msg = ("No external net for floating IP, make sure all "
+                           "external networks migrated. Skipping floating "
+                           "IP '%s'" % fip['floating_ip_address'])
+                    LOG.info(msg)
+                    self.state_notifier.skip(
+                        objects.MigrationObjectType.FLOATING_IP,
+                        fip, msg)
                     continue
 
                 tenant = self.identity_client.keystone_client.tenants.find(
@@ -1491,6 +1481,8 @@ class NeutronNetwork(network.Network):
             LOG.debug(sqls)
             dst_mysql = self.mysql_connector
             dst_mysql.batch_execute(sqls)
+            self.state_notifier.success(
+                objects.MigrationObjectType.FLOATING_IP, fip, fip_id)
 
         LOG.info("Done")
         return new_floating_ids
@@ -1503,6 +1495,9 @@ class NeutronNetwork(network.Network):
             return created['floatingip']
         except neutron_exc.NeutronClientException as e:
             LOG.warning("Unable to create floating IP on destination: '%s'", e)
+            self.state_notifier.fail(
+                objects.MigrationObjectType.FLOATING_IP,
+                fip['floatingip'], e.message)
 
     def update_floatingip(self, floatingip_id, port_id=None):
         update_dict = {'floatingip': {'port_id': port_id}}
@@ -1585,33 +1580,6 @@ class NeutronNetwork(network.Network):
             if (net['res_hash'] == src_net['res_hash'] and
                     net['subnets_hash'] == src_net['subnets_hash']):
                 return net
-
-
-class Router(object):
-    """
-    Represents router_info, extract external ip.
-    Router_info contain list of ips only in different order. Impossible to
-    define external router ip.
-    """
-    def __init__(self, router_info, subnets):
-        self.id = router_info['id']
-        self.ext_net_id = router_info.get('ext_net_id', None)
-        self.int_cidr = []
-        self.tenant_name = router_info['tenant_name']
-        if self.ext_net_id:
-            subnet_ids = router_info['subnet_ids']
-            for subnet_id in subnet_ids:
-                subnet = subnets[subnet_id]
-                if subnet['network_id'] == self.ext_net_id:
-                    self.ext_cidr = subnet['cidr']
-                    self.ext_subnet_id = subnet_id
-                else:
-                    self.int_cidr.append(subnet['cidr'])
-            ext_network = ipaddr.IPNetwork(self.ext_cidr)
-            for ip in router_info['ips']:
-                if ext_network.Contains(ipaddr.IPAddress(ip)):
-                    self.ext_ip = ip
-                    break
 
 
 def get_network_from_list_by_id(network_id, networks_list):
