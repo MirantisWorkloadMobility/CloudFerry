@@ -103,7 +103,18 @@ class TransportInstance(action.Action):
             one_instance = self.deploy_instance(one_instance)
 
             if src_instance['boot_mode'] == utils.BOOT_FROM_IMAGE:
-                self.copy_diff(one_instance)
+                try:
+                    tt = task_transfer.TaskTransfer(
+                        init=self.init,
+                        driver=CONF.migrate.copy_backend,
+                        resource_name=utils.INSTANCES_TYPE,
+                        resource_root_name=utils.DIFF_BODY)
+                    tt.run(info=one_instance)
+                except (base.NotEnoughSpace, base.FileCopyError) as e:
+                    self.state_notifier.incomplete(
+                        objects.MigrationObjectType.VM,
+                        instance,
+                        message=e.message)
 
             new_info[utils.INSTANCES_TYPE].update(
                 one_instance[utils.INSTANCES_TYPE])
@@ -111,18 +122,6 @@ class TransportInstance(action.Action):
         return {
             'info': new_info
         }
-
-    def copy_diff(self, instance):
-        try:
-            tt = task_transfer.TaskTransfer(init=self.init,
-                                            driver=CONF.migrate.copy_backend,
-                                            resource_name=utils.INSTANCES_TYPE,
-                                            resource_root_name=utils.DIFF_BODY)
-            tt.run(info=instance)
-        except (base.NotEnoughSpace, base.FileCopyError) as e:
-            self.state_notifier.incomplete(objects.MigrationObjectType.VM,
-                                           instance[utils.INSTANCES_TYPE],
-                                           message=e.message)
 
     def get_dst_image(self, src_image_id):
         """Returns active image for VM. If not found, tries to match image
