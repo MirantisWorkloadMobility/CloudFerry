@@ -501,7 +501,7 @@ class KeystoneIdentity(identity.Identity):
                                                     tenant['description'])
                 _tenant['meta']['new_id'] = created_tenant.id
                 self.state_notifier.success(
-                    objs.MigrationObjectType.TENANT, tenant, created_tenant)
+                    objs.MigrationObjectType.TENANT, tenant, created_tenant.id)
             else:
                 msg = "Tenant '%s' is already present on destination, " \
                       "skipping" % tenant['name']
@@ -583,7 +583,7 @@ class KeystoneIdentity(identity.Identity):
                 LOG.debug("Creating role '%s'", role['name'])
                 new_role = self.create_role(role['name'])
                 self.state_notifier.success(
-                    objs.MigrationObjectType.ROLE, role, new_role)
+                    objs.MigrationObjectType.ROLE, role, new_role.id)
                 _role['meta']['new_id'] = new_role.id
             else:
                 msg = "Role '%s' is already present on destination, " \

@@ -21,12 +21,12 @@ class MigrationStateNotifier(object):
     def add_observer(self, observer):
         self.observers.append(observer)
 
-    def success(self, object_type, src_object, dst_object, message=None):
+    def success(self, object_type, src_object, dst_object_id, message=None):
         self._update_state(object_type, src_object,
                            objects.MigrationState.SUCCESS,
                            message)
         for observer in self.observers:
-            observer.set_dst_uuid(object_type, src_object, dst_object)
+            observer.set_dst_uuid(object_type, src_object, dst_object_id)
 
     def fail(self, object_type, obj, message=None):
         self._update_state(object_type, obj,
