@@ -21,11 +21,14 @@ LOG = log.getLogger(__name__)
 
 class CinderVolume(object):
     def __init__(self, uuid=None, display_name=None, provider_location=None,
-                 project_id=None):
+                 project_id=None, deleted=None, deleted_at=None, status=None):
         self.id = uuid
         self.display_name = display_name
         self.provider_location = provider_location
         self.project_id = project_id
+        self.deleted = deleted
+        self.deleted_at = deleted_at
+        self.status = status
 
     def __repr__(self):
         s = "CinderVolume<uuid={id},display_name={name}>"
@@ -36,7 +39,10 @@ class CinderVolume(object):
         return cls(uuid=volume['id'],
                    display_name=volume['display_name'],
                    provider_location=volume['provider_location'],
-                   project_id=volume['project_id'])
+                   project_id=volume['project_id'],
+                   deleted=volume['deleted'] == 1,
+                   deleted_at=volume['deleted_at'],
+                   status=volume['status'])
 
 
 class CinderDBBroker(object):
@@ -46,9 +52,10 @@ class CinderDBBroker(object):
     def get_cinder_volume(self, volume_id):
         """Provider location and extra specs are not available from APIs,
         yet is required for EMC VMAX volume migration."""
-        get_volume = ('SELECT id, display_name, provider_location, project_id '
-                      'FROM volumes WHERE id = :volume_id')
-        volume = self.mysql.execute(get_volume, volume_id=volume_id).fetchone()
+        sql = ('SELECT id, display_name, provider_location, project_id, '
+               'deleted, deleted_at, status '
+               'FROM volumes WHERE id = :volume_id')
+        volume = self.mysql.execute(sql, volume_id=volume_id).fetchone()
 
         if volume is not None:
             return CinderVolume.from_db_record(volume)
@@ -105,3 +112,15 @@ class CinderDBBroker(object):
                            project_id=project_id,
                            resource=resource,
                            value=value)
+
+    def delete_volume(self, volume_id):
+        volume_sql = ("UPDATE volumes "
+                      "SET deleted=1, deleted_at=NOW(), status='deleted' "
+                      "WHERE id = :uuid")
+        volume_metadata_sql = ("UPDATE volume_metadata "
+                               "SET deleted=1, deleted_at=NOW() "
+                               "WHERE volume_id = :uuid")
+        with self.mysql.transaction():
+            self.mysql.execute(volume_sql, uuid=volume_id)
+            self.mysql.execute(volume_metadata_sql, uuid=volume_id)
+            return self.get_cinder_volume(volume_id)
