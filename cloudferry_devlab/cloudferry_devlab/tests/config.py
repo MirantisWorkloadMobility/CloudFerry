@@ -700,6 +700,13 @@ snapshots = [
 ]
 """VM's snapshots to create/delete"""
 
+cinder_volume_types = [
+    {'name': 'nfs1', 'metadata': {'volume_backend_name': 'nfs1'}},
+    {'name': 'nfs2', 'metadata': {'volume_backend_name': 'nfs2'}},
+    {'name': 'nfs_other', 'metadata': {'volume_backend_name': 'nfs2'}}
+]
+"""Cinder volume types to create"""
+
 cinder_volumes = [
     {'display_name': 'cinder_volume1', 'size': 1, 'volume_type': 'nfs1'},
     {'display_name': 'cinder_volume2', 'size': 1,

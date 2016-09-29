@@ -235,6 +235,7 @@ class MigrateVolumes(action.Action):
 
         LOG.info("Creating volume of size %sG in tenant %s in destination",
                  src_volume['size'], dst_tenant.name)
+        LOG.debug('Volume: %s', src_volume)
         dst_volume = dst_cinder.create_volume_from_volume(src_volume,
                                                           dst_tenant.id)
         LOG.info("Volume created: %s", volume_name(dst_volume))
