@@ -43,4 +43,4 @@ class Volume(model.Model):
     size = model.Integer(required=True)
     tenant = model.Dependency(identity.Tenant, required=True)
     metadata = model.Dict(missing=dict)
-    volume_type = model.String(required=True)
+    volume_type = model.String(required=True, allow_none=True)

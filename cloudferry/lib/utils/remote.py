@@ -11,14 +11,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import atexit
 import contextlib
 import logging
 import os
+import re
+import signal
 import socket
 import StringIO
-import sys
+import subprocess
+import tempfile
 
 import paramiko
+import paramiko.agent
+import paramiko.util
 
 from cloudferry.lib.utils import retrying
 
@@ -43,6 +49,11 @@ class RemoteExecutor(object):
     """
 
     def __init__(self, cloud, hostname, ignore_errors=False):
+        if not isinstance(hostname, basestring):
+            hostname = _get_ip_from_node(cloud, hostname)
+
+        assert hostname is not None
+
         self.cloud_name = cloud.name
         self.hostname = hostname
         self.ignore_errors = ignore_errors
@@ -59,6 +70,9 @@ class RemoteExecutor(object):
 
     def connect(self):
         settings = self.settings
+        LOG.debug('Connecting to %s@%s:%s [cloud: %s]',
+                  settings.username, self.hostname, settings.port,
+                  self.cloud_name)
         gateway_socket = self._connect_through_gateway(
             self.hostname, settings.port, settings.gateway)
         try:
@@ -69,7 +83,7 @@ class RemoteExecutor(object):
                            port=settings.port,
                            username=settings.username,
                            password=settings.password,
-                           pkey=self._create_pkey(settings.private_key),
+                           pkey=create_pkey(settings.private_key),
                            sock=gateway_socket,
                            timeout=self.settings.timeout,
                            allow_agent=False,
@@ -88,15 +102,15 @@ class RemoteExecutor(object):
             connection.close()
         self.connections = []
 
-    def sudo(self, cmd, **kwargs):
+    def sudo(self, cmd, agent=None, **kwargs):
         formatted_cmd = cmd.format(**kwargs)
         if self.settings.username == 'root':
-            return self._run(formatted_cmd, False)
+            return self._run(formatted_cmd, False, agent)
         else:
-            return self._run(formatted_cmd, True)
+            return self._run(formatted_cmd, True, agent)
 
-    def run(self, cmd, **kwargs):
-        return self._run(cmd.format(**kwargs), False)
+    def run(self, cmd, agent=None, **kwargs):
+        return self._run(cmd.format(**kwargs), False, agent)
 
     @contextlib.contextmanager
     def tmpdir(self, prefix='cloudferry'):
@@ -120,6 +134,9 @@ class RemoteExecutor(object):
     def _connect_through_gateway(self, host, port, gateway):
         if gateway is None:
             return None
+        LOG.debug('Connecting to %s@%s:%s [cloud: %s]',
+                  gateway.username, gateway.hostname, gateway.port,
+                  self.cloud_name)
         try:
             client = paramiko.SSHClient()
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -128,7 +145,7 @@ class RemoteExecutor(object):
                            port=gateway.port,
                            username=gateway.username,
                            password=gateway.password,
-                           pkey=self._create_pkey(gateway.private_key),
+                           pkey=create_pkey(gateway.private_key),
                            sock=self._connect_through_gateway(
                                gateway.hostname, gateway.port,
                                gateway.gateway),
@@ -146,22 +163,7 @@ class RemoteExecutor(object):
                       '\'%s\': %s', gateway.hostname, self.cloud_name, ex)
             raise
 
-    @staticmethod
-    def _create_pkey(content):
-        if content is None:
-            return None
-        saved_exceptions = []
-        for key_cls in (paramiko.ECDSAKey, paramiko.RSAKey, paramiko.DSSKey):
-            try:
-                return key_cls.from_private_key(StringIO.StringIO(content))
-            except paramiko.SSHException:
-                saved_exceptions.append(sys.exc_info())
-
-        for exc_info in saved_exceptions:
-            LOG.error('Failed to decode SSH key', exc_info=exc_info)
-        return None
-
-    def _run(self, command, is_sudo):
+    def _run(self, command, is_sudo, agent):
         attempts = 0
         while True:
             try:
@@ -181,6 +183,8 @@ class RemoteExecutor(object):
 
                 session = self.client.get_transport().open_session(
                     window_size=WINDOW_SIZE)
+                if agent and agent.auth_sock:
+                    AgentRequestHandler(session, agent.auth_sock)
                 with session:
                     session.set_combine_stderr(True)
                     session.get_pty()
@@ -235,3 +239,129 @@ class RemoteExecutor(object):
     def _reconnect(self):
         self.close()
         self.connect()
+
+
+def _get_ip_from_node(cloud, compute_node):
+    candidates = []
+    if cloud.access_iface:
+        candidates = list(_strip_suffix(
+            compute_node.interfaces.get(cloud.access_iface, [])))
+    else:
+        for addresses in compute_node.interfaces.values():
+            candidates.extend(_strip_suffix(addresses))
+
+    if cloud.access_networks:
+        candidates = [addr for addr in candidates
+                      if any(addr in net for net in cloud.access_networks)]
+
+    if len(candidates) != 1:
+        raise RemoteFailure(
+            '{n} IP address found for compute node "{host}": {addrs}'.format(
+                n=len(candidates), host=compute_node.object_id.id,
+                addrs=', '.join(candidates)))
+    return candidates[0]
+
+
+def _strip_suffix(addresses):
+    for address in addresses:
+        if '/' in address:
+            address, _ = address.split('/')
+        yield address
+
+
+def create_pkey(content):
+    if content is None:
+        return None
+    for key_cls in (paramiko.ECDSAKey, paramiko.RSAKey, paramiko.DSSKey):
+        try:
+            return key_cls.from_private_key(StringIO.StringIO(content))
+        except paramiko.SSHException:
+            pass
+
+    LOG.error('Failed to decode SSH key')
+    return None
+
+
+class SSHAgent(object):
+    def __init__(self):
+        self.agent_pid = None
+        self.auth_sock = None
+
+    def start(self):
+        assert self.auth_sock is None and self.agent_pid is None
+        process = subprocess.Popen(['ssh-agent', '-s'],
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+        stdout, _ = process.communicate()
+        auth_sock_re = re.compile(r'^SSH_AUTH_SOCK=([^;]+);.*$')
+        agent_pid_re = re.compile(r'^SSH_AGENT_PID=([0-9]+);.*$')
+
+        auth_sock, agent_pid = None, None
+        for line in stdout.splitlines():
+            if not auth_sock:
+                match = auth_sock_re.match(line)
+                if match is not None:
+                    auth_sock = match.group(1)
+            if not agent_pid:
+                match = agent_pid_re.match(line)
+                if match is not None:
+                    agent_pid = int(match.group(1))
+
+        if agent_pid:
+            self.auth_sock = auth_sock
+            self.agent_pid = agent_pid
+            atexit.register(self.terminate)
+
+        if not agent_pid or not auth_sock:
+            LOG.error('Failed to parse ssh-agent output: %s', repr(stdout))
+            raise RuntimeError('Failed to parse ssh-agent output')
+
+    def terminate(self):
+        if self.agent_pid is not None:
+            os.kill(self.agent_pid, signal.SIGTERM)
+            self.agent_pid = None
+            self.auth_sock = None
+
+    def add_key(self, key):
+        assert self.auth_sock is not None and self.agent_pid is not None
+
+        key = create_pkey(key)
+        if key is None:
+            return
+
+        with tempfile.NamedTemporaryFile() as ntf:
+            key.write_private_key(ntf.file)
+            ntf.file.flush()
+            process = subprocess.Popen(
+                ['ssh-add', ntf.name],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                env={
+                    'SSH_AUTH_SOCK': self.auth_sock,
+                    'SSH_AGENT_PID': str(self.agent_pid),
+                })
+
+            stdout, _ = process.communicate()
+            if process.returncode:
+                LOG.error('Failed to add key to SSH agent: %s', stdout)
+
+
+class AgentClientProxy(paramiko.agent.AgentClientProxy):
+    def __init__(self, chan_remote, auth_sock):
+        self.auth_sock = auth_sock
+        super(AgentClientProxy, self).__init__(chan_remote)
+
+    def connect(self):
+        conn = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        paramiko.util.retry_on_signal(lambda: conn.connect(self.auth_sock))
+        self._conn = conn
+
+
+class AgentRequestHandler(paramiko.agent.AgentRequestHandler):
+    def __init__(self, chan_client, auth_sock):
+        self.auth_sock = auth_sock
+        super(AgentRequestHandler, self).__init__(chan_client)
+
+    def _forward_agent_handler(self, chan_remote):
+        self.__clientProxys.append(
+            AgentClientProxy(chan_remote, self.auth_sock))

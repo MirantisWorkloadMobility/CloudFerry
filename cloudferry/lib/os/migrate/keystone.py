@@ -15,29 +15,35 @@ from cloudferry.lib.os import clients
 from cloudferry.lib.os.migrate import base
 from cloudferry.model import identity
 
+from keystoneclient import exceptions
+
 
 class CreateTenant(base.MigrationTask):
     default_provides = ['dst_object']
 
-    @property
-    def dst_identity(self):
-        cloud = self.config.clouds[self.migration.destination]
-        return clients.identity_client(cloud)
-
-    def migrate(self, *args, **kwargs):
-        source = self.src_object
-        dst_cloud = self.config.clouds[self.migration.destination]
-        self.created_object = self.dst_identity.tenants.create(
-            source.name, description=source.description,
-            enabled=source.enabled)
+    def migrate(self, source_obj, *args, **kwargs):
+        identity_client = clients.identity_client(self.dst_cloud)
+        try:
+            destination_obj = clients.retry(
+                identity_client.tenants.create, source_obj.name,
+                description=source_obj.description, enabled=source_obj.enabled,
+                expected_exceptions=[exceptions.Conflict])
+            self.created_object = destination_obj
+        except exceptions.Conflict:
+            for tenant_obj in clients.retry(identity_client.tenants.list):
+                if tenant_obj.name.lower() == source_obj.name.lower():
+                    destination_obj = tenant_obj
+                    break
+            else:
+                raise base.AbortMigration('Invalid state')
         destination = self.load_from_cloud(
-            identity.Tenant, dst_cloud, self.created_object)
+            identity.Tenant, self.dst_cloud, destination_obj)
         return dict(dst_object=destination)
 
     def revert(self, *args, **kwargs):
         if self.created_object is not None:
-            # TODO: retry delete
-            self.dst_identity.tenants.delete(self.created_object)
+            identity_client = clients.identity_client(self.dst_cloud)
+            clients.retry(identity_client.tenants.delete, self.created_object)
         super(CreateTenant, self).revert(*args, **kwargs)
 
 
@@ -46,6 +52,6 @@ class TenantMigrationFlowFactory(base.MigrationFlowFactory):
 
     def create_flow(self, config, migration, obj):
         return [
-            CreateTenant(obj, config, migration),
-            base.RememberMigration(obj, config, migration),
+            CreateTenant(config, migration, obj),
+            base.RememberMigration(config, migration, obj),
         ]

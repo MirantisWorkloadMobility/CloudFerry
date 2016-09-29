@@ -137,6 +137,12 @@ class ObjectId(collections.namedtuple('ObjectId', ('id', 'cloud'))):
             'type': utils.qualname(cls),
         }
 
+    def __str__(self):
+        return '{}/{}'.format(self.cloud, self.id)
+
+    def __repr__(self):
+        return str(self)
+
 
 class NotFound(Exception):
     """
@@ -153,29 +159,56 @@ class NotFound(Exception):
             utils.qualname(self.cls), self.object_id)
 
 
-class _FieldWithTable(object):
+class _FieldBase(object):
     def __init__(self, *args, **kwargs):
         self.table = kwargs.pop('table', 'objects')
-        super(_FieldWithTable, self).__init__(*args, **kwargs)
+        super(_FieldBase, self).__init__(*args, **kwargs)
+
+    def create_descriptor(self, name):
+        # pylint: disable=unused-argument
+        return None
 
 
-class String(_FieldWithTable, fields.String):
+class String(_FieldBase, fields.String):
     pass
 
 
-class Boolean(_FieldWithTable, fields.Boolean):
+class Boolean(_FieldBase, fields.Boolean):
     pass
 
 
-class Integer(_FieldWithTable, fields.Integer):
+class Integer(_FieldBase, fields.Integer):
     pass
 
 
-class Dict(_FieldWithTable, fields.Dict):
+class Float(_FieldBase, fields.Float):
     pass
 
 
-class Reference(_FieldWithTable, fields.Field):
+class List(_FieldBase, fields.List):
+    pass
+
+
+class Dict(_FieldBase, fields.Dict):
+    @staticmethod
+    def equals(lhs, rhs):
+        """
+        Returns True if both ``lhs`` dictionary and ``rhs`` dictionary have
+        identical contents.
+        :param lhs: one dictionary
+        :param rhs: other dictionary
+        :return: True if dictionaries are equal, False otherwise
+        """
+        keys = set(lhs.keys())
+        if keys != set(rhs.keys()):
+            return False
+        for key in keys:
+            if lhs[key] != rhs[key]:
+                return False
+        return True
+
+
+class Reference(_FieldBase, fields.Field):
     """
     Field referencing one or more model instances.
     """
@@ -237,7 +270,7 @@ class Reference(_FieldWithTable, fields.Field):
         if value is None:
             return None
         if self.many:
-            return set(x.primary_key for x in value)
+            return frozenset(x.primary_key for x in value)
         else:
             return value.primary_key
 
@@ -281,11 +314,13 @@ class ModelMetaclass(type):
         if 'schema_class' not in dct:
             schema_fields = {}
             for key, value in dct.items():
-                if isinstance(value, fields.FieldABC) or \
-                        hasattr(value, '__marshmallow_tags__'):
+                if isinstance(value, _FieldBase):
                     schema_fields[key] = value
-            for key in schema_fields:
-                del dct[key]
+                    descriptor = value.create_descriptor(key)
+                    if descriptor is not None:
+                        dct[key] = descriptor
+                    else:
+                        del dct[key]
 
             model_parent = mcs._find_model_parent(parents)
             schema_class = type(name + 'Schema', (model_parent.schema_class,),
@@ -345,8 +380,16 @@ class Model(_EqualityByPrimaryKeyMixin):
         if schema is None:
             schema = cls.get_schema()
         obj = cls()
+        if cls.pk_field is not None:
+            value = values.get(cls.pk_field)
+            if not mark_dirty:
+                obj._original[cls.pk_field] = value
+            setattr(obj, cls.pk_field, value)
+
         for name, field in schema.fields.items():
-            if isinstance(field, Nested):
+            if isinstance(field, PrimaryKey):
+                continue
+            elif isinstance(field, Nested):
                 value = values.get(name)
                 model = field.nested_model
                 nested_schema = model.get_schema()
@@ -441,7 +484,7 @@ class Model(_EqualityByPrimaryKeyMixin):
                             elem.clear_dirty(table)
                     else:
                         value.clear_dirty(table)
-            else:
+            elif table is None or field.table == table:
                 value = getattr(self, name, None)
                 if isinstance(field, Reference):
                     self._original[name] = \
@@ -513,6 +556,7 @@ class Model(_EqualityByPrimaryKeyMixin):
         """
         # pylint: disable=no-member
         assert self.primary_key is not None
+        assert self.primary_key.cloud != cloud.name
         for link in self.links:
             if link.primary_key.cloud == cloud.name:
                 return link
@@ -549,12 +593,39 @@ class Dependency(Reference):
     can't exist without the dependency.
     """
 
-    def __init__(self, model_class, many=False, **kwargs):
+    def __init__(self, model_class, many=False, backref=None, **kwargs):
         super(Dependency, self).__init__(
             model_class, many=many, ensure_existence=True, **kwargs)
+        self.backref = backref
+
+    def create_descriptor(self, name):
+        if self.backref is None:
+            return None
+        return DependencyDescriptor(self, name)
 
 
-class Nested(_FieldWithTable, fields.Nested):
+class DependencyDescriptor(object):
+    def __init__(self, field, name):
+        self.field = field
+        self.name = name
+
+    def __set__(self, instance, value):
+        old_value = instance.__dict__.get(self.name)
+        with Session.current() as session:
+            if old_value is not None:
+                backref_list = getattr(old_value, self.field.backref)
+                backref_list.remove(instance)
+                session.store(old_value)
+                session.store(instance)
+            if value is not None:
+                backref_list = getattr(value, self.field.backref)
+                backref_list.append(instance)
+                session.store(value)
+                session.store(instance)
+            instance.__dict__[self.name] = value
+
+
+class Nested(_FieldBase, fields.Nested):
     """
     Nested model field.
     """
@@ -564,7 +635,7 @@ class Nested(_FieldWithTable, fields.Nested):
         self.nested_model = nested_model
 
 
-class PrimaryKey(_FieldWithTable, fields.Field):
+class PrimaryKey(_FieldBase, fields.Field):
     """
     Primary key field. Root objects (non nested) should have one primary key
     field.
@@ -740,10 +811,15 @@ class Session(object):
         field.
         :param obj: model instance
         """
+        # pylint: disable=protected-access
+        if isinstance(obj, LazyObj):
+            if obj._object is None:
+                return
+            else:
+                obj = obj._object
         pk = obj.primary_key
         if pk is None:
             raise TypeError('Can\'t store object without PrimaryKey field.')
-        LOG.debug('Storing: %s', obj)
         key = (obj.get_class(), pk)
         self.session[key] = obj
 
@@ -851,27 +927,27 @@ class Session(object):
             result.append(obj)
         return result
 
-    def delete(self, cls=None, cloud=None, object_id=None, table='objects'):
+    def delete(self, cls=None, cloud=None, cloud_name=None, object_id=None,
+               table='objects'):
         """
         Deletes all objects that have cls or cloud or object_id that are equal
         to values passed as arguments. Arguments that are None are ignored.
         """
+        if cloud is not None:
+            cloud_name = cloud.name
         if cloud is not None and object_id is not None:
-            assert object_id.cloud == cloud.name
+            assert object_id.cloud == cloud_name
         for key in self.session.keys():
             obj_cls, obj_pk = key
             matched = True
             if cls is not None and cls is not obj_cls:
                 matched = False
-            if cloud is not None and obj_pk.cloud != cloud.name:
+            if cloud is not None and obj_pk.cloud != cloud_name:
                 matched = False
             if object_id is not None and object_id != obj_pk:
                 matched = False
             if matched:
                 del self.session[key]
-        cloud_name = None
-        if cloud is not None:
-            cloud_name = cloud.name
         self._delete_rows(cls, cloud_name, object_id, table)
 
     @staticmethod

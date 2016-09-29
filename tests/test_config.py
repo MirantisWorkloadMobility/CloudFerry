@@ -179,6 +179,7 @@ class OpenstackCloudTestCase(ConfigTestCase):
             'neutron_db': REGULAR_DB_SETTINGS,
             'glance_db': REGULAR_DB_SETTINGS,
             'cinder_db': REGULAR_DB_SETTINGS,
+            'access_iface': 'bond0',
         })
         self.assertIsInstance(cloud, config.OpenstackCloud)
         self.assertAttrs(cloud, name='foo')
@@ -212,6 +213,7 @@ class ConfigurationTestCase(ConfigTestCase):
         'neutron_db': REGULAR_DB_SETTINGS,
         'glance_db': REGULAR_DB_SETTINGS,
         'cinder_db': REGULAR_DB_SETTINGS,
+        'access_iface': 'bond0',
     }
 
     def test_regular(self):

@@ -97,15 +97,7 @@ class Discoverer(object):
                       model_qualname, object_id)
 
         try:
-            discoverer_class = self.cloud.discoverers.get(model_class)
-            if discoverer_class is None:
-                LOG.warning('Can\'t find discoverer class for %s',
-                            model_qualname)
-                raise DiscovererNotFound(model_class)
-            LOG.debug('Trying to discover %s with ID %s using %s',
-                      model_qualname, object_id,
-                      utils.qualname(discoverer_class))
-            discoverer = discoverer_class(self.config, self.cloud)
+            discoverer = get_discoverer(self.config, self.cloud, model_class)
             return discoverer.discover_one(uuid)
         except NotFound:
             LOG.warning('Object %s with uuid %s not found in cloud %s',
@@ -197,21 +189,40 @@ def discover_all(cfg, cloud):
     """
     LOG.info('Start discovery process for cloud %s', cloud.name)
     for discoverer_class in cloud.discoverers.values():
-        LOG.debug('Starting discovering %s using %s',
-                  utils.qualname(discoverer_class.discovered_class),
-                  utils.qualname(discoverer_class))
+        LOG.info('Starting discovering %s using %s',
+                 utils.qualname(discoverer_class.discovered_class),
+                 utils.qualname(discoverer_class))
         discoverer = discoverer_class(cfg, cloud)
         discoverer.discover_all()
-        LOG.debug('Finished discovering %s using %s',
-                  utils.qualname(discoverer_class.discovered_class),
-                  utils.qualname(discoverer_class))
+        LOG.info('Finished discovering %s using %s',
+                 utils.qualname(discoverer_class.discovered_class),
+                 utils.qualname(discoverer_class))
     LOG.info('Finished discovery process for cloud %s', cloud.name)
 
 
-def load_from_cloud(cfg, cloud, model_class, data):
+def get_discoverer(cfg, cloud, model_class):
+    """
+    Returns discoverer for given model class and cloud
+    :param cfg: cloudferry configuration object
+    :param cloud: cloud configuration object
+    :param model_class: model.Model derived class
+    :return: discoverer object
+    """
     discoverer_class = cloud.discoverers.get(model_class)
     if discoverer_class is None:
         LOG.error('Can\'t find discoverer for %s', utils.qualname(model_class))
         raise DiscovererNotFound(model_class)
-    discoverer = discoverer_class(cfg, cloud)
+    return discoverer_class(cfg, cloud)
+
+
+def load_from_cloud(cfg, cloud, model_class, data):
+    """
+    Returns instance of ``model_class`` created using data.
+    :param cfg: cloudferry configuration object
+    :param cloud: cloud configuration object
+    :param model_class: model.Model derived class
+    :param data: data which to use when constructing object
+    :return: ``model_class`` instance
+    """
+    discoverer = get_discoverer(cfg, cloud, model_class)
     return discoverer.load_from_cloud(data)

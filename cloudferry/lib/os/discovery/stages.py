@@ -49,7 +49,7 @@ class DiscoverStage(stage.Stage):
 
         with model.Session() as session:
             for cloud in invalid_clouds:
-                session.delete(cloud=cloud)
+                session.delete(cloud_name=cloud)
 
     def signature(self):
         """

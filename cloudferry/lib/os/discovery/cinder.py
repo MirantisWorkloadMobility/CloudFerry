@@ -57,6 +57,7 @@ class VolumeDiscoverer(discover.Discoverer):
             raise discover.NotFound()
 
     def load_from_cloud(self, data):
+        volume_type = data.volume_type
         volume_dict = {
             'object_id': self.make_id(data.id),
             'name': data.display_name,
@@ -65,9 +66,10 @@ class VolumeDiscoverer(discover.Discoverer):
             'tenant': self.find_ref(
                 identity.Tenant,
                 getattr(data, 'os-vol-tenant-attr:tenant_id')),
+            'volume_type': None if volume_type == 'None' else volume_type,
         }
-        for attr_name in ('availability_zone', 'size', 'volume_type',
-                          'encrypted', 'metadata'):
+        for attr_name in ('availability_zone', 'size', 'encrypted',
+                          'metadata'):
             if hasattr(data, attr_name):
                 volume_dict[attr_name] = getattr(data, attr_name)
         return storage.Volume.load(volume_dict)
