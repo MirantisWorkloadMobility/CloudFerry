@@ -56,10 +56,7 @@ class BbcpCopier(base.BaseCopier):
 
         LOG.debug("Checking if bbcp is installed on '%s' host", host)
 
-        bbcp_installed = (_bbcp_installed(runner, 'bbcp') or
-                          _bbcp_installed(runner, BBCP_PATH))
-
-        if bbcp_installed:
+        if _bbcp_installed(runner, BBCP_PATH):
             return
 
         if position == 'src':
