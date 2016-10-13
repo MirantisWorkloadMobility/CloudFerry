@@ -155,7 +155,6 @@ class NovaCompute(compute.Compute):
             tenant_ids = \
                 [tenant.id for tenant in self.identity.get_tenants_list()
                     if tenant.id != service_tenant_id]
-        user_ids = [user.id for user in self.identity.get_users_list()]
         project_quotas = list()
         user_quotas = list()
 
@@ -165,15 +164,15 @@ class NovaCompute(compute.Compute):
             project_quota_info['tenant_id'] = tenant_id
             project_quotas.append(project_quota_info)
             if self.config.migrate.migrate_user_quotas:
-                for user_id in user_ids:
-                    LOG.debug("Get quotas for tenant '%s' and user '%s'",
-                              tenant_id, user_id)
+                for user in self.identity.get_users_list():
                     user_quota = self.get_quotas(tenant_id=tenant_id,
-                                                 user_id=user_id)
+                                                 user_id=user.id)
                     user_quota_info = self.convert_resources(
                         user_quota, None)
                     user_quota_info['tenant_id'] = tenant_id
-                    user_quota_info['user_id'] = user_id
+                    user_quota_info['user_id'] = user.id
+                    LOG.debug("Get quotas for tenant '%s' and user '%s': %s",
+                              tenant_id, user.name, user_quota_info)
                     user_quotas.append(user_quota_info)
 
         return project_quotas, user_quotas
@@ -582,6 +581,8 @@ class NovaCompute(compute.Compute):
 
             quota_info['force'] = True
 
+            LOG.debug("Updating quota for user %s tenant %s: %s", user_id,
+                      tenant_id, quota_info)
             self.update_quota(tenant_id=tenant_id, user_id=user_id,
                               **quota_info)
 

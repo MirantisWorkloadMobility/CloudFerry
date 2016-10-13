@@ -142,8 +142,9 @@ class KeystoneIdentity(identity.Identity):
             overwrite_user_passwords = cfg.migrate.overwrite_user_passwords
             return {'user': {'name': identity_obj.name,
                              'id': identity_obj.id,
-                             'email': getattr(identity_obj, 'email', ''),
-                             'tenantId': getattr(identity_obj, 'tenantId', '')
+                             'email': getattr(identity_obj, 'email', None),
+                             'tenantId': getattr(identity_obj, 'tenantId',
+                                                 None)
                              },
                     'meta': {
                         'overwrite_password': overwrite_user_passwords}}
@@ -157,14 +158,6 @@ class KeystoneIdentity(identity.Identity):
                   'Please pass to it only tenants, users or role objects.')
         return None
 
-    def has_tenants_by_id_cached(self):
-        tenants = set([t.id for t in self.keystone_client.tenants.list()])
-
-        def func(tenant_id):
-            return tenant_id in tenants
-
-        return func
-
     def read_info(self, **kwargs):
         info = {'tenants': [],
                 'users': [],
@@ -176,24 +169,10 @@ class KeystoneIdentity(identity.Identity):
         info['tenants'] = [self.convert(tenant, self.config)
                            for tenant in tenant_list]
         user_list = self.get_users_list()
-        has_tenants_by_id_cached = self.has_tenants_by_id_cached()
-        has_roles_by_ids_cached = self._get_user_roles_cached()
+        LOG.debug("Users scheduled for migration: %s", user_list)
         for user in user_list:
             usr = self.convert(user, self.config)
-            if has_tenants_by_id_cached(getattr(user, 'tenantId', '')):
-                info['users'].append(usr)
-            else:
-                LOG.info("User's '%s' primary tenant '%s' is deleted, "
-                         "finding out if user is a member of other tenants",
-                         user.name, getattr(user, 'tenantId', ''))
-                for t in tenant_list:
-                    roles = has_roles_by_ids_cached(user.id, t.id)
-                    if roles:
-                        LOG.info("Setting tenant '%s' for user '%s' as "
-                                 "primary", t.name, user.name)
-                        usr['user']['tenantId'] = t.id
-                        info['users'].append(usr)
-                        break
+            info['users'].append(usr)
         info['roles'] = [self.convert(role, self.config)
                          for role in self.get_roles_list()]
         info['user_tenants_roles'] = \
@@ -458,6 +437,9 @@ class KeystoneIdentity(identity.Identity):
         """ Create new user in keystone. """
 
         try:
+            LOG.debug("Creating user: name=%s, password=%s, email=%s, "
+                      "tenant_id=%s, enabled=%s", name, password, email,
+                      tenant_id, enabled)
             with proxy_client.expect_exception(ks_exceptions.Conflict):
                 return self.keystone_client.users.create(name=name,
                                                          password=password,
@@ -465,7 +447,7 @@ class KeystoneIdentity(identity.Identity):
                                                          tenant_id=tenant_id,
                                                          enabled=enabled)
         except ks_exceptions.Conflict:
-            LOG.warning('Conflict creating user %s', name, exc_info=True)
+            LOG.debug('User %s already exists', name, exc_info=True)
             return self.try_get_user_by_name(name)
 
     def update_tenant(self, tenant_id, tenant_name=None, description=None,
@@ -513,6 +495,7 @@ class KeystoneIdentity(identity.Identity):
         LOG.info("Tenant deployment done.")
 
     def _deploy_users(self, users, tenants):
+        LOG.debug("Deploying users")
         dst_users = {user.name.lower(): user.id
                      for user in self.get_users_list()}
         tenant_mapped_ids = {tenant['tenant']['id']: tenant['meta']['new_id']
@@ -523,6 +506,7 @@ class KeystoneIdentity(identity.Identity):
 
         for _user in users:
             user = _user['user']
+            LOG.debug("Deploying user %s", user['name'])
             password = self._generate_password()
 
             if user['name'].lower() in dst_users:
@@ -538,14 +522,20 @@ class KeystoneIdentity(identity.Identity):
             if not self.config.migrate.migrate_users:
                 continue
 
-            tenant_id = tenant_mapped_ids[user['tenantId']]
-            _user['meta']['new_id'] = self.create_user(user['name'], password,
-                                                       user['email'],
-                                                       tenant_id).id
-            if self.config['migrate']['keep_user_passwords']:
-                _user['meta']['overwrite_password'] = True
-            else:
-                self._passwd_notification(user['name'], password)
+            tenant_id = tenant_mapped_ids.get(user['tenantId'])
+            try:
+                _user['meta']['new_id'] = self.create_user(user['name'],
+                                                           password,
+                                                           user['email'],
+                                                           tenant_id).id
+                if self.config['migrate']['keep_user_passwords']:
+                    _user['meta']['overwrite_password'] = True
+                else:
+                    self._passwd_notification(user['name'], password)
+            except ks_exceptions.ClientException as e:
+                LOG.debug("Failed to create user '%s': %s", user['name'], e)
+
+        LOG.debug("Users deployment done")
 
     @staticmethod
     def _update_users_info(users):
