@@ -16,9 +16,14 @@ import os
 import yaml
 
 from cloudferry import cfglib
+from cloudferry.lib.base import exception
 
 LOG = logging.getLogger(__name__)
 CONF = cfglib.CONF
+
+
+class InvalidMapperConfig(exception.InvalidConfigException):
+    pass
 
 
 class Mapper(object):
@@ -63,6 +68,13 @@ class Mapper(object):
         if self._config is None:
             self._load_configuration()
         self._mapping = self._config.get(mapping_name, {})
+        if self._mapping is None:
+            msg = "'{mapping}' mapping is set to nothing in {config}, " \
+                  "you should either remove '{mapping}' mapping completely " \
+                  "from config file, or define mapping between " \
+                  "objects.".format(mapping=mapping_name,
+                                    config=CONF.migrate.resource_map)
+            raise InvalidMapperConfig(msg)
 
     def __getitem__(self, item):
         return self._mapping[item]
