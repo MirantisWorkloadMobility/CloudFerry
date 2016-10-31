@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from pip.req import parse_requirements
+from setuptools import find_packages
 from setuptools import setup
 
 all_reqs = parse_requirements('requirements.txt', session=False)
@@ -26,8 +27,7 @@ setup(name='cloudferry_devlab',
       author='Mirantis Workload Mobility',
       author_email='workloadmobility@mirantis.com',
       license='Apache',
-      packages=['cloudferry_devlab', 'cloudferry_devlab.tests',
-                'cloudferry_devlab.tests.testcases'],
+      packages=find_packages(),
       entry_points={
           'console_scripts': [
               'generate_load = cloudferry_devlab.bin.main:main',
