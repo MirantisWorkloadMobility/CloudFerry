@@ -507,8 +507,34 @@ class NeutronNetwork(network.Network):
         return result
 
     @staticmethod
+    def _try_get_ip_prefix(sg_rule):
+        # Ensures '1.2.3.4' and '1.2.3.4/32' IP prefixes are the same
+        ip_prefix = None
+        remote_ip_prefix = sg_rule['remote_ip_prefix']
+        if remote_ip_prefix is not None:
+            nets = {
+                'IPv4': ipaddr.IPv4Network,
+                'IPv6': ipaddr.IPv6Network
+            }
+
+            try:
+                net = nets[sg_rule['ethertype']]
+                ip_prefix = str(net(sg_rule['remote_ip_prefix']))
+            except (ipaddr.AddressValueError, ipaddr.NetmaskValueError) as e:
+                LOG.debug("Failed to convert '%s' to IPNetwork. Rule: %s. "
+                          "Error: '%s'",
+                          remote_ip_prefix, sg_rule, e)
+            except KeyError as e:
+                LOG.debug("Unable to convert remote_ip_prefix for rule %s: "
+                          "%s", sg_rule, e)
+
+        return ip_prefix
+
+    @staticmethod
     def convert_rules(rule, cloud):
         net_res = cloud.resources[utils.NETWORK_RESOURCE]
+
+        rule['remote_ip_prefix'] = NeutronNetwork._try_get_ip_prefix(rule)
 
         rule_hash = net_res.get_resource_hash(rule,
                                               'direction',
