@@ -35,6 +35,22 @@ class AttachVolumesCompute(action.Action):
         for observer in self.init['migration_observers']:
             self.state_notifier.add_observer(observer)
 
+    def _try_get_source_instance(self, instance_dict):
+        default_retval = instance_dict['instance']
+        source_instance_id = instance_dict.get('old_id')
+        if source_instance_id is None:
+            LOG.debug("No source instance ID specified for instance '%s'",
+                      instance_dict)
+            return default_retval
+
+        try:
+            src_cpu = self.src_cloud.resources[utils.COMPUTE_RESOURCE]
+            return src_cpu.nova_client.servers.get(source_instance_id)
+        except nova_exceptions.NotFound:
+            LOG.debug("Failed to find instance '%s' in source cloud",
+                      source_instance_id)
+            return default_retval
+
     def run(self, info, **kwargs):
         info = copy.deepcopy(info)
         compute_res = self.cloud.resources[utils.COMPUTE_RESOURCE]
@@ -56,13 +72,14 @@ class AttachVolumesCompute(action.Action):
                             status = dst_volume.status
 
                 inst = instance['instance']
+                source_instance = self._try_get_source_instance(instance)
 
                 if status is None:
                     msg = ("Cannot attach volume '{vol}' to VM '{vm}': volume "
                            "does not exist").format(vol=volume_id,
                                                     vm=inst['name'])
                     self.state_notifier.incomplete(
-                        objects.MigrationObjectType.VM, inst, msg)
+                        objects.MigrationObjectType.VM, source_instance, msg)
                     continue
 
                 if status == 'available':
@@ -83,12 +100,14 @@ class AttachVolumesCompute(action.Action):
                                (volume_id, inst['id'], e.message))
                         LOG.warning(msg)
                         self.state_notifier.incomplete(
-                            objects.MigrationObjectType.VM, inst, msg)
+                            objects.MigrationObjectType.VM,
+                            source_instance,
+                            msg)
                 else:
                     msg = ("Cannot attach volume '%s' to instance '%s' since "
                            "it's status is '%s'" % (volume_id, inst['id'],
                                                     status))
                     LOG.warning(msg)
                     self.state_notifier.incomplete(
-                        objects.MigrationObjectType.VM, inst, msg)
+                        objects.MigrationObjectType.VM, source_instance, msg)
         return {}
