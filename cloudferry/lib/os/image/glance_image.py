@@ -304,11 +304,13 @@ class GlanceImage(image.Image):
             with proxy_client.expect_exception(
                 ssl.ZeroReturnError,
                 glance_exceptions.HTTPException,
+                glance_exceptions.CommunicationError,
                 IOError
             ):
                 return self.glance_client.images.data(image_id)
         except (ssl.ZeroReturnError,
                 glance_exceptions.HTTPException,
+                glance_exceptions.CommunicationError,
                 IOError):
             raise exception.ImageDownloadError
 
