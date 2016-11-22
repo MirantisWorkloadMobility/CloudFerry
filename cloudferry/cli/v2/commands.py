@@ -137,4 +137,6 @@ class Migrate(MigrationBaseMixin, command.Command):
                 migrate_base.create_migration_flow,
                 self.config, migration)
 
+            migrate_base.add_destructor_task(self.config, migration, graph)
+
         taskflow_utils.execute_flow(graph)

@@ -18,6 +18,8 @@ import httplib
 from itertools import ifilter
 import re
 
+from cloudferry.lib.migration import notifiers
+from cloudferry.lib.migration import objects
 from glanceclient import client as glance_client
 from glanceclient import exc as glance_exceptions
 from glanceclient.v1.images import CREATE_PARAMS
@@ -40,7 +42,7 @@ from cloudferry.lib.utils import utils as utl
 LOG = log.getLogger(__name__)
 
 
-class GlanceImageProgessMigrationView(object):
+class GlanceImageProgressMigrationView(object):
 
     """ View to show the progress of image migration. """
 
@@ -122,6 +124,10 @@ class GlanceImage(image.Image):
                                                  self.config.cloud.ssh_user)
         self._image_filter = None
         self.tenant_name_map = mapper.Mapper('tenant_map')
+        self.state_notifier = notifiers.MigrationStateNotifier()
+        for o in cloud.migration_observers:
+            self.state_notifier.add_observer(o)
+
         super(GlanceImage, self).__init__(config)
 
     def get_image_filter(self):
@@ -298,11 +304,13 @@ class GlanceImage(image.Image):
             with proxy_client.expect_exception(
                 ssl.ZeroReturnError,
                 glance_exceptions.HTTPException,
+                glance_exceptions.CommunicationError,
                 IOError
             ):
                 return self.glance_client.images.data(image_id)
         except (ssl.ZeroReturnError,
                 glance_exceptions.HTTPException,
+                glance_exceptions.CommunicationError,
                 IOError):
             raise exception.ImageDownloadError
 
@@ -493,7 +501,7 @@ class GlanceImage(image.Image):
         obsolete_images_ids_list = []
         dst_images = self._dst_images()
 
-        view = GlanceImageProgessMigrationView(info['images'], dst_images)
+        view = GlanceImageProgressMigrationView(info['images'], dst_images)
         view.show_info()
         for image_id_src in info['images']:
             img = info['images'][image_id_src]['image']
@@ -510,8 +518,11 @@ class GlanceImage(image.Image):
                     created_images.append((existing_image, meta))
                     image_members = img['members'].get(img['id'], {})
                     self.update_membership(existing_image.id, image_members)
-                    LOG.info("Image '%s' is already present on destination, "
-                             "skipping", img['name'])
+                    msg = ("Image '%s' is already present in destination, "
+                           "skipping" % img['name'])
+                    LOG.info(msg)
+                    self.state_notifier.skip(
+                        objects.MigrationObjectType.IMAGE, img, msg)
                     continue
 
                 view.show_progress()
@@ -546,7 +557,7 @@ class GlanceImage(image.Image):
                     LOG.warning("re-creating image %s from original source "
                                 "URL", img["id"])
                     if meta['img_loc'] is not None:
-                        self.create_image(
+                        new_image = self.create_image(
                             id=img['id'],
                             name=img['name'],
                             disk_format=img['disk_format'] or "qcow2",
@@ -554,13 +565,21 @@ class GlanceImage(image.Image):
                             container_format=img['container_format'] or 'bare',
                         )
 
+                        self.state_notifier.success(
+                            objects.MigrationObjectType.IMAGE, img,
+                            new_image.id, message='Recreated from URL')
+
                         recreated_image = utl.ext_dict(
                             name=img["name"]
                         )
                         created_images.append((recreated_image, meta))
                     else:
-                        raise exception.AbortMigrationError(
-                            "image information has no original source URL")
+                        msg = ("Failed to re-create image in destination "
+                               "because source image URL is missing")
+                        LOG.info(msg)
+                        self.state_notifier.fail(
+                            objects.MigrationObjectType.IMAGE,
+                            img, msg)
                     continue
 
                 LOG.debug("Creating image '%s' (%s)", img["name"], img['id'])
@@ -595,14 +614,20 @@ class GlanceImage(image.Image):
                     LOG.debug("new image ID %s", created_image.id)
                     self.update_membership(created_image.id, image_members)
                     created_images.append((created_image, meta))
+                    self.state_notifier.success(
+                        objects.MigrationObjectType.IMAGE, img,
+                        created_image.id)
                 except (exception.ImageDownloadError,
                         httplib.IncompleteRead,
                         glance_exceptions.HTTPInternalServerError) as e:
                     LOG.debug(e, exc_info=True)
-                    LOG.warning("Unable to reach image's data due to "
-                                "Glance HTTPInternalServerError. Skipping "
-                                "image: %s (%s)", img['name'], img["id"])
+                    msg = ("Unable to reach image's data due to "
+                           "'%s'. Skipping image: %s (%s)" %
+                           (e, img['name'], img["id"]))
+                    LOG.warning(msg)
                     obsolete_images_ids_list.append(img["id"])
+                    self.state_notifier.fail(
+                        objects.MigrationObjectType.IMAGE, img, msg)
                     continue
 
                 if not img["container_format"]:

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import argparse
+import logging
 import sys
 
 from cliff import app
@@ -67,7 +68,7 @@ class CloudFerryApp(app.App):
         return parser
 
     def configure_logging(self):
-        pass
+        logging.basicConfig()
 
 
 def main(argv=sys.argv[1:]):

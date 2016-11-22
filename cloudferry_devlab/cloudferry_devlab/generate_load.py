@@ -16,6 +16,7 @@ import itertools
 import os
 import copy
 
+from cinderclient import exceptions as cd_exceptions
 from keystoneclient import exceptions as ks_exceptions
 from neutronclient.common import exceptions as nt_exceptions
 from novaclient import exceptions as nv_exceptions
@@ -176,6 +177,17 @@ class Prerequisites(base.BasePrerequisites):
                                             public_key=keypair['public_key'])
         self.switch_user(user=self.username, password=self.password,
                          tenant=self.tenant)
+
+    def modify_user_quotas(self):
+        """ Modify user's custom nova quotas
+        """
+        for user in self.config.users:
+            if 'quota' in user:
+                self.log.debug("Updating custom nova quota for user %s,"
+                               " tenant %s.", user['name'], user['tenant'])
+                self.novaclient.quotas.update(tenant_id=self.get_tenant_id(
+                    user['tenant']), user_id=self.get_user_id(user['name']),
+                    **user['quota'])
 
     def modify_quotas(self):
         """ Modify nova and cinder quotas
@@ -680,6 +692,22 @@ class Prerequisites(base.BasePrerequisites):
                                             "port_range_max": port_range_max}}
         self.neutronclient.create_security_group_rule(sec_rule)
 
+    def create_cinder_volume_types_on_all_clouds(self):
+        self.create_cinder_volume_types(self.config.cinder_volume_types)
+        self.dst_cloud.create_cinder_volume_types(
+            self.config.cinder_volume_types)
+
+    def create_cinder_volume_types(self, volume_types_list):
+        self.log.debug("Creating cinder volume types on '%s' cloud",
+                       self.cloud_prefix)
+        for volume_type in volume_types_list:
+            try:
+                vt = self.cinderclient.volume_types.create(volume_type['name'])
+                vt.set_keys(volume_type['metadata'])
+            except cd_exceptions.ClientException as e:
+                self.log.warning("Failed to create volume type '%s', "
+                                 "error: %s", volume_type['name'], e)
+
     def create_cinder_volumes(self, volumes_list):
 
         def get_params_for_volume_creating(_volume):
@@ -1132,8 +1160,13 @@ class Prerequisites(base.BasePrerequisites):
         self.create_roles()
         self.log.info('Creating keypairs.')
         self.create_keypairs()
+        self.log.info('Creating cinder volume types.')
+        self.create_cinder_volume_types_on_all_clouds()
         self.log.info('Modifying quotas.')
         self.modify_quotas()
+        if self.openstack_release in ['icehouse', 'juno']:
+            self.log.info('Modifying custom user quotas.')
+            self.modify_user_quotas()
         self.log.info('Creating flavors.')
         self.create_flavors()
         self.log.info('Uploading images.')

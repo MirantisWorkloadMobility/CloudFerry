@@ -18,6 +18,7 @@ from generator import generator, generate
 from nose.plugins.attrib import attr
 
 from cloudferry_devlab.tests import functional_test
+import cloudferry_devlab.tests.config as config
 
 
 @generator
@@ -142,3 +143,58 @@ class NovaResourceMigrationTests(functional_test.FunctionalTest):
         if tenants_with_missed_quotas:
             self.fail(msg='%s quotas for tenants %s migrated not successfully'
                           % (param, tenants_with_missed_quotas))
+
+    @unittest.skipIf(functional_test.get_option_from_config_ini(
+        option='migrate_user_quotas') == 'False',
+        'migrate user quotas disabled in CloudFerry config')
+    def test_migrate_custom_user_quotas(self):
+        """Validate user's custom nova quotas were migrated to correct user.
+
+        Scenario:
+            1. Get user's custom nova quota parameters from src cloud
+            2. Get custom nova quotas values for each user of each tenant from
+                src cloud
+            3. Get custom nova quotas values for each user of each tenant from
+                dst cloud
+            4. Verify custom nova user quotas the same on dst and src clouds
+        """
+
+        def get_user_quotas(users, client):
+            """
+            Method gets custom nova quotas for given users, and saves
+            quotas, which exist on src (on dst could exists quotas, which
+            are not exist on src).
+            """
+            qs = {}
+            for u in users:
+                qs[u.name.lower()] = {'nova_q': {}}
+                nova_quota = client.novaclient.quotas.get(u.tenantId,
+                                                          u.id).to_dict()
+                for k, v in nova_quota.iteritems():
+                    if k in src_nova_quota_keys and k != 'id':
+                        qs[u.name.lower()]['nova_q'][k] = v
+            return qs
+
+        if self.src_cloud.openstack_release == 'grizzly':
+            self.skipTest('Grizzly release does not support custom nova quotas'
+                          ' for users')
+
+        src_nova_quota_keys = self.src_cloud.novaclient.quotas.get(
+            self.src_cloud.keystoneclient.tenant_id).to_dict().keys()
+
+        src_quotas = get_user_quotas(self.filter_users(), self.src_cloud)
+        users_names = [user['name'] for user in config.users]
+        dst_users = [user for user in
+                     self.dst_cloud.keystoneclient.users.list()
+                     if user.name.lower() in users_names]
+        dst_quotas = get_user_quotas(dst_users, self.dst_cloud)
+
+        users_with_missed_quotas = []
+        for user in src_quotas:
+            self.assertIn(user, dst_quotas,
+                          'User %s is missing on dst' % user)
+            if src_quotas[user]['nova_q'] != dst_quotas[user]['nova_q']:
+                users_with_missed_quotas.append(user)
+        if users_with_missed_quotas:
+            self.fail(msg='custom nova quotas for users %s not migrated'
+                          ' successfully' % (users_with_missed_quotas))

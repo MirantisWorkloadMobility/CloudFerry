@@ -11,11 +11,14 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
+
+import logging
 import yaml
 
 from cloudferry.lib.base import exception
 
 ABSENT = object()
+LOG = logging.getLogger(__name__)
 
 
 class InvalidOverrideConfigError(exception.AbortMigrationError):
@@ -61,6 +64,19 @@ class OverrideRule(object):
                     'Invalid match rule for "%s" attribute, must be '
                     '{"attr": [...], "other_attr": [...]}: %s' %
                     (attribute, repr(match)))
+
+
+class OverrideProxy(object):
+    def __init__(self, obj, overrides):
+        self._obj = obj
+        self._overrides = overrides
+        self._cache = {}
+
+    def __getattr__(self, name):
+        for rule in self._overrides.get(name, []):
+            if rule.predicate(self._obj):
+                return rule.value
+        return getattr(self._obj, name)
 
 
 def get_filename_from_stream(stream):
@@ -133,11 +149,18 @@ class AttributeOverrides(object):
         :param attribute: attribute name
         :return: original or overriden attribute based on override rules
         """
-
+        original_value = obj.get(attribute)
         for rule in self.mapping.get(attribute, []):
             if rule.predicate(obj):
-                return rule.value
+                new_value = rule.value
+                LOG.debug("Value of '%s' attribute has been overridden "
+                          "from '%s' to the new value: '%s'",
+                          attribute, original_value, new_value)
+                return new_value
         if default is not ABSENT:
+            LOG.debug("Value of '%s' attribute has been overridden "
+                      "from '%s' to the default value: '%s'",
+                      attribute, original_value, default)
             return default
         else:
-            return obj.get(attribute)
+            return original_value

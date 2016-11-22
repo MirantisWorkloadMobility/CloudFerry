@@ -22,6 +22,8 @@ from sqlalchemy.exc import ProgrammingError
 
 from cloudferry import cfglib
 from cloudferry.lib.base import identity
+from cloudferry.lib.migration import notifiers
+from cloudferry.lib.migration import objects as objs
 from cloudferry.lib.utils import log
 from cloudferry.lib.utils import mapper
 from cloudferry.lib.utils import proxy_client
@@ -109,6 +111,9 @@ class KeystoneIdentity(identity.Identity):
         self.generator = GeneratorPassword()
         self.defaults = {}
         self.tenant_name_map = mapper.Mapper('tenant_map')
+        self.state_notifier = notifiers.MigrationStateNotifier()
+        for observer in cloud.migration_observers:
+            self.state_notifier.add_observer(observer)
 
     @property
     def keystone_client(self):
@@ -137,28 +142,21 @@ class KeystoneIdentity(identity.Identity):
             overwrite_user_passwords = cfg.migrate.overwrite_user_passwords
             return {'user': {'name': identity_obj.name,
                              'id': identity_obj.id,
-                             'email': getattr(identity_obj, 'email', ''),
-                             'tenantId': getattr(identity_obj, 'tenantId', '')
+                             'email': getattr(identity_obj, 'email', None),
+                             'tenantId': getattr(identity_obj, 'tenantId',
+                                                 None)
                              },
                     'meta': {
                         'overwrite_password': overwrite_user_passwords}}
 
         elif isinstance(identity_obj, keystone_client.roles.Role):
             return {'role': {'name': identity_obj.name,
-                             'id': identity_obj},
+                             'id': identity_obj.id},
                     'meta': {}}
 
         LOG.error('KeystoneIdentity converter has received incorrect value. '
                   'Please pass to it only tenants, users or role objects.')
         return None
-
-    def has_tenants_by_id_cached(self):
-        tenants = set([t.id for t in self.keystone_client.tenants.list()])
-
-        def func(tenant_id):
-            return tenant_id in tenants
-
-        return func
 
     def read_info(self, **kwargs):
         info = {'tenants': [],
@@ -171,24 +169,10 @@ class KeystoneIdentity(identity.Identity):
         info['tenants'] = [self.convert(tenant, self.config)
                            for tenant in tenant_list]
         user_list = self.get_users_list()
-        has_tenants_by_id_cached = self.has_tenants_by_id_cached()
-        has_roles_by_ids_cached = self._get_user_roles_cached()
+        LOG.debug("Users scheduled for migration: %s", user_list)
         for user in user_list:
             usr = self.convert(user, self.config)
-            if has_tenants_by_id_cached(getattr(user, 'tenantId', '')):
-                info['users'].append(usr)
-            else:
-                LOG.info("User's '%s' primary tenant '%s' is deleted, "
-                         "finding out if user is a member of other tenants",
-                         user.name, getattr(user, 'tenantId', ''))
-                for t in tenant_list:
-                    roles = has_roles_by_ids_cached(user.id, t.id)
-                    if roles:
-                        LOG.info("Setting tenant '%s' for user '%s' as "
-                                 "primary", t.name, user.name)
-                        usr['user']['tenantId'] = t.id
-                        info['users'].append(usr)
-                        break
+            info['users'].append(usr)
         info['roles'] = [self.convert(role, self.config)
                          for role in self.get_roles_list()]
         info['user_tenants_roles'] = \
@@ -453,6 +437,9 @@ class KeystoneIdentity(identity.Identity):
         """ Create new user in keystone. """
 
         try:
+            LOG.debug("Creating user: name=%s, password=%s, email=%s, "
+                      "tenant_id=%s, enabled=%s", name, password, email,
+                      tenant_id, enabled)
             with proxy_client.expect_exception(ks_exceptions.Conflict):
                 return self.keystone_client.users.create(name=name,
                                                          password=password,
@@ -460,7 +447,7 @@ class KeystoneIdentity(identity.Identity):
                                                          tenant_id=tenant_id,
                                                          enabled=enabled)
         except ks_exceptions.Conflict:
-            LOG.warning('Conflict creating user %s', name, exc_info=True)
+            LOG.debug('User %s already exists', name, exc_info=True)
             return self.try_get_user_by_name(name)
 
     def update_tenant(self, tenant_id, tenant_name=None, description=None,
@@ -492,17 +479,23 @@ class KeystoneIdentity(identity.Identity):
             tenant = _tenant['tenant']
             if tenant['name'].lower() not in dst_tenants:
                 LOG.debug("Creating tenant '%s'", tenant['name'])
-                _tenant['meta']['new_id'] = self.create_tenant(
-                    tenant['name'],
-                    tenant['description']).id
+                created_tenant = self.create_tenant(tenant['name'],
+                                                    tenant['description'])
+                _tenant['meta']['new_id'] = created_tenant.id
+                self.state_notifier.success(
+                    objs.MigrationObjectType.TENANT, tenant, created_tenant.id)
             else:
-                LOG.debug("Tenant '%s' is already present on destination, "
-                          "skipping", tenant['name'])
+                msg = "Tenant '%s' is already present on destination, " \
+                      "skipping" % tenant['name']
+                LOG.debug(msg)
                 _tenant['meta']['new_id'] = dst_tenants[tenant['name'].lower()]
+                self.state_notifier.skip(objs.MigrationObjectType.TENANT,
+                                         tenant, msg)
 
         LOG.info("Tenant deployment done.")
 
     def _deploy_users(self, users, tenants):
+        LOG.debug("Deploying users")
         dst_users = {user.name.lower(): user.id
                      for user in self.get_users_list()}
         tenant_mapped_ids = {tenant['tenant']['id']: tenant['meta']['new_id']
@@ -513,6 +506,7 @@ class KeystoneIdentity(identity.Identity):
 
         for _user in users:
             user = _user['user']
+            LOG.debug("Deploying user %s", user['name'])
             password = self._generate_password()
 
             if user['name'].lower() in dst_users:
@@ -528,14 +522,20 @@ class KeystoneIdentity(identity.Identity):
             if not self.config.migrate.migrate_users:
                 continue
 
-            tenant_id = tenant_mapped_ids[user['tenantId']]
-            _user['meta']['new_id'] = self.create_user(user['name'], password,
-                                                       user['email'],
-                                                       tenant_id).id
-            if self.config['migrate']['keep_user_passwords']:
-                _user['meta']['overwrite_password'] = True
-            else:
-                self._passwd_notification(user['name'], password)
+            tenant_id = tenant_mapped_ids.get(user['tenantId'])
+            try:
+                _user['meta']['new_id'] = self.create_user(user['name'],
+                                                           password,
+                                                           user['email'],
+                                                           tenant_id).id
+                if self.config['migrate']['keep_user_passwords']:
+                    _user['meta']['overwrite_password'] = True
+                else:
+                    self._passwd_notification(user['name'], password)
+            except ks_exceptions.ClientException as e:
+                LOG.debug("Failed to create user '%s': %s", user['name'], e)
+
+        LOG.debug("Users deployment done")
 
     @staticmethod
     def _update_users_info(users):
@@ -571,10 +571,16 @@ class KeystoneIdentity(identity.Identity):
             role = _role['role']
             if role['name'].lower() not in dst_roles:
                 LOG.debug("Creating role '%s'", role['name'])
-                _role['meta']['new_id'] = self.create_role(role['name']).id
+                new_role = self.create_role(role['name'])
+                self.state_notifier.success(
+                    objs.MigrationObjectType.ROLE, role, new_role.id)
+                _role['meta']['new_id'] = new_role.id
             else:
-                LOG.debug("Role '%s' is already present on destination, "
-                          "skipping", role['name'])
+                msg = "Role '%s' is already present on destination, " \
+                      "skipping" % role['name']
+                LOG.debug(msg)
+                self.state_notifier.skip(objs.MigrationObjectType.ROLE,
+                                         role, msg)
                 _role['meta']['new_id'] = dst_roles[role['name'].lower()]
 
         LOG.info("Role deployment done.")

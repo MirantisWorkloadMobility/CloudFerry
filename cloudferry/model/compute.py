@@ -20,13 +20,44 @@ from cloudferry.model import storage
 @model.type_alias('flavors')
 class Flavor(model.Model):
     object_id = model.PrimaryKey()
+    flavor_id = model.String(required=True)
+    is_deleted = model.Boolean(required=True)
+    is_disabled = model.Boolean(required=True)
+    is_public = model.Boolean(required=True)
+    name = model.String(required=True)
+    vcpus = model.Integer(required=True)
+    memory_mb = model.Integer(required=True)
+    root_gb = model.Integer(required=True)
+    ephemeral_gb = model.Integer(required=True)
+    swap_mb = model.Integer(required=True)
+    vcpu_weight = model.Integer(allow_none=True, missing=None)
+    rxtx_factor = model.Float(required=True)
+    extra_specs = model.Dict(missing=dict)
 
     def equals(self, other):
         # pylint: disable=no-member
-        # TODO: replace with implementation that make sense
         if super(Flavor, self).equals(other):
             return True
-        return self.object_id.id == other.object_id.id
+        return (self.is_public == other.is_public and
+                self.is_disabled == other.is_disabled and
+                self.name == other.name and
+                self.vcpus == other.vcpus and
+                self.memory_mb == other.memory_mb and
+                self.root_gb == self.root_gb and
+                self.ephemeral_gb == self.ephemeral_gb and
+                self.swap_mb == self.swap_mb and
+                self.vcpu_weight == self.vcpu_weight and
+                self.rxtx_factor == self.rxtx_factor and
+                model.Dict.equals(self.extra_specs, other.extra_specs))
+
+
+@model.type_alias('compute_nodes')
+class ComputeNode(model.Model):
+    object_id = model.PrimaryKey()
+    interfaces = model.Dict(required=True, missing=list)
+
+    def equals(self, other):
+        return False
 
 
 class SecurityGroup(model.Model):
@@ -64,6 +95,8 @@ class Server(model.Model):
     ephemeral_disks = model.Nested(EphemeralDisk, many=True, missing=list)
     attached_volumes = model.Dependency(storage.Attachment, many=True,
                                         missing=list)
+    compute_node = model.Reference(ComputeNode, required=True,
+                                   ensure_existence=True)
     # TODO: ports
 
     def equals(self, other):

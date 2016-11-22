@@ -11,6 +11,7 @@
 # implied.
 # See the License for the specific language governing permissions and#
 # limitations under the License.
+import itertools
 import logging
 import os
 import traceback
@@ -18,15 +19,20 @@ import traceback
 import futurist
 from taskflow import engines
 from taskflow import exceptions
+from taskflow.listeners import base
 from taskflow.patterns import graph_flow
 from taskflow.persistence import backends
 from taskflow.persistence import models
+from taskflow import states
 from taskflow import task
 
 LOG = logging.getLogger(__name__)
 TASK_DATABASE_FILE = os.environ.get('CF_TASK_DB', './tasks.db')
 LOGBOOK_ID = 'primary'
 MAX_WORKERS = int(os.environ.get('CF_MAX_WORKERS', 4))
+STARTING_STATES = frozenset((states.RUNNING, states.REVERTING))
+FINISHED_STATES = frozenset((states.SUCCESS, states.REVERTED))
+WATCH_STATES = frozenset(itertools.chain(FINISHED_STATES, STARTING_STATES))
 
 
 def _ensure_db_initialized(conn, flow):
@@ -52,7 +58,17 @@ def _ensure_db_initialized(conn, flow):
 
 
 def _workaround_reverted_reset(flow_detail):
-    flow_detail.state = 'PENDING'
+    have_revert_failures = False
+    for task_detail in flow_detail:
+        if task_detail.state == 'REVERT_FAILURE':
+            old_intention = task_detail.intention
+            task_detail.reset('SUCCESS')
+            task_detail.intention = old_intention
+            have_revert_failures = True
+
+    if have_revert_failures:
+        return
+
     for task_detail in flow_detail:
         if task_detail.state == 'REVERTED':
             task_detail.reset('PENDING')
@@ -77,14 +93,15 @@ def execute_flow(flow):
 
     engine.compile()
     _workaround_reverted_reset(flow_detail)
-    try:
-        engine.run()
-    except exceptions.WrappedFailure as wf:
-        for failure in wf:
-            if failure.exc_info is not None:
-                traceback.print_exception(*failure.exc_info)
-            else:
-                print failure
+    with MetadataSavingListener(engine, flow_detail):
+        try:
+            engine.run()
+        except exceptions.WrappedFailure as wf:
+            for failure in wf:
+                if failure.exc_info is not None:
+                    traceback.print_exception(*failure.exc_info)
+                else:
+                    print failure
 
 
 def create_graph_flow(name, objs, subflow_factory_fn, *args, **kwargs):
@@ -161,3 +178,44 @@ class Conditional(task.Task):
             LOG.debug('Not running %s because \'%s\' is False', self.task.name,
                       self.parameter_name)
             return [None] * len(self.task.provides)
+
+
+class MetadataSavingListener(base.Listener):
+    """Listener that store task internal state to storage as metadata."""
+
+    def __init__(self, engine, flow_detail):
+        self.flow_detail = flow_detail
+        super(MetadataSavingListener, self).__init__(
+            engine, task_listen_for=WATCH_STATES)
+
+    def _task_receiver(self, state, details):
+        task_name = details['task_name']
+        task_uuid = details['task_uuid']
+
+        engine = self._engine
+        storage = engine.storage
+        hierarchy = engine.compilation.hierarchy
+
+        node = hierarchy.find_first_match(lambda x: x.item.name == task_name)
+        if node is None:
+            LOG.warning('Could not find task with name "%s"', task_name)
+            return
+
+        the_task = node.item
+        if state in FINISHED_STATES:
+            if not hasattr(the_task, 'save_internal_state'):
+                return
+            internal_state = the_task.save_internal_state()
+            if internal_state is None:
+                return
+            storage.update_atom_metadata(task_name,
+                                         {'internal_state': internal_state})
+        elif state in STARTING_STATES:
+            if hasattr(the_task, 'restore_internal_state'):
+                atom_detail = self.flow_detail.find(task_uuid)
+                if not atom_detail:
+                    return
+                internal_state = atom_detail.meta.get('internal_state')
+                if not internal_state:
+                    return
+                the_task.restore_internal_state(internal_state)

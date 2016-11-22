@@ -18,15 +18,18 @@ import copy
 import pprint
 import uuid
 
-from novaclient.v2 import client as nova_client
 from novaclient import exceptions as nova_exc
+from novaclient.v2 import client as nova_client
 
 from cloudferry.lib.base import compute
 from cloudferry.lib.base import exception
-from cloudferry.lib.os.compute import instances
-from cloudferry.lib.os.compute import instance_info_caches
+from cloudferry.lib.migration import notifiers
+from cloudferry.lib.migration import objects
 from cloudferry.lib.os.compute import cold_evacuate
+from cloudferry.lib.os.compute import instance_info_caches
+from cloudferry.lib.os.compute import instances
 from cloudferry.lib.os.compute import server_groups
+from cloudferry.lib.os.compute.usage_quota import UsageQuotaCompute
 from cloudferry.lib.os.identity import keystone
 from cloudferry.lib.scheduler import signal_handler
 from cloudferry.lib.utils import log
@@ -36,7 +39,6 @@ from cloudferry.lib.utils import node_ip
 from cloudferry.lib.utils import override
 from cloudferry.lib.utils import proxy_client
 from cloudferry.lib.utils import utils
-from cloudferry.lib.os.compute.usage_quota import UsageQuotaCompute
 
 LOG = log.getLogger(__name__)
 
@@ -96,6 +98,9 @@ class NovaCompute(compute.Compute):
             self.get_db_connection())
         self.attr_override = override.AttributeOverrides.from_filename(
             config.migrate.override_rules, 'servers')
+        self.state_notifier = notifiers.MigrationStateNotifier()
+        for observer in cloud.migration_observers:
+            self.state_notifier.add_observer(observer)
 
     @property
     def nova_client(self):
@@ -150,7 +155,6 @@ class NovaCompute(compute.Compute):
             tenant_ids = \
                 [tenant.id for tenant in self.identity.get_tenants_list()
                     if tenant.id != service_tenant_id]
-        user_ids = [user.id for user in self.identity.get_users_list()]
         project_quotas = list()
         user_quotas = list()
 
@@ -160,15 +164,15 @@ class NovaCompute(compute.Compute):
             project_quota_info['tenant_id'] = tenant_id
             project_quotas.append(project_quota_info)
             if self.config.migrate.migrate_user_quotas:
-                for user_id in user_ids:
-                    LOG.debug("Get quotas for tenant '%s' and user '%s'",
-                              tenant_id, user_id)
+                for user in self.identity.get_users_list():
                     user_quota = self.get_quotas(tenant_id=tenant_id,
-                                                 user_id=user_id)
+                                                 user_id=user.id)
                     user_quota_info = self.convert_resources(
                         user_quota, None)
                     user_quota_info['tenant_id'] = tenant_id
-                    user_quota_info['user_id'] = user_id
+                    user_quota_info['user_id'] = user.id
+                    LOG.debug("Get quotas for tenant '%s' and user '%s': %s",
+                              tenant_id, user.name, user_quota_info)
                     user_quotas.append(user_quota_info)
 
         return project_quotas, user_quotas
@@ -264,8 +268,12 @@ class NovaCompute(compute.Compute):
                                              instance_node,
                                              ssh_user,
                                              cfg.cloud.ssh_sudo_password):
-            LOG.warning('Instance %s (%s) not found on %s, skipping migration',
-                        instance_name, instance.id, instance_node)
+
+            msg = ('Instance %s (%s) not found on %s, skipping '
+                   'migration' % (instance_name, instance.id, instance_node))
+            self.state_notifier.skip(
+                objects.MigrationObjectType.VM,
+                instance, msg)
             return None
 
         instance_block_info = utils.get_libvirt_block_info(
@@ -573,6 +581,8 @@ class NovaCompute(compute.Compute):
 
             quota_info['force'] = True
 
+            LOG.debug("Updating quota for user %s tenant %s: %s", user_id,
+                      tenant_id, quota_info)
             self.update_quota(tenant_id=tenant_id, user_id=user_id,
                               **quota_info)
 
@@ -645,8 +655,10 @@ class NovaCompute(compute.Compute):
                     create_params['image'] = None
                 else:
                     msg = ("Bootable volume for instance '%s' is "
-                           "not present, volume will NOT be attached")
-                    LOG.warning(msg, instance['name'])
+                           "not present, volume will NOT be attached" %
+                           instance['name'])
+                    self.state_notifier.incomplete(
+                        objects.MigrationObjectType.VM, instance, msg)
 
             client_conf.cloud.tenant = instance['tenant_name']
             return self.try_deploy_instance(create_params, client_conf)
@@ -729,15 +741,21 @@ class NovaCompute(compute.Compute):
         active_servers = []
         for server in servers:
             if server.status not in ALLOWED_VM_STATUSES:
-                LOG.debug("Instance '%s' has been excluded from VMs list, "
-                          "because the status '%s' is not allowed.",
-                          server.id, server.status)
+                msg = ("Instance '%s' has been excluded from VMs list, "
+                       "because the status '%s' is not allowed." %
+                       (server.id, server.status))
+                self.state_notifier.skip(
+                    objects.MigrationObjectType.VM,
+                    server, msg)
                 continue
             server_host = getattr(server, INSTANCE_HOST_ATTRIBUTE)
             if server_host not in active_computes:
-                LOG.debug("Instance '%s' has been excluded from VMs list, "
-                          "because it is booted on non-active compute host "
-                          "'%s'.", server.id, server_host)
+                msg = ("Instance '%s' has been excluded from VMs list, "
+                       "because it is booted on non-active compute host '%s'."
+                       % (server.id, server_host))
+                self.state_notifier.skip(
+                    objects.MigrationObjectType.VM,
+                    server, msg)
                 continue
             active_servers.append(server)
         return active_servers

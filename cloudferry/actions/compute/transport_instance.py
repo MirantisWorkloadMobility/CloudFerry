@@ -12,19 +12,25 @@
 # See the License for the specific language governing permissions and#
 # limitations under the License.
 
-import logging
 import copy
+import logging
 import pprint
 import random
 
-from cloudferry.lib.base.action import action
+from oslo_config import cfg
+
+from cloudferry.actions.helper import task_transfer
 from cloudferry.lib.base import exception
+from cloudferry.lib.base.action import action
+from cloudferry.lib.copy_engines import base
+from cloudferry.lib.migration import notifiers
+from cloudferry.lib.migration import objects
 from cloudferry.lib.os.identity import keystone
 from cloudferry.lib.os.network import network_utils
 from cloudferry.lib.utils import utils
 
-
 LOG = logging.getLogger(__name__)
+CONF = cfg.CONF
 
 
 INSTANCES = 'instances'
@@ -49,7 +55,11 @@ class DestinationCloudNotOperational(RuntimeError):
 
 
 class TransportInstance(action.Action):
-    # TODO constants
+    def __init__(self, init, cloud=None):
+        super(TransportInstance, self).__init__(init, cloud)
+        self.state_notifier = notifiers.MigrationStateNotifier()
+        for observer in self.init['migration_observers']:
+            self.state_notifier.add_observer(observer)
 
     def run(self, info=None, **kwargs):
         info = copy.deepcopy(info)
@@ -60,16 +70,22 @@ class TransportInstance(action.Action):
 
         # Get next one instance
         for instance_id, instance in info[utils.INSTANCES_TYPE].iteritems():
+            LOG.debug("Transport instance '%s': %s", instance_id, instance)
+
             instance = self._replace_user_ids(instance)
             src_instance = instance['instance']
             src_image_id = src_instance['image_id']
             dst_image = self.get_dst_image(src_image_id)
 
             if dst_image is None:
-                LOG.warning("Image '%s' is not present in destination, "
-                            "skipping migration of VM '%s' (%s).",
-                            src_image_id, src_instance['name'],
-                            src_instance['id'])
+                msg = ("Image '%s' is not present in destination, "
+                       "skipping migration of VM '%s' (%s)." %
+                       (src_image_id,
+                        src_instance['name'],
+                        src_instance['id']))
+                self.state_notifier.skip(
+                    objects.MigrationObjectType.VM,
+                    src_instance, msg)
                 continue
 
             if dst_image.id != src_image_id:
@@ -85,6 +101,20 @@ class TransportInstance(action.Action):
             }
 
             one_instance = self.deploy_instance(one_instance)
+
+            if src_instance['boot_mode'] == utils.BOOT_FROM_IMAGE:
+                try:
+                    tt = task_transfer.TaskTransfer(
+                        init=self.init,
+                        driver=CONF.migrate.copy_backend,
+                        resource_name=utils.INSTANCES_TYPE,
+                        resource_root_name=utils.DIFF_BODY)
+                    tt.run(info=one_instance)
+                except (base.NotEnoughSpace, base.FileCopyError) as e:
+                    self.state_notifier.incomplete(
+                        objects.MigrationObjectType.VM,
+                        instance,
+                        message=e.message)
 
             new_info[utils.INSTANCES_TYPE].update(
                 one_instance[utils.INSTANCES_TYPE])
@@ -136,6 +166,9 @@ class TransportInstance(action.Action):
         try:
             new_id = dst_compute.deploy(
                 instance, availability_zone=instance_az)
+            self.state_notifier.success(
+                objects.MigrationObjectType.VM,
+                instance, new_id)
         except exception.TimeoutException:
             one_instance, new_id = self.deploy_instance_on_random_host(
                 one_instance, instance_az)
@@ -200,12 +233,20 @@ class TransportInstance(action.Action):
             try:
                 new_id = dst_compute.deploy(
                     updated_instance_body, availability_zone=host_az)
+                self.state_notifier.success(
+                    objects.MigrationObjectType.VM, instance_body, new_id)
                 return one_instance, new_id
             except exception.TimeoutException:
-                pass
+                msg = 'Failed to boot VM on node {}'.format(next_host)
+                self.state_notifier.append_message(
+                    objects.MigrationObjectType.VM, instance_body, msg)
 
         message = ("Unable to schedule VM '{vm}' on any of available compute "
                    "nodes.").format(vm=instance_body['name'])
+        self.state_notifier.fail(
+            objects.MigrationObjectType.VM,
+            one_instance,
+            message)
         LOG.error(message)
         raise DestinationCloudNotOperational(message)
 

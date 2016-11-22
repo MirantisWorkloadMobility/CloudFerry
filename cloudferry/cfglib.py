@@ -140,15 +140,6 @@ migrate_opts = [
                 help='Specifies whether floating IPs will be kept the same '
                      'in destination cloud. Requires low-level neutron DB '
                      'modifications, thus is dangerous.'),
-    cfg.BoolOpt('change_router_ips', default=False,
-                help='change router external ip on dst cloud to '
-                     'avoid ip collision by making additional floatingip '
-                     'on dst as stub'),
-    cfg.BoolOpt('clean_router_ips_stub', default=False,
-                help='delete floating ip stub on dst after router migration'),
-    cfg.StrOpt('router_ips_stub_tenant', default=None,
-               help='tenant for creation router ip stubs, if it "None" as '
-                    'default stub creates in router tenant'),
     cfg.BoolOpt('keep_lbaas', default=False,
                 help='yes - keep lbaas settings, '
                      'no - not keep lbaas settings'),

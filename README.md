@@ -75,15 +75,33 @@ sphinx-build docs/ sphinx-build
 
 
 # Installation
-CloudFerry can be installed as docker container or it can be installed as a 
-python package by pip
+
+CloudFerry can be installed as docker container or it can be installed as a
+python package by pip.
 
 ## Installation with pip
-```
-pip install git+git://github.com/MirantisWorkloadMobility/CloudFerry.git
-```
+
+1. Make sure you have non-python packages installed in your system
+(following for Ubuntu):
+    ```
+    sudo apt-get install libffi-dev libssl-dev libxml2-dev \
+        libxslt1-dev python-pip python-dev git -y
+    ```
+
+2. Install virtualenv version 15.0.3
+    ```
+    sudo pip install virtualenv==15.0.3
+    ```
+
+3. Install cloudferry with pip:
+    ```
+    virtualenv .venv
+    source .venv/bin/activate
+    pip install git+git://github.com/MirantisWorkloadMobility/CloudFerry.git
+    ```
 
 ## Installation with docker
+
 ### Building the docker container
 ```
 docker build --build-arg cf_commit_or_branch=origin/master -t <username>/cf-in-docker .

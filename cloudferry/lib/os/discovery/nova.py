@@ -24,6 +24,7 @@ from cloudferry.model import storage
 from cloudferry.lib.utils import qemu_img
 from cloudferry.lib.utils import remote
 from cloudferry.lib.os import clients
+from cloudferry.lib.os import cloud_db
 
 EXT_ATTR_INSTANCE_NAME = 'OS-EXT-SRV-ATTR:instance_name'
 EXT_ATTR_HYPER_HOST = 'OS-EXT-SRV-ATTR:hypervisor_hostname'
@@ -36,21 +37,63 @@ LOG = logging.getLogger(__name__)
 
 class FlavorDiscoverer(discover.Discoverer):
     discovered_class = compute.Flavor
+    BASE_QUERY = '''
+      SELECT
+        `id` AS `object_id`,
+        `flavorid` AS `flavor_id`,
+        SIGN(`deleted`) AS `is_deleted`,
+        `disabled` AS `is_disabled`,
+        `is_public`, `name`, `vcpus`, `memory_mb`, `root_gb`, `ephemeral_gb`,
+        `swap` AS `swap_mb`,
+        `vcpu_weight`, `rxtx_factor`
+      FROM instance_types
+    '''
+    EXTRA_SPECS_QUERY = '''
+      SELECT `key`, `value` FROM `instance_type_extra_specs`
+      WHERE `deleted` = 0 AND `instance_type_id` = %(id)s
+   '''
 
     def discover_all(self):
-        # TODO: implement
-        return
+        with cloud_db.connection(self.cloud.nova_db) as db, \
+                model.Session() as session:
+            flavor_rows = db.query(self.BASE_QUERY + 'WHERE `deleted` = 0')
+            for flavor_data in flavor_rows:
+                self._populate_extra(db, flavor_data)
+                session.store(self.load_from_cloud(flavor_data))
 
-    def discover_one(self, uuid):
-        compute_client = clients.compute_client(self.cloud)
-        raw_flavor = self.retry(compute_client.flavors.get, uuid)
-        # TODO: implement
-        return compute.Flavor.load({
-            'object_id': self.make_id(raw_flavor.id),
-        })
+    def discover_one(self, internal_id):
+        with cloud_db.connection(self.cloud.nova_db) as db, \
+                model.Session() as session:
+            flavor_data = db.query_one(self.BASE_QUERY + 'WHERE `id` = %(id)s',
+                                       id=internal_id)
+            self._populate_extra(db, flavor_data)
+            flavor = self.load_from_cloud(flavor_data)
+            session.store(flavor)
+            return flavor
 
-    def load_from_cloud(self, data):
+    def discover_by_flavor_id(self, flavor_id):
+        with cloud_db.connection(self.cloud.nova_db) as db, \
+                model.Session() as session:
+            flavor_data = db.query_one(
+                self.BASE_QUERY +
+                'WHERE `flavorid` = %(flavor_id)s AND `deleted` = 0',
+                flavor_id=flavor_id)
+            self._populate_extra(db, flavor_data)
+            flavor = self.load_from_cloud(flavor_data)
+            session.store(flavor)
+            return flavor
+
+    def load_from_cloud(self, raw_data):
+        data = dict(raw_data)
+        data['object_id'] = self.make_id(data['object_id'])
         return compute.Flavor.load(data)
+
+    def _populate_extra(self, db, flavor_data):
+        extra_specs = {}
+        for key, value in db.query(self.EXTRA_SPECS_QUERY,
+                                   id=flavor_data['object_id']):
+            extra_specs[key] = value
+        flavor_data['extra_specs'] = extra_specs
 
 
 class ServerDiscoverer(discover.Discoverer):
@@ -156,19 +199,26 @@ class ServerDiscoverer(discover.Discoverer):
             server_image = data.image['id']
         attached_volumes = [self.find_ref(storage.Attachment, attachment)
                             for attachment in raw_attachments]
+
+        with cloud_db.connection(self.cloud.nova_db) as db:
+            flavor_id = self._get_flavor(db, data.id)
+
+        hypervisor_host = getattr(data, EXT_ATTR_HYPER_HOST)
         server_dict = {
             'object_id': self.make_id(data.id),
             'security_groups': [],  # TODO: implement security groups
             'tenant': self.find_ref(identity.Tenant, data.tenant_id),
             'image': self.find_ref(image.Image, server_image),
             'image_membership': None,
-            'flavor': self.find_ref(compute.Flavor, data.flavor['id']),
+            'flavor': self.find_ref(compute.Flavor, flavor_id),
             'availability_zone': getattr(data, EXT_ATTR_AZ),
             'host': getattr(data, EXT_ATTR_HOST),
-            'hypervisor_hostname': getattr(data, EXT_ATTR_HYPER_HOST),
+            'hypervisor_hostname': hypervisor_host,
             'instance_name': getattr(data, EXT_ATTR_INSTANCE_NAME),
             'attached_volumes': [av for av in attached_volumes if av],
             'ephemeral_disks': [],  # Ephemeral disks will be filled later
+            'compute_node': self.find_ref(compute.ComputeNode,
+                                          hypervisor_host),
         }
         for attr_name in ('name', 'status', 'user_id', 'key_name',
                           'config_drive', 'metadata'):
@@ -186,6 +236,16 @@ class ServerDiscoverer(discover.Discoverer):
                                        binary='nova-compute',
                                        returns_iterable=True)
                    if c.state == 'up' and c.status == 'enabled')
+
+    @staticmethod
+    def _get_flavor(nova_db, server_id):
+        data = nova_db.query_one(
+            'SELECT instance_type_id AS flavor_id '
+            'FROM instances WHERE uuid = %(uuid)s',
+            uuid=server_id)
+        assert data is not None, 'Flavor id for server not found. Most ' \
+                                 'probably database configuration is incorrect'
+        return data['flavor_id']
 
 
 def _populate_ephemeral_disks(rmt_exec, server):
@@ -239,7 +299,8 @@ def _get_disk_info(remote_executor, path):
     try:
         size_str = remote_executor.sudo('stat -c %s {path}', path=path)
     except remote.RemoteFailure:
-        LOG.error('Unable to get size of "%s", skipping disk.', path,
+        LOG.warn('Unable to get size of "%s", skipping disk.', path)
+        LOG.debug('Unable to get size of "%s", skipping disk.', path,
                   exc_info=True)
         return None, None, None
     disk_info = qemu_img.get_disk_info(remote_executor, path)

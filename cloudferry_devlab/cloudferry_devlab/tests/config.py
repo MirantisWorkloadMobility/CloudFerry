@@ -96,9 +96,17 @@ case_sensitivity_test_user = 'user10'
 case_sensitivity_test_tenant = 'tenant6'
 """Tenant to be created in upper case on DST Cloud."""
 
+user_with_quotas = 'user1'
+"""User with custom nova quotas"""
+
 users = [
-    {'name': 'user1', 'password': 'passwd1', 'email': 'mail@example.com',
-     'tenant': 'tenant1', 'enabled': True},
+    {'name': user_with_quotas, 'password': 'passwd1',
+     'email': 'mail@example.com', 'tenant': 'tenant1', 'enabled': True,
+     'quota': {'instances': '19', 'cores': '18', 'ram': '52198',
+               'floating_ips': '8', 'fixed_ips': '15', 'metadata_items': '127',
+               'injected_files': '4', 'injected_file_content_bytes': '10239',
+               'injected_file_path_bytes': '254', 'key_pairs': '4',
+               'security_groups': '8', 'security_group_rules': '19'}},
     {'name': 'user2', 'password': 'passwd2', 'email': 'aa@example.com',
      'tenant': 'tenant2', 'enabled': True},
     {'name': 'user3', 'password': 'paafdssswd1', 'email': 'mdsail@example.com',
@@ -148,7 +156,7 @@ roles = [
 tenants = [
     {'name': 'tenant1', 'description': 'None', 'enabled': True,
      'quota': {'instances': '20', 'cores': '19', 'ram': '52199',
-               'floating_ips': '9', 'fixed_ips': '', 'metadata_items': '',
+               'floating_ips': '9', 'fixed_ips': '16', 'metadata_items': '',
                'injected_files': '', 'injected_file_content_bytes': '',
                'injected_file_path_bytes': '', 'key_pairs': '5',
                'security_groups': '9', 'security_group_rules': ''},
@@ -691,6 +699,13 @@ snapshots = [
     {'server': 'server2', 'image_name': 'asdasd'}
 ]
 """VM's snapshots to create/delete"""
+
+cinder_volume_types = [
+    {'name': 'nfs1', 'metadata': {'volume_backend_name': 'nfs1'}},
+    {'name': 'nfs2', 'metadata': {'volume_backend_name': 'nfs2'}},
+    {'name': 'nfs_other', 'metadata': {'volume_backend_name': 'nfs2'}}
+]
+"""Cinder volume types to create"""
 
 cinder_volumes = [
     {'display_name': 'cinder_volume1', 'size': 1, 'volume_type': 'nfs1'},

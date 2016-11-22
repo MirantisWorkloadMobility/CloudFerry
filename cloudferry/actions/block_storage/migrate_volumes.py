@@ -21,8 +21,10 @@ from cinderclient.v2 import volumes as volumes_v2
 
 from cloudferry.lib.base import exception
 from cloudferry.lib.base.action import action
-from cloudferry.lib.os.identity import keystone
 from cloudferry.lib.copy_engines import base as copy_engines_base
+from cloudferry.lib.migration import notifiers
+from cloudferry.lib.migration import objects
+from cloudferry.lib.os.identity import keystone
 from cloudferry.lib.os.storage import cinder_db
 from cloudferry.lib.os.storage import plugins
 from cloudferry.lib.os.storage.plugins import copy_mechanisms
@@ -122,6 +124,10 @@ class MigrateVolumes(action.Action):
         super(MigrateVolumes, self).__init__(init)
         self.src_cinder_backend = plugins.get_cinder_backend(self.src_cloud)
         self.dst_cinder_backend = plugins.get_cinder_backend(self.dst_cloud)
+        self.migration_status = notifiers.MigrationStateNotifier()
+
+        for observer in self.init['migration_observers']:
+            self.migration_status.add_observer(observer)
 
         if self._is_nfs_shared():
             self.migrate_func = self.reuse_source_volume
@@ -229,6 +235,7 @@ class MigrateVolumes(action.Action):
 
         LOG.info("Creating volume of size %sG in tenant %s in destination",
                  src_volume['size'], dst_tenant.name)
+        LOG.debug('Volume: %s', src_volume)
         dst_volume = dst_cinder.create_volume_from_volume(src_volume,
                                                           dst_tenant.id)
         LOG.info("Volume created: %s", volume_name(dst_volume))
@@ -270,11 +277,18 @@ class MigrateVolumes(action.Action):
             dst_volume = dst_cinder.get_migrated_volume(src_volume['id'])
 
             if dst_volume is not None:
-                LOG.info("Volume '%s' is already present in destination "
-                         "cloud, skipping", src_volume['id'])
+                msg = ("Volume '%s' is already present in destination "
+                       "cloud, skipping" % src_volume['id'])
+                self.migration_status.skip(
+                    objects.MigrationObjectType.VOLUME,
+                    src_volume, msg)
             else:
                 try:
                     dst_volume = self.migrate_func(src_volume)
+                    self.migration_status.success(
+                        objects.MigrationObjectType.VOLUME,
+                        src_volume,
+                        dst_volume.id)
                 except (plugins.base.VolumeObjectNotFoundError,
                         retrying.TimeoutExceeded,
                         exception.TenantNotPresentInDestination,
@@ -285,6 +299,11 @@ class MigrateVolumes(action.Action):
                     LOG.warning("%(error)s, volume %(name)s will be skipped",
                                 {'error': e.message,
                                  'name': volume_name(src_volume)})
+
+                    self.migration_status.fail(
+                        objects.MigrationObjectType.VOLUME,
+                        src_volume,
+                        e.message)
 
                     dst_volume = dst_cinder.get_migrated_volume(
                         src_volume['id'])

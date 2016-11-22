@@ -51,10 +51,7 @@ class TaskTransfer(action.Action):
                             data.get('host_dst'), data.get('path_dst'))
                 continue
 
-            try:
-                if self.driver.check_usage(data):
-                    self.driver.transfer(data)
-            except base.NotEnoughSpace as e:
-                LOG.warning("Failed to copy data: %s", e)
+            if self.driver.check_usage(data):
+                self.driver.transfer(data)
 
         return {}

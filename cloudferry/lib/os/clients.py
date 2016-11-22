@@ -13,17 +13,20 @@
 # limitations under the License.
 import logging
 import re
+import time
 import threading
+import traceback
 
 from keystoneclient import exceptions as ks_exceptions
 from keystoneclient.v2_0 import client as v2_0_client
 from novaclient.v2 import client as nova
 from neutronclient.v2_0 import client as neutron
 from glanceclient.v1 import client as glance
-from cinderclient.v2 import client as cinder
+from cinderclient.v1 import client as cinder
 
 from cloudferry.lib.os import consts
 from cloudferry.lib.utils import proxy_client
+from cloudferry.lib.utils import retrying
 
 LOG = logging.getLogger(__name__)
 _lock = threading.Lock()
@@ -32,49 +35,58 @@ _endpoints = {}
 
 
 class ClientProxy(object):
-    def __init__(self, factory_fn, credential, scope, token=None,
-                 endpoint=None, path=None, service_type=None):
+    def __init__(self, factory_fn, cloud, credential, scope,
+                 path=None, service_type=None):
         if path is None:
             path = []
-        if token is None and endpoint is None:
-            assert service_type is not None
-            token = get_token(credential, scope)
-            endpoint = get_endpoint(credential, scope, service_type)
-        else:
-            assert token is not None and endpoint is not None
         self._factory_fn = factory_fn
+        self._cloud = cloud
         self._credential = credential
         self._scope = scope
-        self._token = token
-        self._endpoint = endpoint
         self._path = path
+        self._service_type = service_type
 
     def __getattr__(self, name):
         new_path = list(self._path)
         new_path.append(name)
-        attr = self._get_attr(new_path)
+        attr = self._get_attr(new_path, 'token', 'http://endpoint')
         if hasattr(attr, '__call__') or proxy_client.is_wrapping(attr):
-            return ClientProxy(self._factory_fn, self._credential, self._scope,
-                               self._token, self._endpoint, new_path)
+            return ClientProxy(self._factory_fn, self._cloud, self._credential,
+                               self._scope, new_path, self._service_type)
         else:
             return attr
 
     def __call__(self, *args, **kwargs):
         # pylint: disable=broad-except
-        for retry in (True, False):
+        token = get_token(self._credential, self._scope)
+        endpoint = get_endpoint(self._credential, self._scope,
+                                self._service_type)
+        for do_retry in (True, False):
             try:
-                method = self._get_attr(self._path)
+                LOG.debug('Calling %s_client.%s(*%r, **%r)',
+                          self._service_type, '.'.join(self._path),
+                          args, kwargs)
+                method = self._get_attr(self._path, token, endpoint)
                 return method(*args, **kwargs)
             except Exception as ex:
-                LOG.debug('Error calling OpenStack client', exc_info=True)
-                http_status = getattr(ex, 'http_status', None)
-                if retry and http_status in (401, 403):
-                    discard_token(self._token)
+                LOG.debug('Error calling OpenStack client with args %r %r\n'
+                          'Full stack trace:\n%s',
+                          args, kwargs, ''.join(traceback.format_stack()),
+                          exc_info=True)
+                if hasattr(ex, 'http_status'):
+                    http_status = getattr(ex, 'http_status')
+                elif hasattr(ex, 'code'):
+                    http_status = getattr(ex, 'code')
+                else:
+                    raise
+                if do_retry and http_status in (401, 403):
+                    discard_token(token)
+                    token = get_token(self._credential, self._scope)
                 else:
                     raise
 
-    def _get_attr(self, path):
-        current = self._factory_fn(self._token, self._endpoint)
+    def _get_attr(self, path, token, endpoint):
+        current = self._factory_fn(token, endpoint)
         for element in path:
             current = getattr(current, element)
         return current
@@ -134,9 +146,17 @@ def get_token(credential, scope):
 
 def get_endpoint(credential, scope, service_type):
     with _lock:
-        LOG.debug('Retrieving endpoint for credential %r for scope %r for '
-                  'service %s', credential, scope, service_type)
-        return _endpoints[credential, scope, service_type]
+        try:
+            result = _endpoints[credential, scope, service_type]
+            LOG.debug('Retrieving endpoint for credential %r for scope %r for '
+                      'service %s, result: %s',
+                      credential, scope, service_type, result)
+            return result
+        except KeyError:
+            LOG.error('Failed to retrieve endpoint for credential %r for'
+                      'scope %r for service %s',
+                      credential, scope, service_type)
+            raise
 
 
 def discard_token(token):
@@ -166,7 +186,7 @@ def identity_client(cloud, scope=None):
                                   endpoint_override=endpoint,
                                   insecure=credential.https_insecure,
                                   cacert=credential.https_cacert)
-    return ClientProxy(factory_fn, credential, scope,
+    return ClientProxy(factory_fn, cloud, credential, scope,
                        service_type=consts.ServiceType.IDENTITY)
 
 
@@ -180,7 +200,7 @@ def compute_client(cloud, scope=None):
         client.set_management_url(endpoint)
         return client
 
-    return ClientProxy(factory_fn, credential, scope,
+    return ClientProxy(factory_fn, cloud, credential, scope,
                        service_type=consts.ServiceType.COMPUTE)
 
 
@@ -193,7 +213,7 @@ def network_client(cloud, scope=None):
                               insecure=credential.https_insecure,
                               cacert=credential.https_cacert)
 
-    return ClientProxy(factory_fn, credential, scope,
+    return ClientProxy(factory_fn, cloud, credential, scope,
                        service_type=consts.ServiceType.NETWORK)
 
 
@@ -207,7 +227,7 @@ def image_client(cloud, scope=None):
                              insecure=credential.https_insecure,
                              cacert=credential.https_cacert)
 
-    return ClientProxy(factory_fn, credential, scope,
+    return ClientProxy(factory_fn, cloud, credential, scope,
                        service_type=consts.ServiceType.IMAGE)
 
 
@@ -221,5 +241,71 @@ def volume_client(cloud, scope=None):
         client.client.auth_token = token
         return client
 
-    return ClientProxy(factory_fn, credential, scope,
+    return ClientProxy(factory_fn, cloud, credential, scope,
                        service_type=consts.ServiceType.VOLUME)
+
+
+def retry(func, *args, **kwargs):
+    """
+    Call function passed as first argument passing any remaining arguments
+    and keyword arguments. If function fail with exception, it is called
+    again after waiting for few seconds (specified by
+    ``OpenstackCloud.request_attempts`` configuration parameter). It stops
+    retrying after ``OpenstackCloud.request_failure_sleep`` unsuccessful
+    attempts were made.
+    :param func: function, bound method or some other callable
+    :param expected_exceptions: tuple/list of exceptions that are expected
+                                and handled, e.g. there is no need to retry
+                                if such exception is caught
+    :param returns_iterable: set it to True if func is expected to return
+                             iterable
+    :return: whatever func returns
+    """
+    # pylint: disable=protected-access
+
+    expected_exceptions = kwargs.pop('expected_exceptions', None)
+    returns_iterable = kwargs.pop('returns_iterable', False)
+    assert isinstance(func, ClientProxy)
+    cloud = func._cloud
+
+    retry_obj = retrying.Retry(
+        max_attempts=cloud.request_attempts,
+        timeout=cloud.request_failure_sleep,
+        expected_exceptions=expected_exceptions,
+        reraise_original_exception=True)
+    if returns_iterable:
+        return retry_obj.run(lambda *a, **kw: [x for x in func(*a, **kw)],
+                             *args, **kwargs)
+    else:
+        return retry_obj.run(func, *args, **kwargs)
+
+
+class Timeout(Exception):
+    """
+    Exception is raised when some operation didn't complete in time.
+    """
+
+
+def wait_for(predicate, client, *args, **kwargs):
+    """
+    Periodically call predicate with client, *args, **kwargs arguments until it
+    return True. If <cloud>.operation_timeout (from configuration) amount of
+    seconds pass since beginning of wait, then Timeout exception is raised.
+    """
+    # pylint: disable=protected-access
+
+    assert isinstance(client, ClientProxy)
+    cloud = client._cloud
+
+    operation_timeout = cloud.operation_timeout
+    waited = 0.0
+    sleep_time = 1.0
+    while waited <= operation_timeout:
+        time.sleep(
+            max(1.0, min(sleep_time, operation_timeout - waited)))
+        waited += sleep_time
+        sleep_time *= 1.5
+        result = predicate(client, *args, **kwargs)
+        if result:
+            return result
+    raise Timeout()
