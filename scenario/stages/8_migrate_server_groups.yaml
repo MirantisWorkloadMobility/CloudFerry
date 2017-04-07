@@ -1,9 +1,0 @@
-# Nova server groups migration (affinity/anti-affinity).
-# Associations migration only. No VMs are migrated during this step.
-# These are resources associated with objects of a migration that may
-# not exist in the destination cloud until after the migration has been completed.
-# Use path to this file in the configuration.ini in block [migrate].
-
-process:
-  - task_associations_transporting:
-      - act_server_group_trans: True

@@ -1,7 +1,0 @@
-# NOTE: Rollback has been disabled.
-# Stage to migrate compute resources such as flavors and nova quotas.
-
-process:
-  - act_get_filter: True
-  - act_check_filter: True
-  - act_comp_res_trans: True

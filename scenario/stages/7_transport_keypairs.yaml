@@ -1,6 +1,0 @@
-# Stage to migrate keypair resource.
-
-process:
-  - act_get_filter: True
-  - act_check_filter: True
-  - transport_key_pairs: True

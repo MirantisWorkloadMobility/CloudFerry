@@ -1,8 +1,0 @@
-# Stage to migrate network resources such as networks, subnets,
-# routers, FIPs, security groups, neutron quotas, 
-# LoadBalancer resources (pools, monitors, members, vips)
-
-process:
-  - act_get_filter: True
-  - act_check_filter: True
-  - act_network_trans: True

@@ -1,9 +1,0 @@
-# NOTE: Rollback has been disabled.
-# Stage to migrate glance resources such as images, snapshots and image
-# members.
-
-process:
-  - act_get_filter: True
-  - act_check_filter: True
-  - act_get_info_images: True
-  - act_deploy_images: True
